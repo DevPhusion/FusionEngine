@@ -49,36 +49,7 @@ struct Projection {
 	}
 };
 
-//GJK
-
-struct Simplex {
-	std::array<glm::vec3, 3> points;
-	int size = 0;
-
-	void Add(const glm::vec3& p) {
-		for (int i = std::min(size, 2); i > 0; i--)
-			points[i] = points[i - 1];
-		points[0] = p;
-		size = std::min(size + 1, 3);
-	}
-
-	void Set(glm::vec3 a) { points[0] = a; size = 1; }
-	void Set(glm::vec3 a, glm::vec3 b) { points[0] = a; points[1] = b; size = 2; }
-	void Set(glm::vec3 a, glm::vec3 b, glm::vec3 c) { points[0] = a; points[1] = b; points[2] = c; size = 3; }
-};
-
-struct GJKResult {
-	bool isColliding;
-	Simplex simplex;
-};
-
-struct EPAResult {
-	glm::vec3 normal = glm::vec3(0);
-	float penetration = 0.0f;
-	glm::vec3 contactPoint = glm::vec3(0);
-	glm::vec3 witnessA = glm::vec3(0); 
-	glm::vec3 witnessB = glm::vec3(0);
-};
+class SoftBodyComponent;
 
 class PhysicsEngine
 {
@@ -113,6 +84,10 @@ public:
 	BAHNode<BoundingCircle>* RegisterBoundingAreaNode(Object* obj, BoundingCircle boundingCircle);
 	void UnRegisterBoundingAreaNode(Object* obj);
 	void ResolveContacts(PotentialContact* contacts, unsigned numContacts);
+	bool ResolveRigidVertexSoftEdgeContact(const glm::vec3& checkPoint, PhysicsBody rigidBody, SoftBodyComponent* sb, const std::vector<Edge>& edges, float vertexRadius);
+	bool ResolveCircleCircleContacts(PhysicsBody bodyA, PhysicsBody bodyB, float rA, float rB);
+	bool ResolveCirclePolygonContacts(PhysicsBody circle, PhysicsBody polygon, float radius, std::vector<Edge> edges);
+	bool ResolvePolygonPolygonContacts(PhysicsBody bodyA, PhysicsBody bodyB);
 	CollisionData SAT(Object* objA, Object* objB);
 	std::vector<ContactPoint> GenerateContactPoints(CollisionData collisionData);
 

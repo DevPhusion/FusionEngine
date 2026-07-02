@@ -15,6 +15,7 @@ public:
 
 	int index;
 	bool isCenter;
+	float pointRadius = 0.01f;
 	glm::vec3 worldPos = glm::vec3(0);
 	glm::mat4 transform = glm::mat4(1);
 	glm::vec3 rotationCenter = glm::vec3(0);

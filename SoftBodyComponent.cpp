@@ -104,6 +104,36 @@ void SoftBodyComponent::OnDelete() {
 	if (tc) tc->RemoveTransformCallback(transformCallbackID);
 }
 
+std::vector<Edge> SoftBodyComponent::GetEdgesFromMassAggregate() {
+	std::vector<Edge> dynamicEdges;
+
+	if (MassAggregate.size() < 4) {
+		return dynamicEdges;
+	}
+
+	int edgeCount = (int)MassAggregate.size() - 1;
+
+	std::vector<glm::vec3> boundary;
+	boundary.reserve(edgeCount);
+	for (int i = 0; i < edgeCount; i++) {
+		boundary.push_back(MassAggregate[i]->worldPos);
+	}
+
+	if (PhysicsEngine::getInstance().ComputeSignedArea(boundary) < 0.0f) {
+		std::reverse(boundary.begin(), boundary.end());
+	}
+
+	for (int i = 0; i < edgeCount; i++) {
+		int nextIndex = (i + 1) % edgeCount;
+		Edge e;
+		e.start = boundary[i];
+		e.end = boundary[nextIndex];
+		dynamicEdges.push_back(e);
+	}
+
+	return dynamicEdges;
+}
+
 void SoftBodyComponent::UpdateMassAggregate() {
 	if (updatingFromParent || updatingFromPoints) return;
 	updatingFromParent = true;

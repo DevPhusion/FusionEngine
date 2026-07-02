@@ -18,8 +18,8 @@ public:
 
 	float inverseMass = 1.0f;
 
-	float stiffness = 0.5f;
-	float damping = 0.001f;
+	float stiffness = 50.0f;
+	float damping = 10.0f;
 
 	void ProcessSoftBody(float delta);
 	void IntegrateVelocities(float delta);
@@ -27,6 +27,7 @@ public:
 	void BuildMassAggregate();
 	void UpdateMassAggregate();
 	void SyncMeshFromMassAggregate();
+	std::vector<Edge> GetEdgesFromMassAggregate();
 
 	virtual void ProcessInspectorUI();
 	virtual void OnDelete();
