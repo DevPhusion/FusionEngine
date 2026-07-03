@@ -3,6 +3,14 @@
 #include "PointMass.h"
 #include "SoftBodySpringConstraint.h"
 #include <variant>
+
+struct SoftEdge {
+	Edge edge;
+	int idxA;
+	int idxB;
+	glm::vec3 normal;
+};
+
 class SoftBodyComponent : public ComponentBase<SoftBodyComponent>
 {
 public:
@@ -18,8 +26,8 @@ public:
 
 	float inverseMass = 1.0f;
 
-	float stiffness = 50.0f;
-	float damping = 10.0f;
+	float stiffness = 5.0f;
+	float damping = 1.0f;
 
 	void ProcessSoftBody(float delta);
 	void IntegrateVelocities(float delta);
@@ -27,7 +35,7 @@ public:
 	void BuildMassAggregate();
 	void UpdateMassAggregate();
 	void SyncMeshFromMassAggregate();
-	std::vector<Edge> GetEdgesFromMassAggregate();
+	std::vector<SoftEdge> GetEdgesFromMassAggregate();
 
 	virtual void ProcessInspectorUI();
 	virtual void OnDelete();

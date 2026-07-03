@@ -197,31 +197,38 @@ void PhysicsEngine::ResolveContacts(PotentialContact* contacts, unsigned numCont
 				anyPointContact = anyPointContact || hit;
 			}
 
-			std::vector<Edge> softBodyEdges = sb->GetEdgesFromMassAggregate();
+			std::vector<SoftEdge> softBodyEdges = sb->GetEdgesFromMassAggregate();
 			const float rigidVertexRadius = 0.01f;
 
 			std::vector<Edge> rigidEdges = rigidBody.obj->GetComponent<RenderComponent>()->edges;
-
-			/*
-			std::vector<glm::vec3> boundary;
-			for (int i = 0; i < rigidEdges.size(); i++) {
-				boundary.push_back(rigidEdges[i].start);
-			}
-
-			if (PhysicsEngine::getInstance().ComputeSignedArea(boundary) > 0.0f) {
-				std::reverse(boundary.begin(), boundary.end());
-			}
-			*/
 
 			for (int i = 0; i < rigidEdges.size(); i++)
 			{
 				glm::vec3 point = rigidBody.obj->GetComponent<TransformComponent>()->ProjectToWorld(rigidEdges[i].start);
 
-				bool hit = ResolveRigidVertexSoftEdgeContact(point, rigidBody, sb, softBodyEdges, rigidVertexRadius);
+				bool hit = ResolveRigidVertexSoftEdgeContacts(point, rigidBody, sb, softBodyEdges, rigidVertexRadius);
 				anyPointContact = anyPointContact || hit;
 			}
 
 			collisionResult = anyPointContact;
+		}
+		//Soft body & Soft body
+		if (sbA && sbB) {
+			std::vector<SoftEdge> edgesA = sbA->GetEdgesFromMassAggregate();
+			std::vector<SoftEdge> edgesB = sbB->GetEdgesFromMassAggregate();
+
+			bool anyPointContact = false;
+
+			for (auto& pm : sbA->MassAggregate) {
+				if (ResolveSoftPointSoftEdgeContacts(pm->body, pm.get(), sbB, edgesB, pm->pointRadius))
+					anyPointContact = true;
+			}
+
+			for (auto& pm : sbB->MassAggregate) {
+				if (ResolveSoftPointSoftEdgeContacts(pm->body, pm.get(), sbA, edgesA, pm->pointRadius))
+					anyPointContact = true;
+			}
+
 		}
 
 		if (EngineManager::getInstance().debugMode && collisionResult) {
@@ -235,19 +242,124 @@ void PhysicsEngine::ResolveContacts(PotentialContact* contacts, unsigned numCont
 	}
 }
 
-bool PhysicsEngine::ResolveRigidVertexSoftEdgeContact(const glm::vec3& checkPoint, PhysicsBody rigidBody,
-	SoftBodyComponent* sb, const std::vector<Edge>& edges, float vertexRadius) {
+bool PhysicsEngine::ResolveSoftPointSoftEdgeContacts(PhysicsBody pointBody, PointMass* pointMass,
+	SoftBodyComponent* otherSb, const std::vector<SoftEdge>& otherEdges,
+	float vertexRadius) {
+	glm::vec3 center = pointMass->worldPos;
+
+	bool centerInside = false;
+	for (int e = 0; e < (int)otherEdges.size(); e++) {
+		glm::vec3 p1 = otherEdges[e].edge.start;
+		glm::vec3 p2 = otherEdges[e].edge.end;
+
+		if (((p1.y > center.y) != (p2.y > center.y)) &&
+			(center.x < (p2.x - p1.x) * (center.y - p1.y) / (p2.y - p1.y) + p1.x)) {
+			centerInside = !centerInside;
+		}
+	}
+
+	float bestDist = INFINITY;
+	int bestEdge = -1;
+	float bestT = 0.0f;
+	glm::vec3 bestPoint = glm::vec3(0);
+	glm::vec3 bestNormal = glm::vec3(0);
+
+	for (int e = 0; e < (int)otherEdges.size(); e++)
+	{
+		const Edge& edge = otherEdges[e].edge;
+		glm::vec3 ab = edge.end - edge.start;
+		float len = glm::length(ab);
+		if (len < 1e-8f) continue;
+
+		glm::vec3 ac = center - edge.start;
+		glm::vec3 abNorm = ab / len;
+		float t = glm::clamp(glm::dot(ac, abNorm), 0.0f, len);
+		glm::vec3 closest = edge.start + abNorm * t;
+
+		glm::vec3 edgeNormal = glm::normalize(glm::vec3(ab.y, -ab.x, 0.0f));
+		glm::vec3 toOtherCenter = otherSb->CenterPM->worldPos - edge.start;
+		if (glm::dot(edgeNormal, toOtherCenter) > 0.0f) edgeNormal = -edgeNormal;
+
+		float dist = glm::length(center - closest);
+		if (dist < bestDist) {
+			bestDist = dist; bestPoint = closest; bestNormal = edgeNormal;
+			bestEdge = e; bestT = t / len;
+		}
+	}
+
+	if (bestEdge < 0) return false;
+
+	bool isColliding = false;
+	glm::vec3 contactNormal;
+	float  penetration = 0.0f;
+
+	if (centerInside) {
+		contactNormal = bestNormal;
+		penetration = vertexRadius + bestDist;
+		isColliding = true;
+	}
+	else if (bestDist < vertexRadius) {
+		glm::vec3 dir = center - bestPoint;
+		contactNormal = (glm::length(dir) > 1e-6f && glm::dot(glm::normalize(dir), bestNormal) > 0.5f)
+			? glm::normalize(dir) : bestNormal;
+		penetration = vertexRadius - bestDist;
+		isColliding = true;
+	}
+
+	if (!isColliding) return false;
+
+	int i0 = otherEdges[bestEdge].idxA;
+	int i1 = otherEdges[bestEdge].idxB;
+	PointMass* nearPM = (bestT < 0.5f) ? otherSb->MassAggregate[i0].get() : otherSb->MassAggregate[i1].get();
+
+	ContactPoint cp;
+	cp.point = bestPoint;
+	cp.normal = contactNormal;
+	cp.penetration = penetration;
+	cp.id = ContactID();
+	allContactPoints.push_back(cp);
+
+	float cachedLambda = 0.0f;
+	for (const auto& cached : contactsCache) {
+		if ((cached.objectA == pointMass->body.obj && cached.objectB == nearPM->body.obj) ||
+			(cached.objectA == nearPM->body.obj && cached.objectB == pointMass->body.obj)) {
+			cachedLambda = cached.lambda;
+			break;
+		}
+	}
+
+	ContactConstraint* constraint = new ContactConstraint(
+		pointBody, nearPM->body,
+		bestPoint, bestPoint, ContactID(), contactNormal, penetration,
+		0.2f, 0.4f, 0.6f);
+	constraint->SetInitialImpulse(cachedLambda);
+	RegisterConstraint(constraint);
+	return true;
+}
+
+bool PhysicsEngine::ResolveRigidVertexSoftEdgeContacts(const glm::vec3& checkPoint, PhysicsBody rigidBody,
+	SoftBodyComponent* sb, const std::vector<SoftEdge>& edges, float vertexRadius) {
 	glm::vec3 center = checkPoint;
+	
+	bool centerInside = false;
+	for (int e = 0; e < (int)edges.size(); e++) {
+		glm::vec3 p1 = edges[e].edge.start;
+		glm::vec3 p2 = edges[e].edge.end;
+
+		if (((p1.y > center.y) != (p2.y > center.y)) &&
+			(center.x < (p2.x - p1.x) * (center.y - p1.y) / (p2.y - p1.y) + p1.x)) {
+			centerInside = !centerInside;
+		}
+	}
 
 	float bestDist = INFINITY;
 	int bestEdge = -1;
 	float bestT = 0.0f;
 	glm::vec3 bestPoint = glm::vec3(0.0f);
 	glm::vec3 bestNormal = glm::vec3(0.0f);
-	bool centerInside = true;
 
 	for (int e = 0; e < (int)edges.size(); e++) {
-		const Edge& edge = edges[e];
+		const Edge& edge = edges[e].edge;
 		glm::vec3 ab = edge.end - edge.start;
 		float len = glm::length(ab);
 		if (len < 1e-8f) continue;
@@ -259,8 +371,10 @@ bool PhysicsEngine::ResolveRigidVertexSoftEdgeContact(const glm::vec3& checkPoin
 
 		glm::vec3 edgeNormal = glm::normalize(glm::vec3(ab.y, -ab.x, 0.0f));
 
-		if (glm::dot(edgeNormal, ac) > 0.0f) {
-			centerInside = false;
+		glm::vec3 toSoftCenter = sb->CenterPM->worldPos - edge.start;
+		
+		if (glm::dot(edgeNormal, toSoftCenter) > 0.0f) {
+			edgeNormal = -edgeNormal;
 		}
 
 		float dist = glm::length(center - closest);
@@ -273,8 +387,6 @@ bool PhysicsEngine::ResolveRigidVertexSoftEdgeContact(const glm::vec3& checkPoin
 		}
 	}
 
-	if (bestEdge < 0) return false;
-
 	bool isColliding = false;
 	glm::vec3 contactNormal;
 	float penetration = 0.0f;
@@ -286,9 +398,13 @@ bool PhysicsEngine::ResolveRigidVertexSoftEdgeContact(const glm::vec3& checkPoin
 	}
 	else if (bestDist < vertexRadius) {
 		glm::vec3 dir = center - bestPoint;
-		contactNormal = (glm::length(dir) > 1e-6f)
-			? glm::normalize(dir)
-			: bestNormal;
+		if (glm::length(dir) > 1e-6f && glm::dot(glm::normalize(dir), bestNormal) > 0.5f) {
+			contactNormal = glm::normalize(dir);
+		}
+		else {
+			contactNormal = bestNormal;
+		}
+
 		penetration = vertexRadius - bestDist;
 		isColliding = true;
 	}
@@ -296,8 +412,8 @@ bool PhysicsEngine::ResolveRigidVertexSoftEdgeContact(const glm::vec3& checkPoin
 	if (!isColliding) return false;
 
 	int edgeCount = (int)sb->MassAggregate.size() - 1;
-	int i0 = bestEdge;
-	int i1 = (bestEdge + 1) % edgeCount;
+	int i0 = edges[bestEdge].idxA;
+	int i1 = edges[bestEdge].idxB;
 	PointMass* nearPM = (bestT < 0.5f) ? sb->MassAggregate[i0].get() : sb->MassAggregate[i1].get();
 
 	ContactPoint cp;
@@ -370,6 +486,7 @@ bool PhysicsEngine::ResolveCirclePolygonContacts(PhysicsBody circle, PhysicsBody
 	glm::vec3 bestPoint = glm::vec3(0.0f);
 	glm::vec3 bestNormal = glm::vec3(0.0f);
 	bool     centerInside = true;
+	glm::vec3 polyCenter = (polygon.position != nullptr) ? *polygon.position : glm::vec3(0);
 
 	for (const auto& edge : worldEdges) {
 		glm::vec3 ab = edge.end - edge.start;
@@ -381,6 +498,11 @@ bool PhysicsEngine::ResolveCirclePolygonContacts(PhysicsBody circle, PhysicsBody
 		glm::vec3 closest = edge.start + abNorm * t;
 
 		glm::vec3 edgeNormal = glm::normalize(glm::vec3(ab.y, -ab.x, 0.0f));
+
+		glm::vec3 toPolyCenter = polyCenter - edge.start;
+		if (glm::dot(edgeNormal, toPolyCenter) > 0.0f) {
+			edgeNormal = -edgeNormal;
+		}
 
 		if (glm::dot(edgeNormal, ac) > 0.0f) {
 			centerInside = false;
@@ -397,23 +519,23 @@ bool PhysicsEngine::ResolveCirclePolygonContacts(PhysicsBody circle, PhysicsBody
 	bool isColliding = false;
 	glm::vec3 contactNormal;
 	float     penetration;
-	glm::vec3 contactPoint;
+	glm::vec3 contactPoint = bestPoint;
 
 	if (centerInside) {
 		contactNormal = bestNormal;
-		if (glm::dot(contactNormal, center - *polygon.position) < 0.0f)
-			contactNormal = -contactNormal;
 		penetration = radius + bestDist;
-		contactPoint = bestPoint;
 		isColliding = true;
 	}
 	else if (bestDist < radius) {
 		glm::vec3 dir = center - bestPoint;
-		contactNormal = (glm::length(dir) > 1e-6f)
-			? glm::normalize(dir)
-			: bestNormal;
+		if (glm::length(dir) > 1e-6f && glm::dot(glm::normalize(dir), bestNormal) > 0.5f) {
+			contactNormal = glm::normalize(dir);
+		}
+		else {
+			contactNormal = bestNormal;
+		}
+
 		penetration = radius - bestDist;
-		contactPoint = bestPoint;
 		isColliding = true;
 	}
 

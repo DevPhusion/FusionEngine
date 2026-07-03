@@ -91,6 +91,19 @@ void SoftBodyComponent::CopyTo(Object* other) {
 		other->AddComponent(std::make_unique<SoftBodyComponent>(other));
 		target = other->GetComponent<SoftBodyComponent>();
 	}
+
+	target->stiffness = stiffness;
+	for (int i = 0; i < target->springs.size(); i++)
+	{
+		target->springs[i]->stiffness = stiffness;
+	}
+
+	target->damping = damping;
+	for (int i = 0; i < target->springs.size(); i++)
+	{
+		target->springs[i]->damping = damping;
+	}
+
 }
 
 void SoftBodyComponent::OnDelete() {
@@ -104,33 +117,26 @@ void SoftBodyComponent::OnDelete() {
 	if (tc) tc->RemoveTransformCallback(transformCallbackID);
 }
 
-std::vector<Edge> SoftBodyComponent::GetEdgesFromMassAggregate() {
-	std::vector<Edge> dynamicEdges;
-
-	if (MassAggregate.size() < 4) {
-		return dynamicEdges;
-	}
+std::vector<SoftEdge> SoftBodyComponent::GetEdgesFromMassAggregate() {
+	std::vector<SoftEdge> dynamicEdges;
+	if (MassAggregate.size() < 4) return dynamicEdges;
 
 	int edgeCount = (int)MassAggregate.size() - 1;
 
-	std::vector<glm::vec3> boundary;
-	boundary.reserve(edgeCount);
-	for (int i = 0; i < edgeCount; i++) {
-		boundary.push_back(MassAggregate[i]->worldPos);
-	}
-
-	if (PhysicsEngine::getInstance().ComputeSignedArea(boundary) < 0.0f) {
-		std::reverse(boundary.begin(), boundary.end());
-	}
+	std::vector<glm::vec3> boundary(edgeCount);
+	for (int i = 0; i < edgeCount; i++) boundary[i] = MassAggregate[i]->worldPos;
 
 	for (int i = 0; i < edgeCount; i++) {
-		int nextIndex = (i + 1) % edgeCount;
-		Edge e;
-		e.start = boundary[i];
-		e.end = boundary[nextIndex];
-		dynamicEdges.push_back(e);
-	}
+		int a = i;
+		int b = (i + 1) % edgeCount;
 
+		SoftEdge se;
+		se.edge.start = MassAggregate[a]->worldPos;
+		se.edge.end = MassAggregate[b]->worldPos;
+		se.idxA = a;
+		se.idxB = b;
+		dynamicEdges.push_back(se);
+	}
 	return dynamicEdges;
 }
 
@@ -187,6 +193,16 @@ void SoftBodyComponent::SyncMeshFromMassAggregate() {
 		rc->UpdateShape(verts, rc->Triangulate(verts));
 	}
 
+	VertexComponent* vc = parent->GetComponent<VertexComponent>();
+	if (vc) {
+		for (int i = 0; i < edgeCount; i++)
+		{
+			glm::vec3 worldP = MassAggregate[i]->worldPos;
+			glm::vec3 localP = tc->ProjectToWorld(worldP, true);
+			vc->vertexPoints[i]->UpdatePosition(localP.x, localP.y);
+		}
+	}
+
 	updatingFromPoints = false;
 }
 
@@ -207,7 +223,7 @@ void SoftBodyComponent::BuildMassAggregate() {
 
 	for (int i = 0; i < MassAggregate.size(); i++)
 	{
-		MassAggregate[i]->inverseMass = inverseMass / MassAggregate.size();
+		MassAggregate[i]->inverseMass = inverseMass * MassAggregate.size();
 	}
 
 	int edgeCount = MassAggregate.size() - 1;

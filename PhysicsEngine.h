@@ -8,6 +8,7 @@
 #include "Constraint.h"
 #include "ContactConstraint.h"
 #include "ContactID.h"
+#include "PointMass.h"
 #include <numeric>
 
 // Sutherland Hodgman
@@ -50,6 +51,7 @@ struct Projection {
 };
 
 class SoftBodyComponent;
+struct SoftEdge;
 
 class PhysicsEngine
 {
@@ -84,7 +86,10 @@ public:
 	BAHNode<BoundingCircle>* RegisterBoundingAreaNode(Object* obj, BoundingCircle boundingCircle);
 	void UnRegisterBoundingAreaNode(Object* obj);
 	void ResolveContacts(PotentialContact* contacts, unsigned numContacts);
-	bool ResolveRigidVertexSoftEdgeContact(const glm::vec3& checkPoint, PhysicsBody rigidBody, SoftBodyComponent* sb, const std::vector<Edge>& edges, float vertexRadius);
+	bool ResolveSoftPointSoftEdgeContacts(PhysicsBody pointBody, PointMass* pointMass,
+		SoftBodyComponent* otherSb, const std::vector<SoftEdge>& otherEdges,
+		float vertexRadius);
+	bool ResolveRigidVertexSoftEdgeContacts(const glm::vec3& checkPoint, PhysicsBody rigidBody, SoftBodyComponent* sb, const std::vector<SoftEdge>& edges, float vertexRadius);
 	bool ResolveCircleCircleContacts(PhysicsBody bodyA, PhysicsBody bodyB, float rA, float rB);
 	bool ResolveCirclePolygonContacts(PhysicsBody circle, PhysicsBody polygon, float radius, std::vector<Edge> edges);
 	bool ResolvePolygonPolygonContacts(PhysicsBody bodyA, PhysicsBody bodyB);
