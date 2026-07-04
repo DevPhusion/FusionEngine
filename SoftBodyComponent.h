@@ -1,7 +1,7 @@
 #pragma once
 #include "Component.h"
 #include "PointMass.h"
-#include "SoftBodySpringConstraint.h"
+#include "XPBDDistanceConstraint.h"
 #include <variant>
 
 struct SoftEdge {
@@ -18,7 +18,7 @@ public:
 	SoftBodyComponent() = default;
 
 	std::vector<std::unique_ptr<PointMass>> MassAggregate = {};
-	std::vector<SoftBodySpringConstraint*> springs = {};
+	std::vector<XPBDDistanceConstraint*> springs = {};
 
 	PointMass* CenterPM = nullptr;
 
@@ -26,12 +26,10 @@ public:
 
 	float inverseMass = 1.0f;
 
-	float stiffness = 5.0f;
-	float damping = 1.0f;
+	float stiffness = 150.0f;
+	float damping = 24.7f;
 
 	void ProcessSoftBody(float delta);
-	void IntegrateVelocities(float delta);
-	void IntegratePositions(float delta);
 	void BuildMassAggregate();
 	void UpdateMassAggregate();
 	void SyncMeshFromMassAggregate();

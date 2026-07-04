@@ -17,6 +17,7 @@ PhysicsBody PointMass::BuildPhysicsBody() {
 	PhysicsBody body = PhysicsBody();
 	body.obj = nullptr;
 	body.position = &worldPos;
+	body.prevPos = &prevPos;
 	body.transformMatrix = &transform;
 	body.rotation = &rotation;
 	body.velocity = &velocity;
@@ -24,22 +25,6 @@ PhysicsBody PointMass::BuildPhysicsBody() {
 	body.invMass = &inverseMass;
 	body.invInertia = &InverseInertia;
 	return body;
-}
-
-void PointMass::IntegrateVelocities(float delta) {
-	if (sb->isDragging) {
-		ProcessDragForce();
-	}
-
-	glm::vec3 resultingAcc = baseAcceleration + accleration;
-	velocity += resultingAcc * delta;
-	velocity *= powf(linearDamping, delta);
-	accleration = glm::vec3(0);
-}
-
-void PointMass::IntegratePositions(float delta) {
-	glm::vec3 newPos = worldPos + velocity * delta;
-	UpdateWorldPosition(newPos);
 }
 
 void PointMass::InitDebugQuad() {
@@ -88,7 +73,7 @@ void PointMass::ProcessDragForce() {
 	glm::vec3 springForce = 150.0f * (1 / inverseMass) * delta;
 	glm::vec3 dampingForce = -24.5f * (1 / inverseMass) * velocity;
 	glm::vec3 totalForce = springForce + dampingForce;
-	accleration = totalForce * inverseMass;
+	acceleration = totalForce * inverseMass;
 }
 
 void PointMass::UpdateWorldPosition(glm::vec3 newPos) {
@@ -101,6 +86,7 @@ void PointMass::UpdateWorldPosition(glm::vec3 newPos) {
 	glm::mat4 newTransform = glm::translate(glm::mat4(1.0f), delta) * transform;
 
 	transform = newTransform;
+	prevPos = worldPos;
 	worldPos = GetWorldPosition();
 }
 
@@ -119,6 +105,11 @@ void PointMass::ProcessTransform() {
 	this->shader.setMat4D("projection", projection);
 	this->shader.setMat4D("transform", this->transform);
 	this->shader.setMat4D("view", Camera::getInstance().viewMatrix);
+
+	if (worldPos != GetWorldPosition()) {
+		prevPos = GetWorldPosition();
+		UpdateWorldPosition(worldPos);
+	}
 }
 
 void PointMass::DrawDebug() {

@@ -79,6 +79,18 @@
     <Filter Include="Source Files\Core\Rendering">
       <UniqueIdentifier>{f5fd0333-9038-41c6-aa29-d23c8a99fd1b}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\Core\Physics\Constraint\PGSConstraint">
+      <UniqueIdentifier>{fcb85b17-660a-4f28-ae94-e71e3125c5ed}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Core\Physics\Constraint\XPBDConstraint">
+      <UniqueIdentifier>{3370492a-07c4-4d0c-a4eb-bb5e92ba89a2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Core\Physics\Constraint\PGSConstraint">
+      <UniqueIdentifier>{9d9423b9-080e-48d3-8df7-63a7c292d92e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Core\Physics\Constraint\XPBDConstraint">
+      <UniqueIdentifier>{7128dff6-fcec-4fab-b22c-1f8a2efc75ce}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="glad.c">
@@ -121,9 +133,6 @@
       <Filter>Source Files\Core</Filter>
     </ClCompile>
     <ClCompile Include="PhysicsEngine.cpp">
-      <Filter>Source Files\Core\Physics</Filter>
-    </ClCompile>
-    <ClCompile Include="ForceGenerator.cpp">
       <Filter>Source Files\Core\Physics</Filter>
     </ClCompile>
     <ClCompile Include="MouseInteractComponent.cpp">
@@ -195,26 +204,8 @@
     <ClCompile Include="DebugPoint.cpp">
       <Filter>Source Files\Core\Physics\Collision</Filter>
     </ClCompile>
-    <ClCompile Include="Constraint.cpp">
-      <Filter>Source Files\Core\Physics\Constraint</Filter>
-    </ClCompile>
-    <ClCompile Include="DistanceConstraint.cpp">
-      <Filter>Source Files\Core\Physics\Constraint</Filter>
-    </ClCompile>
-    <ClCompile Include="ContactConstraint.cpp">
-      <Filter>Source Files\Core\Physics\Constraint</Filter>
-    </ClCompile>
     <ClCompile Include="InfiniteGrid.cpp">
       <Filter>Source Files\Core\Editor</Filter>
-    </ClCompile>
-    <ClCompile Include="RevoluteConstraint.cpp">
-      <Filter>Source Files\Core\Physics\Constraint</Filter>
-    </ClCompile>
-    <ClCompile Include="WeldConstraint.cpp">
-      <Filter>Source Files\Core\Physics\Constraint</Filter>
-    </ClCompile>
-    <ClCompile Include="SpringConstraint.cpp">
-      <Filter>Source Files\Core\Physics\Constraint</Filter>
     </ClCompile>
     <ClCompile Include="ConstraintComponent.cpp">
       <Filter>Source Files\Components</Filter>
@@ -231,20 +222,44 @@
     <ClCompile Include="Circle.cpp">
       <Filter>Source Files\Objects</Filter>
     </ClCompile>
-    <ClCompile Include="PrismaticConstraint.cpp">
-      <Filter>Source Files\Core\Physics\Constraint</Filter>
-    </ClCompile>
     <ClCompile Include="SoftBodyComponent.cpp">
       <Filter>Source Files\Components</Filter>
     </ClCompile>
     <ClCompile Include="PointMass.cpp">
       <Filter>Source Files\Objects</Filter>
     </ClCompile>
-    <ClCompile Include="SoftBodySpringConstraint.cpp">
-      <Filter>Source Files\Core\Physics\Constraint</Filter>
-    </ClCompile>
     <ClCompile Include="ComponentTypeID.cpp">
       <Filter>Source Files\Components</Filter>
+    </ClCompile>
+    <ClCompile Include="Constraint.cpp">
+      <Filter>Source Files\Core\Physics\Constraint\PGSConstraint</Filter>
+    </ClCompile>
+    <ClCompile Include="ContactConstraint.cpp">
+      <Filter>Source Files\Core\Physics\Constraint\PGSConstraint</Filter>
+    </ClCompile>
+    <ClCompile Include="DistanceConstraint.cpp">
+      <Filter>Source Files\Core\Physics\Constraint\PGSConstraint</Filter>
+    </ClCompile>
+    <ClCompile Include="PrismaticConstraint.cpp">
+      <Filter>Source Files\Core\Physics\Constraint\PGSConstraint</Filter>
+    </ClCompile>
+    <ClCompile Include="RevoluteConstraint.cpp">
+      <Filter>Source Files\Core\Physics\Constraint\PGSConstraint</Filter>
+    </ClCompile>
+    <ClCompile Include="SpringConstraint.cpp">
+      <Filter>Source Files\Core\Physics\Constraint\PGSConstraint</Filter>
+    </ClCompile>
+    <ClCompile Include="WeldConstraint.cpp">
+      <Filter>Source Files\Core\Physics\Constraint\PGSConstraint</Filter>
+    </ClCompile>
+    <ClCompile Include="XPBDConstraint.cpp">
+      <Filter>Source Files\Core\Physics\Constraint\XPBDConstraint</Filter>
+    </ClCompile>
+    <ClCompile Include="ForceGenerator.cpp">
+      <Filter>Source Files\Core\Physics\Forces</Filter>
+    </ClCompile>
+    <ClCompile Include="XPBDDistanceConstraint.cpp">
+      <Filter>Source Files\Core\Physics\Constraint\XPBDConstraint</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -282,9 +297,6 @@
       <Filter>Header Files\Core</Filter>
     </ClInclude>
     <ClInclude Include="PhysicsEngine.h">
-      <Filter>Header Files\Core\Physics</Filter>
-    </ClInclude>
-    <ClInclude Include="ForceGenerator.h">
       <Filter>Header Files\Core\Physics</Filter>
     </ClInclude>
     <ClInclude Include="MouseInteractComponent.h">
@@ -368,29 +380,11 @@
     <ClInclude Include="DebugPoint.h">
       <Filter>Header Files\Core\Physics\Collision</Filter>
     </ClInclude>
-    <ClInclude Include="Constraint.h">
-      <Filter>Header Files\Core\Physics\Constraint</Filter>
-    </ClInclude>
-    <ClInclude Include="ContactConstraint.h">
-      <Filter>Header Files\Core\Physics\Constraint</Filter>
-    </ClInclude>
-    <ClInclude Include="DistanceConstraint.h">
-      <Filter>Header Files\Core\Physics\Constraint</Filter>
-    </ClInclude>
     <ClInclude Include="InfiniteGrid.h">
       <Filter>Header Files\Core\Editor</Filter>
     </ClInclude>
     <ClInclude Include="ContactID.h">
       <Filter>Header Files\Core\Physics\Collision</Filter>
-    </ClInclude>
-    <ClInclude Include="RevoluteConstraint.h">
-      <Filter>Header Files\Core\Physics\Constraint</Filter>
-    </ClInclude>
-    <ClInclude Include="WeldConstraint.h">
-      <Filter>Header Files\Core\Physics\Constraint</Filter>
-    </ClInclude>
-    <ClInclude Include="SpringConstraint.h">
-      <Filter>Header Files\Core\Physics\Constraint</Filter>
     </ClInclude>
     <ClInclude Include="ConstraintComponent.h">
       <Filter>Header Files\Components</Filter>
@@ -416,17 +410,44 @@
     <ClInclude Include="SoftBodyComponent.h">
       <Filter>Header Files\Components</Filter>
     </ClInclude>
-    <ClInclude Include="PrismaticConstraint.h">
-      <Filter>Header Files\Core\Physics\Constraint</Filter>
-    </ClInclude>
     <ClInclude Include="PointMass.h">
       <Filter>Header Files\Objects</Filter>
     </ClInclude>
-    <ClInclude Include="SoftBodySpringConstraint.h">
-      <Filter>Header Files\Core\Physics\Constraint</Filter>
-    </ClInclude>
     <ClInclude Include="ComponentTypeID.h">
       <Filter>Header Files\Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Constraint.h">
+      <Filter>Header Files\Core\Physics\Constraint\PGSConstraint</Filter>
+    </ClInclude>
+    <ClInclude Include="ContactConstraint.h">
+      <Filter>Header Files\Core\Physics\Constraint\PGSConstraint</Filter>
+    </ClInclude>
+    <ClInclude Include="DistanceConstraint.h">
+      <Filter>Header Files\Core\Physics\Constraint\PGSConstraint</Filter>
+    </ClInclude>
+    <ClInclude Include="PrismaticConstraint.h">
+      <Filter>Header Files\Core\Physics\Constraint\PGSConstraint</Filter>
+    </ClInclude>
+    <ClInclude Include="RevoluteConstraint.h">
+      <Filter>Header Files\Core\Physics\Constraint\PGSConstraint</Filter>
+    </ClInclude>
+    <ClInclude Include="SpringConstraint.h">
+      <Filter>Header Files\Core\Physics\Constraint\PGSConstraint</Filter>
+    </ClInclude>
+    <ClInclude Include="WeldConstraint.h">
+      <Filter>Header Files\Core\Physics\Constraint\PGSConstraint</Filter>
+    </ClInclude>
+    <ClInclude Include="XPBDConstraint.h">
+      <Filter>Header Files\Core\Physics\Constraint\XPBDConstraint</Filter>
+    </ClInclude>
+    <ClInclude Include="ForceGenerator.h">
+      <Filter>Header Files\Core\Physics\Forces</Filter>
+    </ClInclude>
+    <ClInclude Include="PhysicsBody.h">
+      <Filter>Header Files\Core\Physics</Filter>
+    </ClInclude>
+    <ClInclude Include="XPBDDistanceConstraint.h">
+      <Filter>Header Files\Core\Physics\Constraint\XPBDConstraint</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -24,7 +24,6 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 		}
 		if ((*allObjects)[i]->HasComponent<SoftBodyComponent>()) {
 			(*allObjects)[i]->GetComponent<SoftBodyComponent>()->ProcessSoftBody(delta);
-			(*allObjects)[i]->GetComponent<SoftBodyComponent>()->IntegrateVelocities(delta);
 		}
 		if ((*allObjects)[i]->HasComponent<CollisionComponent>()) {
 			(*allObjects)[i]->GetComponent<RenderComponent>()->color = glm::vec4(1);
@@ -37,7 +36,8 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 		ResolveContacts(potentialContacts, totalContacts);
 	}
 
-	ResolveConstraints(delta);
+	ResolveXPBDConstraint(delta);
+	ResolvePGSConstraints(delta);
 
 	UpdateContactCache();
 
@@ -45,9 +45,6 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 	{
 		if ((*allObjects)[i]->HasComponent<RigidBodyComponent>()) {
 			(*allObjects)[i]->GetComponent<RigidBodyComponent>()->IntegratePositions(delta);
-		}
-		if ((*allObjects)[i]->HasComponent<SoftBodyComponent>()) {
-			(*allObjects)[i]->GetComponent<SoftBodyComponent>()->IntegratePositions(delta);
 		}
 	}
 }
@@ -333,7 +330,7 @@ bool PhysicsEngine::ResolveSoftPointSoftEdgeContacts(PhysicsBody pointBody, Poin
 		bestPoint, bestPoint, ContactID(), contactNormal, penetration,
 		0.2f, 0.4f, 0.6f);
 	constraint->SetInitialImpulse(cachedLambda);
-	RegisterConstraint(constraint);
+	RegisterPGSConstraint(constraint);
 	return true;
 }
 
@@ -438,7 +435,7 @@ bool PhysicsEngine::ResolveRigidVertexSoftEdgeContacts(const glm::vec3& checkPoi
 		ContactID(), contactNormal, penetration,
 		0.2f, 0.4f, 0.6f);
 	constraint->SetInitialImpulse(cachedLambda);
-	RegisterConstraint(constraint);
+	RegisterPGSConstraint(constraint);
 
 	return true;
 }
@@ -463,7 +460,7 @@ bool PhysicsEngine::ResolveCircleCircleContacts(PhysicsBody bodyA, PhysicsBody b
 
 		ContactConstraint* constraint = new ContactConstraint(
 			bodyA, bodyB, cPoint, cPoint, ContactID(), normal, penetration, 0.2f, 0.4f, 0.6f);
-		RegisterConstraint(constraint);
+		RegisterPGSConstraint(constraint);
 
 		return true;
 	}
@@ -562,7 +559,7 @@ bool PhysicsEngine::ResolveCirclePolygonContacts(PhysicsBody circle, PhysicsBody
 			ContactID(), contactNormal, penetration,
 			0.2f, 0.4f, 0.6f);
 		constraint->SetInitialImpulse(cachedLambda);
-		RegisterConstraint(constraint);
+		RegisterPGSConstraint(constraint);
 	}
 	
 	return isColliding;
@@ -593,7 +590,7 @@ bool PhysicsEngine::ResolvePolygonPolygonContacts(PhysicsBody bodyA, PhysicsBody
 
 			ContactConstraint* constraint = new ContactConstraint(bodyA, bodyB, points[j].point, points[j].point, points[j].id, points[j].normal, points[j].penetration, 0.2f, 0.4f, 0.6f);
 			constraint->SetInitialImpulse(cachedLambda);
-			RegisterConstraint(constraint);
+			RegisterPGSConstraint(constraint);
 		}
 
 	}
@@ -908,16 +905,16 @@ void PhysicsEngine::UnRegisterBoundingAreaNode(Object* obj) {
 	node->removeLeaf();
 }
 
-// Constraints
+// PGS Constraints
 
-void PhysicsEngine::RegisterConstraint(Constraint* constraint) {
-	registeredConstraints.push_back(constraint);
+void PhysicsEngine::RegisterPGSConstraint(Constraint* constraint) {
+	registeredPGSConstraints.push_back(constraint);
 }
 
 void PhysicsEngine::UpdateContactCache() {
 	contactsCache.clear();
 
-	for (auto* constraint : registeredConstraints) {
+	for (auto* constraint : registeredPGSConstraints) {
 		if (constraint->isTemporary) {
 			auto* contact = static_cast<ContactConstraint*>(constraint);
 
@@ -933,10 +930,10 @@ void PhysicsEngine::UpdateContactCache() {
 }
 
 void PhysicsEngine::UnRegisterTemporaryConstraint() {
-	for (auto it = registeredConstraints.begin(); it != registeredConstraints.end(); ) {
+	for (auto it = registeredPGSConstraints.begin(); it != registeredPGSConstraints.end(); ) {
 		if ((*it)->isTemporary) {
 			delete* it;
-			it = registeredConstraints.erase(it);
+			it = registeredPGSConstraints.erase(it);
 		}
 		else {
 			++it;
@@ -944,21 +941,21 @@ void PhysicsEngine::UnRegisterTemporaryConstraint() {
 	}
 }
 
-void PhysicsEngine::UnRegisterConstraint(Constraint* constraint) {
-	for (int i = 0; i < registeredConstraints.size(); i++)
+void PhysicsEngine::UnRegisterPGSConstraint(Constraint* constraint) {
+	for (int i = 0; i < registeredPGSConstraints.size(); i++)
 	{
-		if (registeredConstraints[i] == constraint) {
-			registeredConstraints[i]->Unregister();
-			registeredConstraints.erase(registeredConstraints.begin() + i);
+		if (registeredPGSConstraints[i] == constraint) {
+			registeredPGSConstraints[i]->Unregister();
+			registeredPGSConstraints.erase(registeredPGSConstraints.begin() + i);
 		}
 	}
 }
 
-void PhysicsEngine::ResolveConstraints(float delta) {
+void PhysicsEngine::ResolvePGSConstraints(float delta) {
 	std::vector<SolverRow> solverRows;
-	solverRows.reserve(registeredConstraints.size() * 3);
+	solverRows.reserve(registeredPGSConstraints.size() * 3);
 
-	for (auto* constraint : registeredConstraints) {
+	for (auto* constraint : registeredPGSConstraints) {
 		constraint->Prepare(solverRows, delta);
 	}
 
@@ -1012,7 +1009,51 @@ void PhysicsEngine::ResolveConstraints(float delta) {
 		}
 	}
 
-	for (auto* constraint : registeredConstraints) {
+	for (auto* constraint : registeredPGSConstraints) {
 		constraint->PostSolve(solverRows);
+	}
+}
+
+// XPBD constraints
+void PhysicsEngine::RegisterXPBDConstraint(XPBDConstraint* constraint) {
+	registeredXPBDConstraints.push_back(constraint);
+}
+
+void PhysicsEngine::UnRegisterXPBDConstraint(XPBDConstraint* constraint) {
+	for (int i = 0; i < registeredXPBDConstraints.size(); i++)
+	{
+		if (registeredXPBDConstraints[i] == constraint) {
+			registeredXPBDConstraints.erase(registeredXPBDConstraints.begin() + i);
+		}
+	}
+}
+
+void PhysicsEngine::ResolveXPBDConstraint(float delta) {
+	int substeps = 8;
+	float dtSub = delta / substeps;
+
+	for (int i = 0; i < substeps; i++) {
+		for (auto& pm : allSoftBodyPointMasses) {
+			if (pm->sb->isDragging) pm->ProcessDragForce();
+
+			pm->prevPos = pm->worldPos; 
+			pm->velocity += (pm->baseAcceleration + pm->acceleration) * dtSub;
+			pm->worldPos += pm->velocity * dtSub;
+			pm->acceleration = glm::vec3(0);
+		}
+
+		for (auto* constraint : registeredXPBDConstraints) constraint->ResetLambda();
+
+		const int posIterations = 4;
+		for (int it = 0; it < posIterations; it++) {
+			for (auto* c : registeredXPBDConstraints) {
+				c->SolvePosition(dtSub);
+			}
+		}
+
+		// 3. Update velocities (v_n+1 = (x_n+1 - x_n) / dt) 
+		for (auto& pm : allSoftBodyPointMasses) {
+			pm->velocity = (pm->worldPos - pm->prevPos) / dtSub;
+		}
 	}
 }

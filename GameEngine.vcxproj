@@ -185,13 +185,14 @@
     <ClCompile Include="RevoluteConstraint.cpp" />
     <ClCompile Include="Shader.cpp" />
     <ClCompile Include="SoftBodyComponent.cpp" />
-    <ClCompile Include="SoftBodySpringConstraint.cpp" />
     <ClCompile Include="SpringConstraint.cpp" />
     <ClCompile Include="stb_image.cpp" />
     <ClCompile Include="TransformComponent.cpp" />
     <ClCompile Include="VertexComponent.cpp" />
     <ClCompile Include="VertexPoint.cpp" />
     <ClCompile Include="WeldConstraint.cpp" />
+    <ClCompile Include="XPBDConstraint.cpp" />
+    <ClCompile Include="XPBDDistanceConstraint.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AddObjectWindow.h" />
@@ -236,6 +237,7 @@
     <ClInclude Include="ContactConstraint.h" />
     <ClInclude Include="Object.h" />
     <ClInclude Include="ObjectManager.h" />
+    <ClInclude Include="PhysicsBody.h" />
     <ClInclude Include="PointMass.h" />
     <ClInclude Include="RigidBodyComponent.h" />
     <ClInclude Include="PhysicsEngine.h" />
@@ -247,13 +249,14 @@
     <ClInclude Include="RevoluteConstraint.h" />
     <ClInclude Include="Shader.h" />
     <ClInclude Include="SoftBodyComponent.h" />
-    <ClInclude Include="SoftBodySpringConstraint.h" />
     <ClInclude Include="SpringConstraint.h" />
     <ClInclude Include="stb_image.h" />
     <ClInclude Include="TransformComponent.h" />
     <ClInclude Include="VertexComponent.h" />
     <ClInclude Include="VertexPoint.h" />
     <ClInclude Include="WeldConstraint.h" />
+    <ClInclude Include="XPBDConstraint.h" />
+    <ClInclude Include="XPBDDistanceConstraint.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="fragment.txt" />

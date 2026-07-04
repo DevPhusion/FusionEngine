@@ -17,6 +17,7 @@ public:
 	bool isCenter;
 	float pointRadius = 0.01f;
 	glm::vec3 worldPos = glm::vec3(0);
+	glm::vec3 prevPos = glm::vec3(0);
 	glm::mat4 transform = glm::mat4(1);
 	glm::vec3 rotationCenter = glm::vec3(0);
 
@@ -25,7 +26,7 @@ public:
 	float linearDamping = 0.995f;
 	glm::vec3 velocity = glm::vec3(0);
 	glm::vec3 baseAcceleration = glm::vec3(0, -9.8f, 0);
-	glm::vec3 accleration = glm::vec3(0);
+	glm::vec3 acceleration = glm::vec3(0);
 
 	//Simply to satisfy the PhysicsBody interface, pm can't rotate
 	float rotation = 0; 
@@ -36,8 +37,6 @@ public:
 
 	PhysicsBody BuildPhysicsBody();
 	void ProcessTransform();
-	void IntegratePositions(float delta);
-	void IntegrateVelocities(float delta);
 	void UpdateWorldPosition(glm::vec3 newPos);
 	glm::vec3 ProjectToWorld(glm::vec3 point);
 	glm::vec3 GetWorldPosition();

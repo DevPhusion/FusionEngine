@@ -16,20 +16,6 @@ void SoftBodyComponent::ProcessSoftBody(float delta) {
 	SyncMeshFromMassAggregate();
 }
 
-void SoftBodyComponent::IntegrateVelocities(float delta) {
-	for (int i = 0; i < MassAggregate.size(); i++)
-	{
-		MassAggregate[i]->IntegrateVelocities(delta);
-	}
-}
-
-void SoftBodyComponent::IntegratePositions(float delta) {
-	for (int i = 0; i < MassAggregate.size(); i++)
-	{
-		MassAggregate[i]->IntegratePositions(delta);
-	}
-}
-
 void SoftBodyComponent::ProcessInspectorUI() {
 	ImGui::Text("Mass ");
 	ImGui::SameLine();
@@ -57,16 +43,17 @@ void SoftBodyComponent::ProcessInspectorUI() {
 
 	ImGui::Text("Acceleration ");
 	ImGui::SameLine();
-	glm::vec3 finalAccel = CenterPM->baseAcceleration + CenterPM->accleration;
+	glm::vec3 finalAccel = CenterPM->baseAcceleration + CenterPM->acceleration;
 	float accel[2] = { finalAccel.x, finalAccel.y };
 	ImGui::InputFloat2("##Acceleration", accel, "%.3f m/s", ImGuiInputTextFlags_ReadOnly);
 
 	ImGui::Text("Stiffness ");
 	ImGui::SameLine();
 	if (ImGui::InputFloat("##Stiffness ", &stiffness, 0.0f, 0.0f, "%.3f N/m")) {
+		float compliance = (stiffness > 0.0f) ? (1.0f / stiffness) : 0.0f;
 		for (int i = 0; i < springs.size(); i++)
 		{
-			springs[i]->stiffness = stiffness;
+			springs[i]->compliance = compliance;
 		}
 	}
 
@@ -93,9 +80,10 @@ void SoftBodyComponent::CopyTo(Object* other) {
 	}
 
 	target->stiffness = stiffness;
+	float compliance = (stiffness > 0.0f) ? (1.0f / stiffness) : 0.0f;
 	for (int i = 0; i < target->springs.size(); i++)
 	{
-		target->springs[i]->stiffness = stiffness;
+		target->springs[i]->compliance = compliance;
 	}
 
 	target->damping = damping;
@@ -107,9 +95,19 @@ void SoftBodyComponent::CopyTo(Object* other) {
 }
 
 void SoftBodyComponent::OnDelete() {
-	for (SoftBodySpringConstraint* s : springs)
-		PhysicsEngine::getInstance().UnRegisterConstraint(s);
+	for (XPBDDistanceConstraint* s : springs)
+		PhysicsEngine::getInstance().UnRegisterXPBDConstraint(s);
 	springs.clear();
+	std::vector<PointMass*> allPms = PhysicsEngine::getInstance().allSoftBodyPointMasses;
+	for (int i = 0; i < MassAggregate.size(); i++)
+	{
+		for (int j = 0; j < allPms.size(); j++)
+		{
+			if (allPms[j] == MassAggregate[i].get()) {
+				allPms.erase(allPms.begin() + j);
+			}
+		}
+	}
 
 	MassAggregate.clear();
 
@@ -215,10 +213,12 @@ void SoftBodyComponent::BuildMassAggregate() {
 	{
 		glm::vec3 p = glm::vec3(rc->points[i][0], rc->points[i][1], 0.0f);
 		std::unique_ptr<PointMass> pm = std::make_unique<PointMass>(Shader("vertex.txt", "fragment.txt"), this, tc->ProjectToWorld(p), i, false);
+		PhysicsEngine::getInstance().allSoftBodyPointMasses.push_back(pm.get());
 		MassAggregate.push_back(std::move(pm));
 	}
-	
+
 	std::unique_ptr<PointMass> pm = std::make_unique<PointMass>(Shader("vertex.txt", "fragment.txt"), this, tc->GetWorldPosition(), MassAggregate.size(), true);
+	PhysicsEngine::getInstance().allSoftBodyPointMasses.push_back(pm.get());
 	MassAggregate.push_back(std::move(pm));
 
 	for (int i = 0; i < MassAggregate.size(); i++)
@@ -229,49 +229,47 @@ void SoftBodyComponent::BuildMassAggregate() {
 	int edgeCount = MassAggregate.size() - 1;
 	CenterPM = MassAggregate.back().get();
 
+	float compliance = (stiffness > 0.0f) ? (1.0f / stiffness) : 0.0f;
+
+	// Structural springs (perimeter)
 	for (int i = 0; i < edgeCount; i++)
 	{
 		PointMass* pmA = MassAggregate[i].get();
 		PointMass* pmB = MassAggregate[(i + 1) % edgeCount].get();
 
-		glm::vec3 posA = pmA->worldPos;
-		glm::vec3 posB = pmB->worldPos;
-		float restLength = glm::length(posB - posA);
+		float restLength = glm::length(pmB->worldPos - pmA->worldPos);
 
-		SoftBodySpringConstraint* spring = new SoftBodySpringConstraint(pmA->body, pmB->body, glm::vec3(0), glm::vec3(0), restLength, stiffness, damping);
-		PhysicsEngine::getInstance().RegisterConstraint(spring);
-		springs.push_back(spring);
+		XPBDDistanceConstraint* constraint = new XPBDDistanceConstraint(
+			pmA->body, pmB->body, restLength, compliance, damping);
+		PhysicsEngine::getInstance().RegisterXPBDConstraint(constraint);
+		springs.push_back(constraint);
 	}
 
 	// Spoke springs (center to each vertex)
 	for (int i = 0; i < edgeCount; i++)
 	{
 		PointMass* pmV = MassAggregate[i].get();
+		float restLength = glm::length(pmV->worldPos - CenterPM->worldPos);
 
-		glm::vec3 posV = pmV->worldPos;
-		glm::vec3 posC = CenterPM->worldPos;
-		float restLength = glm::length(posV - posC);
-
-		SoftBodySpringConstraint* spring = new SoftBodySpringConstraint(CenterPM->body, pmV->body, glm::vec3(0), glm::vec3(0), restLength, stiffness, damping);
-		PhysicsEngine::getInstance().RegisterConstraint(spring);
-		springs.push_back(spring);
+		XPBDDistanceConstraint* constraint = new XPBDDistanceConstraint(
+			CenterPM->body, pmV->body, restLength, compliance, damping);
+		PhysicsEngine::getInstance().RegisterXPBDConstraint(constraint);
+		springs.push_back(constraint);
 	}
 
-	// Shear spring
-
+	// Shear springs
 	if (edgeCount >= 4) {
 		for (int i = 0; i < edgeCount; i++)
 		{
 			PointMass* pmA = MassAggregate[i].get();
 			PointMass* pmB = MassAggregate[(i + 2) % edgeCount].get();
+			float restLength = glm::length(pmB->worldPos - pmA->worldPos);
 
-			glm::vec3 posA = pmA->worldPos;
-			glm::vec3 posB = pmB->worldPos;
-			float restLength = glm::length(posB - posA);
-
-			SoftBodySpringConstraint* spring = new SoftBodySpringConstraint(pmA->body, pmB->body, glm::vec3(0), glm::vec3(0), restLength, stiffness, damping);
-			PhysicsEngine::getInstance().RegisterConstraint(spring);
-			springs.push_back(spring);
+			XPBDDistanceConstraint* constraint = new XPBDDistanceConstraint(
+				pmA->body, pmB->body, restLength, compliance, damping);
+			PhysicsEngine::getInstance().RegisterXPBDConstraint(constraint);
+			springs.push_back(constraint);
 		}
 	}
+	
 }

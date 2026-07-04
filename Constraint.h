@@ -2,20 +2,9 @@
 #include "Object.h"
 #include "TransformComponent.h"
 #include "RigidBodyComponent.h"
+#include "PhysicsBody.h"
 #include <string>
 #include <vector>
-
-struct PhysicsBody {
-    Object* obj = nullptr;
-    glm::mat4* transformMatrix;
-
-    glm::vec3* position = nullptr;
-    float* rotation = nullptr;
-    float* invMass = nullptr;
-    float* invInertia = nullptr;
-    glm::vec3* velocity = nullptr;
-    float* angularVelocity = nullptr;
-};
 
 struct JacobianRow {
     glm::vec3 linearA;

@@ -6,6 +6,7 @@
 #include "BAHNode.h"
 #include "DebugPoint.h"
 #include "Constraint.h"
+#include "XPBDConstraint.h"
 #include "ContactConstraint.h"
 #include "ContactID.h"
 #include "PointMass.h"
@@ -103,14 +104,21 @@ public:
 	int ClipSegmentToLine(ClipVertex vOut[2], const ClipVertex vIn[2], int numInPoints,
 		const glm::vec3& normal, float offset, int referenceEdgeIndex, bool isA_Reference, int clipPlaneId);
 
-	//Constraint resolution
+	//PGS Constraint resolution
 	std::vector<ContactCache> contactsCache;
-	std::vector<Constraint*> registeredConstraints;
+	std::vector<Constraint*> registeredPGSConstraints;
 	void UpdateContactCache();
 	void UnRegisterTemporaryConstraint();
-	void RegisterConstraint(Constraint* constraint);
-	void UnRegisterConstraint(Constraint* constraint);
-	void ResolveConstraints(float delta);
+	void RegisterPGSConstraint(Constraint* constraint);
+	void UnRegisterPGSConstraint(Constraint* constraint);
+	void ResolvePGSConstraints(float delta);
+
+	//XPBD Constraint resolution 
+	std::vector<PointMass*> allSoftBodyPointMasses;
+	std::vector<XPBDConstraint*> registeredXPBDConstraints;
+	void RegisterXPBDConstraint(XPBDConstraint* constraint);
+	void UnRegisterXPBDConstraint(XPBDConstraint* constraint);
+	void ResolveXPBDConstraint(float delta);
 private:
 	PhysicsEngine() = default;
 	std::vector<std::unique_ptr<Object>>* allObjects;

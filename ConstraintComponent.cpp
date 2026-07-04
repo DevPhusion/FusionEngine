@@ -16,7 +16,7 @@ ConstraintComponent::ConstraintComponent(Object* parent)
 void ConstraintComponent::AddConstraint(std::shared_ptr<Constraint> constraint)
 {
     if (!constraint) return;
-    PhysicsEngine::getInstance().RegisterConstraint(constraint.get());
+    PhysicsEngine::getInstance().RegisterPGSConstraint(constraint.get());
     appliedConstraints.push_back(std::move(constraint));
 }
 
@@ -27,7 +27,7 @@ void ConstraintComponent::RemoveConstraint(Constraint* constraint)
 
     if (it == appliedConstraints.end()) return;
 
-    PhysicsEngine::getInstance().UnRegisterConstraint(it->get());
+    PhysicsEngine::getInstance().UnRegisterPGSConstraint(it->get());
     (*it)->Unregister(); 
     appliedConstraints.erase(it);
 }
@@ -37,7 +37,7 @@ void ConstraintComponent::RemoveConstraint(std::size_t index)
     if (index >= appliedConstraints.size()) return;
 
     auto& c = appliedConstraints[static_cast<int>(index)];
-    PhysicsEngine::getInstance().UnRegisterConstraint(c.get());
+    PhysicsEngine::getInstance().UnRegisterPGSConstraint(c.get());
     c->Unregister(); 
     appliedConstraints.erase(appliedConstraints.begin() + static_cast<std::ptrdiff_t>(index));
 }
@@ -54,7 +54,7 @@ void ConstraintComponent::OnDelete()
 {
     for (auto& c : appliedConstraints)
     {
-        PhysicsEngine::getInstance().UnRegisterConstraint(c.get());
+        PhysicsEngine::getInstance().UnRegisterPGSConstraint(c.get());
         c->Unregister();
     }
     appliedConstraints.clear();
