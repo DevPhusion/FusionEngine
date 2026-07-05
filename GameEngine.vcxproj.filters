@@ -261,6 +261,9 @@
     <ClCompile Include="XPBDDistanceConstraint.cpp">
       <Filter>Source Files\Core\Physics\Constraint\XPBDConstraint</Filter>
     </ClCompile>
+    <ClCompile Include="XPBDContactConstraint.cpp">
+      <Filter>Source Files\Core\Physics\Constraint\XPBDConstraint</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stb_image.h">
@@ -448,6 +451,12 @@
     </ClInclude>
     <ClInclude Include="XPBDDistanceConstraint.h">
       <Filter>Header Files\Core\Physics\Constraint\XPBDConstraint</Filter>
+    </ClInclude>
+    <ClInclude Include="XPBDContactConstraint.h">
+      <Filter>Header Files\Core\Physics\Constraint\XPBDConstraint</Filter>
+    </ClInclude>
+    <ClInclude Include="DebugTimer.h">
+      <Filter>Header Files\Core</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -38,9 +38,6 @@ void XPBDDistanceConstraint::SolvePosition(float delta) {
     float deltaLambda = numerator / denom;
     lambda += deltaLambda;
 
-    glm::vec3 corrA = (*objA.invMass) * gradA * deltaLambda;
-    glm::vec3 corrB = (*objB.invMass) * gradB * deltaLambda;
-
-    *objA.position += corrA;
-    *objB.position += corrB;
+    *objA.position += (*objA.invMass) * gradA * deltaLambda;
+    *objB.position += (*objB.invMass) * gradB * deltaLambda;
 }

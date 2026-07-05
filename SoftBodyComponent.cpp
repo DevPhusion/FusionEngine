@@ -98,15 +98,12 @@ void SoftBodyComponent::OnDelete() {
 	for (XPBDDistanceConstraint* s : springs)
 		PhysicsEngine::getInstance().UnRegisterXPBDConstraint(s);
 	springs.clear();
-	std::vector<PointMass*> allPms = PhysicsEngine::getInstance().allSoftBodyPointMasses;
+
+	auto& allPms = PhysicsEngine::getInstance().allSoftBodyPointMasses;  
 	for (int i = 0; i < MassAggregate.size(); i++)
 	{
-		for (int j = 0; j < allPms.size(); j++)
-		{
-			if (allPms[j] == MassAggregate[i].get()) {
-				allPms.erase(allPms.begin() + j);
-			}
-		}
+		PointMass* target = MassAggregate[i].get();
+		allPms.erase(std::remove(allPms.begin(), allPms.end(), target), allPms.end());
 	}
 
 	MassAggregate.clear();

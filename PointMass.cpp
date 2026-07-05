@@ -16,6 +16,7 @@ PointMass::PointMass(Shader shader, SoftBodyComponent* sb, glm::vec3 point, int 
 PhysicsBody PointMass::BuildPhysicsBody() {
 	PhysicsBody body = PhysicsBody();
 	body.obj = nullptr;
+	body.pm = this;
 	body.position = &worldPos;
 	body.prevPos = &prevPos;
 	body.transformMatrix = &transform;
@@ -108,7 +109,8 @@ void PointMass::ProcessTransform() {
 
 	if (worldPos != GetWorldPosition()) {
 		prevPos = GetWorldPosition();
-		UpdateWorldPosition(worldPos);
+		glm::vec3 delta = worldPos - prevPos;
+		transform = glm::translate(glm::mat4(1.0f), delta) * transform;
 	}
 }
 

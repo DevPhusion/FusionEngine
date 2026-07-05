@@ -10,6 +10,8 @@ struct ContactID {
 struct ContactCache {
 	Object* objectA = nullptr;
 	Object* objectB = nullptr;
+	void* pmA = nullptr; 
+	void* pmB = nullptr;
 	ContactID id;
 	float lambda;
 };

@@ -8,8 +8,10 @@
 #include "Constraint.h"
 #include "XPBDConstraint.h"
 #include "ContactConstraint.h"
+#include "XPBDContactConstraint.h"
 #include "ContactID.h"
 #include "PointMass.h"
+#include "DebugTimer.h"
 #include <numeric>
 
 // Sutherland Hodgman
@@ -118,6 +120,7 @@ public:
 	std::vector<XPBDConstraint*> registeredXPBDConstraints;
 	void RegisterXPBDConstraint(XPBDConstraint* constraint);
 	void UnRegisterXPBDConstraint(XPBDConstraint* constraint);
+	void UnRegisterTemporaryXPBDConstraint();
 	void ResolveXPBDConstraint(float delta);
 private:
 	PhysicsEngine() = default;

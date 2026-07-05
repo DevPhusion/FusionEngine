@@ -2,7 +2,8 @@
 #include "Object.h"
 
 struct PhysicsBody {
-    Object* obj = nullptr;
+    Object* obj = nullptr; // set if is rigidbody
+    void* pm = nullptr; // set if is soft body point mass
     glm::mat4* transformMatrix;
 
     glm::vec3* position = nullptr;

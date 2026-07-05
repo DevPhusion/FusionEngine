@@ -10,6 +10,7 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 		return;
 	}
 
+	UnRegisterTemporaryXPBDConstraint();
 	UnRegisterTemporaryConstraint();
 
 	for (int i = 0; i < ForceRegistrations.size(); i++)
@@ -36,8 +37,8 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 		ResolveContacts(potentialContacts, totalContacts);
 	}
 
-	ResolveXPBDConstraint(delta);
 	ResolvePGSConstraints(delta);
+	ResolveXPBDConstraint(delta);
 
 	UpdateContactCache();
 
@@ -314,23 +315,16 @@ bool PhysicsEngine::ResolveSoftPointSoftEdgeContacts(PhysicsBody pointBody, Poin
 	cp.normal = contactNormal;
 	cp.penetration = penetration;
 	cp.id = ContactID();
-	allContactPoints.push_back(cp);
+	allContactPoints.push_back(cp);  
 
-	float cachedLambda = 0.0f;
-	for (const auto& cached : contactsCache) {
-		if ((cached.objectA == pointMass->body.obj && cached.objectB == nearPM->body.obj) ||
-			(cached.objectA == nearPM->body.obj && cached.objectB == pointMass->body.obj)) {
-			cachedLambda = cached.lambda;
-			break;
-		}
-	}
-
-	ContactConstraint* constraint = new ContactConstraint(
+	XPBDContactConstraint* constraint = new XPBDContactConstraint(
 		pointBody, nearPM->body,
-		bestPoint, bestPoint, ContactID(), contactNormal, penetration,
-		0.2f, 0.4f, 0.6f);
-	constraint->SetInitialImpulse(cachedLambda);
-	RegisterPGSConstraint(constraint);
+		contactNormal, vertexRadius,     
+		0.0001f,                            
+		0.6f, 0.4f);                     
+	constraint->isTemporary = true;
+	RegisterXPBDConstraint(constraint);
+
 	return true;
 }
 
@@ -411,7 +405,11 @@ bool PhysicsEngine::ResolveRigidVertexSoftEdgeContacts(const glm::vec3& checkPoi
 	int edgeCount = (int)sb->MassAggregate.size() - 1;
 	int i0 = edges[bestEdge].idxA;
 	int i1 = edges[bestEdge].idxB;
-	PointMass* nearPM = (bestT < 0.5f) ? sb->MassAggregate[i0].get() : sb->MassAggregate[i1].get();
+	PointMass* pm0 = sb->MassAggregate[i0].get();
+	PointMass* pm1 = sb->MassAggregate[i1].get();
+
+	float w1 = glm::clamp(bestT, 0.0f, 1.0f);
+	float w0 = 1.0f - w1;
 
 	ContactPoint cp;
 	cp.point = bestPoint;
@@ -420,22 +418,38 @@ bool PhysicsEngine::ResolveRigidVertexSoftEdgeContacts(const glm::vec3& checkPoi
 	cp.id = ContactID();
 	allContactPoints.push_back(cp);
 
-	float cachedLambda = 0.0f;
+	float cachedLambda0 = 0.0f, cachedLambda1 = 0.0f;
 	for (const auto& cached : contactsCache) {
-		if ((cached.objectA == rigidBody.obj && cached.objectB == nearPM->body.obj) ||
-			(cached.objectA == nearPM->body.obj && cached.objectB == rigidBody.obj)) {
-			cachedLambda = cached.lambda;
-			break;
-		}
+		bool match0 = (cached.objectA == rigidBody.obj && cached.pmB == pm0->body.pm) ||
+			(cached.objectB == rigidBody.obj && cached.pmA == pm0->body.pm);
+		if (match0) cachedLambda0 = cached.lambda;
+
+		bool match1 = (cached.objectA == rigidBody.obj && cached.pmB == pm1->body.pm) ||
+			(cached.objectB == rigidBody.obj && cached.pmA == pm1->body.pm);
+		if (match1) cachedLambda1 = cached.lambda;
 	}
 
-	ContactConstraint* constraint = new ContactConstraint(
-		rigidBody, nearPM->body,
-		bestPoint, bestPoint,
-		ContactID(), contactNormal, penetration,
-		0.2f, 0.4f, 0.6f);
-	constraint->SetInitialImpulse(cachedLambda);
-	RegisterPGSConstraint(constraint);
+	if (w0 > 1e-4f) {
+		ContactConstraint* c0 = new ContactConstraint(
+			rigidBody, pm0->body,
+			bestPoint, bestPoint,
+			ContactID(), contactNormal, penetration,
+			0.2f, 0.4f, 0.6f,
+			1.0f, w0);
+		c0->SetInitialImpulse(cachedLambda0);
+		RegisterPGSConstraint(c0);
+	}
+
+	if (w1 > 1e-4f) {
+		ContactConstraint* c1 = new ContactConstraint(
+			rigidBody, pm1->body,
+			bestPoint, bestPoint,
+			ContactID(), contactNormal, penetration,
+			0.2f, 0.4f, 0.6f,
+			1.0f, w1);
+		c1->SetInitialImpulse(cachedLambda1);
+		RegisterPGSConstraint(c1);
+	}
 
 	return true;
 }
@@ -546,8 +560,14 @@ bool PhysicsEngine::ResolveCirclePolygonContacts(PhysicsBody circle, PhysicsBody
 
 		float cachedLambda = 0.0f;
 		for (const auto& cached : contactsCache) {
-			if ((cached.objectA == circle.obj && cached.objectB == polygon.obj) || 
-				(cached.objectA == polygon.obj && cached.objectB == circle.obj)) {
+			bool matchCircle = circle.obj ? (cached.objectA == circle.obj || cached.objectB == circle.obj)
+				: (cached.pmA == circle.pm || cached.pmB == circle.pm);
+			bool matchPolygon = (cached.objectA == polygon.obj || cached.objectB == polygon.obj);
+
+			bool matchAB = (cached.objectA == polygon.obj && (circle.obj ? cached.objectB == circle.obj : cached.pmB == circle.pm)) ||
+				(cached.objectB == polygon.obj && (circle.obj ? cached.objectA == circle.obj : cached.pmA == circle.pm));
+
+			if (matchAB) {
 				cachedLambda = cached.lambda;
 				break;
 			}
@@ -913,17 +933,16 @@ void PhysicsEngine::RegisterPGSConstraint(Constraint* constraint) {
 
 void PhysicsEngine::UpdateContactCache() {
 	contactsCache.clear();
-
 	for (auto* constraint : registeredPGSConstraints) {
 		if (constraint->isTemporary) {
 			auto* contact = static_cast<ContactConstraint*>(constraint);
-
 			ContactCache entry;
-			entry.objectA = contact->objectA.obj; 
+			entry.objectA = contact->objectA.obj;
 			entry.objectB = contact->objectB.obj;
+			entry.pmA = contact->objectA.pm;   // NEW
+			entry.pmB = contact->objectB.pm;   // NEW
 			entry.id = contact->contactId;
 			entry.lambda = contact->cacheLambda;
-
 			contactsCache.push_back(entry);
 		}
 	}
@@ -1012,6 +1031,25 @@ void PhysicsEngine::ResolvePGSConstraints(float delta) {
 	for (auto* constraint : registeredPGSConstraints) {
 		constraint->PostSolve(solverRows);
 	}
+
+	// Bridge to XPBD
+	for (auto* constraint : registeredPGSConstraints)
+	{
+		if (!constraint->isTemporary) continue;
+		auto* contact = static_cast<ContactConstraint*>(constraint);
+
+		glm::vec3 normal = contact->normal;
+		float lambda = contact->cacheLambda;
+
+		if (!contact->objectA.obj) {
+			glm::vec3 deltaX = (*contact->objectA.invMass) * normal * lambda * delta;
+			*contact->objectA.position += deltaX;
+		}
+		else if (!contact->objectB.obj) {
+			glm::vec3 deltaX = -(*contact->objectB.invMass) * normal * lambda * delta;
+			*contact->objectB.position += deltaX;
+		}
+	}
 }
 
 // XPBD constraints
@@ -1024,6 +1062,18 @@ void PhysicsEngine::UnRegisterXPBDConstraint(XPBDConstraint* constraint) {
 	{
 		if (registeredXPBDConstraints[i] == constraint) {
 			registeredXPBDConstraints.erase(registeredXPBDConstraints.begin() + i);
+		}
+	}
+}
+
+void PhysicsEngine::UnRegisterTemporaryXPBDConstraint() {
+	for (auto it = registeredXPBDConstraints.begin(); it != registeredXPBDConstraints.end(); ) {
+		if ((*it)->isTemporary) {
+			delete* it;
+			it = registeredXPBDConstraints.erase(it);
+		}
+		else {
+			++it;
 		}
 	}
 }
@@ -1051,7 +1101,6 @@ void PhysicsEngine::ResolveXPBDConstraint(float delta) {
 			}
 		}
 
-		// 3. Update velocities (v_n+1 = (x_n+1 - x_n) / dt) 
 		for (auto& pm : allSoftBodyPointMasses) {
 			pm->velocity = (pm->worldPos - pm->prevPos) / dtSub;
 		}

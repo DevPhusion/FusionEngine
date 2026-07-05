@@ -101,10 +101,13 @@
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>D:\Programming\GameEngine\Libraries\include;D:\Programming\GameEngine\Libraries\include\glad;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>D:\Programming\GameEngine\Libraries\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -130,10 +133,13 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>D:\Programming\GameEngine\Libraries\include;D:\Programming\GameEngine\Libraries\include\glad;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>D:\Programming\GameEngine\Libraries\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -192,6 +198,7 @@
     <ClCompile Include="VertexPoint.cpp" />
     <ClCompile Include="WeldConstraint.cpp" />
     <ClCompile Include="XPBDConstraint.cpp" />
+    <ClCompile Include="XPBDContactConstraint.cpp" />
     <ClCompile Include="XPBDDistanceConstraint.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -210,6 +217,7 @@
     <ClInclude Include="ContactID.h" />
     <ClInclude Include="DebugCircle.h" />
     <ClInclude Include="DebugPoint.h" />
+    <ClInclude Include="DebugTimer.h" />
     <ClInclude Include="DistanceConstraint.h" />
     <ClInclude Include="EditorManager.h" />
     <ClInclude Include="EngineManager.h" />
@@ -256,6 +264,7 @@
     <ClInclude Include="VertexPoint.h" />
     <ClInclude Include="WeldConstraint.h" />
     <ClInclude Include="XPBDConstraint.h" />
+    <ClInclude Include="XPBDContactConstraint.h" />
     <ClInclude Include="XPBDDistanceConstraint.h" />
   </ItemGroup>
   <ItemGroup>

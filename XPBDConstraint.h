@@ -8,6 +8,8 @@ class XPBDConstraint
 public:
 	XPBDConstraint() = default;
 
+	bool isTemporary = false;
+
 	float lambda = 0.0f;
 	float compliance = 0.0f;
 	float damping = 0.0f;
