@@ -13,8 +13,6 @@
 #include "VertexPoint.h"
 #include "MouseDrag.h"
 
-Renderer renderer = Renderer(&ObjectManager::getInstance().allObjects);
-
 void cursorPressedCallback(int button, int action, int mods) {
 	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
 		ObjectManager::getInstance().AddPolygonVertex();
@@ -64,7 +62,8 @@ int main() {
 		glfwSetWindowIcon(window, 1, images);
 		stbi_image_free(images[0].pixels); // Clean up memory safely after setting
 	}
-
+	
+	Renderer::getInstance().Setup(&ObjectManager::getInstance().allObjects);
 	EditorManager::getInstance().Setup(window);
 
 	InputManager::getInstance().Setup(window);
@@ -75,7 +74,7 @@ int main() {
 	PhysicsEngine::getInstance().Setup(&ObjectManager::getInstance().allObjects);
 
 	Camera::getInstance().Setup();
-	renderer.SetupGrid();
+	Renderer::getInstance().SetupGrid();
 
 	float prev_t = glfwGetTime(); 
 	float physicsAccumulator = 0.0f;
@@ -102,9 +101,10 @@ int main() {
 		ObjectManager::getInstance().ProcessObjects(delta);
 
 		glad_glClearColor(0.235f, 0.239f, 0.216f, 1.0f);
+		//glad_glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		renderer.Draw();
+		Renderer::getInstance().Draw();
 		EditorManager::getInstance().ProcessEditor();
 
 		glfwSwapBuffers(window);

@@ -1,7 +1,7 @@
 #include "Renderer.h"
 
-Renderer::Renderer(std::vector<std::unique_ptr<Object>>* objects) {
-	this->allObjects = objects;
+void Renderer::Setup(std::vector<std::unique_ptr<Object>>* objects) {
+    this->allObjects = objects;
 }
 
 void Renderer::Draw() {
@@ -59,10 +59,23 @@ void Renderer::Draw() {
             point.DrawPoint(PhysicsEngine::getInstance().allContactPoints[i].point, 15, Shader("vertex.txt", "fragment.txt"));
         }
 
+        for (int i = 0; i < PhysicsEngine::getInstance().allContactPoints.size(); i++)
+        {
+            ContactPoint& cp = PhysicsEngine::getInstance().allContactPoints[i];
+
+            DebugPoint point = DebugPoint();
+            point.DrawPoint(cp.point, 15, Shader("vertex.txt", "fragment.txt"));
+
+            glm::vec4 normalColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f); 
+            float arrowLength = 0.5f; 
+            DrawArrow(cp.point, cp.normal, arrowLength, normalColor);
+        }
+
         for (int i = 0; i < (*allObjects).size(); i++)
         {
             SoftBodyComponent* sb = (*allObjects)[i]->GetComponent<SoftBodyComponent>();
 			if (sb) {
+                sb->DrawSprings();
 				for (int j = 0; j < sb->MassAggregate.size(); j++)
 				{
 					sb->MassAggregate[j]->DrawDebug();
@@ -73,4 +86,82 @@ void Renderer::Draw() {
         glLineWidth(1.0f);
     }
 
+}
+
+void Renderer::DrawLine(glm::vec3 p1, glm::vec3 p2, glm::vec4 color) {
+    static unsigned int lineVAO = 0;
+    static unsigned int lineVBO = 0;
+    static unsigned int whiteTex = 0;
+    static Shader lineShader = Shader("vertex.txt", "fragment.txt");
+
+    if (lineVAO == 0) {
+        glGenVertexArrays(1, &lineVAO);
+        glGenBuffers(1, &lineVBO);
+
+        glBindVertexArray(lineVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
+        glBufferData(GL_ARRAY_BUFFER, 2 * 3 * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+
+        unsigned char whitePixel[4] = { 255, 255, 255, 255 };
+        glGenTextures(1, &whiteTex);
+        glBindTexture(GL_TEXTURE_2D, whiteTex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, whitePixel);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    }
+
+    float vertices[6] = { p1.x, p1.y, p1.z, p2.x, p2.y, p2.z };
+    glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    lineShader.use();
+    lineShader.setVec4D("aColor", color);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, whiteTex);
+
+    glm::mat4 identity(1.0f);
+    glm::mat4 projection = glm::ortho(-EngineManager::getInstance().aspectRatio,
+        EngineManager::getInstance().aspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
+
+    lineShader.setMat4D("projection", projection);
+    lineShader.setMat4D("transform", identity);
+    lineShader.setMat4D("view", Camera::getInstance().viewMatrix);
+
+    glBindVertexArray(lineVAO);
+    glDrawArrays(GL_LINES, 0, 2);
+    glBindVertexArray(0);
+}
+
+void Renderer::DrawArrow(glm::vec3 origin, glm::vec3 direction, float length, glm::vec4 color,
+    float headLength, float headAngleDeg) {
+    if (glm::length(direction) < 1e-8f) return;
+    glm::vec3 dir = glm::normalize(direction);
+
+    glm::vec3 tip = origin + dir * length;
+
+    DrawLine(origin, tip, color);
+
+    glm::vec3 back = -dir;
+    float rad = glm::radians(headAngleDeg);
+
+    auto rotateZ = [](glm::vec3 v, float angle) {
+        float c = cos(angle);
+        float s = sin(angle);
+        return glm::vec3(v.x * c - v.y * s, v.x * s + v.y * c, v.z);
+        };
+
+    glm::vec3 headDirA = rotateZ(back, rad);
+    glm::vec3 headDirB = rotateZ(back, -rad);
+
+    glm::vec3 headA = tip + headDirA * headLength;
+    glm::vec3 headB = tip + headDirB * headLength;
+
+    DrawLine(tip, headA, color);
+    DrawLine(tip, headB, color);
 }

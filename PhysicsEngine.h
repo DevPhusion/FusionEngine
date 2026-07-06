@@ -91,14 +91,17 @@ public:
 	void ResolveContacts(PotentialContact* contacts, unsigned numContacts);
 	bool ResolveSoftPointSoftEdgeContacts(PhysicsBody pointBody, PointMass* pointMass,
 		SoftBodyComponent* otherSb, const std::vector<SoftEdge>& otherEdges,
-		float vertexRadius);
-	bool ResolveRigidVertexSoftEdgeContacts(const glm::vec3& checkPoint, PhysicsBody rigidBody, SoftBodyComponent* sb, const std::vector<SoftEdge>& edges, float vertexRadius);
+		float vertexRadius, const glm::vec3* forcedAxis = nullptr);
+	bool ResolveRigidVertexSoftEdgeContacts(const glm::vec3& checkPoint, PhysicsBody rigidBody, SoftBodyComponent* sb, const std::vector<SoftEdge>& edges, float vertexRadius, const glm::vec3* forcedAxis = nullptr);
 	bool ResolveCircleCircleContacts(PhysicsBody bodyA, PhysicsBody bodyB, float rA, float rB);
-	bool ResolveCirclePolygonContacts(PhysicsBody circle, PhysicsBody polygon, float radius, std::vector<Edge> edges);
+	bool ResolveCirclePolygonContacts(PhysicsBody circle, PhysicsBody polygon, float radius, std::vector<Edge> edges, const glm::vec3* forcedAxis = nullptr);
 	bool ResolvePolygonPolygonContacts(PhysicsBody bodyA, PhysicsBody bodyB);
 	CollisionData SAT(Object* objA, Object* objB);
 	std::vector<ContactPoint> GenerateContactPoints(CollisionData collisionData);
 
+	glm::vec3 ComputeSoftSoftAxis(SoftBodyComponent* sbA, const std::vector<SoftEdge>& edgesA,
+		SoftBodyComponent* sbB, const std::vector<SoftEdge>& edgesB, bool* outValid);
+	glm::vec3 ComputeRigidSoftAxis(PhysicsBody rigidBody, const std::vector<Edge>& rigidEdgesLocal, SoftBodyComponent* sb, bool* outValid);
 	Projection ProjectOntoAxis(std::vector<glm::vec3>& vertices, SeparatingAxis axis);
 	float ComputeSignedArea(const std::vector<glm::vec3>& vertices);
 	Edge FindMostParallelEdge(const std::vector<Edge>& edges, const glm::vec3& normal);

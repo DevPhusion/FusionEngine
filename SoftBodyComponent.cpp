@@ -51,6 +51,7 @@ void SoftBodyComponent::ProcessInspectorUI() {
 	ImGui::SameLine();
 	if (ImGui::InputFloat("##Stiffness ", &stiffness, 0.0f, 0.0f, "%.3f N/m")) {
 		float compliance = (stiffness > 0.0f) ? (1.0f / stiffness) : 0.0f;
+		areaConstraint->compliance = compliance;
 		for (int i = 0; i < springs.size(); i++)
 		{
 			springs[i]->compliance = compliance;
@@ -98,6 +99,7 @@ void SoftBodyComponent::OnDelete() {
 	for (XPBDDistanceConstraint* s : springs)
 		PhysicsEngine::getInstance().UnRegisterXPBDConstraint(s);
 	springs.clear();
+	PhysicsEngine::getInstance().UnRegisterXPBDConstraint(areaConstraint);
 
 	auto& allPms = PhysicsEngine::getInstance().allSoftBodyPointMasses;  
 	for (int i = 0; i < MassAggregate.size(); i++)
@@ -206,7 +208,12 @@ void SoftBodyComponent::BuildMassAggregate() {
 	RenderComponent* rc = parent->GetComponent<RenderComponent>();
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
 
-	for (int i = 0; i < rc->points.size(); i++)
+	int physicsPointCount = (int)rc->points.size();
+	if (std::holds_alternative<CircleShape>(rc->currentShape)) {
+		physicsPointCount -= 1;
+	}
+
+	for (int i = 0; i < physicsPointCount; i++)
 	{
 		glm::vec3 p = glm::vec3(rc->points[i][0], rc->points[i][1], 0.0f);
 		std::unique_ptr<PointMass> pm = std::make_unique<PointMass>(Shader("vertex.txt", "fragment.txt"), this, tc->ProjectToWorld(p), i, false);
@@ -269,4 +276,32 @@ void SoftBodyComponent::BuildMassAggregate() {
 		}
 	}
 	
+	// Apply area constraint
+	std::vector<PhysicsBody> massBody;
+	for (int i = 0; i < MassAggregate.size() - 1; i++)
+	{
+		massBody.push_back(MassAggregate[i]->body);
+	}
+
+	areaConstraint = new XPBDAreaConstraint(massBody,  (stiffness > 0.0f) ? (1.0f / stiffness) : 0.0f);
+	PhysicsEngine::getInstance().RegisterXPBDConstraint(areaConstraint);
+}
+
+void SoftBodyComponent::DrawSprings() {
+	auto& renderer = Renderer::getInstance();
+
+	for (const auto* spring : springs) {
+		glm::vec3 posA = *spring->objA.position;
+		glm::vec3 posB = *spring->objB.position;
+
+		float currentLength = glm::length(posA - posB);
+		float ratio = currentLength / spring->restLength;
+
+		glm::vec4 color;
+		if (ratio > 1.05f) color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f); 
+		else if (ratio < 0.95f) color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f); 
+		else color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f); 
+
+		renderer.DrawLine(posA, posB, color);
+	}
 }

@@ -197,6 +197,7 @@
     <ClCompile Include="VertexComponent.cpp" />
     <ClCompile Include="VertexPoint.cpp" />
     <ClCompile Include="WeldConstraint.cpp" />
+    <ClCompile Include="XPBDAreaConstraint.cpp" />
     <ClCompile Include="XPBDConstraint.cpp" />
     <ClCompile Include="XPBDContactConstraint.cpp" />
     <ClCompile Include="XPBDDistanceConstraint.cpp" />
@@ -263,6 +264,7 @@
     <ClInclude Include="VertexComponent.h" />
     <ClInclude Include="VertexPoint.h" />
     <ClInclude Include="WeldConstraint.h" />
+    <ClInclude Include="XPBDAreaConstraint.h" />
     <ClInclude Include="XPBDConstraint.h" />
     <ClInclude Include="XPBDContactConstraint.h" />
     <ClInclude Include="XPBDDistanceConstraint.h" />

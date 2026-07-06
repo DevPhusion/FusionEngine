@@ -20,6 +20,7 @@ public:
 	glm::vec3 worldPosition = glm::vec3(0);
 	glm::vec3 rotation_center = glm::vec3(0);
 	glm::vec3 position = glm::vec3(0);
+	glm::vec3 prevPos = glm::vec3(0);
 	glm::vec3 size = glm::vec3(1);
 	std::unordered_map<int, std::function<void()>> transformCallback;
 	float rotation = 0;

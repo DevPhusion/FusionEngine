@@ -106,6 +106,7 @@ void TransformComponent::UpdateWorldPosition(glm::vec3 targetWorldPos) {
 	glm::mat4 newOriginTransform = glm::translate(glm::mat4(1.0f), delta) * OriginTransform;
 	
 	SetOriginTransform(newOriginTransform);
+	prevPos = worldPosition;
 	worldPosition = GetWorldPosition();
 }
 
@@ -197,6 +198,7 @@ void TransformComponent::ProcessTransform() {
 	this->shader.setMat4D("view", Camera::getInstance().viewMatrix);
 
 	if (worldPosition != GetWorldPosition()) {
+		prevPos = GetWorldPosition();
 		UpdateWorldPosition(worldPosition);
 	}
 }
