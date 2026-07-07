@@ -146,6 +146,23 @@ void Constraint::OnDisplayAMoved()
     if (objectA.obj == nullptr || attachDisplayA == nullptr) return;
     glm::vec3 world = attachDisplayA->GetComponent<TransformComponent>()->GetWorldPosition();
     attachPointA = objectA.obj->GetComponent<TransformComponent>()->ProjectToWorld(world, true);
+   
+    SoftBodyComponent* sb = objectA.obj->GetComponent<SoftBodyComponent>();
+    if (sb) {
+        if (!virtualPMA) {
+            virtualPMA = sb->AddVirtualPointMass(attachPointA);
+        }
+        else {
+            sb->RemoveVirtualPointMass(virtualPMA);
+            virtualPMA = sb->AddVirtualPointMass(attachPointA);
+        }
+        objectA.velocity = &virtualPMA->velocity;
+        objectA.angularVelocity = &virtualPMA->angularVelocity;
+        objectA.invInertia = &virtualPMA->InverseInertia;
+        objectA.position = &virtualPMA->worldPos;
+        objectA.transformMatrix = &virtualPMA->transform;
+        objectA.invMass = &virtualPMA->inverseMass;
+    }
 
     ProcessConstraintDisplay();
 }
@@ -155,6 +172,23 @@ void Constraint::OnDisplayBMoved()
     if (objectB.obj == nullptr || attachDisplayB == nullptr) return;
     glm::vec3 world = attachDisplayB->GetComponent<TransformComponent>()->GetWorldPosition();
     attachPointB = objectB.obj->GetComponent<TransformComponent>()->ProjectToWorld(world, true);
+
+    SoftBodyComponent* sb = objectB.obj->GetComponent<SoftBodyComponent>();
+    if (sb) {
+        if (!virtualPMB) {
+            virtualPMB = sb->AddVirtualPointMass(attachPointB);
+        }
+        else {
+            sb->RemoveVirtualPointMass(virtualPMB);
+            virtualPMB = sb->AddVirtualPointMass(attachPointB);
+        }
+        objectB.velocity = &virtualPMB->velocity;
+        objectB.angularVelocity = &virtualPMB->angularVelocity;
+        objectB.invInertia = &virtualPMB->InverseInertia;
+        objectB.position = &virtualPMB->worldPos;
+        objectB.transformMatrix = &virtualPMB->transform;
+        objectB.invMass = &virtualPMB->inverseMass;
+    }
 
     ProcessConstraintDisplay();
 }
@@ -278,12 +312,19 @@ void Constraint::ProcessInspectorUI(Object* parent)
         PhysicsBody body = PhysicsBody();
         TransformComponent* tc = parent->GetComponent<TransformComponent>();
         RigidBodyComponent* pc = parent->GetComponent<RigidBodyComponent>();
+        SoftBodyComponent* sb = parent->GetComponent<SoftBodyComponent>();
         body.obj = parent;
 
         if (tc) {
             body.position = &tc->worldPosition;
             body.transformMatrix = &tc->WorldMatrix;
             body.rotation = &tc->rotation;
+        }
+        if (sb) {
+            body.velocity = &sb->CenterPM->velocity;
+            body.angularVelocity = &sb->CenterPM->angularVelocity;
+            body.invInertia = &sb->CenterPM->InverseInertia;
+            body.invMass = &sb->inverseMass;
         }
         if (pc) {
             body.velocity = &pc->velocity;
@@ -408,12 +449,19 @@ void Constraint::ProcessInspectorUI(Object* parent)
                 PhysicsBody body = PhysicsBody();
                 TransformComponent* tc = pendingSelection->GetComponent<TransformComponent>();
                 RigidBodyComponent* pc = pendingSelection->GetComponent<RigidBodyComponent>();
+                SoftBodyComponent* sb = pendingSelection->GetComponent<SoftBodyComponent>();
                 body.obj = pendingSelection;
 
                 if (tc) {
                     body.position = &tc->worldPosition;
                     body.transformMatrix = &tc->WorldMatrix;
                     body.rotation = &tc->rotation;
+                }
+                if (sb) {
+                    body.velocity = &sb->CenterPM->velocity;
+                    body.angularVelocity = &sb->CenterPM->angularVelocity;
+                    body.invInertia = &sb->CenterPM->InverseInertia;
+                    body.invMass = &sb->inverseMass;
                 }
                 if (pc) {
                     body.velocity = &pc->velocity;

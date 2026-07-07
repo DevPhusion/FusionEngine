@@ -6,6 +6,7 @@ SoftBodyComponent::SoftBodyComponent(Object* parent) : ComponentBase<SoftBodyCom
 	BuildMassAggregate();
 
 	transformCallbackID = parent->GetComponent<TransformComponent>()->AddTransformCallback([this] {UpdateMassAggregate();});
+	setShapeCallbackID = parent->GetComponent<RenderComponent>()->AddOnShapeSetCallback([this] {RebuildMassAggregate();});
 
 	if (parent->HasComponent<MouseInteractComponent>()) {
 		parent->GetComponent<MouseInteractComponent>()->physicsInteract = true;
@@ -13,6 +14,7 @@ SoftBodyComponent::SoftBodyComponent(Object* parent) : ComponentBase<SoftBodyCom
 }
 
 void SoftBodyComponent::ProcessSoftBody(float delta) {
+	ProcessVirtualPointMass(delta);
 	SyncMeshFromMassAggregate();
 }
 
@@ -112,6 +114,8 @@ void SoftBodyComponent::OnDelete() {
 
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
 	if (tc) tc->RemoveTransformCallback(transformCallbackID);
+	RenderComponent* rc = parent->GetComponent<RenderComponent>();
+	if (rc) rc->RemoveOnShapeSetCallback(setShapeCallbackID);
 }
 
 std::vector<SoftEdge> SoftBodyComponent::GetEdgesFromMassAggregate() {
@@ -191,7 +195,7 @@ void SoftBodyComponent::SyncMeshFromMassAggregate() {
 	}
 
 	VertexComponent* vc = parent->GetComponent<VertexComponent>();
-	if (vc) {
+	if (vc && std::holds_alternative<PolygonShape>(rc->currentShape)) {
 		for (int i = 0; i < edgeCount; i++)
 		{
 			glm::vec3 worldP = MassAggregate[i]->worldPos;
@@ -201,6 +205,24 @@ void SoftBodyComponent::SyncMeshFromMassAggregate() {
 	}
 
 	updatingFromPoints = false;
+}
+
+void SoftBodyComponent::RebuildMassAggregate() {
+	for (XPBDDistanceConstraint* s : springs)
+		PhysicsEngine::getInstance().UnRegisterXPBDConstraint(s);
+	springs.clear();
+	PhysicsEngine::getInstance().UnRegisterXPBDConstraint(areaConstraint);
+
+	auto& allPms = PhysicsEngine::getInstance().allSoftBodyPointMasses;
+	for (int i = 0; i < MassAggregate.size(); i++)
+	{
+		PointMass* target = MassAggregate[i].get();
+		allPms.erase(std::remove(allPms.begin(), allPms.end(), target), allPms.end());
+	}
+
+	MassAggregate.clear();
+
+	BuildMassAggregate();
 }
 
 void SoftBodyComponent::BuildMassAggregate() {
@@ -285,6 +307,92 @@ void SoftBodyComponent::BuildMassAggregate() {
 
 	areaConstraint = new XPBDAreaConstraint(massBody,  (stiffness > 0.0f) ? (1.0f / stiffness) : 0.0f);
 	PhysicsEngine::getInstance().RegisterXPBDConstraint(areaConstraint);
+}
+
+PointMass* SoftBodyComponent::AddVirtualPointMass(glm::vec3 point) {
+	TransformComponent* tc = parent->GetComponent<TransformComponent>();
+
+	glm::vec3 worldPos = tc->ProjectToWorld(point);
+
+	std::unique_ptr<PointMass> vpm = std::make_unique<PointMass>(
+		Shader("vertex.txt", "fragment.txt"), this, worldPos, (int)VirtualMassAggregate.size(), false);
+
+	vpm->inverseMass = inverseMass * MassAggregate.size();
+
+	std::vector<std::pair<float, PointMass*>> distances;
+	distances.reserve(MassAggregate.size());
+	for (auto& pm : MassAggregate) {
+		float d = glm::length(pm->worldPos - worldPos);
+		distances.push_back({ d, pm.get() });
+	}
+	std::sort(distances.begin(), distances.end(),
+		[](const auto& a, const auto& b) { return a.first < b.first; });
+
+	int linkCount = std::max(1, (int)std::round(distances.size() * virtualPointPercentClosest));
+	linkCount = std::min(linkCount, (int)distances.size());
+
+	const float epsilon = 1e-4f;
+	std::vector<float> rawWeights(linkCount);
+	float weightSum = 0.0f;
+	for (int i = 0; i < linkCount; i++) {
+		rawWeights[i] = 1.0f / (distances[i].first + epsilon);
+		weightSum += rawWeights[i];
+	}
+
+	for (int i = 0; i < linkCount; i++) {
+		float normalizedWeight = rawWeights[i] / weightSum;
+		virtualLinks.push_back({
+			vpm.get(),
+			distances[i].second,
+			normalizedWeight
+			});
+	}
+
+	PointMass* virtualPm = vpm.get();
+	VirtualMassAggregate.push_back(std::move(vpm));
+	PhysicsEngine::getInstance().allVirtualPointMasses.push_back(virtualPm);
+	return virtualPm;
+}
+
+void SoftBodyComponent::RemoveVirtualPointMass(PointMass* pm) {
+	for (int i = 0; i < PhysicsEngine::getInstance().allVirtualPointMasses.size(); i++)
+	{
+		if (PhysicsEngine::getInstance().allVirtualPointMasses[i] == pm) {
+			PhysicsEngine::getInstance().allVirtualPointMasses.erase((PhysicsEngine::getInstance().allVirtualPointMasses.begin() + i));
+		}
+	}
+
+	virtualLinks.erase(std::remove_if(virtualLinks.begin(), virtualLinks.end(),
+		[pm](const VirtualLink& link) { return link.virtualPM == pm; }),
+		virtualLinks.end());
+
+	auto it = std::find_if(VirtualMassAggregate.begin(), VirtualMassAggregate.end(),
+		[pm](const std::unique_ptr<PointMass>& p) { return p.get() == pm; });
+
+	if (it != VirtualMassAggregate.end()) {
+		(*it)->OnDelete(); 
+		VirtualMassAggregate.erase(it);
+	}
+}
+
+void SoftBodyComponent::ProcessVirtualPointMass(float delta) {
+	for (const auto& link : virtualLinks) {
+		link.realPM->velocity += link.virtualPM->velocity * link.weight;
+	}
+
+	for (auto& vpm : VirtualMassAggregate) {
+		glm::vec3 weightedPos(0.0f);
+		float totalWeight = 0.0f;
+		for (const auto& link : virtualLinks) {
+			if (link.virtualPM != vpm.get()) continue;
+			weightedPos += link.realPM->worldPos * link.weight;
+			totalWeight += link.weight;
+		}
+		if (totalWeight > 0.0f) {
+			vpm->UpdateWorldPosition(weightedPos / totalWeight);
+			vpm->velocity = glm::vec3(0.0f); 
+		}
+	}
 }
 
 void SoftBodyComponent::DrawSprings() {

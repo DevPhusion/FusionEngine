@@ -2,6 +2,7 @@
 #include "Component.h"
 #include "Constraint.h"
 #include "PhysicsEngine.h"
+#include "SoftBodyComponent.h"
 
 class ConstraintComponent : public ComponentBase<ConstraintComponent> {
 public:

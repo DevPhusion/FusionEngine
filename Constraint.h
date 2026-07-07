@@ -31,6 +31,8 @@ struct SolverRow {
     class Constraint* parentConstraint = nullptr;
 };
 
+class PointMass;
+
 class Constraint
 {
 public:
@@ -74,6 +76,8 @@ public:
     virtual void ProcessInspectorUI(Object* parent);
 
 protected:
+    PointMass* virtualPMA = nullptr;
+    PointMass* virtualPMB = nullptr;
     Object* attachDisplayA = nullptr;
     Object* attachDisplayB = nullptr;
     Object* constraintDisplay = nullptr;

@@ -74,12 +74,19 @@ void ConstraintComponent::ProcessInspectorUI()
         PhysicsBody body = PhysicsBody();
         TransformComponent* tc = parent->GetComponent<TransformComponent>();
         RigidBodyComponent* pc = parent->GetComponent<RigidBodyComponent>();
+        SoftBodyComponent* sb = parent->GetComponent<SoftBodyComponent>();
         body.obj = parent;
 
         if (tc) {
             body.position = &tc->worldPosition;
             body.transformMatrix = &tc->WorldMatrix;
             body.rotation = &tc->rotation;
+        }
+        if (sb) {
+            body.velocity = &sb->CenterPM->velocity;
+            body.angularVelocity = &sb->CenterPM->angularVelocity;
+            body.invInertia = &sb->CenterPM->InverseInertia;
+            body.invMass = &sb->inverseMass;
         }
         if (pc) {
             body.velocity = &pc->velocity;

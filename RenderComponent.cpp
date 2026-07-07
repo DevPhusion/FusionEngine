@@ -65,6 +65,16 @@ RenderComponent::RenderComponent(Object* parent, std::vector<float> vertices, Sh
 	SetTexture(texture_path);
 }
 
+int RenderComponent::AddOnShapeSetCallback(std::function<void()> func) {
+	shapeCallbackID += 1;
+	OnShapeSetCallbacks[shapeCallbackID] = func;
+	return shapeCallbackID;
+}
+
+void RenderComponent::RemoveOnShapeSetCallback(int ID) {
+	OnShapeSetCallbacks.erase(ID);
+}
+
 void RenderComponent::SetShape(Shape shape) {
 	currentShape = shape;
 	auto verts = VerticesFromShape(shape);
@@ -92,6 +102,12 @@ void RenderComponent::SetShape(Shape shape) {
 	}
 	else {
 		UpdateShape(verts, Triangulate(verts));
+	}
+
+	if (!std::holds_alternative<PolygonShape>(shape)) {
+		for (auto& [id, func] : OnShapeSetCallbacks) {
+			func();
+		}
 	}
 }
 
@@ -567,6 +583,9 @@ void RenderComponent::ProcessInspectorUI() {
 					TransformComponent* tc = parent->GetComponent<TransformComponent>();
 					tc->SetRotationCenter(GetCenter());
 					tc->SetOriginTransform(Camera::getInstance().viewMatrixInverse);
+
+					SoftBodyComponent* sb = parent->GetComponent<SoftBodyComponent>();
+					if (sb) sb->RebuildMassAggregate();
 
 					ObjectManager::getInstance().vertexPoints.clear();
 					ObjectManager::getInstance().vertices.clear();

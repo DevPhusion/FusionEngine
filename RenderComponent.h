@@ -57,6 +57,9 @@ public:
 	virtual void ProcessInspectorUI();
 	virtual void CopyTo(Object* other);
 
+	int AddOnShapeSetCallback(std::function<void()> func);
+	void RemoveOnShapeSetCallback(int ID);
+
 	std::vector<float> VerticesFromShape(Shape& shape);
 	std::vector<unsigned int> TriangulateCircle(int segments);
 	std::vector<unsigned int> Triangulate(std::vector<float> vertices);
@@ -69,7 +72,9 @@ public:
 	void Draw();
 
 private:
-	std::vector<std::function<void()>> OnShapeUpdateCallbacks;
+	std::unordered_map<int, std::function<void()>> OnShapeSetCallbacks;
+	int shapeCallbackID = -1;
+
 	bool initialized = false;
 	Shader shader;
 	unsigned int VAO;

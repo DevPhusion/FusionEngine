@@ -1102,7 +1102,7 @@ int PhysicsEngine::ClipSegmentToLine(ClipVertex vOut[2], const ClipVertex vIn[2]
 
 		vOut[numOutPoints < 2 ? numOutPoints++ : 1] = intersectionPoint;
 	}
-
+	
 	return numOutPoints;
 }
 
@@ -1324,6 +1324,11 @@ void PhysicsEngine::ResolveXPBDConstraint(float delta) {
 			pm->worldPos += pm->velocity * dtSub;
 			pm->acceleration = glm::vec3(0);
 		}
+		/*
+		for (auto& vpm : allVirtualPointMasses) {
+			vpm->prevPos = vpm->worldPos;   
+		}
+		*/
 
 		for (auto* constraint : registeredXPBDConstraints) constraint->ResetLambda();
 
@@ -1337,5 +1342,11 @@ void PhysicsEngine::ResolveXPBDConstraint(float delta) {
 		for (auto& pm : allSoftBodyPointMasses) {
 			pm->velocity = (pm->worldPos - pm->prevPos) / dtSub;
 		}
+		/*
+		for (auto& vpm : allVirtualPointMasses) {
+			std::cout << "Vel: (" << vpm->velocity.x << "," << vpm->velocity.y << ")" << std::endl;
+			vpm->velocity = (vpm->worldPos - vpm->prevPos) / dtSub;
+		}
+		*/
 	}
 }
