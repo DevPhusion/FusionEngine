@@ -1,7 +1,7 @@
 #include "PrismaticConstraint.h"
 
-PrismaticConstraint::PrismaticConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB, glm::vec3 dir) :
-    Constraint(objectA, objectB, attachPointA, attachPointB) {
+PrismaticConstraint::PrismaticConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB, glm::vec3 dir, float weightA, float weightB) :
+    Constraint(objectA, objectB, attachPointA, attachPointB, weightA, weightB) {
     this->dir = dir;
     this->Name = "Prismatic Constraint";
 }
@@ -11,8 +11,13 @@ void PrismaticConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
         return;
     }
 
-    glm::vec3 globalPointA = *objectA.transformMatrix * glm::vec4(attachPointA, 1);
-    glm::vec3 globalPointB = *objectB.transformMatrix * glm::vec4(attachPointB, 1);
+    glm::vec3 globalPointA = (objectA.pm != nullptr)
+        ? *objectA.position
+        : glm::vec3(*objectA.transformMatrix * glm::vec4(attachPointA, 1));
+
+    glm::vec3 globalPointB = (objectB.pm != nullptr)
+        ? *objectB.position
+        : glm::vec3(*objectB.transformMatrix * glm::vec4(attachPointB, 1));
 
     glm::vec3 rA = globalPointA - *objectA.position;
     glm::vec3 rB = globalPointB - *objectB.position;
@@ -21,11 +26,11 @@ void PrismaticConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
     SolverRow rowLinear, rowTheta;
 
     glm::vec3 t = glm::vec3(-dir.y, dir.x, 0.0f);
-    
-    jacobianLinear.linearA = t;
-    jacobianLinear.linearB = -t;
-    jacobianLinear.angularA = rA.x * t.y - rA.y * t.x;
-    jacobianLinear.angularB = -(rB.x * t.y - rB.y * t.x);
+
+    jacobianLinear.linearA = t * weightA;
+    jacobianLinear.linearB = -t * weightB;
+    jacobianLinear.angularA = weightA * (rA.x * t.y - rA.y * t.x);
+    jacobianLinear.angularB = -weightB * (rB.x * t.y - rB.y * t.x);
 
     jacobianTheta.linearA = glm::vec3(0);
     jacobianTheta.linearB = glm::vec3(0);
@@ -35,11 +40,11 @@ void PrismaticConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
     float klinear = 0.0f;
     float ktheta = 0.0f;
     if (objectA.invMass != nullptr && objectA.invInertia != nullptr) {
-        klinear += *objectA.invMass + glm::length2(jacobianLinear.linearA) * *objectA.invInertia;
+        klinear += *objectA.invMass * glm::length2(jacobianLinear.linearA) + *objectA.invInertia * (jacobianLinear.angularA * jacobianLinear.angularA);
         ktheta += *objectA.invInertia;
     }
     if (objectB.invMass != nullptr && objectB.invInertia != nullptr) {
-        klinear += *objectB.invMass + glm::length2(jacobianLinear.linearB) * *objectB.invInertia;
+        klinear += *objectB.invMass * glm::length2(jacobianLinear.linearB) + *objectB.invInertia * (jacobianLinear.angularB * jacobianLinear.angularB);
         ktheta += *objectB.invInertia;
     }
 
@@ -114,6 +119,32 @@ void PrismaticConstraint::ProcessInspectorUI(Object* parent) {
             glm::vec3 pB = objectB.obj->GetComponent<TransformComponent>()->GetWorldPosition();
             this->dir = pB - pA;
         }
+    }
+}
+
+void PrismaticConstraint::WarmStartSoftBody() {
+    if (objectA.obj == nullptr || objectB.obj == nullptr) return;
+    if (objectA.pm == nullptr && objectB.pm == nullptr) return;
+
+    glm::vec3 globalPointA = (objectA.pm != nullptr)
+        ? *objectA.position
+        : glm::vec3(*objectA.transformMatrix * glm::vec4(attachPointA, 1));
+
+    glm::vec3 globalPointB = (objectB.pm != nullptr)
+        ? *objectB.position
+        : glm::vec3(*objectB.transformMatrix * glm::vec4(attachPointB, 1));
+
+    glm::vec3 t = glm::vec3(-dir.y, dir.x, 0.0f);
+
+    glm::vec3 positionError = globalPointB - globalPointA;
+    float perpError = glm::dot(positionError, t);
+    glm::vec3 correction = t * perpError;
+
+    if (objectA.pm != nullptr) {
+        *objectA.position += correction * weightA;
+    }
+    if (objectB.pm != nullptr) {
+        *objectB.position -= correction * weightB;
     }
 }
 

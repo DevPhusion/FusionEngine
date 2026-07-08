@@ -1264,24 +1264,9 @@ void PhysicsEngine::ResolvePGSConstraints(float delta) {
 	for (auto* constraint : registeredPGSConstraints) {
 		constraint->PostSolve(solverRows);
 	}
-
 	for (auto* constraint : registeredPGSConstraints)
 	{
-		if (!constraint->isTemporary) continue;
-		auto* contact = static_cast<ContactConstraint*>(constraint);
-
-		if (contact->objectA.obj && contact->objectB.obj) continue;
-
-		glm::vec3 normal = contact->normal;
-
-		if (contact->penetration > 0.0f) {
-			if (!contact->objectA.obj && contact->objectA.position != nullptr) {
-				*contact->objectA.position += normal * contact->penetration;
-			}
-			else if (!contact->objectB.obj && contact->objectB.position != nullptr) {
-				*contact->objectB.position -= normal * contact->penetration; // Note the negative sign depending on normal direction
-			}
-		}
+		constraint->WarmStartSoftBody();
 	}
 }
 
@@ -1324,11 +1309,6 @@ void PhysicsEngine::ResolveXPBDConstraint(float delta) {
 			pm->worldPos += pm->velocity * dtSub;
 			pm->acceleration = glm::vec3(0);
 		}
-		/*
-		for (auto& vpm : allVirtualPointMasses) {
-			vpm->prevPos = vpm->worldPos;   
-		}
-		*/
 
 		for (auto* constraint : registeredXPBDConstraints) constraint->ResetLambda();
 
@@ -1342,11 +1322,5 @@ void PhysicsEngine::ResolveXPBDConstraint(float delta) {
 		for (auto& pm : allSoftBodyPointMasses) {
 			pm->velocity = (pm->worldPos - pm->prevPos) / dtSub;
 		}
-		/*
-		for (auto& vpm : allVirtualPointMasses) {
-			std::cout << "Vel: (" << vpm->velocity.x << "," << vpm->velocity.y << ")" << std::endl;
-			vpm->velocity = (vpm->worldPos - vpm->prevPos) / dtSub;
-		}
-		*/
 	}
 }

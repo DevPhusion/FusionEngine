@@ -3,7 +3,7 @@
 class PrismaticConstraint : public Constraint
 {
 public:
-	PrismaticConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB, glm::vec3 dir);
+	PrismaticConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB, glm::vec3 dir, float weightA = 1.0f, float weightB = 1.0f);
 	PrismaticConstraint() = default;
 
 	glm::vec3 dir;
@@ -19,5 +19,6 @@ public:
 	virtual void PostSolve(std::vector<SolverRow>& allRows);
 	virtual void ProcessInspectorUI(Object* parent);
 	virtual void ProcessConstraintDisplay();
+	virtual void WarmStartSoftBody();
 };
 

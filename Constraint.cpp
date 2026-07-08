@@ -6,13 +6,15 @@
 #include "ConstraintComponent.h"
 #include "EditorManager.h"
 
-Constraint::Constraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB)
+Constraint::Constraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB, float weightA, float weightB)
 {
     SetObjectA(objectA);
     SetObjectB(objectB);
 
     this->attachPointA = attachPointA;
     this->attachPointB = attachPointB;
+    this->weightA = weightA;
+    this->weightB = weightB;
 
     this->constraintDisplay = CreateConstraintDisplay();
     onPhysicsModeChangedCallbackID = EngineManager::getInstance().AddPhysicsModeChangedEvent([this] {OnPhysicsModeChanged();});
@@ -146,22 +148,16 @@ void Constraint::OnDisplayAMoved()
     if (objectA.obj == nullptr || attachDisplayA == nullptr) return;
     glm::vec3 world = attachDisplayA->GetComponent<TransformComponent>()->GetWorldPosition();
     attachPointA = objectA.obj->GetComponent<TransformComponent>()->ProjectToWorld(world, true);
-   
+
     SoftBodyComponent* sb = objectA.obj->GetComponent<SoftBodyComponent>();
     if (sb) {
-        if (!virtualPMA) {
-            virtualPMA = sb->AddVirtualPointMass(attachPointA);
-        }
-        else {
-            sb->RemoveVirtualPointMass(virtualPMA);
-            virtualPMA = sb->AddVirtualPointMass(attachPointA);
-        }
-        objectA.velocity = &virtualPMA->velocity;
-        objectA.angularVelocity = &virtualPMA->angularVelocity;
-        objectA.invInertia = &virtualPMA->InverseInertia;
-        objectA.position = &virtualPMA->worldPos;
-        objectA.transformMatrix = &virtualPMA->transform;
-        objectA.invMass = &virtualPMA->inverseMass;
+        PhysicsBody pmBody = sb->FindClosestPointMassBody(attachPointA, &weightA);
+        objectA.pm = pmBody.pm;
+        objectA.position = pmBody.position;
+        objectA.velocity = pmBody.velocity;
+        objectA.angularVelocity = pmBody.angularVelocity;
+        objectA.invInertia = pmBody.invInertia;
+        objectA.invMass = &sb->inverseMass;
     }
 
     ProcessConstraintDisplay();
@@ -175,19 +171,13 @@ void Constraint::OnDisplayBMoved()
 
     SoftBodyComponent* sb = objectB.obj->GetComponent<SoftBodyComponent>();
     if (sb) {
-        if (!virtualPMB) {
-            virtualPMB = sb->AddVirtualPointMass(attachPointB);
-        }
-        else {
-            sb->RemoveVirtualPointMass(virtualPMB);
-            virtualPMB = sb->AddVirtualPointMass(attachPointB);
-        }
-        objectB.velocity = &virtualPMB->velocity;
-        objectB.angularVelocity = &virtualPMB->angularVelocity;
-        objectB.invInertia = &virtualPMB->InverseInertia;
-        objectB.position = &virtualPMB->worldPos;
-        objectB.transformMatrix = &virtualPMB->transform;
-        objectB.invMass = &virtualPMB->inverseMass;
+        PhysicsBody pmBody = sb->FindClosestPointMassBody(attachPointB, &weightB);
+        objectB.pm = pmBody.pm;
+        objectB.position = pmBody.position;
+        objectB.velocity = pmBody.velocity;
+        objectB.angularVelocity = pmBody.angularVelocity;
+        objectB.invInertia = pmBody.invInertia;
+        objectB.invMass = &sb->inverseMass;
     }
 
     ProcessConstraintDisplay();
@@ -321,6 +311,8 @@ void Constraint::ProcessInspectorUI(Object* parent)
             body.rotation = &tc->rotation;
         }
         if (sb) {
+            body.pm = &sb->CenterPM;
+            body.position = &sb->CenterPM->worldPos;
             body.velocity = &sb->CenterPM->velocity;
             body.angularVelocity = &sb->CenterPM->angularVelocity;
             body.invInertia = &sb->CenterPM->InverseInertia;
@@ -458,6 +450,8 @@ void Constraint::ProcessInspectorUI(Object* parent)
                     body.rotation = &tc->rotation;
                 }
                 if (sb) {
+                    body.pm = &sb->CenterPM;
+                    body.position = &sb->CenterPM->worldPos;
                     body.velocity = &sb->CenterPM->velocity;
                     body.angularVelocity = &sb->CenterPM->angularVelocity;
                     body.invInertia = &sb->CenterPM->InverseInertia;

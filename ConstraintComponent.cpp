@@ -83,6 +83,8 @@ void ConstraintComponent::ProcessInspectorUI()
             body.rotation = &tc->rotation;
         }
         if (sb) {
+            body.pm = &sb->CenterPM;
+            body.position = &sb->CenterPM->worldPos;
             body.velocity = &sb->CenterPM->velocity;
             body.angularVelocity = &sb->CenterPM->angularVelocity;
             body.invInertia = &sb->CenterPM->InverseInertia;

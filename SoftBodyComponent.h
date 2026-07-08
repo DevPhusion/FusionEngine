@@ -46,11 +46,8 @@ public:
 	void UpdateMassAggregate();
 	void SyncMeshFromMassAggregate();
 	void DrawSprings();
+	PhysicsBody FindClosestPointMassBody(glm::vec3 localPoint, float* outWeight);
 	std::vector<SoftEdge> GetEdgesFromMassAggregate();
-
-	PointMass* AddVirtualPointMass(glm::vec3 point);
-	void RemoveVirtualPointMass(PointMass* pm);
-	void ProcessVirtualPointMass(float delta);
 
 	virtual void ProcessInspectorUI();
 	virtual void OnDelete();

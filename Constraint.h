@@ -37,13 +37,15 @@ class Constraint
 {
 public:
     Constraint(PhysicsBody objectA, PhysicsBody objectB,
-        glm::vec3 attachPointA, glm::vec3 attachPointB);
+        glm::vec3 attachPointA, glm::vec3 attachPointB, float weightA = 1.0f, float weightB = 1.0f);
     Constraint() = default;
 
     PhysicsBody objectA;
     PhysicsBody objectB;
     glm::vec3 attachPointA = glm::vec3(0.0f);
     glm::vec3 attachPointB = glm::vec3(0.0f);
+    float weightA = 1.0f;
+    float weightB = 1.0f;
 
     std::string Name;
     bool  isTemporary = false;
@@ -70,6 +72,7 @@ public:
     virtual void SetObjectA(PhysicsBody obj);
     virtual void SetObjectB(PhysicsBody obj);
 
+    virtual void WarmStartSoftBody() = 0;
     virtual void PostSolve(std::vector<SolverRow>& allRows) {}
     virtual void ProcessConstraintDisplay();
     virtual void ProcessMirroredUI();

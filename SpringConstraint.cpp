@@ -1,12 +1,12 @@
 #include "SpringConstraint.h"
 
 SpringConstraint::SpringConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB,
-	float length, float stiffness, float damping) :
-	Constraint(objectA, objectB, attachPointA, attachPointB) {
+	float length, float stiffness, float damping, float weightA, float weightB) :
+	Constraint(objectA, objectB, attachPointA, attachPointB, weightA, weightB) {
 	this->length = length;
 	this->stiffness = stiffness;
 	this->damping = damping;
-	this->Name = "Distance Constraint";
+	this->Name = "Spring Constraint";
 }
 
 void SpringConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
@@ -15,8 +15,13 @@ void SpringConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
 	JacobianRow jacobian = JacobianRow();
 	SolverRow row = SolverRow();
 
-	glm::vec3 globalPointA = *objectA.transformMatrix * glm::vec4(attachPointA, 1);
-	glm::vec3 globalPointB = *objectB.transformMatrix * glm::vec4(attachPointB, 1);
+	glm::vec3 globalPointA = (objectA.pm != nullptr)
+		? *objectA.position
+		: glm::vec3(*objectA.transformMatrix * glm::vec4(attachPointA, 1));
+
+	glm::vec3 globalPointB = (objectB.pm != nullptr)
+		? *objectB.position
+		: glm::vec3(*objectB.transformMatrix * glm::vec4(attachPointB, 1));
 
 	glm::vec3 d = globalPointB - globalPointA;
 	float currentDistance = glm::length(d);
@@ -25,10 +30,10 @@ void SpringConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
 	glm::vec3 rA = globalPointA - *objectA.position;
 	glm::vec3 rB = globalPointB - *objectB.position;
 
-	jacobian.linearA = glm::vec3(d_hat.x, d_hat.y, 0.0f);
-	jacobian.linearB = glm::vec3(-d_hat.x, -d_hat.y, 0.0f);
-	jacobian.angularA = (rA.x * d_hat.y - rA.y * d_hat.x);
-	jacobian.angularB = -(rB.x * d_hat.y - rB.y * d_hat.x);
+	jacobian.linearA = d_hat * weightA;
+	jacobian.linearB = -d_hat * weightB;
+	jacobian.angularA = weightA * (rA.x * d_hat.y - rA.y * d_hat.x);
+	jacobian.angularB = -weightB * (rB.x * d_hat.y - rB.y * d_hat.x);
 
 	row.jacobian = jacobian;
 
@@ -192,5 +197,31 @@ void SpringConstraint::ProcessConstraintDisplay() {
 	}
 	else {
 		rc->SetEnabled(false);
+	}
+}
+
+void SpringConstraint::WarmStartSoftBody() {
+	if (objectA.obj == nullptr || objectB.obj == nullptr) return;
+	if (objectA.pm == nullptr && objectB.pm == nullptr) return;
+
+	glm::vec3 globalPointA = (objectA.pm != nullptr)
+		? *objectA.position
+		: glm::vec3(*objectA.transformMatrix * glm::vec4(attachPointA, 1));
+
+	glm::vec3 globalPointB = (objectB.pm != nullptr)
+		? *objectB.position
+		: glm::vec3(*objectB.transformMatrix * glm::vec4(attachPointB, 1));
+
+	glm::vec3 d = globalPointB - globalPointA;
+	float currentDistance = glm::length(d);
+	glm::vec3 d_hat = (currentDistance > 0.00001f) ? d / currentDistance : glm::vec3(0.0f);
+
+	float error = currentDistance - length;
+
+	if (objectA.pm != nullptr) {
+		*objectA.position += d_hat * error * weightA;
+	}
+	if (objectB.pm != nullptr) {
+		*objectB.position -= d_hat * error * weightB;
 	}
 }

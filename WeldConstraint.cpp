@@ -1,7 +1,7 @@
 #include "WeldConstraint.h"
 
-WeldConstraint::WeldConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB, float angularOffset) :
-	Constraint(objectA, objectB, attachPointA, attachPointB) {
+WeldConstraint::WeldConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB, float angularOffset, float weightA, float weightB) :
+	Constraint(objectA, objectB, attachPointA, attachPointB, weightA, weightB) {
 	this->angularOffset = angularOffset;
 	this->Name = "Weld Constraint";
 }
@@ -11,8 +11,13 @@ void WeldConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
         return;
     }
 
-    glm::vec3 globalPointA = *objectA.transformMatrix * glm::vec4(attachPointA, 1);
-    glm::vec3 globalPointB = *objectB.transformMatrix * glm::vec4(attachPointB, 1);
+    glm::vec3 globalPointA = (objectA.pm != nullptr)
+        ? *objectA.position
+        : glm::vec3(*objectA.transformMatrix * glm::vec4(attachPointA, 1));
+
+    glm::vec3 globalPointB = (objectB.pm != nullptr)
+        ? *objectB.position
+        : glm::vec3(*objectB.transformMatrix * glm::vec4(attachPointB, 1));
 
     glm::vec3 rA = globalPointA - *objectA.position;
     glm::vec3 rB = globalPointB - *objectB.position;
@@ -20,15 +25,15 @@ void WeldConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
     JacobianRow jacobianX, jacobianY, jacobianTheta;
     SolverRow rowX, rowY, rowTheta;
 
-    jacobianX.linearA = glm::vec3(1.0f, 0.0f, 0.0f);
-    jacobianX.linearB = glm::vec3(-1.0f, 0.0f, 0.0f);
-    jacobianX.angularA = -rA.y;
-    jacobianX.angularB = rB.y;
+    jacobianX.linearA = glm::vec3(weightA, 0.0f, 0.0f);
+    jacobianX.linearB = glm::vec3(-weightB, 0.0f, 0.0f);
+    jacobianX.angularA = -weightA * rA.y;
+    jacobianX.angularB = weightB * rB.y;
 
-    jacobianY.linearA = glm::vec3(0.0f, 1.0f, 0.0f);
-    jacobianY.linearB = glm::vec3(0.0f, -1.0f, 0.0f);
-    jacobianY.angularA = rA.x;
-    jacobianY.angularB = -rB.x;
+    jacobianY.linearA = glm::vec3(0.0f, weightA, 0.0f);
+    jacobianY.linearB = glm::vec3(0.0f, -weightB, 0.0f);
+    jacobianY.angularA = weightA * rA.x;
+    jacobianY.angularB = -weightB * rB.x;
 
     jacobianTheta.linearA = glm::vec3(0);
     jacobianTheta.linearB = glm::vec3(0);
@@ -42,15 +47,14 @@ void WeldConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
     float thetaA = *objectA.rotation;
     float thetaB = *objectB.rotation;
 
-    float kX = invMassA + invInertiaA * jacobianX.angularA * jacobianX.angularA +
-        invMassB + invInertiaB * jacobianX.angularB * jacobianX.angularB;
+    float kX = invMassA * glm::length2(jacobianX.linearA) + invInertiaA * jacobianX.angularA * jacobianX.angularA +
+        invMassB * glm::length2(jacobianX.linearB) + invInertiaB * jacobianX.angularB * jacobianX.angularB;
 
-    float kY = invMassA + invInertiaA * jacobianY.angularA * jacobianY.angularA +
-        invMassB + invInertiaB * jacobianY.angularB * jacobianY.angularB;
+    float kY = invMassA * glm::length2(jacobianY.linearA) + invInertiaA * jacobianY.angularA * jacobianY.angularA +
+        invMassB * glm::length2(jacobianY.linearB) + invInertiaB * jacobianY.angularB * jacobianY.angularB;
 
     float kTheta = invInertiaA + invInertiaB;
 
- 
     float softnessCFM = 0.0f;
     float finalBeta = beta;
 
@@ -141,4 +145,26 @@ void WeldConstraint::ProcessInspectorUI(Object* parent) {
             angularOffset = thetaB - thetaA;
         }
 	}
+}
+
+void WeldConstraint::WarmStartSoftBody() {
+    if (objectA.obj == nullptr || objectB.obj == nullptr) return;
+    if (objectA.pm == nullptr && objectB.pm == nullptr) return;
+
+    glm::vec3 globalPointA = (objectA.pm != nullptr)
+        ? *objectA.position
+        : glm::vec3(*objectA.transformMatrix * glm::vec4(attachPointA, 1));
+
+    glm::vec3 globalPointB = (objectB.pm != nullptr)
+        ? *objectB.position
+        : glm::vec3(*objectB.transformMatrix * glm::vec4(attachPointB, 1));
+
+    glm::vec3 positionError = globalPointB - globalPointA;
+
+    if (objectA.pm != nullptr) {
+        *objectA.position += positionError * weightA;
+    }
+    if (objectB.pm != nullptr) {
+        *objectB.position -= positionError * weightB;
+    }
 }

@@ -1,8 +1,8 @@
 #include "DistanceConstraint.h"
 
 DistanceConstraint::DistanceConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB, 
-	float distance, bool extendable, bool retractable) : 
-	Constraint(objectA, objectB, attachPointA, attachPointB) {
+	float distance, bool extendable, bool retractable, float weightA, float weightB) :
+	Constraint(objectA, objectB, attachPointA, attachPointB, weightA, weightB) {
 	this->distance = distance;
 	this->extendable = extendable;
 	this->retractable = retractable;
@@ -18,7 +18,7 @@ void DistanceConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
 	SolverRow row = SolverRow();
 
 	glm::vec3 globalPointA = *objectA.transformMatrix * glm::vec4(attachPointA, 1);
-	glm::vec3 globalPointB = *objectB.transformMatrix * glm::vec4(attachPointB, 1); 
+	glm::vec3 globalPointB = *objectB.transformMatrix * glm::vec4(attachPointB, 1);
 
 	glm::vec3 d = globalPointB - globalPointA;
 	float currentDistance = glm::length(d);
@@ -26,13 +26,13 @@ void DistanceConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
 	glm::vec3 rA = globalPointA - *objectA.position;
 	glm::vec3 rB = globalPointB - *objectB.position;
 
-	jacobian.linearA = glm::vec3(d_hat.x, d_hat.y, 0.0f);
-	jacobian.linearB = glm::vec3(-d_hat.x, -d_hat.y, 0.0f);
-	jacobian.angularA = (rA.x * d_hat.y - rA.y * d_hat.x);
-	jacobian.angularB = -(rB.x * d_hat.y - rB.y * d_hat.x);
+	jacobian.linearA = d_hat * weightA;
+	jacobian.linearB = -d_hat * weightB;
+	jacobian.angularA = weightA * (rA.x * d_hat.y - rA.y * d_hat.x);
+	jacobian.angularB = -weightB * (rB.x * d_hat.y - rB.y * d_hat.x);
 
 	row.jacobian = jacobian;
-	
+
 	float k = 0.0f;
 
 	if (objectA.invMass != nullptr && objectA.invInertia != nullptr) {
@@ -45,22 +45,15 @@ void DistanceConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
 	row.effectiveMass = (k > 0.0f) ? 1.0f / k : 0.0f;
 
 	float error = currentDistance - distance;
-	float rawBias = (beta / delta) * error;
-
-	row.bias = rawBias;
+	row.bias = (beta / delta) * error;
 
 	row.objectA = objectA;
 	row.objectB = objectB;
 
 	row.maxLambda = INFINITY;
 	row.minLambda = -INFINITY;
-
-	if (retractable) {
-		row.minLambda = 0;
-	}
-	if (extendable) {
-		row.maxLambda = 0;
-	}
+	if (retractable) row.minLambda = 0;
+	if (extendable) row.maxLambda = 0;
 
 	row.lambda = cacheLambda;
 	row.parentConstraint = this;
@@ -140,5 +133,32 @@ void DistanceConstraint::ProcessConstraintDisplay() {
 	}
 	else {
 		rc->SetEnabled(false);
+	}
+}
+
+void DistanceConstraint::WarmStartSoftBody() {
+	if (objectA.obj == nullptr || objectB.obj == nullptr) return;
+	if (objectA.pm == nullptr && objectB.pm == nullptr) return;
+
+	glm::vec3 globalPointA = *objectA.transformMatrix * glm::vec4(attachPointA, 1);
+	glm::vec3 globalPointB = *objectB.transformMatrix * glm::vec4(attachPointB, 1);
+
+	glm::vec3 d = globalPointB - globalPointA;
+	float currentDistance = glm::length(d);
+	if (currentDistance < 0.00001f) return;
+	glm::vec3 d_hat = d / currentDistance;
+
+	float error = currentDistance - distance;
+
+	if (retractable && error < 0.0f) return;
+	if (extendable && error > 0.0f) return;
+
+	float correction = error * beta;
+
+	if (objectA.pm != nullptr && objectA.position != nullptr) {
+		*objectA.position += d_hat * correction * weightA;
+	}
+	if (objectB.pm != nullptr && objectB.position != nullptr) {
+		*objectB.position -= d_hat * correction * weightB;
 	}
 }

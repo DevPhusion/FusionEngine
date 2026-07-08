@@ -120,7 +120,6 @@ public:
 
 	//XPBD Constraint resolution 
 	std::vector<PointMass*> allSoftBodyPointMasses;
-	std::vector<PointMass*> allVirtualPointMasses;
 	std::vector<XPBDConstraint*> registeredXPBDConstraints;
 	void RegisterXPBDConstraint(XPBDConstraint* constraint);
 	void UnRegisterXPBDConstraint(XPBDConstraint* constraint);
