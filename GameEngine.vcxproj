@@ -201,6 +201,7 @@
     <ClCompile Include="XPBDConstraint.cpp" />
     <ClCompile Include="XPBDContactConstraint.cpp" />
     <ClCompile Include="XPBDDistanceConstraint.cpp" />
+    <ClCompile Include="XPBDProxyPointConstraint.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AddObjectWindow.h" />
@@ -268,6 +269,7 @@
     <ClInclude Include="XPBDConstraint.h" />
     <ClInclude Include="XPBDContactConstraint.h" />
     <ClInclude Include="XPBDDistanceConstraint.h" />
+    <ClInclude Include="XPBDProxyPointConstraint.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="fragment.txt" />

@@ -137,28 +137,5 @@ void DistanceConstraint::ProcessConstraintDisplay() {
 }
 
 void DistanceConstraint::WarmStartSoftBody() {
-	if (objectA.obj == nullptr || objectB.obj == nullptr) return;
-	if (objectA.pm == nullptr && objectB.pm == nullptr) return;
-
-	glm::vec3 globalPointA = *objectA.transformMatrix * glm::vec4(attachPointA, 1);
-	glm::vec3 globalPointB = *objectB.transformMatrix * glm::vec4(attachPointB, 1);
-
-	glm::vec3 d = globalPointB - globalPointA;
-	float currentDistance = glm::length(d);
-	if (currentDistance < 0.00001f) return;
-	glm::vec3 d_hat = d / currentDistance;
-
-	float error = currentDistance - distance;
-
-	if (retractable && error < 0.0f) return;
-	if (extendable && error > 0.0f) return;
-
-	float correction = error * beta;
-
-	if (objectA.pm != nullptr && objectA.position != nullptr) {
-		*objectA.position += d_hat * correction * weightA;
-	}
-	if (objectB.pm != nullptr && objectB.position != nullptr) {
-		*objectB.position -= d_hat * correction * weightB;
-	}
+	
 }

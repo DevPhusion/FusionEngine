@@ -75,23 +75,5 @@ void RevoluteConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
 }
 
 void RevoluteConstraint::WarmStartSoftBody() {
-	if (objectA.obj == nullptr || objectB.obj == nullptr) return;
-	if (objectA.pm == nullptr && objectB.pm == nullptr) return;
-
-	glm::vec3 globalPointA = (objectA.pm != nullptr)
-		? *objectA.position
-		: glm::vec3(*objectA.transformMatrix * glm::vec4(attachPointA, 1));
-
-	glm::vec3 globalPointB = (objectB.pm != nullptr)
-		? *objectB.position
-		: glm::vec3(*objectB.transformMatrix * glm::vec4(attachPointB, 1));
-
-	glm::vec3 positionError = globalPointB - globalPointA;
-
-	if (objectA.pm != nullptr) {
-		*objectA.position += positionError * weightA;
-	}
-	if (objectB.pm != nullptr) {
-		*objectB.position -= positionError * weightB;
-	}
+	
 }

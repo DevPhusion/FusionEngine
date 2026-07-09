@@ -16,6 +16,7 @@ public:
 	int index;
 	bool isCenter;
 	float pointRadius = 0.01f;
+	glm::vec3 localPos = glm::vec3(0);
 	glm::vec3 worldPos = glm::vec3(0);
 	glm::vec3 prevPos = glm::vec3(0);
 	glm::mat4 transform = glm::mat4(1);
@@ -30,6 +31,7 @@ public:
 
 	//Simply to satisfy the PhysicsBody interface, pm can't rotate
 	float rotation = 0; 
+	float prevRotation = 0;
 	float InverseInertia = 0; 
 	float angularVelocity = 0; 
 

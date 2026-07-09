@@ -3,6 +3,7 @@
 #include "PointMass.h"
 #include "XPBDDistanceConstraint.h"
 #include "XPBDAreaConstraint.h"
+#include "XPBDProxyPointConstraint.h"
 #include "Renderer.h"
 #include <variant>
 
@@ -14,9 +15,9 @@ struct SoftEdge {
 };
 
 struct VirtualLink {
-	PointMass* virtualPM;
-	PointMass* realPM;
-	float weight;
+	PointMass* virtualProxy;
+	std::vector<PointMass*> affectPM;
+	std::vector<glm::vec3> localOffsets;
 };
 
 class SoftBodyComponent : public ComponentBase<SoftBodyComponent>
@@ -27,7 +28,8 @@ public:
 
 	std::vector<std::unique_ptr<PointMass>> VirtualMassAggregate = {};
 	std::vector<std::unique_ptr<PointMass>> MassAggregate = {};
-	std::vector<VirtualLink> virtualLinks;
+	std::vector<VirtualLink> virtualLinks = {};
+	std::vector<XPBDProxyPointConstraint*> proxyLinks = {};
 	std::vector<XPBDDistanceConstraint*> springs = {};
 	XPBDAreaConstraint* areaConstraint = nullptr;
 
@@ -35,7 +37,9 @@ public:
 
 	bool isDragging;
 
-	float virtualPointPercentClosest = 0.2f;
+	float attachmentStiffness = 3000.0f;
+	float virtualPointPercentClosest = 0.001f;
+
 	float inverseMass = 1.0f;
 	float stiffness = 150.0f;
 	float damping = 2.47f;
@@ -46,6 +50,9 @@ public:
 	void UpdateMassAggregate();
 	void SyncMeshFromMassAggregate();
 	void DrawSprings();
+	void PreProxySync(float delta);
+	float CalculateVirtualRigidBodyInvInertia(glm::vec3 pos);
+	PointMass* AddVirtualRigidBody(glm::vec3 localPos);
 	PhysicsBody FindClosestPointMassBody(glm::vec3 localPoint, float* outWeight);
 	std::vector<SoftEdge> GetEdgesFromMassAggregate();
 

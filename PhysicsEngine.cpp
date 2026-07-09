@@ -38,6 +38,7 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 	}
 
 	ResolvePGSConstraints(delta);
+
 	ResolveXPBDConstraint(delta);
 
 	UpdateContactCache();
@@ -1203,6 +1204,60 @@ void PhysicsEngine::UnRegisterPGSConstraint(Constraint* constraint) {
 	}
 }
 
+void PhysicsEngine::ResolveJointConstraintsForSubstep(float dtSub) {
+	std::vector<SolverRow> solverRows;
+	solverRows.reserve(registeredPGSConstraints.size() * 2);
+
+	for (auto* constraint : registeredPGSConstraints) {
+		if (constraint->isTemporary) continue;
+		constraint->Prepare(solverRows, dtSub);
+	}
+
+	if (solverRows.empty()) return;
+
+	std::vector<int> sortedIndices(solverRows.size());
+	std::iota(sortedIndices.begin(), sortedIndices.end(), 0);
+	std::stable_sort(sortedIndices.begin(), sortedIndices.end(), [&](int a, int b) {
+		return solverRows[a].bias > solverRows[b].bias;
+		});
+
+	const int velocityIterations = 8;
+	for (int i = 0; i < velocityIterations; i++) {
+		for (int idx : sortedIndices) {
+			auto& row = solverRows[idx];
+
+			float relVel = 0.0f;
+			if (row.objectA.velocity != nullptr && row.objectA.angularVelocity != nullptr) relVel += glm::dot(row.jacobian.linearA, *row.objectA.velocity)
+				+ row.jacobian.angularA * *row.objectA.angularVelocity;
+			if (row.objectB.velocity != nullptr && row.objectB.angularVelocity != nullptr) relVel += glm::dot(row.jacobian.linearB, *row.objectB.velocity)
+				+ row.jacobian.angularB * *row.objectB.angularVelocity;
+
+			float lambdaRaw = row.effectiveMass * (row.bias - relVel - row.softnessCFM * row.lambda);
+			float lambdaOld = row.lambda;
+			row.lambda += lambdaRaw;
+
+			if (row.parentConstraint) {
+				row.parentConstraint->PostIterationClamp(solverRows, idx, i);
+			}
+
+			float deltaLambda = row.lambda - lambdaOld;
+			if (row.objectA.velocity != nullptr && row.objectA.angularVelocity != nullptr) {
+				*row.objectA.velocity += *row.objectA.invMass * row.jacobian.linearA * deltaLambda;
+				*row.objectA.angularVelocity += *row.objectA.invInertia * row.jacobian.angularA * deltaLambda;
+			}
+			if (row.objectB.velocity != nullptr && row.objectB.angularVelocity != nullptr) {
+				*row.objectB.velocity += *row.objectB.invMass * row.jacobian.linearB * deltaLambda;
+				*row.objectB.angularVelocity += *row.objectB.invInertia * row.jacobian.angularB * deltaLambda;
+			}
+		}
+	}
+
+	for (auto* constraint : registeredPGSConstraints) {
+		if (constraint->isTemporary) continue;
+		constraint->PostSolve(solverRows);
+	}
+}
+
 void PhysicsEngine::ResolvePGSConstraints(float delta) {
 	std::vector<SolverRow> solverRows;
 	solverRows.reserve(registeredPGSConstraints.size() * 3);
@@ -1309,6 +1364,13 @@ void PhysicsEngine::ResolveXPBDConstraint(float delta) {
 			pm->worldPos += pm->velocity * dtSub;
 			pm->acceleration = glm::vec3(0);
 		}
+		for (auto* proxy : allSoftBodyProxies) {
+			if (!proxy) continue;
+			proxy->prevPos = proxy->worldPos;
+			proxy->prevRotation = proxy->rotation;
+			proxy->worldPos += proxy->velocity * dtSub;
+			proxy->rotation += proxy->angularVelocity * dtSub;
+		}
 
 		for (auto* constraint : registeredXPBDConstraints) constraint->ResetLambda();
 
@@ -1318,9 +1380,19 @@ void PhysicsEngine::ResolveXPBDConstraint(float delta) {
 				c->SolvePosition(dtSub);
 			}
 		}
+		ResolveJointConstraintsForSubstep(dtSub);
 
 		for (auto& pm : allSoftBodyPointMasses) {
 			pm->velocity = (pm->worldPos - pm->prevPos) / dtSub;
+		}
+		for (auto* proxy : allSoftBodyProxies) {
+			if (!proxy) continue;
+			proxy->velocity = (proxy->worldPos - proxy->prevPos) / dtSub;
+
+			float dTheta = proxy->rotation - proxy->prevRotation;
+			if (dTheta > glm::pi<float>())  dTheta -= glm::two_pi<float>();
+			if (dTheta < -glm::pi<float>()) dTheta += glm::two_pi<float>();
+			proxy->angularVelocity = dTheta / dtSub;
 		}
 	}
 }

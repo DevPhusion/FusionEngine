@@ -80,6 +80,10 @@ void Renderer::Draw() {
 				{
 					sb->MassAggregate[j]->DrawDebug();
 				}
+                for (int j = 0; j < sb->VirtualMassAggregate.size(); j++)
+                {
+                    sb->VirtualMassAggregate[j]->DrawDebug();
+                }
 			}
         }
 

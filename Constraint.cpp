@@ -151,13 +151,18 @@ void Constraint::OnDisplayAMoved()
 
     SoftBodyComponent* sb = objectA.obj->GetComponent<SoftBodyComponent>();
     if (sb) {
-        PhysicsBody pmBody = sb->FindClosestPointMassBody(attachPointA, &weightA);
-        objectA.pm = pmBody.pm;
-        objectA.position = pmBody.position;
-        objectA.velocity = pmBody.velocity;
-        objectA.angularVelocity = pmBody.angularVelocity;
-        objectA.invInertia = pmBody.invInertia;
-        objectA.invMass = &sb->inverseMass;
+        if (!virtualPMA) {
+            virtualPMA = sb->AddVirtualRigidBody(attachPointA);
+        }
+
+        virtualPMA->localPos = attachPointA;
+        objectA.pm = virtualPMA;
+        objectA.position = &virtualPMA->worldPos;
+        objectA.rotation = &virtualPMA->rotation;
+        objectA.velocity = &virtualPMA->velocity;
+        objectA.angularVelocity = &virtualPMA->angularVelocity;
+        objectA.invInertia = &virtualPMA->InverseInertia;
+        objectA.invMass = &virtualPMA->inverseMass;
     }
 
     ProcessConstraintDisplay();
@@ -171,13 +176,19 @@ void Constraint::OnDisplayBMoved()
 
     SoftBodyComponent* sb = objectB.obj->GetComponent<SoftBodyComponent>();
     if (sb) {
-        PhysicsBody pmBody = sb->FindClosestPointMassBody(attachPointB, &weightB);
-        objectB.pm = pmBody.pm;
-        objectB.position = pmBody.position;
-        objectB.velocity = pmBody.velocity;
-        objectB.angularVelocity = pmBody.angularVelocity;
-        objectB.invInertia = pmBody.invInertia;
-        objectB.invMass = &sb->inverseMass;
+        if (!virtualPMB) {
+            virtualPMB = sb->AddVirtualRigidBody(attachPointB);
+        }
+
+        virtualPMB->localPos = attachPointB;
+
+        objectB.pm = virtualPMB;
+        objectB.position = &virtualPMB->worldPos;
+        objectB.rotation = &virtualPMB->rotation;
+        objectB.velocity = &virtualPMB->velocity;
+        objectB.angularVelocity = &virtualPMB->angularVelocity;
+        objectB.invInertia = &virtualPMB->InverseInertia;
+        objectB.invMass = &virtualPMB->inverseMass;
     }
 
     ProcessConstraintDisplay();

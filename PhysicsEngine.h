@@ -116,10 +116,12 @@ public:
 	void UnRegisterTemporaryConstraint();
 	void RegisterPGSConstraint(Constraint* constraint);
 	void UnRegisterPGSConstraint(Constraint* constraint);
+	void ResolveJointConstraintsForSubstep(float dtSub);
 	void ResolvePGSConstraints(float delta);
 
 	//XPBD Constraint resolution 
 	std::vector<PointMass*> allSoftBodyPointMasses;
+	std::vector<PointMass*> allSoftBodyProxies;
 	std::vector<XPBDConstraint*> registeredXPBDConstraints;
 	void RegisterXPBDConstraint(XPBDConstraint* constraint);
 	void UnRegisterXPBDConstraint(XPBDConstraint* constraint);
