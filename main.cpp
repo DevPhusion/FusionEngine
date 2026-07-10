@@ -100,8 +100,8 @@ int main() {
 		EngineManager::getInstance().ProcessEngine(delta);
 		ObjectManager::getInstance().ProcessObjects(delta);
 
-		glad_glClearColor(0.235f, 0.239f, 0.216f, 1.0f);
-		//glad_glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+		glm::vec4& bg = EngineManager::getInstance().EngineSettings.backgroundColor;
+		glad_glClearColor(bg.r, bg.g, bg.b, bg.a);
 		glClear(GL_COLOR_BUFFER_BIT);
 
 		Renderer::getInstance().Draw();

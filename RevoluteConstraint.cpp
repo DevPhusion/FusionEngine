@@ -1,7 +1,7 @@
 #include "RevoluteConstraint.h"
 
-RevoluteConstraint::RevoluteConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB, float weightA, float weightB) :
-	Constraint(objectA, objectB, attachPointA, attachPointB, weightA, weightB) {
+RevoluteConstraint::RevoluteConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB) :
+	Constraint(objectA, objectB, attachPointA, attachPointB) {
 	this->Name = "Revolute Constraint";
 }
 
@@ -23,18 +23,18 @@ void RevoluteConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
 
 	JacobianRow jacobianX = JacobianRow();
 	SolverRow rowX = SolverRow();
-	jacobianX.linearA = glm::vec3(weightA, 0.0f, 0.0f);
-	jacobianX.linearB = glm::vec3(-weightB, 0.0f, 0.0f);
-	jacobianX.angularA = -weightA * rA.y;
-	jacobianX.angularB = weightB * rB.y;
+	jacobianX.linearA = glm::vec3(1.0f, 0.0f, 0.0f);
+	jacobianX.linearB = glm::vec3(-1.0f, 0.0f, 0.0f);
+	jacobianX.angularA = -rA.y;
+	jacobianX.angularB = rB.y;
 	rowX.jacobian = jacobianX;
 
 	JacobianRow jacobianY = JacobianRow();
 	SolverRow rowY = SolverRow();
-	jacobianY.linearA = glm::vec3(0.0f, weightA, 0.0f);
-	jacobianY.linearB = glm::vec3(0.0f, -weightB, 0.0f);
-	jacobianY.angularA = weightA * rA.x;
-	jacobianY.angularB = -weightB * rB.x;
+	jacobianY.linearA = glm::vec3(0.0f, 1.0f, 0.0f);
+	jacobianY.linearB = glm::vec3(0.0f, -1.0f, 0.0f);
+	jacobianY.angularA = rA.x;
+	jacobianY.angularB = -rB.x;
 	rowY.jacobian = jacobianY;
 
 	float invMassA = objectA.invMass ? *objectA.invMass : 0.0f;
@@ -72,8 +72,4 @@ void RevoluteConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
 
 	rows.push_back(rowX);
 	rows.push_back(rowY);
-}
-
-void RevoluteConstraint::WarmStartSoftBody() {
-	
 }

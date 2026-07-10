@@ -26,7 +26,7 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 		if ((*allObjects)[i]->HasComponent<SoftBodyComponent>()) {
 			(*allObjects)[i]->GetComponent<SoftBodyComponent>()->ProcessSoftBody(delta);
 		}
-		if ((*allObjects)[i]->HasComponent<CollisionComponent>()) {
+		if ((*allObjects)[i]->HasComponent<CollisionComponent>() && EngineManager::getInstance().EngineSettings.colorCollisions) {
 			(*allObjects)[i]->GetComponent<RenderComponent>()->color = glm::vec4(1);
 		}
 	}
@@ -242,11 +242,11 @@ void PhysicsEngine::ResolveContacts(PotentialContact* contacts, unsigned numCont
 
 		}
 
-		if (EngineManager::getInstance().debugMode && collisionResult) {
+		if (EngineManager::getInstance().EngineSettings.colorCollisions && collisionResult) {
 			objA->GetComponent<RenderComponent>()->color = glm::vec4(0, 1, 0, 1);
 			objB->GetComponent<RenderComponent>()->color = glm::vec4(0, 1, 0, 1);
 		}
-		else if (EngineManager::getInstance().debugMode) {
+		else if (EngineManager::getInstance().EngineSettings.colorCollisions) {
 			objA->GetComponent<RenderComponent>()->color = glm::vec4(1, 0, 0, 1);
 			objB->GetComponent<RenderComponent>()->color = glm::vec4(1, 0, 0, 1);
 		}
@@ -1204,7 +1204,7 @@ void PhysicsEngine::UnRegisterPGSConstraint(Constraint* constraint) {
 	}
 }
 
-void PhysicsEngine::ResolveJointConstraintsForSubstep(float dtSub) {
+void PhysicsEngine::ResolvePGSConstraintsForSubstep(float dtSub) {
 	std::vector<SolverRow> solverRows;
 	solverRows.reserve(registeredPGSConstraints.size() * 2);
 
@@ -1321,7 +1321,21 @@ void PhysicsEngine::ResolvePGSConstraints(float delta) {
 	}
 	for (auto* constraint : registeredPGSConstraints)
 	{
-		constraint->WarmStartSoftBody();
+		if (!constraint->isTemporary) continue;
+		auto* contact = static_cast<ContactConstraint*>(constraint);
+
+		if (contact->objectA.obj && contact->objectB.obj) continue;
+
+		glm::vec3 normal = contact->normal;
+
+		if (contact->penetration > 0.0f) {
+			if (!contact->objectA.obj && contact->objectA.position != nullptr) {
+				*contact->objectA.position += normal * contact->penetration;
+			}
+			else if (!contact->objectB.obj && contact->objectB.position != nullptr) {
+				*contact->objectB.position -= normal * contact->penetration; // Note the negative sign depending on normal direction
+			}
+		}
 	}
 }
 
@@ -1356,6 +1370,12 @@ void PhysicsEngine::ResolveXPBDConstraint(float delta) {
 	float dtSub = delta / substeps;
 
 	for (int i = 0; i < substeps; i++) {
+		for (int j = 0; j < allObjects->size(); j++)
+		{
+			SoftBodyComponent* sb = (*allObjects)[j]->GetComponent<SoftBodyComponent>();
+			if (sb && sb->useGasPressure) sb->ApplyGasPressure();
+		}
+
 		for (auto& pm : allSoftBodyPointMasses) {
 			if (pm->sb->isDragging) pm->ProcessDragForce();
 
@@ -1380,7 +1400,7 @@ void PhysicsEngine::ResolveXPBDConstraint(float delta) {
 				c->SolvePosition(dtSub);
 			}
 		}
-		ResolveJointConstraintsForSubstep(dtSub);
+		ResolvePGSConstraintsForSubstep(dtSub);
 
 		for (auto& pm : allSoftBodyPointMasses) {
 			pm->velocity = (pm->worldPos - pm->prevPos) / dtSub;
@@ -1390,8 +1410,7 @@ void PhysicsEngine::ResolveXPBDConstraint(float delta) {
 			proxy->velocity = (proxy->worldPos - proxy->prevPos) / dtSub;
 
 			float dTheta = proxy->rotation - proxy->prevRotation;
-			if (dTheta > glm::pi<float>())  dTheta -= glm::two_pi<float>();
-			if (dTheta < -glm::pi<float>()) dTheta += glm::two_pi<float>();
+			dTheta = atan2(sin(dTheta), cos(dTheta));
 			proxy->angularVelocity = dTheta / dtSub;
 		}
 	}

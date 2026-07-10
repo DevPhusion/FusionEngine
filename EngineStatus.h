@@ -10,6 +10,7 @@ public:
 
 	virtual void ProcessWindow();
 
+	void ProcessSettingsPopup();
 	void OnInteractModeChanged();
 };
 

@@ -29,8 +29,6 @@ void XPBDProxyPointConstraint::SolvePosition(float delta) {
 	glm::vec3 n = relPos / dist;
 	float C = dist;
 
-	// Torque-arm term: how much this correction wants to spin the proxy.
-	// In 2D, cross(rotatedOffset, n) is the z-component of the 3D cross product.
 	float torqueArm = rotatedOffset.x * n.y - rotatedOffset.y * n.x;
 
 	float wPoint = (*point.invMass);
@@ -54,9 +52,7 @@ void XPBDProxyPointConstraint::SolvePosition(float delta) {
 
 	glm::vec3 fullCorrection = n * deltaLambda;
 
-	// Safety net for genuine blow-ups only — absolute cap, not fractional
-	// (a fractional cap throttles ordinary healthy corrections too).
-	const float maxStepAbs = 0.2f; // tune per scene scale
+	const float maxStepAbs = 0.5f; 
 	float corrLen = glm::length(fullCorrection) * std::max(wPoint, wProxyLinear);
 	if (corrLen > maxStepAbs && corrLen > 1e-9f) {
 		fullCorrection *= (maxStepAbs / corrLen);

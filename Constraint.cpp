@@ -6,15 +6,13 @@
 #include "ConstraintComponent.h"
 #include "EditorManager.h"
 
-Constraint::Constraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB, float weightA, float weightB)
+Constraint::Constraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB)
 {
     SetObjectA(objectA);
     SetObjectB(objectB);
 
     this->attachPointA = attachPointA;
     this->attachPointB = attachPointB;
-    this->weightA = weightA;
-    this->weightB = weightB;
 
     this->constraintDisplay = CreateConstraintDisplay();
     onPhysicsModeChangedCallbackID = EngineManager::getInstance().AddPhysicsModeChangedEvent([this] {OnPhysicsModeChanged();});
@@ -152,7 +150,7 @@ void Constraint::OnDisplayAMoved()
     SoftBodyComponent* sb = objectA.obj->GetComponent<SoftBodyComponent>();
     if (sb) {
         if (!virtualPMA) {
-            virtualPMA = sb->AddVirtualRigidBody(attachPointA);
+            virtualPMA = sb->AddVirtualProxy(attachPointA);
         }
 
         virtualPMA->localPos = attachPointA;
@@ -163,6 +161,7 @@ void Constraint::OnDisplayAMoved()
         objectA.angularVelocity = &virtualPMA->angularVelocity;
         objectA.invInertia = &virtualPMA->InverseInertia;
         objectA.invMass = &virtualPMA->inverseMass;
+        sb->UpdateVirtualProxy(virtualPMA);
     }
 
     ProcessConstraintDisplay();
@@ -177,7 +176,7 @@ void Constraint::OnDisplayBMoved()
     SoftBodyComponent* sb = objectB.obj->GetComponent<SoftBodyComponent>();
     if (sb) {
         if (!virtualPMB) {
-            virtualPMB = sb->AddVirtualRigidBody(attachPointB);
+            virtualPMB = sb->AddVirtualProxy(attachPointB);
         }
 
         virtualPMB->localPos = attachPointB;
@@ -189,6 +188,7 @@ void Constraint::OnDisplayBMoved()
         objectB.angularVelocity = &virtualPMB->angularVelocity;
         objectB.invInertia = &virtualPMB->InverseInertia;
         objectB.invMass = &virtualPMB->inverseMass;
+        sb->UpdateVirtualProxy(virtualPMB);
     }
 
     ProcessConstraintDisplay();
@@ -225,6 +225,10 @@ void Constraint::SetObjectA(PhysicsBody obj)
             attachDisplayA->GetComponent<RenderComponent>()->Enabled = false;
             attachDisplayA->GetComponent<MouseInteractComponent>()->Enabled = false;
         }
+        if (virtualPMA) {
+            objectA.obj->GetComponent<SoftBodyComponent>()->RemoveVirtualProxy(virtualPMA);
+            virtualPMA = nullptr;
+        }
     }
 
     objectA = obj;
@@ -251,6 +255,10 @@ void Constraint::SetObjectB(PhysicsBody obj)
         if (attachDisplayB) {
             attachDisplayB->GetComponent<RenderComponent>()->Enabled = false;
             attachDisplayB->GetComponent<MouseInteractComponent>()->Enabled = false;
+        }
+        if (virtualPMB) {
+            objectB.obj->GetComponent<SoftBodyComponent>()->RemoveVirtualProxy(virtualPMB);
+            virtualPMB = nullptr;
         }
     }
 
@@ -313,21 +321,12 @@ void Constraint::ProcessInspectorUI(Object* parent)
         PhysicsBody body = PhysicsBody();
         TransformComponent* tc = parent->GetComponent<TransformComponent>();
         RigidBodyComponent* pc = parent->GetComponent<RigidBodyComponent>();
-        SoftBodyComponent* sb = parent->GetComponent<SoftBodyComponent>();
         body.obj = parent;
 
         if (tc) {
             body.position = &tc->worldPosition;
             body.transformMatrix = &tc->WorldMatrix;
             body.rotation = &tc->rotation;
-        }
-        if (sb) {
-            body.pm = &sb->CenterPM;
-            body.position = &sb->CenterPM->worldPos;
-            body.velocity = &sb->CenterPM->velocity;
-            body.angularVelocity = &sb->CenterPM->angularVelocity;
-            body.invInertia = &sb->CenterPM->InverseInertia;
-            body.invMass = &sb->inverseMass;
         }
         if (pc) {
             body.velocity = &pc->velocity;
@@ -452,21 +451,12 @@ void Constraint::ProcessInspectorUI(Object* parent)
                 PhysicsBody body = PhysicsBody();
                 TransformComponent* tc = pendingSelection->GetComponent<TransformComponent>();
                 RigidBodyComponent* pc = pendingSelection->GetComponent<RigidBodyComponent>();
-                SoftBodyComponent* sb = pendingSelection->GetComponent<SoftBodyComponent>();
                 body.obj = pendingSelection;
 
                 if (tc) {
                     body.position = &tc->worldPosition;
                     body.transformMatrix = &tc->WorldMatrix;
                     body.rotation = &tc->rotation;
-                }
-                if (sb) {
-                    body.pm = &sb->CenterPM;
-                    body.position = &sb->CenterPM->worldPos;
-                    body.velocity = &sb->CenterPM->velocity;
-                    body.angularVelocity = &sb->CenterPM->angularVelocity;
-                    body.invInertia = &sb->CenterPM->InverseInertia;
-                    body.invMass = &sb->inverseMass;
                 }
                 if (pc) {
                     body.velocity = &pc->velocity;

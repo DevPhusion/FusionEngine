@@ -115,19 +115,6 @@ void ContactConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
     rows.push_back(fRow);
 }
 
-void ContactConstraint::WarmStartSoftBody() {
-    if (objectA.obj && objectB.obj) return;
-
-    if (penetration > 0.0f) {
-        if (!objectA.obj && objectA.position != nullptr) {
-            *objectA.position += normal * penetration;
-        }
-        else if (!objectB.obj && objectB.position != nullptr) {
-            *objectB.position -= normal * penetration;
-        }
-    }
-}
-
 void ContactConstraint::PostIterationClamp(std::vector<SolverRow>& allRows, int myRowIndex, int velocityIteration) {
     if (myRowIndex == normalRowOffsetIndex) {
         allRows[myRowIndex].lambda = std::max(0.0f, allRows[myRowIndex].lambda);

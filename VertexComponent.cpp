@@ -125,6 +125,10 @@ void VertexComponent::DragPoint(double xpos, double ypos) {
 			if (pc) {
 				pc->CalculateInertia();
 			}
+			SoftBodyComponent* sb = this->parent->GetComponent<SoftBodyComponent>();
+			if (sb) {
+				sb->RebuildMassAggregate();
+			}
 		}
 	}
 	else {

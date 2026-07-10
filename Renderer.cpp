@@ -6,11 +6,15 @@ void Renderer::Setup(std::vector<std::unique_ptr<Object>>* objects) {
 
 void Renderer::Draw() {
     glm::vec2 camPos = glm::vec2(Camera::getInstance().cameraPos.x, Camera::getInstance().cameraPos.y);
-    
-    glm::vec2 screenSize = glm::vec2(EngineManager::getInstance().windowWidth, EngineManager::getInstance().windowHeight); // Match your window sizes
+
+    glm::vec2 screenSize = glm::vec2(EngineManager::getInstance().windowWidth, EngineManager::getInstance().windowHeight);
     float zoom = Camera::getInstance().cameraZoom;
 
-    backgroundGrid.Draw(camPos, screenSize, zoom);
+    auto& debug = EngineManager::getInstance().EngineSettings;
+
+    if (debug.drawBackgroundGrid) {
+        backgroundGrid.Draw(camPos, screenSize, zoom);
+    }
 
     std::vector<Object*> renderQueue;
     for (size_t i = 0; i < this->allObjects->size(); i++) {
@@ -30,13 +34,13 @@ void Renderer::Draw() {
             zB = b->GetComponent<RenderComponent>()->z_index;
         }
 
-        return zA < zB; 
-    });
+        return zA < zB;
+        });
 
     for (Object* obj : renderQueue) {
         obj->GetComponent<RenderComponent>()->Draw();
         if (obj->HasComponent<TransformComponent>()) {
-           obj->GetComponent<TransformComponent>()->ProcessTransform();
+            obj->GetComponent<TransformComponent>()->ProcessTransform();
         }
         SoftBodyComponent* sb = obj->GetComponent<SoftBodyComponent>();
         if (sb) {
@@ -47,49 +51,58 @@ void Renderer::Draw() {
         }
     }
 
-    if (EngineManager::getInstance().debugMode) {
-        BAHNode<BoundingCircle>* bvhRoot = &PhysicsEngine::getInstance().root;
-
+    if (debug.AnyGizmoEnabled()) {
         glLineWidth(2.0f);
-        bvhRoot->DrawBoundingArea();
 
-        for (int i = 0; i < PhysicsEngine::getInstance().allContactPoints.size(); i++)
-        {
-            DebugPoint point = DebugPoint();
-            point.DrawPoint(PhysicsEngine::getInstance().allContactPoints[i].point, 15, Shader("vertex.txt", "fragment.txt"));
+        if (debug.drawBroadPhaseBounds) {
+            BAHNode<BoundingCircle>* bvhRoot = &PhysicsEngine::getInstance().root;
+            bvhRoot->DrawBoundingArea();
         }
 
-        for (int i = 0; i < PhysicsEngine::getInstance().allContactPoints.size(); i++)
-        {
-            ContactPoint& cp = PhysicsEngine::getInstance().allContactPoints[i];
+        if (debug.drawContactPoints || debug.drawCollisionNormals) {
+            for (int i = 0; i < PhysicsEngine::getInstance().allContactPoints.size(); i++)
+            {
+                ContactPoint& cp = PhysicsEngine::getInstance().allContactPoints[i];
 
-            DebugPoint point = DebugPoint();
-            point.DrawPoint(cp.point, 15, Shader("vertex.txt", "fragment.txt"));
-
-            glm::vec4 normalColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f); 
-            float arrowLength = 0.5f; 
-            DrawArrow(cp.point, cp.normal, arrowLength, normalColor);
-        }
-
-        for (int i = 0; i < (*allObjects).size(); i++)
-        {
-            SoftBodyComponent* sb = (*allObjects)[i]->GetComponent<SoftBodyComponent>();
-			if (sb) {
-                sb->DrawSprings();
-				for (int j = 0; j < sb->MassAggregate.size(); j++)
-				{
-					sb->MassAggregate[j]->DrawDebug();
-				}
-                for (int j = 0; j < sb->VirtualMassAggregate.size(); j++)
-                {
-                    sb->VirtualMassAggregate[j]->DrawDebug();
+                if (debug.drawContactPoints) {
+                    DebugPoint point = DebugPoint();
+                    point.DrawPoint(cp.point, 15, Shader("vertex.txt", "fragment.txt"));
                 }
-			}
+
+                if (debug.drawCollisionNormals) {
+                    glm::vec4 normalColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+                    float arrowLength = 0.5f;
+                    DrawArrow(cp.point, cp.normal, arrowLength, normalColor);
+                }
+            }
+        }
+
+        if (debug.drawSoftBodyPointMasses || debug.drawSoftBodySprings || debug.drawVirtualSoftBodyProxies) {
+            for (int i = 0; i < (*allObjects).size(); i++)
+            {
+                SoftBodyComponent* sb = (*allObjects)[i]->GetComponent<SoftBodyComponent>();
+                if (sb) {
+                    if (debug.drawSoftBodySprings) {
+                        sb->DrawSprings();
+                    }
+                    if (debug.drawSoftBodyPointMasses) {
+                        for (int j = 0; j < sb->MassAggregate.size(); j++)
+                        {
+                            sb->MassAggregate[j]->DrawDebug();
+                        }
+                    }
+                    if (debug.drawVirtualSoftBodyProxies) {
+                        for (int j = 0; j < sb->VirtualProxies.size(); j++)
+                        {
+                            sb->VirtualProxies[j]->DrawDebug();
+                        }
+                    }
+                }
+            }
         }
 
         glLineWidth(1.0f);
     }
-
 }
 
 void Renderer::DrawLine(glm::vec3 p1, glm::vec3 p2, glm::vec4 color) {

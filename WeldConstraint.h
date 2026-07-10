@@ -3,7 +3,7 @@
 class WeldConstraint : public Constraint
 {
 public:
-	WeldConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB, float angularOffset, float weightA = 1.0f, float weightB = 1.0f);
+	WeldConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB, float angularOffset);
 	WeldConstraint() = default;
 
 	float angularOffset;
@@ -19,6 +19,5 @@ public:
 	virtual void Prepare(std::vector<SolverRow>& rows, float delta);
 	virtual void PostSolve(std::vector<SolverRow>& allRows);
 	virtual void ProcessInspectorUI(Object* parent);
-	virtual void WarmStartSoftBody();
 };
 

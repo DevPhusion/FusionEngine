@@ -49,9 +49,6 @@ void ObjectManager::AddPolygon() {
 
 	auto* vc = poly->GetComponent<VertexComponent>();
 	auto* tc = poly->GetComponent<TransformComponent>();
-	auto* pc = poly->GetComponent<RigidBodyComponent>();
-
-	pc->inverseMass = 1;
 
 	if (vc) {
 		vc->SetVertexPoints(vertexPoints);
@@ -64,6 +61,82 @@ void ObjectManager::AddPolygon() {
 	}
 	tc->SetOriginTransform(Camera::getInstance().viewMatrixInverse);
 	allObjects.push_back(std::move(poly));
+	vertices.clear();
+	vertexPoints.clear();
+}
+
+void ObjectManager::AddSoftBox() {
+	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("vertex.txt", "fragment.txt"));
+	obj->AddComponent(std::make_unique<RenderComponent>(obj.get(), std::vector<float> {}, obj->shader, "floorTiled.png"));
+	auto* render = obj->GetComponent<RenderComponent>();
+	RectangleShape shape = RectangleShape();
+	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj->shader, render->GetCenter()));
+	shape.center = obj->GetComponent<TransformComponent>()->GetWorldPosition();
+	shape.width = 1.0f;
+	shape.height = 1.0f;
+	render->SetShape(shape);
+	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), true));
+	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
+	obj->AddComponent(std::make_unique<SoftBodyComponent>(obj.get()));
+	obj->AddComponent(std::make_unique<ConstraintComponent>(obj.get()));
+	allObjects.push_back(std::move(obj));
+}
+
+void ObjectManager::AddSoftCircle() {
+	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("vertex.txt", "fragment.txt"));
+	obj->AddComponent(std::make_unique<RenderComponent>(obj.get(), std::vector<float> {}, obj->shader, "floorTiled.png"));
+	auto* render = obj->GetComponent<RenderComponent>();
+	CircleShape shape = CircleShape();
+	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj->shader, render->GetCenter()));
+	shape.center = obj->GetComponent<TransformComponent>()->GetWorldPosition();
+	shape.radius = 1.0f;
+	render->SetShape(shape);
+	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), true));
+	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
+	obj->AddComponent(std::make_unique<SoftBodyComponent>(obj.get()));
+	obj->AddComponent(std::make_unique<ConstraintComponent>(obj.get()));
+	allObjects.push_back(std::move(obj));
+}
+
+void ObjectManager::AddSoftPolygon() {
+	if (vertexPoints.size() < 3) {
+		std::cout << "Invalid polygon" << std::endl;
+		for (int i = 0; i < vertexPoints.size(); i++)
+		{
+			RemoveObject(vertexPoints[i]);
+		}
+		vertexPoints.clear();
+		vertices.clear();
+		return;
+	}
+
+	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("vertex.txt", "fragment.txt"));
+	obj->AddComponent(std::make_unique<RenderComponent>(obj.get(), vertices, obj->shader, "floorTiled.png"));
+	auto* render = obj->GetComponent<RenderComponent>();
+	PolygonShape shape = PolygonShape();
+	shape.vertices = vertices;
+	render->SetShape(shape);
+	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj->shader, render->GetCenter()));
+	obj->AddComponent(std::make_unique<VertexComponent>(obj.get()));
+	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), true));
+	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
+	obj->AddComponent(std::make_unique<SoftBodyComponent>(obj.get()));
+	obj->AddComponent(std::make_unique<ConstraintComponent>(obj.get()));
+
+	auto* vc = obj->GetComponent<VertexComponent>();
+	auto* tc = obj->GetComponent<TransformComponent>();
+
+	if (vc) {
+		vc->SetVertexPoints(vertexPoints);
+	}
+	else {
+		for (int i = 0; i < vertexPoints.size(); i++)
+		{
+			vertexPoints[i]->GetComponent<RenderComponent>()->SetEnabled(false);
+		}
+	}
+	tc->SetOriginTransform(Camera::getInstance().viewMatrixInverse);
+	allObjects.push_back(std::move(obj));
 	vertices.clear();
 	vertexPoints.clear();
 }

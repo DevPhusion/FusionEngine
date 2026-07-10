@@ -20,6 +20,9 @@ public:
 	float staticFriction;
 	float dynamicFriction;
 
+	float weightA = 1.0f;
+	float weightB = 1.0f;
+
 	int normalRowOffsetIndex = 0;
 	int frictionRowOffsetIndex = -1;
 	float bounceThreshold = 1.0f;
@@ -27,6 +30,5 @@ public:
 	virtual void Prepare(std::vector<SolverRow>& rows, float delta);
 	virtual void PostIterationClamp(std::vector<SolverRow>& allRows, int myRowIndex, int velocityIteration);
 	virtual void PostSolve(std::vector<SolverRow>& allRows);
-	virtual void WarmStartSoftBody();
 };
 

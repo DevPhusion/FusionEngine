@@ -116,7 +116,7 @@ public:
 	void UnRegisterTemporaryConstraint();
 	void RegisterPGSConstraint(Constraint* constraint);
 	void UnRegisterPGSConstraint(Constraint* constraint);
-	void ResolveJointConstraintsForSubstep(float dtSub);
+	void ResolvePGSConstraintsForSubstep(float dtSub);
 	void ResolvePGSConstraints(float delta);
 
 	//XPBD Constraint resolution 

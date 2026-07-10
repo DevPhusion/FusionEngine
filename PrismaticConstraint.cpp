@@ -1,7 +1,7 @@
 #include "PrismaticConstraint.h"
 
-PrismaticConstraint::PrismaticConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB, glm::vec3 dir, float weightA, float weightB) :
-    Constraint(objectA, objectB, attachPointA, attachPointB, weightA, weightB) {
+PrismaticConstraint::PrismaticConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB, glm::vec3 dir) :
+    Constraint(objectA, objectB, attachPointA, attachPointB) {
     this->dir = dir;
     this->Name = "Prismatic Constraint";
 }
@@ -27,10 +27,10 @@ void PrismaticConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
 
     glm::vec3 t = glm::vec3(-dir.y, dir.x, 0.0f);
 
-    jacobianLinear.linearA = t * weightA;
-    jacobianLinear.linearB = -t * weightB;
-    jacobianLinear.angularA = weightA * (rA.x * t.y - rA.y * t.x);
-    jacobianLinear.angularB = -weightB * (rB.x * t.y - rB.y * t.x);
+    jacobianLinear.linearA = t;
+    jacobianLinear.linearB = -t;
+    jacobianLinear.angularA = (rA.x * t.y - rA.y * t.x);
+    jacobianLinear.angularB = -(rB.x * t.y - rB.y * t.x);
 
     jacobianTheta.linearA = glm::vec3(0);
     jacobianTheta.linearB = glm::vec3(0);
@@ -119,32 +119,6 @@ void PrismaticConstraint::ProcessInspectorUI(Object* parent) {
             glm::vec3 pB = objectB.obj->GetComponent<TransformComponent>()->GetWorldPosition();
             this->dir = pB - pA;
         }
-    }
-}
-
-void PrismaticConstraint::WarmStartSoftBody() {
-    if (objectA.obj == nullptr || objectB.obj == nullptr) return;
-    if (objectA.pm == nullptr && objectB.pm == nullptr) return;
-
-    glm::vec3 globalPointA = (objectA.pm != nullptr)
-        ? *objectA.position
-        : glm::vec3(*objectA.transformMatrix * glm::vec4(attachPointA, 1));
-
-    glm::vec3 globalPointB = (objectB.pm != nullptr)
-        ? *objectB.position
-        : glm::vec3(*objectB.transformMatrix * glm::vec4(attachPointB, 1));
-
-    glm::vec3 t = glm::vec3(-dir.y, dir.x, 0.0f);
-
-    glm::vec3 positionError = globalPointB - globalPointA;
-    float perpError = glm::dot(positionError, t);
-    glm::vec3 correction = t * perpError;
-
-    if (objectA.pm != nullptr) {
-        *objectA.position += correction * weightA;
-    }
-    if (objectB.pm != nullptr) {
-        *objectB.position -= correction * weightB;
     }
 }
 

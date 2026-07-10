@@ -2,6 +2,24 @@
 #include "InputManager.h"
 #include <functional>
 
+struct Settings {
+	glm::vec4 backgroundColor = glm::vec4(0.235f, 0.239f, 0.216f, 1.0f);
+	bool drawBackgroundGrid = true;
+	bool drawBroadPhaseBounds = false;
+	bool colorCollisions = false;
+	bool drawCollisionNormals = false;
+	bool drawContactPoints = false;
+	bool drawSoftBodyPointMasses = false;
+	bool drawSoftBodySprings = false;
+	bool drawVirtualSoftBodyProxies = false;
+
+	// Everything except drawBackgroundGrid
+	bool AnyGizmoEnabled() const {
+		return drawBroadPhaseBounds || drawCollisionNormals || drawContactPoints ||
+			drawSoftBodyPointMasses || drawSoftBodySprings || drawVirtualSoftBodyProxies;
+	}
+};
+
 class EngineManager
 {
 public:
@@ -26,11 +44,12 @@ public:
 	InteractMode EngineInteractMode = EditorSelect;
 	PhysicsMode EnginePhysicsMode = Pause;
 
+	Settings EngineSettings;
+
 	float fps;
 	float windowWidth;
 	float windowHeight;
 	float aspectRatio;
-	bool debugMode = false;
 	std::unordered_map<int, std::function<void()>> InteractModeChangedEvents;
 	std::unordered_map<int, std::function<void()>> PhysicsModeChangedEvents;
 

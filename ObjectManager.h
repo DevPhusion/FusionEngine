@@ -23,6 +23,9 @@ public:
 	void AddPolygon();
 	void AddBox();
 	void AddCircle();
+	void AddSoftBox();
+	void AddSoftCircle();
+	void AddSoftPolygon();
 	void AddPolygonVertex();
 	VertexPoint* CopyVertex(VertexPoint* vert); // For copying polygon
 	Object* CopyObject(Object* obj);

@@ -61,20 +61,36 @@ void AddObjectWindow::ProcessWindow() {
 				ObjectManager::getInstance().AddObject();
 				Hide();
 			}
-			else if (SelectedType == "Box") {
+			else if (SelectedType == "Rigid Box") {
 				ObjectManager::getInstance().AddBox();
 				Hide();
 			}
-			else if (SelectedType == "Circle") {
+			else if (SelectedType == "Rigid Circle") {
 				ObjectManager::getInstance().AddCircle();
 				Hide();
 			}
-			else if (SelectedType == "Polygon") {
+			else if (SelectedType == "Rigid Polygon") {
+				EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::AddVertex);
+			}
+			else if (SelectedType == "Soft Box") {
+				ObjectManager::getInstance().AddSoftBox();
+				Hide();
+			}
+			else if (SelectedType == "Soft Circle") {
+				ObjectManager::getInstance().AddSoftCircle();
+				Hide();
+			}
+			else if (SelectedType == "Soft Polygon") {
 				EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::AddVertex);
 			}
 		}
 		else {
-			ObjectManager::getInstance().AddPolygon();
+			if (SelectedType == "Rigid Polygon") {
+				ObjectManager::getInstance().AddPolygon();
+			}
+			else if (SelectedType == "Soft Polygon") {
+				ObjectManager::getInstance().AddSoftPolygon();
+			}
 			EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
 			Hide();
 		}

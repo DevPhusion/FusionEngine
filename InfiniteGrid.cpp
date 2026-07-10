@@ -1,4 +1,5 @@
 #include "InfiniteGrid.h"
+#include "EngineManager.h"
 
 InfiniteGrid::InfiniteGrid() : quadVAO(0), quadVBO(0), gridShader(nullptr) {}
 
@@ -41,6 +42,8 @@ void InfiniteGrid::Draw(glm::vec2 cameraPos, glm::vec2 screenSize, float zoom) {
     if (!gridShader) return;
 
     gridShader->use();
+
+    gridShader->setVec4D("bgColor", EngineManager::getInstance().EngineSettings.backgroundColor);
     gridShader->setVec2("u_cameraPos", cameraPos);
     gridShader->setVec2("u_screenSize", screenSize);
     gridShader->setFloat("u_zoom", zoom);

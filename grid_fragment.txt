@@ -2,6 +2,7 @@
 in vec2 ScreenPos;
 out vec4 FragColor;
 
+uniform vec4 bgColor;
 uniform vec2 u_cameraPos;
 uniform vec2 u_screenSize;
 uniform float u_zoom;
@@ -16,7 +17,6 @@ void main() {
     float lineFactor = min(gridLines.x, gridLines.y);
     float alpha = 1.0 - smoothstep(0.0, 1.2, lineFactor);
 
-    vec4 bgColor = vec4(0.235, 0.239, 0.216, 1.0);
     vec4 gridColor = vec4(0.300, 0.305, 0.280, 1.0);
     vec4 color = mix(bgColor, gridColor, alpha);
 

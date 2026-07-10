@@ -1,8 +1,8 @@
 #include "DistanceConstraint.h"
 
 DistanceConstraint::DistanceConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB, 
-	float distance, bool extendable, bool retractable, float weightA, float weightB) :
-	Constraint(objectA, objectB, attachPointA, attachPointB, weightA, weightB) {
+	float distance, bool extendable, bool retractable) :
+	Constraint(objectA, objectB, attachPointA, attachPointB) {
 	this->distance = distance;
 	this->extendable = extendable;
 	this->retractable = retractable;
@@ -26,10 +26,10 @@ void DistanceConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
 	glm::vec3 rA = globalPointA - *objectA.position;
 	glm::vec3 rB = globalPointB - *objectB.position;
 
-	jacobian.linearA = d_hat * weightA;
-	jacobian.linearB = -d_hat * weightB;
-	jacobian.angularA = weightA * (rA.x * d_hat.y - rA.y * d_hat.x);
-	jacobian.angularB = -weightB * (rB.x * d_hat.y - rB.y * d_hat.x);
+	jacobian.linearA = d_hat;
+	jacobian.linearB = -d_hat;
+	jacobian.angularA = rA.x * d_hat.y - rA.y * d_hat.x;
+	jacobian.angularB = -(rB.x * d_hat.y - rB.y * d_hat.x);
 
 	row.jacobian = jacobian;
 
@@ -134,8 +134,4 @@ void DistanceConstraint::ProcessConstraintDisplay() {
 	else {
 		rc->SetEnabled(false);
 	}
-}
-
-void DistanceConstraint::WarmStartSoftBody() {
-	
 }

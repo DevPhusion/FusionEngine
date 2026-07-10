@@ -15,7 +15,45 @@ SoftBodyComponent::SoftBodyComponent(Object* parent) : ComponentBase<SoftBodyCom
 
 void SoftBodyComponent::ProcessSoftBody(float delta) {
 	SyncMeshFromMassAggregate();
-	PreProxySync(delta);
+}
+
+void SoftBodyComponent::ApplyGasPressure() {
+	int edgeCount = (int)MassAggregate.size() - 1;
+	if (edgeCount < 3) return;
+
+	float area = 0.0f;
+	glm::vec3 centroid(0.0f);
+	for (int i = 0; i < edgeCount; i++) {
+		glm::vec3 a = MassAggregate[i]->worldPos;
+		glm::vec3 b = MassAggregate[(i + 1) % edgeCount]->worldPos;
+		area += a.x * b.y - b.x * a.y;
+		centroid += a;
+	}
+	area = std::abs(area) * 0.5f;
+	area = std::max(area, 1e-4f);
+	centroid /= (float)edgeCount; 
+
+	float pressure = gasAmount / area;
+	const float maxForcePerEdge = 50.0f;
+
+	for (int i = 0; i < edgeCount; i++) {
+		PointMass* pmA = MassAggregate[i].get();
+		PointMass* pmB = MassAggregate[(i + 1) % edgeCount].get();
+
+		glm::vec3 edge = pmB->worldPos - pmA->worldPos;
+		float edgeLength = glm::length(edge);
+		if (edgeLength < 1e-8f) continue;
+
+		glm::vec3 normal = glm::normalize(glm::vec3(edge.y, -edge.x, 0.0f));
+		glm::vec3 toCentroid = centroid - pmA->worldPos;
+		if (glm::dot(normal, toCentroid) > 0.0f) normal = -normal;
+
+		float magnitude = std::min(pressure * edgeLength, maxForcePerEdge);
+		glm::vec3 force = normal * magnitude;
+
+		pmA->acceleration += force * 0.5f * pmA->inverseMass;
+		pmB->acceleration += force * 0.5f * pmB->inverseMass;
+	}
 }
 
 void SoftBodyComponent::ProcessInspectorUI() {
@@ -69,9 +107,20 @@ void SoftBodyComponent::ProcessInspectorUI() {
 		}
 	}
 
+	ImGui::Separator();
+	if (ImGui::Checkbox("Gas Pressure Mode", &useGasPressure)) {
+		RebuildMassAggregate();
+	}
+	if (useGasPressure) {
+		ImGui::Text("Gas Amount");
+		ImGui::SameLine();
+		ImGui::InputFloat("##GasAmount", &gasAmount, 0.0f, 0.0f, "%.3f");
+	}
+
 	if (ImGui::Button("Reset shape")) {
 		parent->GetComponent<RenderComponent>()->SetShape(parent->GetComponent<RenderComponent>()->currentShape);
 		parent->GetComponent<TransformComponent>()->SetRotationCenter(parent->GetComponent<RenderComponent>()->GetCenter());
+		RebuildMassAggregate();
 	}
 }
 
@@ -102,6 +151,21 @@ void SoftBodyComponent::OnDelete() {
 		PhysicsEngine::getInstance().UnRegisterXPBDConstraint(s);
 	springs.clear();
 	PhysicsEngine::getInstance().UnRegisterXPBDConstraint(areaConstraint);
+	auto& allProxies = PhysicsEngine::getInstance().allSoftBodyProxies;
+
+	for (int i = 0; i < proxyLinks.size(); i++)
+	{
+		PhysicsEngine::getInstance().UnRegisterXPBDConstraint(proxyLinks[i]);
+	}
+
+	for (int i = 0; i < VirtualProxies.size(); i++)
+	{
+		PointMass* target = VirtualProxies[i].get();
+		allProxies.erase(std::remove(allProxies.begin(), allProxies.end(), target), allProxies.end());
+	}
+
+	proxyLinks.clear();
+	VirtualProxies.clear();
 
 	auto& allPms = PhysicsEngine::getInstance().allSoftBodyPointMasses;  
 	for (int i = 0; i < MassAggregate.size(); i++)
@@ -301,21 +365,24 @@ void SoftBodyComponent::BuildMassAggregate() {
 	}
 	
 	// Apply area constraint
-	std::vector<PhysicsBody> massBody;
-	for (int i = 0; i < MassAggregate.size() - 1; i++)
-	{
-		massBody.push_back(MassAggregate[i]->body);
-	}
+	if (!useGasPressure) {
+		std::vector<PhysicsBody> massBody;
+		for (int i = 0; i < MassAggregate.size() - 1; i++)
+			massBody.push_back(MassAggregate[i]->body);
 
-	areaConstraint = new XPBDAreaConstraint(massBody,  (stiffness > 0.0f) ? (1.0f / stiffness) : 0.0f);
-	PhysicsEngine::getInstance().RegisterXPBDConstraint(areaConstraint);
+		areaConstraint = new XPBDAreaConstraint(massBody, (stiffness > 0.0f) ? (1.0f / stiffness) : 0.0f);
+		PhysicsEngine::getInstance().RegisterXPBDConstraint(areaConstraint);
+	}
+	else {
+		areaConstraint = nullptr;
+	}
 }
 
-float calcRBTriangleArea(glm::vec3 a, glm::vec3 b, glm::vec3 c) {
+float calcProxyTriangleArea(glm::vec3 a, glm::vec3 b, glm::vec3 c) {
 	return 0.5f * std::abs((a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y)));
 }
 
-float calculateRBTriangleInertia(glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 centerOfMass, float massTriangle) {
+float calculateProxyTriangleInertia(glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 centerOfMass, float massTriangle) {
 	float inertia = (massTriangle / 36) * (glm::length2(a - b) + glm::length2(b - c) + glm::length2(c - a));
 	glm::vec3 centroid = (a + b + c) / 3.0f;
 
@@ -323,7 +390,7 @@ float calculateRBTriangleInertia(glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec
 	return inertia + (massTriangle * distSquared);
 }
 
-float SoftBodyComponent::CalculateVirtualRigidBodyInvInertia(glm::vec3 pos) {
+float SoftBodyComponent::CalculateVirtualProxyInvInertia(glm::vec3 pos) {
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
 	RenderComponent* rc = parent->GetComponent<RenderComponent>();
 	std::vector<std::vector<float>> points = rc->points;
@@ -338,21 +405,21 @@ float SoftBodyComponent::CalculateVirtualRigidBodyInvInertia(glm::vec3 pos) {
 		glm::vec3 b = glm::vec3(points[indices[i + 1]][0], points[indices[i + 1]][1], 0.0f);
 		glm::vec3 c = glm::vec3(points[indices[i + 2]][0], points[indices[i + 2]][1], 0.0f);
 
-		float m_triangle = mass * (calcRBTriangleArea(a, b, c) / rc->GetArea());
-		sum += calculateRBTriangleInertia(tc->ProjectToWorld(a), tc->ProjectToWorld(b), tc->ProjectToWorld(c),
+		float m_triangle = mass * (calcProxyTriangleArea(a, b, c) / rc->GetArea());
+		sum += calculateProxyTriangleInertia(tc->ProjectToWorld(a), tc->ProjectToWorld(b), tc->ProjectToWorld(c),
 			pos, m_triangle);   
 	}
 
 	return (sum > 0) ? 1.0f / sum : 0.0f;
 }
 
-PointMass* SoftBodyComponent::AddVirtualRigidBody(glm::vec3 localPos) {
+PointMass* SoftBodyComponent::AddVirtualProxy(glm::vec3 localPos) {
 	glm::vec3 worldPos = parent->GetComponent<TransformComponent>()->ProjectToWorld(localPos);
 	std::unique_ptr<PointMass> virtualRigidbody = std::make_unique<PointMass>(
-		Shader("vertex.txt", "fragment.txt"), this, worldPos, VirtualMassAggregate.size(), false);
-	PointMass* rb = virtualRigidbody.get();
-	rb->localPos = localPos;
-	PhysicsEngine::getInstance().allSoftBodyProxies.push_back(rb);
+		Shader("vertex.txt", "fragment.txt"), this, worldPos, VirtualProxies.size(), false);
+	PointMass* proxy = virtualRigidbody.get();
+	proxy->localPos = localPos;
+	PhysicsEngine::getInstance().allSoftBodyProxies.push_back(proxy);
 
 	std::vector<std::pair<float, PointMass*>> distancePairs;
 	for (auto& pm : MassAggregate) {
@@ -369,95 +436,93 @@ PointMass* SoftBodyComponent::AddVirtualRigidBody(glm::vec3 localPos) {
 	int pointsToLink = (int)(totalPoints * virtualPointPercentClosest);
 	pointsToLink = std::max(1, std::min(pointsToLink, totalPoints));
 
-	VirtualLink link;
-	link.virtualProxy = rb;
-
 	float totalMass = 0.0f;
 	for (int i = 0; i < pointsToLink; i++) {
 		PointMass* targetPM = distancePairs[i].second;
-		link.affectPM.push_back(targetPM);
 
 		glm::vec3 restOffset = targetPM->localPos - localPos;
-		link.localOffsets.push_back(restOffset);
 
 		if (targetPM->inverseMass > 0.0f) totalMass += 1.0f / targetPM->inverseMass;
 
 		float compliance = (attachmentStiffness > 0.0f) ? (1.0f / attachmentStiffness) : 0.0f;
 		XPBDProxyPointConstraint* c = new XPBDProxyPointConstraint(
-			targetPM->body, rb->body, restOffset, compliance, damping);
+			targetPM->body, proxy->body, restOffset, compliance, damping);
 		PhysicsEngine::getInstance().RegisterXPBDConstraint(c);
 		proxyLinks.push_back(c);
 	}
 
-	virtualLinks.push_back(link);
+	proxy->inverseMass = (totalMass > 0.0f) ? (1.0f / totalMass) : inverseMass;
+	proxy->InverseInertia = CalculateVirtualProxyInvInertia(worldPos);
 
-	rb->inverseMass = (totalMass > 0.0f) ? (1.0f / totalMass) : inverseMass;
-	rb->InverseInertia = CalculateVirtualRigidBodyInvInertia(worldPos);
-
-	VirtualMassAggregate.push_back(std::move(virtualRigidbody));
-	return rb;
+	VirtualProxies.push_back(std::move(virtualRigidbody));
+	return proxy;
 }
 
-void SoftBodyComponent::PreProxySync(float dtSub) {
-	bool simulating = EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate;
-
-	for (auto& link : virtualLinks) {
-		PointMass* proxy = link.virtualProxy;
-		if (!proxy) continue;
-
-		if (!simulating) {
-			glm::vec3 centroid(0.0f);
-			float wSum = 0.0f;
-			for (auto* p : link.affectPM) {
-				float w = (p->inverseMass > 0.0f) ? (1.0f / p->inverseMass) : 1.0f;
-				centroid += p->worldPos * w;
-				wSum += w;
-			}
-			if (wSum < 1e-8f) continue;
-			centroid /= wSum;
-
-			float sinSum = 0.0f, cosSum = 0.0f;
-			for (size_t i = 0; i < link.affectPM.size(); i++) {
-				glm::vec3 rest = link.localOffsets[i];
-				glm::vec3 cur = link.affectPM[i]->worldPos - centroid;
-				sinSum += rest.x * cur.y - rest.y * cur.x;
-				cosSum += rest.x * cur.x + rest.y * cur.y;
-			}
-			float theta = std::atan2(sinSum, cosSum);
-
-			proxy->prevPos = proxy->worldPos;
-			proxy->UpdateWorldPosition(centroid);
-			proxy->rotation = theta;
-			proxy->velocity = glm::vec3(0.0f);
-			proxy->angularVelocity = 0.0f;
-			continue;
+void SoftBodyComponent::UpdateVirtualProxy(PointMass* proxy) {
+	for (int i = (int)proxyLinks.size() - 1; i >= 0; i--)
+	{
+		if (proxyLinks[i]->proxy.pm == proxy) {
+			PhysicsEngine::getInstance().UnRegisterXPBDConstraint(proxyLinks[i]);
+			proxyLinks.erase(proxyLinks.begin() + i);
 		}
 	}
-}
 
-PhysicsBody SoftBodyComponent::FindClosestPointMassBody(glm::vec3 localPoint, float* outWeight) {
-	TransformComponent* tc = parent->GetComponent<TransformComponent>();
-	glm::vec3 worldPoint = tc->ProjectToWorld(localPoint);
+	glm::vec3 localPos = proxy->localPos;
+	glm::vec3 worldPos = parent->GetComponent<TransformComponent>()->ProjectToWorld(localPos);
+	proxy->UpdateWorldPosition(worldPos);
 
-	PointMass* closest = nullptr;
-	float bestDist = INFINITY;
-
+	std::vector<std::pair<float, PointMass*>> distancePairs;
 	for (auto& pm : MassAggregate) {
-		float d = glm::length(pm->worldPos - worldPoint);
-		if (d < bestDist) {
-			bestDist = d;
-			closest = pm.get();
+		float dist = glm::length(pm->localPos - localPos);
+		distancePairs.push_back({ dist, pm.get() });
+	}
+
+	std::sort(distancePairs.begin(), distancePairs.end(),
+		[](const std::pair<float, PointMass*>& a, const std::pair<float, PointMass*>& b) {
+			return a.first < b.first;
+		});
+
+	int totalPoints = (int)MassAggregate.size();
+	int pointsToLink = (int)(totalPoints * virtualPointPercentClosest);
+	pointsToLink = std::max(1, std::min(pointsToLink, totalPoints));
+
+	float totalMass = 0.0f;
+	for (int i = 0; i < pointsToLink; i++) {
+		PointMass* targetPM = distancePairs[i].second;
+
+		glm::vec3 restOffset = targetPM->localPos - localPos;
+
+		if (targetPM->inverseMass > 0.0f) totalMass += 1.0f / targetPM->inverseMass;
+
+		float compliance = (attachmentStiffness > 0.0f) ? (1.0f / attachmentStiffness) : 0.0f;
+		XPBDProxyPointConstraint* c = new XPBDProxyPointConstraint(
+			targetPM->body, proxy->body, restOffset, compliance, damping);
+		PhysicsEngine::getInstance().RegisterXPBDConstraint(c);
+		proxyLinks.push_back(c);
+	}
+
+	proxy->inverseMass = (totalMass > 0.0f) ? (1.0f / totalMass) : inverseMass;
+	proxy->InverseInertia = CalculateVirtualProxyInvInertia(worldPos);
+}
+
+void SoftBodyComponent::RemoveVirtualProxy(PointMass* proxy) {
+	for (int i = (int)proxyLinks.size() - 1; i >= 0; i--)
+	{
+		if (proxyLinks[i]->proxy.pm == proxy) {
+			PhysicsEngine::getInstance().UnRegisterXPBDConstraint(proxyLinks[i]);
+			proxyLinks.erase(proxyLinks.begin() + i);
 		}
 	}
 
-	if (closest == nullptr) {
-		if (outWeight) *outWeight = 0.0f;
-		return PhysicsBody();
+	auto& allProxies = PhysicsEngine::getInstance().allSoftBodyProxies;
+	allProxies.erase(std::remove(allProxies.begin(), allProxies.end(), proxy), allProxies.end());
+	
+	for (int i = 0; i < VirtualProxies.size(); i++)
+	{
+		if (VirtualProxies[i].get() == proxy) {
+			VirtualProxies.erase(VirtualProxies.begin() + i);
+		}
 	}
-
-	if (outWeight) *outWeight = 1.0f / (1.0f + bestDist);
-
-	return closest->body;
 }
 
 void SoftBodyComponent::DrawSprings() {
@@ -471,9 +536,9 @@ void SoftBodyComponent::DrawSprings() {
 		float ratio = currentLength / spring->restLength;
 
 		glm::vec4 color;
-		if (ratio > 1.05f) color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f); 
-		else if (ratio < 0.95f) color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f); 
-		else color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f); 
+		if (ratio > 1.05f) color = glm::vec4(1.0f, 0.0f, 0.0f, 1.0f);
+		else if (ratio < 0.95f) color = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+		else color = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
 
 		renderer.DrawLine(posA, posB, color);
 	}
