@@ -1,4 +1,5 @@
 #include "EngineStatus.h"
+#include "Renderer.h"
 
 EngineStatus::EngineStatus(std::string main) : EditorWindow(main) {
 	EngineManager::getInstance().AddInteractModeChangedEvent([this]() {this->OnInteractModeChanged();});
@@ -15,12 +16,15 @@ void EngineStatus::ProcessWindow() {
 
 	std::string fpsText = std::to_string(EngineManager::getInstance().fps) + " FPS";
 	ImGui::Text(fpsText.c_str());
-	ImGui::Text(InteractModeText.c_str());
 
 	if (ImGui::Button("Settings"))
 		ImGui::OpenPopup("Settings");
 
 	ProcessSettingsPopup();
+
+	ImGui::Text("Gizmo: ");
+	ImGui::SameLine();
+	DrawGizmoModeSelector();
 
 	ImGui::Text("Physics: ");
 	ImGui::SameLine();
@@ -36,6 +40,32 @@ void EngineStatus::ProcessWindow() {
 	}
 
 	ImGui::End();
+}
+
+void EngineStatus::DrawGizmoModeSelector() {
+	Gizmos* gizmos = Renderer::getInstance().gizmos;
+	if (!gizmos) return;
+
+	GizmosMode current = gizmos->currentGizmosMode;
+
+	auto modeButton = [&](const char* label, GizmosMode mode) {
+		bool isActive = (current == mode);
+		if (isActive) {
+			ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+		}
+		if (ImGui::Button(label)) {
+			gizmos->SwitchMode(mode);
+		}
+		if (isActive) {
+			ImGui::PopStyleColor();
+		}
+		};
+
+	modeButton("Move", GizmosMode::Move);
+	ImGui::SameLine();
+	modeButton("Rotate", GizmosMode::Rotate);
+	ImGui::SameLine();
+	modeButton("Scale", GizmosMode::Scale);
 }
 
 void EngineStatus::ProcessSettingsPopup() {

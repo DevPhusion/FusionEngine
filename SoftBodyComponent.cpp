@@ -212,6 +212,11 @@ void SoftBodyComponent::UpdateMassAggregate() {
 	RenderComponent* rc = parent->GetComponent<RenderComponent>();
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
 
+	if (tc->size != prevScale) {
+		prevScale = tc->size;
+		RebuildMassAggregate();
+	}
+
 	for (int i = 0; i < rc->points.size(); i++)
 	{
 		glm::vec3 p = glm::vec3(rc->points[i][0], rc->points[i][1], 0.0f);

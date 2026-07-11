@@ -14,7 +14,7 @@ struct Settings {
 	bool drawVirtualSoftBodyProxies = false;
 
 	// Everything except drawBackgroundGrid
-	bool AnyGizmoEnabled() const {
+	bool AnyDebugGizmoEnabled() const {
 		return drawBroadPhaseBounds || drawCollisionNormals || drawContactPoints ||
 			drawSoftBodyPointMasses || drawSoftBodySprings || drawVirtualSoftBodyProxies;
 	}

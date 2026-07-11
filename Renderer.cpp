@@ -2,6 +2,8 @@
 
 void Renderer::Setup(std::vector<std::unique_ptr<Object>>* objects) {
     this->allObjects = objects;
+    gizmos = new Gizmos();
+    gizmos->Initialize();
 }
 
 void Renderer::Draw() {
@@ -51,7 +53,7 @@ void Renderer::Draw() {
         }
     }
 
-    if (debug.AnyGizmoEnabled()) {
+    if (debug.AnyDebugGizmoEnabled()) {
         glLineWidth(2.0f);
 
         if (debug.drawBroadPhaseBounds) {
@@ -103,9 +105,12 @@ void Renderer::Draw() {
 
         glLineWidth(1.0f);
     }
+
+    gizmos->UpdateGizmos();
 }
 
-void Renderer::DrawLine(glm::vec3 p1, glm::vec3 p2, glm::vec4 color) {
+void Renderer::DrawLine(glm::vec3 p1, glm::vec3 p2, glm::vec4 color, float thickness, bool screenSpace) {
+    glLineWidth(thickness);
     static unsigned int lineVAO = 0;
     static unsigned int lineVBO = 0;
     static unsigned int whiteTex = 0;
@@ -131,7 +136,17 @@ void Renderer::DrawLine(glm::vec3 p1, glm::vec3 p2, glm::vec4 color) {
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     }
 
-    float vertices[6] = { p1.x, p1.y, p1.z, p2.x, p2.y, p2.z };
+    glm::vec3 renderP2 = p2;
+    if (screenSpace) {
+        std::cout << "a" << std::endl;
+        float zoom = Camera::getInstance().cameraZoom;
+        if (zoom > 1e-6f) {
+            glm::vec3 delta = (p2 - p1) * zoom;
+            renderP2 = p1 + delta;
+        }
+    }
+
+    float vertices[6] = { p1.x, p1.y, p1.z, renderP2.x, renderP2.y, renderP2.z };
     glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -153,16 +168,23 @@ void Renderer::DrawLine(glm::vec3 p1, glm::vec3 p2, glm::vec4 color) {
     glBindVertexArray(lineVAO);
     glDrawArrays(GL_LINES, 0, 2);
     glBindVertexArray(0);
+    glLineWidth(1.0f);
 }
 
-void Renderer::DrawArrow(glm::vec3 origin, glm::vec3 direction, float length, glm::vec4 color,
-    float headLength, float headAngleDeg) {
+void Renderer::DrawArrow(glm::vec3 origin, glm::vec3 direction, float length, glm::vec4 color, float thickness,
+    float headLength, float headAngleDeg, bool screenSpace) {
     if (glm::length(direction) < 1e-8f) return;
     glm::vec3 dir = glm::normalize(direction);
 
-    glm::vec3 tip = origin + dir * length;
+    float zoom = 1.0f;
+    if (screenSpace) {
+        zoom = Camera::getInstance().cameraZoom;
+        if (zoom < 1e-6f) zoom = 1.0f;
+    }
 
-    DrawLine(origin, tip, color);
+    glm::vec3 tip = origin + dir * (length * zoom);
+
+    DrawLine(origin, tip, color, thickness);
 
     glm::vec3 back = -dir;
     float rad = glm::radians(headAngleDeg);
@@ -176,9 +198,32 @@ void Renderer::DrawArrow(glm::vec3 origin, glm::vec3 direction, float length, gl
     glm::vec3 headDirA = rotateZ(back, rad);
     glm::vec3 headDirB = rotateZ(back, -rad);
 
-    glm::vec3 headA = tip + headDirA * headLength;
-    glm::vec3 headB = tip + headDirB * headLength;
+    float effHeadLength = headLength * zoom;
 
-    DrawLine(tip, headA, color);
-    DrawLine(tip, headB, color);
+    glm::vec3 headA = tip + headDirA * effHeadLength;
+    glm::vec3 headB = tip + headDirB * effHeadLength;
+
+    DrawLine(tip, headA, color, thickness);
+    DrawLine(tip, headB, color, thickness);
+}
+
+void Renderer::DrawCircle(glm::vec3 center, float radius, glm::vec4 color, int segments, float thickness, bool screenSpace) {
+    float zoom = 1.0f;
+    if (screenSpace) {
+        zoom = Camera::getInstance().cameraZoom;
+        if (zoom < 1e-6f) zoom = 1.0f;
+    }
+    float effRadius = radius * zoom;
+
+    float angleStep = 2.0f * glm::pi<float>() / (float)segments;
+
+    for (int i = 0; i < segments; ++i) {
+        float angle1 = i * angleStep;
+        float angle2 = (i + 1) * angleStep;
+
+        glm::vec3 p1 = center + glm::vec3(cos(angle1) * effRadius, sin(angle1) * effRadius, 0.0f);
+        glm::vec3 p2 = center + glm::vec3(cos(angle2) * effRadius, sin(angle2) * effRadius, 0.0f);
+
+        DrawLine(p1, p2, color, thickness);
+    }
 }

@@ -161,6 +161,7 @@
     <ClCompile Include="EngineManager.cpp" />
     <ClCompile Include="EngineStatus.cpp" />
     <ClCompile Include="ForceGenerator.cpp" />
+    <ClCompile Include="Gizmos.cpp" />
     <ClCompile Include="glad.c" />
     <ClCompile Include="Hierarchy.cpp" />
     <ClCompile Include="imgui\imgui.cpp" />
@@ -225,6 +226,7 @@
     <ClInclude Include="EngineManager.h" />
     <ClInclude Include="EngineStatus.h" />
     <ClInclude Include="ForceGenerator.h" />
+    <ClInclude Include="Gizmos.h" />
     <ClInclude Include="Hierarchy.h" />
     <ClInclude Include="imgui\dirent.h" />
     <ClInclude Include="imgui\imconfig.h" />

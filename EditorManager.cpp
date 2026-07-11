@@ -1,4 +1,5 @@
 #include "EditorManager.h"
+#include "Renderer.h"
 
 void EditorManager::Setup(GLFWwindow* window) {
 	IMGUI_CHECKVERSION();

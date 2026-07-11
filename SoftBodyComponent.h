@@ -39,6 +39,8 @@ public:
 	float damping = 2.47f;
 	float gasAmount = 1.0f;
 
+	glm::vec3 prevScale = glm::vec3(1);
+
 	void ProcessSoftBody(float delta);
 	void ApplyGasPressure();
 	void BuildMassAggregate();

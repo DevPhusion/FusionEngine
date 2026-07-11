@@ -10,6 +10,7 @@ public:
 
 	virtual void ProcessWindow();
 
+	void DrawGizmoModeSelector();
 	void ProcessSettingsPopup();
 	void OnInteractModeChanged();
 };

@@ -33,6 +33,8 @@ void MouseInteractComponent::OnDelete() {
 }
 
 void MouseInteractComponent::SetSelectedPolygon(Object* obj, bool enable) {
+	if (Renderer::getInstance().gizmos->isDragging) return;
+
 	if (!enable) {
 		if (obj->HasComponent<VertexComponent>()) {
 			if (obj->GetComponent<VertexComponent>()->GetSelectedVertex() != -1) {
@@ -140,6 +142,11 @@ void MouseInteractComponent::DragPolygon(double xpos, double ypos) {
 		}
 
 		if (Selected && EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Pause) {
+			GizmosMode gizmoMode = Renderer::getInstance().gizmos->currentGizmosMode;
+			if (gizmoMode == GizmosMode::Rotate || gizmoMode == GizmosMode::Scale) {
+				return;
+			}
+			
 			TransformComponent* trans = parent->GetComponent<TransformComponent>();
 			// project to model space
 			glm::vec3 modelPos = trans->GetTransformedPoint(glm::vec3(InputManager::glX, InputManager::glY, 0), true);
