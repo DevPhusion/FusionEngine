@@ -11,6 +11,7 @@ public:
 
 	virtual void ProcessInspectorUI();
 	virtual void OnDelete();
+	virtual std::unique_ptr<Component> Clone(Object* parent);
 	virtual void CopyTo(Object* other);
 
 	std::vector<Constraint*> mirroredConstraints; // Constraint that other objects applied to this

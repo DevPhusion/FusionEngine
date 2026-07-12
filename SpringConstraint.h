@@ -14,6 +14,7 @@ public:
 	virtual void ProcessConstraintDisplay();
 	virtual void Prepare(std::vector<SolverRow>& rows, float delta);
 	virtual void ProcessInspectorUI(Object* parent);
+	virtual std::shared_ptr<Constraint> Clone();
 };
 
 

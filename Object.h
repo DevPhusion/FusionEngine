@@ -5,6 +5,7 @@
 #include <vector>
 #include <type_traits>
 #include <typeinfo>
+#include <memory>
 
 template <typename T>
 concept AllowedTypes = std::is_base_of_v<Component, T>;
@@ -14,6 +15,8 @@ class Object
 public:
 	Object(Shader shader);
 	Object() = default;
+
+	uint64_t id = NextID();
 
 	std::string name;
 	bool hidden = false;
@@ -79,11 +82,27 @@ public:
 		}
 	}
 
+	std::unique_ptr<Object> Clone() {
+		std::unique_ptr<Object> obj = std::make_unique<Object>(shader);
+		for (int i = 0; i < this->components.size(); i++)
+		{
+			obj->AddComponent(this->components[i]->Clone(obj.get()));
+		}
+		obj->id = id;
+		return obj;
+	}
+
 	void AddComponent(std::unique_ptr<Component> component) {
 		size_t id = component->GetTypeID(); 
 		if (id >= componentByType.size()) componentByType.resize(id + 1, nullptr);
 		componentByType[id] = component.get();
 		components.push_back(std::move(component));
+	}
+
+	void RegisterComponentPointer(Component* comp) {
+		size_t id = comp->GetTypeID();
+		if (id >= componentByType.size()) componentByType.resize(id + 1, nullptr);
+		componentByType[id] = comp;
 	}
 
 	std::unordered_map<int, std::function<void()>> OnDeleteCallbacks;
@@ -92,5 +111,10 @@ public:
 	void RemoveOnDeleteCallback(int ID);
 private:
 	int CurrentOnRemoveID = -1;
+
+	static uint64_t NextID() {
+		static uint64_t counter = 1;
+		return counter++;
+	}
 };
 

@@ -28,14 +28,30 @@ void EngineStatus::ProcessWindow() {
 
 	ImGui::Text("Physics: ");
 	ImGui::SameLine();
-	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Pause) {
+	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Stop) {
 		if (ImGui::Button("Run")) {
 			EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Simulate);
+			EngineManager::getInstance().SaveEngineState();
+		}
+	}
+	else if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Pause) {
+		if (ImGui::Button("Run")) {
+			EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Simulate);
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Stop")) {
+			EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Stop);
+			EngineManager::getInstance().LoadEngineState();
 		}
 	}
 	else if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) {
 		if (ImGui::Button("Pause")) {
 			EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Pause);
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Stop")) {
+			EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Stop);
+			EngineManager::getInstance().LoadEngineState();
 		}
 	}
 

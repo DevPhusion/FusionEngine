@@ -14,6 +14,7 @@ SoftBodyComponent::SoftBodyComponent(Object* parent) : ComponentBase<SoftBodyCom
 }
 
 void SoftBodyComponent::ProcessSoftBody(float delta) {
+	if (!Enabled) return;
 	SyncMeshFromMassAggregate();
 }
 
@@ -144,6 +145,18 @@ void SoftBodyComponent::CopyTo(Object* other) {
 		target->springs[i]->damping = damping;
 	}
 
+}
+
+std::unique_ptr<Component> SoftBodyComponent::Clone(Object* parent) {
+	std::unique_ptr<SoftBodyComponent> comp = std::make_unique<SoftBodyComponent>(parent);
+	comp->stiffness = stiffness;
+	float compliance = (stiffness > 0.0f) ? (1.0f / stiffness) : 0.0f;
+	for (auto* s : comp->springs) s->compliance = compliance;
+
+	comp->damping = damping;
+	for (auto* s : comp->springs) s->damping = damping;
+	comp->SetEnabled(false);
+	return comp;
 }
 
 void SoftBodyComponent::OnDelete() {

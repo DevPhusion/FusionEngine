@@ -51,6 +51,22 @@ void VertexComponent::CopyTo(Object* other) {
 	target->UpdateTransform();
 }
 
+std::unique_ptr<Component> VertexComponent::Clone(Object* parent) {
+	std::unique_ptr<VertexComponent> comp = std::make_unique<VertexComponent>(parent);
+
+	std::vector<VertexPoint*> vPoints;
+	for (auto* vp : vertexPoints) {
+		std::unique_ptr<VertexPoint> vert = vp->CloneVertex();
+		vPoints.push_back(vert.get());
+		EngineManager::getInstance().cachedSaveObjects.push_back(std::move(vert));
+	}
+
+	comp->SetVertexPoints(vPoints);
+	comp->UpdateTransform();
+	comp->SetEnabled(false);
+	return comp;
+}
+
 void VertexComponent::ProcessInspectorUI() {
 	if (!this->parent->GetComponent<TransformComponent>()->Enabled) {
 		SetEnabled(false);

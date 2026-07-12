@@ -1,6 +1,9 @@
 #pragma once
 #include "InputManager.h"
+#include <memory>
 #include <functional>
+
+class Constraint;
 
 struct Settings {
 	glm::vec4 backgroundColor = glm::vec4(0.235f, 0.239f, 0.216f, 1.0f);
@@ -18,6 +21,11 @@ struct Settings {
 		return drawBroadPhaseBounds || drawCollisionNormals || drawContactPoints ||
 			drawSoftBodyPointMasses || drawSoftBodySprings || drawVirtualSoftBodyProxies;
 	}
+};
+
+struct EngineState {
+	std::vector<std::unique_ptr<Object>> Objects = {};
+	std::vector<std::shared_ptr<Constraint>> Constraints = {};
 };
 
 class EngineManager
@@ -38,13 +46,17 @@ public:
 
 	enum PhysicsMode {
 		Pause,
+		Stop,
 		Simulate
 	};
 
 	InteractMode EngineInteractMode = EditorSelect;
-	PhysicsMode EnginePhysicsMode = Pause;
+	PhysicsMode EnginePhysicsMode = Stop;
 
 	Settings EngineSettings;
+	
+	EngineState SavedState;
+	std::vector<std::unique_ptr<Object>> cachedSaveObjects;
 
 	float fps;
 	float windowWidth;
@@ -55,6 +67,8 @@ public:
 
 	void Setup(GLFWwindow* window);
 	void ProcessEngine(float delta);
+	void SaveEngineState();
+	void LoadEngineState();
 	void SwitchInteractMode(InteractMode mode);
 	void SwitchPhysicsMode(PhysicsMode mode);
 	int AddInteractModeChangedEvent(std::function<void()> func);

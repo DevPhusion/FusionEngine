@@ -78,6 +78,7 @@ void DistanceConstraint::ProcessInspectorUI(Object* parent) {
 }
 
 void DistanceConstraint::ProcessConstraintDisplay() {
+	if (!constraintDisplay) return;
 	RenderComponent* rc = constraintDisplay->GetComponent<RenderComponent>();
 	TransformComponent* tc = constraintDisplay->GetComponent<TransformComponent>();
 	if (objectA.obj == nullptr || objectB.obj == nullptr || !canDrawConstraint) {
@@ -134,4 +135,10 @@ void DistanceConstraint::ProcessConstraintDisplay() {
 	else {
 		rc->SetEnabled(false);
 	}
+}
+
+std::shared_ptr<Constraint> DistanceConstraint::Clone() {
+	std::shared_ptr<DistanceConstraint> constraint = std::make_shared<DistanceConstraint>(PhysicsBody(), PhysicsBody(), attachPointA, attachPointB, distance, retractable, extendable);
+	constraint->CopyBaseFieldsFrom(this);
+	return constraint;
 }

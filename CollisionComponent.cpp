@@ -80,6 +80,16 @@ void CollisionComponent::CopyTo(Object* other) {
     target->calculateBoundingCircle();
 }
 
+std::unique_ptr<Component> CollisionComponent::Clone(Object* parent) {
+    std::unique_ptr<CollisionComponent> comp = std::make_unique<CollisionComponent>(parent);
+    comp->boundingCircle = boundingCircle;
+    comp->collisionLayer = collisionLayer;
+    comp->collisionMask = collisionMask;
+    comp->calculateBoundingCircle();
+    comp->SetEnabled(false);
+    return comp;
+}
+
 void CollisionComponent::ProcessInspectorUI() {
     DrawLayerMaskUI("Layer", &collisionLayer);
     ImGui::Spacing();

@@ -15,5 +15,6 @@ public:
 	float x;
 	float y;
 
+	std::unique_ptr<VertexPoint> CloneVertex();
 	void UpdatePosition(float x, float y);
 };

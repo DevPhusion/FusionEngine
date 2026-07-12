@@ -58,6 +58,7 @@ public:
 	virtual void ProcessInspectorUI();
 	virtual void OnDelete();
 	virtual void CopyTo(Object* other);
+	virtual std::unique_ptr<Component> Clone(Object* parent);
 private:
 	bool updatingFromPoints = false;
 	bool updatingFromParent = false;

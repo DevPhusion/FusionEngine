@@ -26,6 +26,7 @@ public:
 
 	virtual void ProcessInspectorUI();
 	virtual void OnDelete();
+	virtual std::unique_ptr<Component> Clone(Object* parent);
 	virtual void CopyTo(Object* other);
 
 	void FindSelectedPolygon(int button, int action, int mods);

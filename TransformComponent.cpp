@@ -39,6 +39,32 @@ void TransformComponent::CopyTo(Object* other) {
 	target->SetRotationCenter(other->GetComponent<RenderComponent>()->GetCenter());
 }
 
+std::unique_ptr<Component> TransformComponent::Clone(Object* parent) {
+	std::unique_ptr<TransformComponent> comp = std::make_unique<TransformComponent>(parent, parent->shader, rotation_center);
+	parent->RegisterComponentPointer(comp.get());   // <-- register before anything looks it up
+
+	comp->SetRotationCenter(rotation_center);
+	comp->SetOriginTransform(OriginTransform);
+	comp->UpdateWorldPosition(comp->GetWorldPosition());
+
+	Shape shapeCopy = this->parent->GetComponent<RenderComponent>()->currentShape;
+
+	std::visit([&](auto&& s) {
+		using T = std::decay_t<decltype(s)>;
+		if constexpr (std::is_same_v<T, RectangleShape> || std::is_same_v<T, CircleShape>) {
+			s.center = comp->GetWorldPosition();
+		}
+		}, shapeCopy);
+
+	parent->GetComponent<RenderComponent>()->SetShape(shapeCopy); // now finds tc correctly
+	comp->SetRotationCenter(parent->GetComponent<RenderComponent>()->GetCenter());
+	comp->Scale(size);
+	comp->Rotate(rotation);
+
+	comp->SetEnabled(false);
+	return comp;
+}
+
 void TransformComponent::ProcessInspectorUI() {
 	ImGui::Text("Position ");
 	ImGui::SameLine();

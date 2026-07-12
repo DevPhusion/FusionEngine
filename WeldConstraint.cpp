@@ -146,3 +146,9 @@ void WeldConstraint::ProcessInspectorUI(Object* parent) {
         }
 	}
 }
+
+std::shared_ptr<Constraint> WeldConstraint::Clone() {
+    std::shared_ptr<WeldConstraint> constraint = std::make_shared<WeldConstraint>(PhysicsBody(), PhysicsBody(), attachPointA, attachPointB, angularOffset);
+    constraint->CopyBaseFieldsFrom(this);
+    return constraint;
+}

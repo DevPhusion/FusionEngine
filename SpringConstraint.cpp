@@ -199,3 +199,9 @@ void SpringConstraint::ProcessConstraintDisplay() {
 		rc->SetEnabled(false);
 	}
 }
+
+std::shared_ptr<Constraint> SpringConstraint::Clone() {
+	std::shared_ptr<SpringConstraint> constraint = std::make_shared<SpringConstraint>(PhysicsBody(), PhysicsBody(), attachPointA, attachPointB, length, stiffness, damping);
+	constraint->CopyBaseFieldsFrom(this);
+	return constraint;
+}

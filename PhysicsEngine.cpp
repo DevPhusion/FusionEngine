@@ -6,7 +6,7 @@ void PhysicsEngine::Setup(std::vector<std::unique_ptr<Object>>* objects) {
 }
 
 void PhysicsEngine::ProcessPhysics(float delta) {
-	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Pause) {
+	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Pause || EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Stop) {
 		return;
 	}
 
@@ -1161,6 +1161,33 @@ void PhysicsEngine::UnRegisterBoundingAreaNode(Object* obj) {
 
 // PGS Constraints
 
+PhysicsBody PhysicsEngine::GetBodyFromObject(Object* obj) {
+	PhysicsBody body;
+	body.obj = obj;
+	if (!obj) return body;
+
+	if (auto* tc = obj->GetComponent<TransformComponent>()) {
+		body.position = &tc->worldPosition;
+		body.transformMatrix = &tc->WorldMatrix;
+		body.rotation = &tc->rotation;
+	}
+	if (auto* sb = obj->GetComponent<SoftBodyComponent>()) {
+		body.pm = &sb->CenterPM;
+		body.position = &sb->CenterPM->worldPos;
+		body.velocity = &sb->CenterPM->velocity;
+		body.angularVelocity = &sb->CenterPM->angularVelocity;
+		body.invInertia = &sb->CenterPM->InverseInertia;
+		body.invMass = &sb->inverseMass;
+	}
+	if (auto* pc = obj->GetComponent<RigidBodyComponent>()) {
+		body.velocity = &pc->velocity;
+		body.angularVelocity = &pc->angularVelocity;
+		body.invInertia = &pc->inverseInertia;
+		body.invMass = &pc->inverseMass;
+	}
+	return body;
+}
+
 void PhysicsEngine::RegisterPGSConstraint(Constraint* constraint) {
 	registeredPGSConstraints.push_back(constraint);
 }
@@ -1373,10 +1400,11 @@ void PhysicsEngine::ResolveXPBDConstraint(float delta) {
 		for (int j = 0; j < allObjects->size(); j++)
 		{
 			SoftBodyComponent* sb = (*allObjects)[j]->GetComponent<SoftBodyComponent>();
-			if (sb && sb->useGasPressure) sb->ApplyGasPressure();
+			if (sb && sb->Enabled && sb->useGasPressure) sb->ApplyGasPressure();
 		}
 
 		for (auto& pm : allSoftBodyPointMasses) {
+			if (!pm->sb->Enabled) continue;
 			if (pm->sb->isDragging) pm->ProcessDragForce();
 
 			pm->prevPos = pm->worldPos; 
@@ -1403,6 +1431,7 @@ void PhysicsEngine::ResolveXPBDConstraint(float delta) {
 		ResolvePGSConstraintsForSubstep(dtSub);
 
 		for (auto& pm : allSoftBodyPointMasses) {
+			if (!pm->sb->Enabled) continue;
 			pm->velocity = (pm->worldPos - pm->prevPos) / dtSub;
 		}
 		for (auto* proxy : allSoftBodyProxies) {

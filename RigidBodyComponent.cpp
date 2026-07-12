@@ -35,6 +35,17 @@ void RigidBodyComponent::CopyTo(Object* other) {
 	target->inverseMass = inverseMass;
 }
 
+std::unique_ptr<Component> RigidBodyComponent::Clone(Object* parent) {
+	std::unique_ptr<RigidBodyComponent> comp = std::make_unique<RigidBodyComponent>(parent);
+	comp->velocity = velocity;
+	comp->angularVelocity = angularVelocity;
+	comp->Inertia = Inertia;
+	comp->inverseInertia = inverseInertia;
+	comp->inverseMass = inverseMass;
+	comp->SetEnabled(false);
+	return comp;
+}
+
 void RigidBodyComponent::ProcessInspectorUI() {
 	if (!this->parent->GetComponent<TransformComponent>()->Enabled) {
 		SetEnabled(false);

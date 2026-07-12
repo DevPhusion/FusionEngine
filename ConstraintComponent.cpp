@@ -50,6 +50,12 @@ void ConstraintComponent::CopyTo(Object* other) {
     }
 }
 
+std::unique_ptr<Component> ConstraintComponent::Clone(Object* parent) {
+    std::unique_ptr<ConstraintComponent> comp = std::make_unique<ConstraintComponent>(parent);
+    comp->SetEnabled(false);
+    return comp;
+}
+
 void ConstraintComponent::OnDelete()
 {
     for (auto& c : appliedConstraints)

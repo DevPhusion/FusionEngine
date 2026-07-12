@@ -232,6 +232,7 @@ void Constraint::SetObjectA(PhysicsBody obj)
     }
 
     objectA = obj;
+    objectIdA = obj.obj ? obj.obj->id : 0;
     if (obj.obj == nullptr) return;
 
 
@@ -263,6 +264,7 @@ void Constraint::SetObjectB(PhysicsBody obj)
     }
 
     objectB = obj;
+    objectIdB = obj.obj ? obj.obj->id : 0;
     if (obj.obj == nullptr) return;
 
     ConstraintComponent* cc = obj.obj->GetComponent<ConstraintComponent>();
@@ -481,4 +483,19 @@ void Constraint::ProcessInspectorUI(Object* parent)
     if (ImGui::Checkbox("##Draw constraint", &canDrawConstraint)) {
         ProcessConstraintDisplay();
     }
+}
+
+void Constraint::CopyBaseFieldsFrom(const Constraint* src) {
+    objectIdA = src->objectIdA;
+    objectIdB = src->objectIdB;
+    attachPointA = src->attachPointA;
+    attachPointB = src->attachPointB;
+    beta = src->beta;
+    canDrawConstraint = src->canDrawConstraint;
+    Name = src->Name;
+
+    DestroyDisplayA();
+    DestroyDisplayB();
+    ObjectManager::getInstance().RemoveObject(constraintDisplay);
+    constraintDisplay = nullptr;
 }

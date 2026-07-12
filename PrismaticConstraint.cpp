@@ -202,3 +202,9 @@ void PrismaticConstraint::ProcessConstraintDisplay() {
     rc->UpdateShape(vertices, indices);
     rc->SetEnabled(true);
 }
+
+std::shared_ptr<Constraint> PrismaticConstraint::Clone() {
+    std::shared_ptr<PrismaticConstraint> constraint = std::make_shared<PrismaticConstraint>(PhysicsBody(), PhysicsBody(), attachPointA, attachPointB, dir);
+    constraint->CopyBaseFieldsFrom(this);
+    return constraint;
+}

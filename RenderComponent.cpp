@@ -410,6 +410,14 @@ void RenderComponent::CopyTo(Object* other) {
 	target->color = color;
 }
 
+std::unique_ptr<Component> RenderComponent::Clone(Object* parent) {
+	std::unique_ptr<RenderComponent> comp = std::make_unique<RenderComponent>(parent, Vertices, parent->shader, texture_path);
+	comp->z_index = z_index;
+	comp->color = color;
+	comp->SetEnabled(false);
+	return comp;
+}
+
 void RenderComponent::ProcessInspectorUI() {
 	ImGui::Text("Texture");
 	ImGui::SameLine();

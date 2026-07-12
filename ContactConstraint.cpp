@@ -142,3 +142,7 @@ void ContactConstraint::PostIterationClamp(std::vector<SolverRow>& allRows, int 
 void ContactConstraint::PostSolve(std::vector<SolverRow>& allRows) {
     this->cacheLambda = allRows[this->normalRowOffsetIndex].lambda;
 }
+
+std::shared_ptr<Constraint> ContactConstraint::Clone() {
+    return nullptr;
+}

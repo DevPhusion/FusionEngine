@@ -127,6 +127,9 @@ public:
 	void UnRegisterXPBDConstraint(XPBDConstraint* constraint);
 	void UnRegisterTemporaryXPBDConstraint();
 	void ResolveXPBDConstraint(float delta);
+
+	// Others
+	PhysicsBody GetBodyFromObject(Object* obj);
 private:
 	PhysicsEngine() = default;
 	std::vector<std::unique_ptr<Object>>* allObjects;

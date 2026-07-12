@@ -40,10 +40,15 @@ public:
         glm::vec3 attachPointA, glm::vec3 attachPointB);
     Constraint() = default;
 
+    uint64_t objectIdA = 0;
+    uint64_t objectIdB = 0;
+
     PhysicsBody objectA;
     PhysicsBody objectB;
     glm::vec3 attachPointA = glm::vec3(0.0f);
     glm::vec3 attachPointB = glm::vec3(0.0f);
+
+    Object* constraintDisplay = nullptr;
 
     std::string Name;
     bool  isTemporary = false;
@@ -56,6 +61,8 @@ public:
 
     void Unregister();
 
+    Object* CreateConstraintDisplay();
+
     virtual void Prepare(std::vector<SolverRow>& rows, float delta) = 0;
 
     virtual void PostIterationClamp(std::vector<SolverRow>& allRows,
@@ -67,6 +74,7 @@ public:
             allRows[myRowIndex].maxLambda);
     }
 
+    virtual std::shared_ptr<Constraint> Clone() = 0;
     virtual void SetObjectA(PhysicsBody obj);
     virtual void SetObjectB(PhysicsBody obj);
 
@@ -80,7 +88,6 @@ protected:
     PointMass* virtualPMB = nullptr;
     Object* attachDisplayA = nullptr;
     Object* attachDisplayB = nullptr;
-    Object* constraintDisplay = nullptr;
 
     void OnPhysicsModeChanged();
 
@@ -96,9 +103,9 @@ protected:
     void OnDisplayAMoved();
     void OnDisplayBMoved();
 
-private:
-    Object* CreateConstraintDisplay();
+    void CopyBaseFieldsFrom(const Constraint* src);
 
+private:
     bool useCenterA = true;
     bool useCenterB = true;
     bool posSetA = false;

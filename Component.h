@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <memory>
 #include "imgui/imgui.h"
 #include "imgui/imgui_impl_glfw.h"
 #include "imgui/imgui_impl_opengl3.h"
@@ -12,7 +13,7 @@ class Component
 public:
 	Component(Object* parent);
 	Component() = default;
-
+ 
 	Object* parent;
 	bool Enabled = true;
 
@@ -24,6 +25,7 @@ public:
 	virtual void SetEnabled(bool enabled);
 	virtual size_t GetTypeID() const = 0;
 	virtual void CopyTo(Object* other) = 0;
+	virtual std::unique_ptr<Component> Clone(Object* parent) = 0;
 	virtual void ProcessInspectorUI() = 0;
 	virtual void OnDelete() = 0;
 };

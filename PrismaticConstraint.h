@@ -19,5 +19,6 @@ public:
 	virtual void PostSolve(std::vector<SolverRow>& allRows);
 	virtual void ProcessInspectorUI(Object* parent);
 	virtual void ProcessConstraintDisplay();
+	virtual std::shared_ptr<Constraint> Clone();
 };
 

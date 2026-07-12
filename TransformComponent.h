@@ -28,6 +28,7 @@ public:
 	virtual void OnDelete();
 	virtual void ProcessInspectorUI();
 	virtual void CopyTo(Object* other);
+	virtual std::unique_ptr<Component> Clone(Object* parent);
 
 	// model space -> screen space (inverse: screen space -> model space) 
 	glm::vec3 GetTransformedPoint(glm::vec3 point, bool inverseTransform = false); 

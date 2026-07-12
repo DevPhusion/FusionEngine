@@ -73,3 +73,9 @@ void RevoluteConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
 	rows.push_back(rowX);
 	rows.push_back(rowY);
 }
+
+std::shared_ptr<Constraint> RevoluteConstraint::Clone() {
+	std::shared_ptr<RevoluteConstraint> constraint = std::make_shared<RevoluteConstraint>(PhysicsBody(), PhysicsBody(), attachPointA, attachPointB);
+	constraint->CopyBaseFieldsFrom(this);
+	return constraint;
+}
