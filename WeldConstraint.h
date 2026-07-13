@@ -20,5 +20,6 @@ public:
 	virtual void PostSolve(std::vector<SolverRow>& allRows);
 	virtual void ProcessInspectorUI(Object* parent);
 	virtual std::shared_ptr<Constraint> Clone();
+	virtual void Serialize(BinaryWriter& w);
+	virtual void Deserialize(BinaryReader& r);
 };
-

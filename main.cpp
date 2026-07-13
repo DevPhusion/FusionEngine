@@ -2,6 +2,8 @@
 #include<GLFW/glfw3.h>
 #include<glm/glm.hpp>
 #include<iostream>
+#include <windows.h>
+#include <filesystem>
 #include "Polygon.h"
 #include "InputManager.h"
 #include "Renderer.h"
@@ -30,7 +32,16 @@ void keyPressed(int key, int scancode, int action, int mods) {
 	}
 }
 
-int main() {
+void SetWorkingDirectoryToExePath() {
+	char exePath[MAX_PATH];
+	GetModuleFileNameA(NULL, exePath, MAX_PATH);
+
+	std::filesystem::path exeDir = std::filesystem::path(exePath).parent_path();
+	SetCurrentDirectoryA(exeDir.string().c_str());
+}
+
+int main(int argc, char* argv[]) {
+	SetWorkingDirectoryToExePath();
 	glfwInit();
 
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -75,6 +86,16 @@ int main() {
 
 	Camera::getInstance().Setup();
 	Renderer::getInstance().SetupGrid();
+
+	if (argc > 1) {
+		std::string launchPath = argv[1];
+		try {
+			EngineManager::getInstance().LoadProjectFromFile(launchPath);
+		}
+		catch (const std::exception& e) {
+			std::cerr << "Failed to load project from launch args: " << e.what() << std::endl;
+		}
+	}
 
 	float prev_t = glfwGetTime(); 
 	float physicsAccumulator = 0.0f;

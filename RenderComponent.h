@@ -42,6 +42,7 @@ public:
 	RenderComponent() = default;
 
 	Shape currentShape;
+	Shape pendingShape;
 	
 	std::vector<float> Vertices;
 	std::vector<unsigned int> Indices;
@@ -57,6 +58,8 @@ public:
 	virtual void ProcessInspectorUI();
 	virtual void CopyTo(Object* other);
 	virtual std::unique_ptr<Component> Clone(Object* parent);
+	virtual void Serialize(BinaryWriter& w);
+	virtual void Deserialize(BinaryReader& r);
 
 	int AddOnShapeSetCallback(std::function<void()> func);
 	void RemoveOnShapeSetCallback(int ID);
@@ -73,6 +76,7 @@ public:
 	void Draw();
 
 private:
+
 	std::unordered_map<int, std::function<void()>> OnShapeSetCallbacks;
 	int shapeCallbackID = -1;
 

@@ -145,6 +145,8 @@ void SoftBodyComponent::CopyTo(Object* other) {
 		target->springs[i]->damping = damping;
 	}
 
+	target->useGasPressure = useGasPressure;
+	target->gasAmount = gasAmount;
 }
 
 std::unique_ptr<Component> SoftBodyComponent::Clone(Object* parent) {
@@ -155,8 +157,32 @@ std::unique_ptr<Component> SoftBodyComponent::Clone(Object* parent) {
 
 	comp->damping = damping;
 	for (auto* s : comp->springs) s->damping = damping;
+
+	comp->useGasPressure = useGasPressure;
+	comp->gasAmount = gasAmount;
+
 	comp->SetEnabled(false);
 	return comp;
+}
+
+void SoftBodyComponent::Serialize(BinaryWriter& w) {
+	Component::Serialize(w);
+	w.Write(stiffness);
+	w.Write(damping);
+	w.Write(useGasPressure);
+	w.Write(gasAmount);
+}
+void SoftBodyComponent::Deserialize(BinaryReader& r) {
+	Component::Deserialize(r);
+	stiffness = r.Read<float>();
+	float compliance = (stiffness > 0.0f) ? (1.0f / stiffness) : 0.0f;
+	for (auto* s : springs) s->compliance = compliance;
+
+	damping = r.Read<float>();
+	for (auto* s : springs) s->damping = damping;
+
+	useGasPressure = r.Read<bool>();
+	gasAmount = r.Read<float>();
 }
 
 void SoftBodyComponent::OnDelete() {

@@ -499,3 +499,18 @@ void Constraint::CopyBaseFieldsFrom(const Constraint* src) {
     ObjectManager::getInstance().RemoveObject(constraintDisplay);
     constraintDisplay = nullptr;
 }
+
+void Constraint::Serialize(BinaryWriter& w) {
+    w.WriteString(Name);
+    w.Write(objectIdA);
+    w.Write(objectIdB);
+    w.Write(beta);
+    w.Write(attachPointA);
+    w.Write(attachPointB);
+}
+
+void Constraint::Deserialize(BinaryReader& r) {
+    beta = r.Read<float>();
+    attachPointA = r.Read<glm::vec3>();
+    attachPointB = r.Read<glm::vec3>();
+}

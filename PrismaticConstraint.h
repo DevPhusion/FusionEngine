@@ -20,5 +20,7 @@ public:
 	virtual void ProcessInspectorUI(Object* parent);
 	virtual void ProcessConstraintDisplay();
 	virtual std::shared_ptr<Constraint> Clone();
+	virtual void Serialize(BinaryWriter& w);
+	virtual void Deserialize(BinaryReader& r);
 };
 

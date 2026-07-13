@@ -1,5 +1,9 @@
 #pragma once
 #include "InputManager.h"
+#include "BinaryWriter.h"
+#include "BinaryReader.h"
+#include <fstream>
+#include <stdexcept>
 #include <memory>
 #include <functional>
 
@@ -69,6 +73,8 @@ public:
 	void ProcessEngine(float delta);
 	void SaveEngineState();
 	void LoadEngineState();
+	void SaveProjectToFile(const std::string& path);
+	void LoadProjectFromFile(const std::string& path);
 	void SwitchInteractMode(InteractMode mode);
 	void SwitchPhysicsMode(PhysicsMode mode);
 	int AddInteractModeChangedEvent(std::function<void()> func);
@@ -76,6 +82,9 @@ public:
 	void RemovePhysicsModeChangedEvent(int ID);
 	void RemoveInteractModeChangedEvent(int ID);
 private:
+	static constexpr uint32_t magicByte = 0x4E535546; 
+	static constexpr uint32_t version = 1;
+
 	int CurrentInteractModeChangedID = -1;
 	int CurrentPhysicsModeChangedID = -1;
 	float time;

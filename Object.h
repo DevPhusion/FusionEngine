@@ -89,8 +89,13 @@ public:
 			obj->AddComponent(this->components[i]->Clone(obj.get()));
 		}
 		obj->id = id;
+		obj->name = name;
 		return obj;
 	}
+
+	void Serialize(BinaryWriter& w);
+
+	void Deserialize(BinaryReader& r);
 
 	void AddComponent(std::unique_ptr<Component> component) {
 		size_t id = component->GetTypeID(); 

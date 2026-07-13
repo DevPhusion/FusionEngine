@@ -1,4 +1,6 @@
 #pragma once
+#include "BinaryReader.h"
+#include "BinaryWriter.h"
 #include <string>
 #include <memory>
 #include "imgui/imgui.h"
@@ -22,12 +24,30 @@ public:
 	bool Hidden = false;
 
 	std::string Name;
+
 	virtual void SetEnabled(bool enabled);
 	virtual size_t GetTypeID() const = 0;
 	virtual void CopyTo(Object* other) = 0;
 	virtual std::unique_ptr<Component> Clone(Object* parent) = 0;
 	virtual void ProcessInspectorUI() = 0;
 	virtual void OnDelete() = 0;
+
+	virtual void Serialize(BinaryWriter& w)
+	{
+		w.WriteString(Name);
+		w.Write(Enabled);
+		w.Write(CanDisable);
+		w.Write(CanRemove);
+		w.Write(Hidden);
+	}
+
+	virtual void Deserialize(BinaryReader& r)
+	{
+		Enabled = r.Read<bool>();
+		CanDisable = r.Read<bool>();
+		CanRemove = r.Read<bool>();
+		Hidden = r.Read<bool>();
+	}
 };
 
 template <typename Derived>

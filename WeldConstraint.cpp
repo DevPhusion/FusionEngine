@@ -152,3 +152,13 @@ std::shared_ptr<Constraint> WeldConstraint::Clone() {
     constraint->CopyBaseFieldsFrom(this);
     return constraint;
 }
+
+void WeldConstraint::Serialize(BinaryWriter& w) {
+    Constraint::Serialize(w);
+    w.Write(angularOffset);
+}
+
+void WeldConstraint::Deserialize(BinaryReader& r) {
+    Constraint::Deserialize(r);
+    angularOffset = r.Read<float>();
+}

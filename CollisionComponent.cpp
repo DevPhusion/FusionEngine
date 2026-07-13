@@ -90,6 +90,19 @@ std::unique_ptr<Component> CollisionComponent::Clone(Object* parent) {
     return comp;
 }
 
+void CollisionComponent::Serialize(BinaryWriter& w) {
+    Component::Serialize(w);
+
+    w.Write(collisionLayer);
+    w.Write(collisionMask);
+}
+void CollisionComponent::Deserialize(BinaryReader& r) {
+    Component::Deserialize(r);
+    collisionLayer = r.Read<uint16_t>();
+    collisionMask = r.Read<uint16_t>();
+    calculateBoundingCircle();
+}
+
 void CollisionComponent::ProcessInspectorUI() {
     DrawLayerMaskUI("Layer", &collisionLayer);
     ImGui::Spacing();

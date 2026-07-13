@@ -144,6 +144,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="AddObjectWindow.cpp" />
+    <ClCompile Include="BinaryReader.cpp" />
+    <ClCompile Include="BinaryWriter.cpp" />
     <ClCompile Include="BoundingCircle.cpp" />
     <ClCompile Include="Box.cpp" />
     <ClCompile Include="Camera.cpp" />
@@ -206,6 +208,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AddObjectWindow.h" />
+    <ClInclude Include="BinaryReader.h" />
+    <ClInclude Include="BinaryWriter.h" />
     <ClInclude Include="BoundingCircle.h" />
     <ClInclude Include="Box.h" />
     <ClInclude Include="Camera.h" />
@@ -214,9 +218,11 @@
     <ClInclude Include="CollisionComponent.h" />
     <ClInclude Include="CollisionLayerMask.h" />
     <ClInclude Include="Component.h" />
+    <ClInclude Include="Components.h" />
     <ClInclude Include="ComponentTypeID.h" />
     <ClInclude Include="Constraint.h" />
     <ClInclude Include="ConstraintComponent.h" />
+    <ClInclude Include="Constraints.h" />
     <ClInclude Include="ContactID.h" />
     <ClInclude Include="DebugCircle.h" />
     <ClInclude Include="DebugPoint.h" />

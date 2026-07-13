@@ -23,6 +23,8 @@ public:
 	virtual void ProcessInspectorUI();
 	virtual std::unique_ptr<Component> Clone(Object* parent);
 	virtual void CopyTo(Object* other);
+	virtual void Serialize(BinaryWriter& w);
+	virtual void Deserialize(BinaryReader& r);
 
 	void DrawLayerMaskUI(const char* label, uint16_t* layer);
 	void calculateBoundingCircle();

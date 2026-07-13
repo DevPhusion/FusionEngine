@@ -113,6 +113,7 @@ void RenderComponent::SetShape(Shape shape) {
 
 void RenderComponent::SetTexture(std::string texture_path) {
 	this->texture_path = texture_path;
+	if (texture_path == "") return;
 	int width, height, nrChannels;
 	stbi_set_flip_vertically_on_load(true);
 
@@ -416,6 +417,65 @@ std::unique_ptr<Component> RenderComponent::Clone(Object* parent) {
 	comp->color = color;
 	comp->SetEnabled(false);
 	return comp;
+}
+
+void RenderComponent::Serialize(BinaryWriter& w) {
+	Component::Serialize(w);
+
+	w.WriteString(texture_path);
+	w.Write(color);
+	w.Write(z_index);
+
+	if (std::holds_alternative<RectangleShape>(currentShape)) {
+		w.Write(static_cast<uint8_t>(1));
+		auto& s = std::get<RectangleShape>(currentShape);
+		w.Write(s.center);
+		w.Write(s.width);
+		w.Write(s.height);
+	}
+	else if (std::holds_alternative<CircleShape>(currentShape)) {
+		w.Write(static_cast<uint8_t>(2));
+		auto& s = std::get<CircleShape>(currentShape);
+		w.Write(s.center);
+		w.Write(s.radius);
+		w.Write(s.segments);
+		w.Write(s.physicsSegments);
+	}
+	else {
+		w.Write(static_cast<uint8_t>(0));
+		auto& s = std::get<PolygonShape>(currentShape);
+		w.WriteArray(s.vertices);
+	}
+}
+void RenderComponent::Deserialize(BinaryReader& r) {
+	Component::Deserialize(r);
+
+	SetTexture(r.ReadString());
+	color = r.Read<glm::vec4>();
+	z_index = r.Read<int>();
+
+	uint8_t shapeType = r.Read<uint8_t>();
+
+	if (shapeType == 1) {
+		RectangleShape s;
+		s.center = r.Read<glm::vec3>();
+		s.width = r.Read<float>();
+		s.height = r.Read<float>();
+		pendingShape = s;
+	}
+	else if (shapeType == 2) {
+		CircleShape s;
+		s.center = r.Read<glm::vec3>();
+		s.radius = r.Read<float>();
+		s.segments = r.Read<int>();
+		s.physicsSegments = r.Read<int>();
+		pendingShape = s;
+	}
+	else {
+		PolygonShape s;
+		s.vertices = r.ReadArray<float>();
+		pendingShape = s;
+	}
 }
 
 void RenderComponent::ProcessInspectorUI() {

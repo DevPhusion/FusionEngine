@@ -67,6 +67,31 @@ std::unique_ptr<Component> VertexComponent::Clone(Object* parent) {
 	return comp;
 }
 
+void VertexComponent::Serialize(BinaryWriter& w) {
+	Component::Serialize(w);
+
+	w.Write((int)vertexPoints.size());
+	for (auto* vp : vertexPoints) {
+		vp->SerializeVertex(w);
+	}
+}
+void VertexComponent::Deserialize(BinaryReader& r) {
+	Component::Deserialize(r);
+
+	int n = r.Read<int>();
+	std::vector<VertexPoint*> vPoints = {};
+	for (int i = 0; i < n; i++)
+	{
+		std::unique_ptr<VertexPoint> vp = std::make_unique<VertexPoint>(0, 0, Shader());
+		vp->DeserializeVertex(r);
+		vPoints.push_back(vp.get());
+		ObjectManager::getInstance().allObjects.push_back(std::move(vp));
+	}
+	std::cout << vPoints.size() << std::endl;
+	SetVertexPoints(vPoints);
+	UpdateTransform();
+}
+
 void VertexComponent::ProcessInspectorUI() {
 	if (!this->parent->GetComponent<TransformComponent>()->Enabled) {
 		SetEnabled(false);

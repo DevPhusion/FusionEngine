@@ -75,6 +75,8 @@ public:
     }
 
     virtual std::shared_ptr<Constraint> Clone() = 0;
+    virtual void Serialize(BinaryWriter& w);
+    virtual void Deserialize(BinaryReader& r);
     virtual void SetObjectA(PhysicsBody obj);
     virtual void SetObjectB(PhysicsBody obj);
 

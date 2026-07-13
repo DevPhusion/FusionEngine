@@ -91,6 +91,12 @@
     <Filter Include="Source Files\Core\Physics\Constraint\XPBDConstraint">
       <UniqueIdentifier>{7128dff6-fcec-4fab-b22c-1f8a2efc75ce}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\Core\Files">
+      <UniqueIdentifier>{19dfdfdc-8ca6-4248-a340-3ea0c09c9bde}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files\Core\Files">
+      <UniqueIdentifier>{efdc15a2-d85e-4332-ab46-b6414ed84723}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="glad.c">
@@ -272,6 +278,12 @@
     </ClCompile>
     <ClCompile Include="Gizmos.cpp">
       <Filter>Source Files\Core\Editor</Filter>
+    </ClCompile>
+    <ClCompile Include="BinaryReader.cpp">
+      <Filter>Source Files\Core\Files</Filter>
+    </ClCompile>
+    <ClCompile Include="BinaryWriter.cpp">
+      <Filter>Source Files\Core\Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -475,6 +487,18 @@
     </ClInclude>
     <ClInclude Include="Gizmos.h">
       <Filter>Header Files\Core\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="BinaryReader.h">
+      <Filter>Header Files\Core\Files</Filter>
+    </ClInclude>
+    <ClInclude Include="BinaryWriter.h">
+      <Filter>Header Files\Core\Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Components.h">
+      <Filter>Header Files\Components</Filter>
+    </ClInclude>
+    <ClInclude Include="Constraints.h">
+      <Filter>Header Files\Core\Physics\Constraint\PGSConstraint</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

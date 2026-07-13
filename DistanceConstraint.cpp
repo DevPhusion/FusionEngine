@@ -142,3 +142,17 @@ std::shared_ptr<Constraint> DistanceConstraint::Clone() {
 	constraint->CopyBaseFieldsFrom(this);
 	return constraint;
 }
+
+void DistanceConstraint::Serialize(BinaryWriter& w) {
+	Constraint::Serialize(w);
+	w.Write(distance);
+	w.Write(extendable);
+	w.Write(retractable);
+}
+
+void DistanceConstraint::Deserialize(BinaryReader& r) {
+	Constraint::Deserialize(r);
+	distance = r.Read<float>();
+	extendable = r.Read<bool>();
+	retractable = r.Read<bool>();
+}

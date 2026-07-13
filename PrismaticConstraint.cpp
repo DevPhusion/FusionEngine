@@ -208,3 +208,13 @@ std::shared_ptr<Constraint> PrismaticConstraint::Clone() {
     constraint->CopyBaseFieldsFrom(this);
     return constraint;
 }
+
+void PrismaticConstraint::Serialize(BinaryWriter& w) {
+    Constraint::Serialize(w);
+    w.Write(dir);
+}
+
+void PrismaticConstraint::Deserialize(BinaryReader& r) {
+    Constraint::Deserialize(r);
+    dir = r.Read<glm::vec3>();
+}

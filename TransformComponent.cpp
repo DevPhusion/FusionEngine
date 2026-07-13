@@ -20,8 +20,6 @@ void TransformComponent::CopyTo(Object* other) {
 		target = other->GetComponent<TransformComponent>();
 	}
 
-	target->rotation = this->rotation;
-	target->size = this->size;
 	target->SetRotationCenter(rotation_center);
 	target->SetOriginTransform(this->OriginTransform);
 	target->UpdateWorldPosition(target->GetWorldPosition());
@@ -37,6 +35,9 @@ void TransformComponent::CopyTo(Object* other) {
 
 	other->GetComponent<RenderComponent>()->SetShape(shapeCopy);
 	target->SetRotationCenter(other->GetComponent<RenderComponent>()->GetCenter());
+
+	target->rotation = this->rotation;
+	target->size = this->size;
 }
 
 std::unique_ptr<Component> TransformComponent::Clone(Object* parent) {
@@ -56,13 +57,44 @@ std::unique_ptr<Component> TransformComponent::Clone(Object* parent) {
 		}
 		}, shapeCopy);
 
-	parent->GetComponent<RenderComponent>()->SetShape(shapeCopy); // now finds tc correctly
+	parent->GetComponent<RenderComponent>()->SetShape(shapeCopy); 
 	comp->SetRotationCenter(parent->GetComponent<RenderComponent>()->GetCenter());
 	comp->Scale(size);
 	comp->Rotate(rotation);
 
 	comp->SetEnabled(false);
 	return comp;
+}
+
+void TransformComponent::Serialize(BinaryWriter& w) {
+	Component::Serialize(w);
+
+	w.Write(rotation_center);
+	w.Write(OriginTransform);
+	w.Write(rotation);
+	w.Write(size);
+}
+void TransformComponent::Deserialize(BinaryReader& r) {
+	Component::Deserialize(r);
+	SetRotationCenter(r.Read<glm::vec3>());
+	SetOriginTransform(r.Read<glm::mat4>());
+	UpdateWorldPosition(GetWorldPosition());
+
+	RenderComponent* rc = parent->GetComponent<RenderComponent>();
+	if (rc) {
+		std::visit([&](auto&& s) {
+			using T = std::decay_t<decltype(s)>;
+			if constexpr (std::is_same_v<T, RectangleShape> || std::is_same_v<T, CircleShape>) {
+				s.center = GetWorldPosition();
+			}
+			}, rc->pendingShape);
+
+		rc->SetShape(rc->pendingShape); 
+		SetRotationCenter(rc->GetCenter());
+	}
+
+	Rotate(r.Read<float>());
+	Scale(r.Read<glm::vec3>());
 }
 
 void TransformComponent::ProcessInspectorUI() {

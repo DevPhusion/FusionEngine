@@ -59,6 +59,8 @@ public:
 	virtual void OnDelete();
 	virtual void CopyTo(Object* other);
 	virtual std::unique_ptr<Component> Clone(Object* parent);
+	virtual void Serialize(BinaryWriter& w);
+	virtual void Deserialize(BinaryReader& r);
 private:
 	bool updatingFromPoints = false;
 	bool updatingFromParent = false;

@@ -46,6 +46,23 @@ std::unique_ptr<Component> RigidBodyComponent::Clone(Object* parent) {
 	return comp;
 }
 
+void RigidBodyComponent::Serialize(BinaryWriter& w) {
+	Component::Serialize(w);
+	w.Write(velocity);
+	w.Write(angularVelocity);
+	w.Write(Inertia);
+	w.Write(inverseInertia);
+	w.Write(inverseMass);
+}
+void RigidBodyComponent::Deserialize(BinaryReader& r) {
+	Component::Deserialize(r);
+	velocity = r.Read<glm::vec3>();
+	angularVelocity = r.Read<float>();
+	Inertia = r.Read<float>();
+	inverseInertia = r.Read<float>();
+	inverseMass = r.Read<float>();
+}
+
 void RigidBodyComponent::ProcessInspectorUI() {
 	if (!this->parent->GetComponent<TransformComponent>()->Enabled) {
 		SetEnabled(false);

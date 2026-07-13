@@ -205,3 +205,17 @@ std::shared_ptr<Constraint> SpringConstraint::Clone() {
 	constraint->CopyBaseFieldsFrom(this);
 	return constraint;
 }
+
+void SpringConstraint::Serialize(BinaryWriter& w) {
+	Constraint::Serialize(w);
+	w.Write(length);
+	w.Write(stiffness);
+	w.Write(damping);
+}
+
+void SpringConstraint::Deserialize(BinaryReader& r) {
+	Constraint::Deserialize(r);
+	length = r.Read<float>();
+	stiffness = r.Read<float>();
+	damping = r.Read<float>();
+}

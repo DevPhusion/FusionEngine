@@ -28,6 +28,13 @@ std::unique_ptr<Component> MouseInteractComponent::Clone(Object* parent) {
 	return comp;
 }
 
+void MouseInteractComponent::Serialize(BinaryWriter& w) {
+	Component::Serialize(w);
+}
+void MouseInteractComponent::Deserialize(BinaryReader& r) {
+	Component::Deserialize(r);
+}
+
 void MouseInteractComponent::ProcessInspectorUI() {
 	return;
 }

@@ -56,6 +56,13 @@ std::unique_ptr<Component> ConstraintComponent::Clone(Object* parent) {
     return comp;
 }
 
+void ConstraintComponent::Serialize(BinaryWriter& w) {
+    Component::Serialize(w);
+}
+void ConstraintComponent::Deserialize(BinaryReader& r) {
+    Component::Deserialize(r);
+}
+
 void ConstraintComponent::OnDelete()
 {
     for (auto& c : appliedConstraints)

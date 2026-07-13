@@ -55,6 +55,14 @@ void EngineStatus::ProcessWindow() {
 		}
 	}
 
+	if (ImGui::Button("Save")) {
+		EngineManager::getInstance().SaveProjectToFile("project.fusion");
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Load")) {
+		EngineManager::getInstance().LoadProjectFromFile("project.fusion");
+	}
+
 	ImGui::End();
 }
 

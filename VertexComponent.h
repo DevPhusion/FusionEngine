@@ -26,6 +26,8 @@ public:
 	virtual void ProcessInspectorUI();
 	virtual void CopyTo(Object* other);
 	virtual std::unique_ptr<Component> Clone(Object* parent);
+	virtual void Serialize(BinaryWriter& w);
+	virtual void Deserialize(BinaryReader& r);
 
 	int GetSelectedVertex();
 	void RemoveAllVertex();

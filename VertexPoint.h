@@ -16,5 +16,7 @@ public:
 	float y;
 
 	std::unique_ptr<VertexPoint> CloneVertex();
+	void SerializeVertex(BinaryWriter& w);
+	void DeserializeVertex(BinaryReader& r);
 	void UpdatePosition(float x, float y);
 };
