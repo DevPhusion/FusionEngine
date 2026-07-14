@@ -54,18 +54,31 @@ public:
 		Simulate
 	};
 
+	enum class PendingAction 
+	{ 
+		None, 
+		Close, 
+		NewProject,
+		LoadProject
+	};
+
 	InteractMode EngineInteractMode = EditorSelect;
 	PhysicsMode EnginePhysicsMode = Stop;
+	PendingAction pendingAction = PendingAction::None;
 
 	Settings EngineSettings;
 	
 	EngineState SavedState;
 	std::vector<std::unique_ptr<Object>> cachedSaveObjects;
 
+	GLFWwindow* Window = nullptr;
+
 	float fps;
 	float windowWidth;
 	float windowHeight;
 	float aspectRatio;
+	bool isSaved = false;
+	std::string currentProjectFile = "";
 	std::unordered_map<int, std::function<void()>> InteractModeChangedEvents;
 	std::unordered_map<int, std::function<void()>> PhysicsModeChangedEvents;
 
@@ -75,12 +88,16 @@ public:
 	void LoadEngineState();
 	void SaveProjectToFile(const std::string& path);
 	void LoadProjectFromFile(const std::string& path);
+	void NewProject();
+	void EngineChangeEvent();
 	void SwitchInteractMode(InteractMode mode);
 	void SwitchPhysicsMode(PhysicsMode mode);
 	int AddInteractModeChangedEvent(std::function<void()> func);
 	int AddPhysicsModeChangedEvent(std::function<void()> func);
 	void RemovePhysicsModeChangedEvent(int ID);
 	void RemoveInteractModeChangedEvent(int ID);
+	static void FramebufferSizeCallback(GLFWwindow* window, int width, int height);
+	static void WindowCloseCallback(GLFWwindow* window);
 private:
 	static constexpr uint32_t magicByte = 0x4E535546; 
 	static constexpr uint32_t version = 1;

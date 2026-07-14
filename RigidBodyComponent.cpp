@@ -77,6 +77,7 @@ void RigidBodyComponent::ProcessInspectorUI() {
 		}
 		else {
 			inverseMass = 1 / mass;
+			EngineManager::getInstance().EngineChangeEvent();
 			CalculateInertia();
 		}
 	}
@@ -85,6 +86,7 @@ void RigidBodyComponent::ProcessInspectorUI() {
 	ImGui::SameLine();
 	float velocity[] = { this->velocity.x, this->velocity.y };
 	if (ImGui::InputFloat2("##Velocity", velocity, "%.3f m/s")) {
+		EngineManager::getInstance().EngineChangeEvent();
 		this->velocity = glm::vec3(velocity[0], velocity[1], 0);
 	}
 
@@ -95,7 +97,9 @@ void RigidBodyComponent::ProcessInspectorUI() {
 
 	ImGui::Text("Angular Velocity ");
 	ImGui::SameLine();
-	ImGui::InputFloat("## Angular Velocity", &angularVelocity, 0.0f, 0.0f, "%.3f rad/s");
+	if (ImGui::InputFloat("## Angular Velocity", &angularVelocity, 0.0f, 0.0f, "%.3f rad/s")) {
+		EngineManager::getInstance().EngineChangeEvent();
+	}
 
 	ImGui::Text("Angular Acceleration ");
 	ImGui::SameLine();

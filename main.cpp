@@ -87,9 +87,13 @@ int main(int argc, char* argv[]) {
 	Camera::getInstance().Setup();
 	Renderer::getInstance().SetupGrid();
 
+	glfwMaximizeWindow(window);
+	glfwPollEvents();
+
 	if (argc > 1) {
 		std::string launchPath = argv[1];
 		try {
+			EngineManager::getInstance().currentProjectFile = launchPath;
 			EngineManager::getInstance().LoadProjectFromFile(launchPath);
 		}
 		catch (const std::exception& e) {

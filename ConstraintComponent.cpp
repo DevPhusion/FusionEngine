@@ -16,6 +16,7 @@ ConstraintComponent::ConstraintComponent(Object* parent)
 void ConstraintComponent::AddConstraint(std::shared_ptr<Constraint> constraint)
 {
     if (!constraint) return;
+    EngineManager::getInstance().EngineChangeEvent();
     PhysicsEngine::getInstance().RegisterPGSConstraint(constraint.get());
     appliedConstraints.push_back(std::move(constraint));
 }
@@ -27,6 +28,7 @@ void ConstraintComponent::RemoveConstraint(Constraint* constraint)
 
     if (it == appliedConstraints.end()) return;
 
+    EngineManager::getInstance().EngineChangeEvent();
     PhysicsEngine::getInstance().UnRegisterPGSConstraint(it->get());
     (*it)->Unregister(); 
     appliedConstraints.erase(it);

@@ -1,67 +1,241 @@
 #include "EngineStatus.h"
 #include "Renderer.h"
+#include "FileDialog.h"
+#include <filesystem>
+
+namespace {
+	void DrawPlayIcon(ImDrawList* drawList, ImVec2 center, float size, ImU32 color) {
+		float h = size * 0.3f;
+		ImVec2 p1(center.x - h * 0.45f, center.y - h);
+		ImVec2 p2(center.x - h * 0.45f, center.y + h);
+		ImVec2 p3(center.x + h * 0.75f, center.y);
+		drawList->AddTriangleFilled(p1, p2, p3, color);
+	}
+
+	void DrawPauseIcon(ImDrawList* drawList, ImVec2 center, float size, ImU32 color) {
+		float barW = size * 0.18f;
+		float barH = size * 0.5f;
+		float gap = size * 0.12f;
+		drawList->AddRectFilled(
+			ImVec2(center.x - gap - barW, center.y - barH * 0.5f),
+			ImVec2(center.x - gap, center.y + barH * 0.5f), color);
+		drawList->AddRectFilled(
+			ImVec2(center.x + gap, center.y - barH * 0.5f),
+			ImVec2(center.x + gap + barW, center.y + barH * 0.5f), color);
+	}
+
+	void DrawStopIcon(ImDrawList* drawList, ImVec2 center, float size, ImU32 color) {
+		float half = size * 0.26f;
+		drawList->AddRectFilled(
+			ImVec2(center.x - half, center.y - half),
+			ImVec2(center.x + half, center.y + half), color, 1.5f);
+	}
+
+	enum class IconType { Play, Pause, Stop };
+
+	bool IconButton(const char* id, IconType type, bool disabled, float dim = 20.0f,
+		ImVec4 tint = ImVec4(0, 0, 0, -1.0f)) {
+		ImGui::PushID(id);
+
+		if (disabled)
+			ImGui::BeginDisabled();
+
+		bool pressed = ImGui::Button("##iconbtn", ImVec2(dim + 8.0f, dim + 8.0f));
+
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		ImVec2 rectMin = ImGui::GetItemRectMin();
+		ImVec2 rectMax = ImGui::GetItemRectMax();
+		ImVec2 center((rectMin.x + rectMax.x) * 0.5f, (rectMin.y + rectMax.y) * 0.5f);
+
+		ImU32 color;
+		if (disabled)
+			color = ImGui::GetColorU32(ImGuiCol_TextDisabled);
+		else if (tint.w >= 0.0f)
+			color = ImGui::GetColorU32(tint);
+		else
+			color = ImGui::GetColorU32(ImGuiCol_Text);
+
+		switch (type) {
+		case IconType::Play:  DrawPlayIcon(drawList, center, dim, color);  break;
+		case IconType::Pause: DrawPauseIcon(drawList, center, dim, color); break;
+		case IconType::Stop:  DrawStopIcon(drawList, center, dim, color);  break;
+		}
+
+		if (disabled)
+			ImGui::EndDisabled();
+
+		ImGui::PopID();
+		return pressed && !disabled;
+	}
+
+	void Spacer(float width) {
+		ImGui::SameLine();
+		ImGui::Dummy(ImVec2(width, 0.0f));
+		ImGui::SameLine();
+	}
+
+	float ButtonWidth(const char* label) {
+		return ImGui::CalcTextSize(label).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+	}
+
+	std::string GetProjectDisplayName() {
+		const std::string& path = EngineManager::getInstance().currentProjectFile;
+		std::string baseName = path.empty()
+			? "NewProject.fusion"
+			: std::filesystem::path(path).filename().string();
+
+		if (!EngineManager::getInstance().isSaved)
+			baseName += "*";
+
+		return baseName;
+	}
+}
 
 EngineStatus::EngineStatus(std::string main) : EditorWindow(main) {
 	EngineManager::getInstance().AddInteractModeChangedEvent([this]() {this->OnInteractModeChanged();});
 	OnInteractModeChanged();
+	InputManager::getInstance().SetKeyButtonCallback([this](int key, int scancode, int action, int mods) {OnKeyButtonPressed(key, scancode, action, mods);}, 999);
 }
 
 void EngineStatus::ProcessWindow() {
+	ProcessUnsavedChangesPopup();
 	if (hidden) return;
 
-	ImGui::SetNextWindowPos(ImVec2(1510, 10), ImGuiCond_FirstUseEver);
-	ImGui::SetNextWindowSize(ImVec2(400, 130), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(ImVec2(1200, 46), ImGuiCond_FirstUseEver);
 
-	ImGui::Begin(name.c_str());
+	ImGuiWindowClass statusWindowClass;
+	statusWindowClass.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_AutoHideTabBar;
+	ImGui::SetNextWindowClass(&statusWindowClass);
+
+	ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
+	ImGui::Begin(name.c_str(), nullptr, flags);
+
+	EngineManager::PhysicsMode mode = EngineManager::getInstance().EnginePhysicsMode;
+	bool isStopped = mode == EngineManager::PhysicsMode::Stop;
+	bool isSimulating = mode == EngineManager::PhysicsMode::Simulate;
+
+	const ImGuiStyle& style = ImGui::GetStyle();
+	const float fullWidth = ImGui::GetContentRegionAvail().x;
+	const float rowStartX = ImGui::GetCursorPosX();
+
+	const ImVec4 playGreen(0.30f, 0.80f, 0.35f, 1.0f);
+	const ImVec4 stopRed(0.85f, 0.30f, 0.30f, 1.0f);
+
+	const float iconDim = 20.0f;
+	const float iconBtnW = iconDim + 8.0f;
+	const float playbackGroupW = iconBtnW * 3.0f + style.ItemSpacing.x * 2.0f;
+	const float playbackStartX = rowStartX + (fullWidth - playbackGroupW) * 0.5f;
+
+	const float projectNameWidth = 160.0f;
+
+	const float rightGroupW = ButtonWidth("Settings") + style.ItemSpacing.x
+		+ projectNameWidth + style.ItemSpacing.x
+		+ ButtonWidth("Save") + style.ItemSpacing.x
+		+ ButtonWidth("Load") + style.ItemSpacing.x + ButtonWidth("New Project");
+	const float rightStartX = rowStartX + fullWidth - rightGroupW;
 
 	std::string fpsText = std::to_string(EngineManager::getInstance().fps) + " FPS";
-	ImGui::Text(fpsText.c_str());
+	ImGui::AlignTextToFramePadding();
+	ImGui::TextUnformatted(fpsText.c_str());
 
-	if (ImGui::Button("Settings"))
-		ImGui::OpenPopup("Settings");
+	Spacer(16.0f);
 
-	ProcessSettingsPopup();
-
-	ImGui::Text("Gizmo: ");
+	ImGui::AlignTextToFramePadding();
+	ImGui::TextUnformatted("Gizmo:");
 	ImGui::SameLine();
 	DrawGizmoModeSelector();
 
-	ImGui::Text("Physics: ");
-	ImGui::SameLine();
-	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Stop) {
-		if (ImGui::Button("Run")) {
-			EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Simulate);
+	ImGui::SameLine(playbackStartX);
+
+	if (IconButton("play", IconType::Play, isSimulating, iconDim, playGreen)) {
+		if (isStopped) {
+			if (EngineManager::getInstance().currentProjectFile != "") {
+				EngineManager::getInstance().SaveProjectToFile(EngineManager::getInstance().currentProjectFile);
+			}
 			EngineManager::getInstance().SaveEngineState();
 		}
-	}
-	else if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Pause) {
-		if (ImGui::Button("Run")) {
-			EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Simulate);
-		}
-		ImGui::SameLine();
-		if (ImGui::Button("Stop")) {
-			EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Stop);
-			EngineManager::getInstance().LoadEngineState();
-		}
-	}
-	else if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) {
-		if (ImGui::Button("Pause")) {
-			EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Pause);
-		}
-		ImGui::SameLine();
-		if (ImGui::Button("Stop")) {
-			EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Stop);
-			EngineManager::getInstance().LoadEngineState();
-		}
-	}
-
-	if (ImGui::Button("Save")) {
-		EngineManager::getInstance().SaveProjectToFile("project.fusion");
+		EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Simulate);
 	}
 	ImGui::SameLine();
-	if (ImGui::Button("Load")) {
-		EngineManager::getInstance().LoadProjectFromFile("project.fusion");
+
+	if (IconButton("pause", IconType::Pause, !isSimulating, iconDim)) {
+		EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Pause);
 	}
+	ImGui::SameLine();
+
+	if (IconButton("stop", IconType::Stop, isStopped, iconDim, stopRed)) {
+		EngineManager::getInstance().LoadEngineState();
+		EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Stop);
+	}
+
+	ImGui::SameLine(rightStartX);
+
+	if (ImGui::Button("Settings"))
+		ImGui::OpenPopup("Settings");
+	ProcessSettingsPopup();
+
+	ImGui::SameLine();
+	{
+		char projectNameBuf[128];
+		std::string displayName = GetProjectDisplayName();
+#if defined(_MSC_VER)
+		strcpy_s(projectNameBuf, displayName.c_str());
+#else
+		strncpy(projectNameBuf, displayName.c_str(), sizeof(projectNameBuf) - 1);
+		projectNameBuf[sizeof(projectNameBuf) - 1] = '\0';
+#endif
+		bool dirty = !EngineManager::getInstance().isSaved;
+		const ImVec4 unsavedColor(0.95f, 0.65f, 0.25f, 1.0f); // amber
+		const ImVec4 savedColor = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+
+		ImGui::PushStyleColor(ImGuiCol_Text, dirty ? unsavedColor : savedColor);
+		ImGui::SetNextItemWidth(projectNameWidth);
+		ImGui::InputText("##ProjectName", projectNameBuf, IM_ARRAYSIZE(projectNameBuf), ImGuiInputTextFlags_ReadOnly);
+		ImGui::PopStyleColor();
+	}
+
+	ImGui::SameLine();
+
+	bool saveDisabled = !isStopped || EngineManager::getInstance().isSaved;
+	ImGui::BeginDisabled(saveDisabled);
+	if (ImGui::Button("Save")) {
+		if (EngineManager::getInstance().currentProjectFile.empty()) {
+			auto opts = FileDialogOptions::ForExtension("Fusion Project", "fusion", "Save Project");
+			opts.defaultFileName = "New Project.fusion";
+			if (auto path = FileDialog::ShowSaveDialog(opts)) {
+				EngineManager::getInstance().currentProjectFile = *path;
+				EngineManager::getInstance().SaveProjectToFile(*path);
+			}
+		}
+		else {
+			EngineManager::getInstance().SaveProjectToFile(EngineManager::getInstance().currentProjectFile);
+		}
+	}
+	ImGui::EndDisabled();
+	ImGui::SameLine();
+
+	ImGui::BeginDisabled(!isStopped);
+	if (ImGui::Button("Load")) {
+		if (!EngineManager::getInstance().isSaved) {
+			EngineManager::getInstance().pendingAction = EngineManager::PendingAction::LoadProject;
+		}
+		else {
+			auto opts = FileDialogOptions::ForExtension("Fusion Project", "fusion", "Open Project");
+			if (auto path = FileDialog::ShowOpenDialog(opts)) {
+				EngineManager::getInstance().currentProjectFile = *path;
+				EngineManager::getInstance().LoadProjectFromFile(*path);
+			}
+		}
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("New Project")) {
+		if (!EngineManager::getInstance().isSaved)
+			EngineManager::getInstance().pendingAction = EngineManager::PendingAction::NewProject;
+		else
+			EngineManager::getInstance().NewProject();
+	}
+	ImGui::EndDisabled();
 
 	ImGui::End();
 }
@@ -154,11 +328,112 @@ void EngineStatus::ProcessSettingsPopup() {
 	}
 }
 
+void EngineStatus::ExecutePendingAction() {
+	EngineManager& eng = EngineManager::getInstance();
+	if (eng.pendingAction == EngineManager::PendingAction::Close) {
+		glfwSetWindowShouldClose(eng.Window, GLFW_TRUE);
+	}
+	else if (eng.pendingAction == EngineManager::PendingAction::NewProject) {
+		eng.NewProject();
+	}
+	else if (eng.pendingAction == EngineManager::PendingAction::LoadProject) {
+		auto opts = FileDialogOptions::ForExtension("Fusion Project", "fusion", "Open Project");
+		if (auto path = FileDialog::ShowOpenDialog(opts)) {
+			EngineManager::getInstance().currentProjectFile = *path;
+			EngineManager::getInstance().LoadProjectFromFile(*path);
+		}
+	}
+	eng.pendingAction = EngineManager::PendingAction::None;
+}
+
+void EngineStatus::ProcessUnsavedChangesPopup() {
+	if (EngineManager::getInstance().pendingAction != EngineManager::PendingAction::None
+		&& !ImGui::IsPopupOpen("Unsaved Changes"))
+		ImGui::OpenPopup("Unsaved Changes");
+
+	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+	if (ImGui::BeginPopupModal("Unsaved Changes", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
+		ImGui::Text("This project has unsaved changes.");
+		ImGui::Text("What would you like to do?");
+		ImGui::Spacing();
+		ImGui::Separator();
+		ImGui::Spacing();
+
+		ImGui::PushStyleColor(ImGuiCol_Button, ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+		std::string saveText = "Save and Close";
+		if (EngineManager::getInstance().pendingAction == EngineManager::PendingAction::LoadProject)
+			saveText = "Save and Load";
+		if (EngineManager::getInstance().pendingAction == EngineManager::PendingAction::NewProject)
+			saveText = "Save and Create";
+		bool saveAndClose = ImGui::Button(saveText.c_str(), ImVec2(140, 0));
+		ImGui::PopStyleColor();
+		ImGui::SetItemDefaultFocus();
+
+		ImGui::SameLine();
+		bool cancel = ImGui::Button("Cancel", ImVec2(120, 0));
+
+		ImGui::SameLine();
+		bool dontSave = ImGui::Button("Don't Save", ImVec2(120, 0));
+
+		if (saveAndClose) {
+			bool didSave = false;
+			if (EngineManager::getInstance().currentProjectFile.empty()) {
+				auto opts = FileDialogOptions::ForExtension("Fusion Project", "fusion", "Save Project");
+				opts.defaultFileName = "New Project.fusion";
+				if (auto path = FileDialog::ShowSaveDialog(opts)) {
+					EngineManager::getInstance().currentProjectFile = *path;
+					EngineManager::getInstance().SaveProjectToFile(*path);
+					didSave = true;
+				}
+			}
+			else {
+				EngineManager::getInstance().SaveProjectToFile(EngineManager::getInstance().currentProjectFile);
+				didSave = true;
+			}
+
+			if (didSave) {
+				ExecutePendingAction();
+				ImGui::CloseCurrentPopup();
+			}
+		}
+
+		if (dontSave) {
+			ExecutePendingAction();
+			ImGui::CloseCurrentPopup();
+		}
+
+		if (cancel) {
+			EngineManager::getInstance().pendingAction = EngineManager::PendingAction::None;
+			ImGui::CloseCurrentPopup();
+		}
+
+		ImGui::EndPopup();
+	}
+}
+
 void EngineStatus::OnInteractModeChanged() {
 	if (EngineManager::getInstance().EngineInteractMode == EngineManager::InteractMode::AddVertex) {
 		InteractModeText = "Interact Mode: ADD VERTEX";
 	}
 	if (EngineManager::getInstance().EngineInteractMode == EngineManager::InteractMode::EditorSelect) {
 		InteractModeText = "Interact Mode: MOUSE INTERACT";
+	}
+}
+
+void EngineStatus::OnKeyButtonPressed(int key, int scancode, int action, int mods) {
+	if (InputManager::getInstance().keys[GLFW_KEY_LEFT_CONTROL] && InputManager::getInstance().keys[GLFW_KEY_S]) {
+		if (EngineManager::getInstance().currentProjectFile.empty()) {
+			auto opts = FileDialogOptions::ForExtension("Fusion Project", "fusion", "Save Project");
+			opts.defaultFileName = "New Project.fusion";
+			if (auto path = FileDialog::ShowSaveDialog(opts)) {
+				EngineManager::getInstance().currentProjectFile = *path;
+				EngineManager::getInstance().SaveProjectToFile(*path);
+			}
+		}
+		else {
+			EngineManager::getInstance().SaveProjectToFile(EngineManager::getInstance().currentProjectFile);
+		}
 	}
 }

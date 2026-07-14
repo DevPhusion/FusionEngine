@@ -285,6 +285,9 @@
     <ClCompile Include="BinaryWriter.cpp">
       <Filter>Source Files\Core\Files</Filter>
     </ClCompile>
+    <ClCompile Include="FileDialog.cpp">
+      <Filter>Source Files\Core\Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stb_image.h">
@@ -499,6 +502,9 @@
     </ClInclude>
     <ClInclude Include="Constraints.h">
       <Filter>Header Files\Core\Physics\Constraint\PGSConstraint</Filter>
+    </ClInclude>
+    <ClInclude Include="FileDialog.h">
+      <Filter>Header Files\Core\Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

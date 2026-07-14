@@ -128,6 +128,7 @@ void CollisionComponent::OnDelete() {
 }
 
 void CollisionComponent::calculateBoundingCircle() {
+    EngineManager::getInstance().EngineChangeEvent();
     std::vector<std::vector<float>> points = parent->GetComponent<RenderComponent>()->points;
     TransformComponent* tc = parent->GetComponent<TransformComponent>();
     glm::vec3 center = tc->GetWorldPosition();

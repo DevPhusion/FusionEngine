@@ -21,13 +21,13 @@ void Camera::Setup() {
 void Camera::ProcessCamera(float delta) {
 	this->delta = delta;
 
-	if (InputManager::keys.contains(GLFW_KEY_W) && InputManager::keys[GLFW_KEY_W]) {
+	if (InputManager::keys.contains(GLFW_KEY_W) && InputManager::keys[GLFW_KEY_W] && !InputManager::keys[GLFW_KEY_LEFT_CONTROL]) {
 		SetCameraPosition(glm::vec3(cameraPos.x, cameraPos.y + cameraSpeed * delta, cameraPos.z));
 	}
-	if (InputManager::keys.contains(GLFW_KEY_A) && InputManager::keys[GLFW_KEY_A]) {
+	if (InputManager::keys.contains(GLFW_KEY_A) && InputManager::keys[GLFW_KEY_A] && !InputManager::keys[GLFW_KEY_LEFT_CONTROL]) {
 		SetCameraPosition(glm::vec3(cameraPos.x - cameraSpeed * delta, cameraPos.y, cameraPos.z));
 	}
-	if (InputManager::keys.contains(GLFW_KEY_S) && InputManager::keys[GLFW_KEY_S]) {
+	if (InputManager::keys.contains(GLFW_KEY_S) && InputManager::keys[GLFW_KEY_S] && !InputManager::keys[GLFW_KEY_LEFT_CONTROL]) {
 		SetCameraPosition(glm::vec3(cameraPos.x, cameraPos.y - cameraSpeed * delta, cameraPos.z));
 	}
 	if (InputManager::keys.contains(GLFW_KEY_D) && InputManager::keys[GLFW_KEY_D] && !InputManager::keys[GLFW_KEY_LEFT_CONTROL]) {

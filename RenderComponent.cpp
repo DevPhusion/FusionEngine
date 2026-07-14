@@ -1,6 +1,7 @@
 #include "RenderComponent.h"
 #include "VertexComponent.h"
 #include "ObjectManager.h"
+#include "FileDialog.h"
 
 RenderComponent::RenderComponent(Object* parent, std::vector<float> vertices, Shader shader, std::string texture_path) : ComponentBase<RenderComponent>(parent) {
 	Name = "Render Component";
@@ -9,7 +10,7 @@ RenderComponent::RenderComponent(Object* parent, std::vector<float> vertices, Sh
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	
+
 	Vertices = vertices;
 	Indices = Triangulate(vertices);
 	this->shader = shader;
@@ -20,8 +21,8 @@ RenderComponent::RenderComponent(Object* parent, std::vector<float> vertices, Sh
 	{
 		points.push_back(std::vector<float> {
 			vertices[i],
-			vertices[i + 1],
-			float(int(i / 5))
+				vertices[i + 1],
+				float(int(i / 5))
 		});
 		i += 3;
 	}
@@ -82,7 +83,7 @@ void RenderComponent::SetShape(Shape shape) {
 	if (std::holds_alternative<CircleShape>(shape)) {
 		auto& circle = std::get<CircleShape>(shape);
 
-		UpdateShape(verts, TriangulateCircle(circle.segments)); 
+		UpdateShape(verts, TriangulateCircle(circle.segments));
 
 		edges.clear();
 		TransformComponent* tc = parent->HasComponent<TransformComponent>()
@@ -104,6 +105,7 @@ void RenderComponent::SetShape(Shape shape) {
 		UpdateShape(verts, Triangulate(verts));
 	}
 
+	EngineManager::getInstance().EngineChangeEvent();
 	if (!std::holds_alternative<PolygonShape>(shape)) {
 		for (auto& [id, func] : OnShapeSetCallbacks) {
 			func();
@@ -139,11 +141,13 @@ void RenderComponent::SetTexture(std::string texture_path) {
 		std::cout << "Failed to load texture" << std::endl;
 	}
 	stbi_image_free(data);
+
+	EngineManager::getInstance().EngineChangeEvent();
 }
 
 
 void RenderComponent::Draw() {
-	
+
 	this->shader.use();
 	if (!Enabled)
 		return;
@@ -170,7 +174,7 @@ std::vector<unsigned int> RenderComponent::TriangulateCircle(int segments) {
 	for (int i = 0; i < segments; i++) {
 		indices.push_back(i);
 		indices.push_back((i + 1) % segments);
-		indices.push_back(segments); 
+		indices.push_back(segments);
 	}
 	return indices;
 }
@@ -320,9 +324,9 @@ std::vector<float> RenderComponent::VerticesFromShape(Shape& shape) {
 
 float RenderComponent::GetArea() {
 	float totalArea = 0;
-	for (int i = 0; i < Indices.size(); i+=3)
+	for (int i = 0; i < Indices.size(); i += 3)
 	{
-	 	totalArea += calcTriangleArea(points[Indices[i]], points[Indices[i + 1]], points[Indices[i + 2]]);
+		totalArea += calcTriangleArea(points[Indices[i]], points[Indices[i + 1]], points[Indices[i + 2]]);
 	}
 
 	return totalArea;
@@ -492,19 +496,14 @@ void RenderComponent::ProcessInspectorUI() {
 	ImGui::InputText("##Texture path", selected_texture_path, IM_ARRAYSIZE(selected_texture_path), ImGuiInputTextFlags_ReadOnly);
 	if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 	if (ImGui::IsItemClicked()) {
-		IGFD::FileDialogConfig config;
-		config.path = ".";
-		config.countSelectionMax = 1;
-		ImGuiFileDialog::Instance()->OpenDialog("ChooseTexture", "Choose Texture", ".png,.jpeg", config);
-	}
-	if (!initialized) {
-		auto* places = ImGuiFileDialog::Instance()->GetPlacesGroupPtr("Devices");
-		if (places) { places->AddPlace("D: ", "D:\\", true); initialized = true; }
-	}
-	if (ImGuiFileDialog::Instance()->Display("ChooseTexture", 32, ImVec2(100, 200))) {
-		if (ImGuiFileDialog::Instance()->IsOk())
-			SetTexture(ImGuiFileDialog::Instance()->GetFilePathName());
-		ImGuiFileDialog::Instance()->Close();
+		FileDialogOptions opts;
+		opts.title = "Choose Texture";
+		opts.filters = {
+			{ "Images", "*.png;*.jpeg;*.jpg" },
+			{ "All Files", "*.*" }
+		};
+		if (auto path = FileDialog::ShowOpenDialog(opts))
+			SetTexture(*path);
 	}
 
 	ImGui::Separator();
@@ -512,8 +511,10 @@ void RenderComponent::ProcessInspectorUI() {
 	ImGui::Text("Color");
 	ImGui::SameLine();
 	float displayColor[4] = { color.x, color.y, color.z, color.a };
-	if (ImGui::ColorEdit4("##Color", displayColor))
+	if (ImGui::ColorEdit4("##Color", displayColor)) {
 		this->color = glm::vec4(displayColor[0], displayColor[1], displayColor[2], displayColor[3]);
+		EngineManager::getInstance().EngineChangeEvent();
+	}
 
 	ImGui::Separator();
 
@@ -735,7 +736,9 @@ void RenderComponent::ProcessInspectorUI() {
 
 	ImGui::Text("Z index");
 	ImGui::SameLine();
-	ImGui::InputInt("##ZIndex", &z_index);
+	if (ImGui::InputInt("##ZIndex", &z_index)) {
+		EngineManager::getInstance().EngineChangeEvent();
+	}
 }
 
 void RenderComponent::OnDelete() {

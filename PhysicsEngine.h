@@ -13,6 +13,7 @@
 #include "PointMass.h"
 #include "DebugTimer.h"
 #include <numeric>
+#include <algorithm>
 
 // Sutherland Hodgman
 

@@ -5,6 +5,7 @@
 #include<GLFW/glfw3.h>
 #include<functional>
 #include<unordered_map>
+#include<algorithm>
 
 struct VectorHasher {
 	size_t operator()(const std::vector<int>& v) const {

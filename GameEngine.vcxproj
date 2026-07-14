@@ -162,6 +162,7 @@
     <ClCompile Include="EditorManager.cpp" />
     <ClCompile Include="EngineManager.cpp" />
     <ClCompile Include="EngineStatus.cpp" />
+    <ClCompile Include="FileDialog.cpp" />
     <ClCompile Include="ForceGenerator.cpp" />
     <ClCompile Include="Gizmos.cpp" />
     <ClCompile Include="glad.c" />
@@ -231,6 +232,7 @@
     <ClInclude Include="EditorManager.h" />
     <ClInclude Include="EngineManager.h" />
     <ClInclude Include="EngineStatus.h" />
+    <ClInclude Include="FileDialog.h" />
     <ClInclude Include="ForceGenerator.h" />
     <ClInclude Include="Gizmos.h" />
     <ClInclude Include="Hierarchy.h" />

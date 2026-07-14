@@ -10,6 +10,10 @@ void EngineManager::Setup(GLFWwindow* window) {
 	this->windowHeight = (float)windowHeight;
 	this->aspectRatio = this->windowWidth / this->windowHeight;
 	frameCount = 0;
+
+	this->Window = window;                                 
+	glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
+	glfwSetWindowCloseCallback(window, WindowCloseCallback);
 }
 
 void EngineManager::ProcessEngine(float delta) {
@@ -43,6 +47,7 @@ void EngineManager::SaveEngineState() {
 	for (int i = 0; i < cachedSaveObjects.size(); i++)
 		SavedState.Objects.push_back(std::move(cachedSaveObjects[i]));
 	cachedSaveObjects.clear();
+	if (currentProjectFile != "") isSaved = true;
 }
 
 void EngineManager::LoadEngineState() {
@@ -85,6 +90,8 @@ void EngineManager::LoadEngineState() {
 
 	}
 	SavedState.Constraints.clear();
+
+	if (currentProjectFile != "") isSaved = true;
 }
 
 void EngineManager::SaveProjectToFile(const std::string& path) {
@@ -124,6 +131,8 @@ void EngineManager::SaveProjectToFile(const std::string& path) {
 
 	if (!w.Good())
 		throw std::runtime_error("SaveProjectToFile: write failed, file may be incomplete: " + path);
+
+	isSaved = true;
 }
 
 void EngineManager::LoadProjectFromFile(const std::string& path) {
@@ -188,6 +197,29 @@ void EngineManager::LoadProjectFromFile(const std::string& path) {
 		a->GetComponent<ConstraintComponent>()->AddConstraint(constraint);
 		constraint->ProcessConstraintDisplay();
 	}
+
+	isSaved = true;
+}
+
+void EngineManager::NewProject() {
+	EditorManager::getInstance().SetSelectedObject(nullptr);
+
+	std::vector<Object*> toRemove;
+	toRemove.reserve(ObjectManager::getInstance().allObjects.size());
+	for (auto& obj : ObjectManager::getInstance().allObjects)
+		toRemove.push_back(obj.get());
+	for (Object* obj : toRemove)
+		ObjectManager::getInstance().RemoveObject(obj);
+	ObjectManager::getInstance().allObjects.clear();
+
+	currentProjectFile = "";
+	isSaved = false;
+}
+
+void EngineManager::EngineChangeEvent() {
+	if (EnginePhysicsMode == PhysicsMode::Stop) {
+		isSaved = false;
+	}
 }
 
 void EngineManager::SwitchInteractMode(InteractMode mode) {
@@ -224,4 +256,23 @@ void EngineManager::RemoveInteractModeChangedEvent(int ID) {
 
 void EngineManager::RemovePhysicsModeChangedEvent(int ID) {
 	PhysicsModeChangedEvents.erase(ID);
+}
+
+void EngineManager::FramebufferSizeCallback(GLFWwindow* window, int width, int height) {
+	if (width == 0 || height == 0) return; 
+
+	EngineManager& eng = EngineManager::getInstance();
+	eng.windowWidth = (float)width;
+	eng.windowHeight = (float)height;
+	eng.aspectRatio = eng.windowWidth / eng.windowHeight;
+
+	glViewport(0, 0, width, height);
+}
+
+void EngineManager::WindowCloseCallback(GLFWwindow* window) {
+	EngineManager& eng = EngineManager::getInstance();
+	if (!eng.isSaved) {
+		glfwSetWindowShouldClose(window, GLFW_FALSE);
+		eng.pendingAction = PendingAction::Close;
+	}
 }

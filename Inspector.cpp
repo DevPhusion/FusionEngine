@@ -29,8 +29,10 @@ void Inspector::ProcessWindow() {
 #endif
         ImGui::Text("Name ");
         ImGui::SameLine();
-        if (ImGui::InputText("##ObjectName", objectNameBuffer, 128))
+        if (ImGui::InputText("##ObjectName", objectNameBuffer, 128)) {
             selected->name = std::string(objectNameBuffer);
+            EngineManager::getInstance().EngineChangeEvent();
+        }
 
         ImGui::Spacing();
 
@@ -84,8 +86,10 @@ void Inspector::ProcessWindow() {
             ImGui::PopID();
         }
 
-        if (pendingRemoval != -1)
+        if (pendingRemoval != -1) {
+            EngineManager::getInstance().EngineChangeEvent();
             selected->RemoveComponent(pendingRemoval);
+        }
 
       
         ImGui::Dummy(ImVec2(0.0f, 6.0f));
@@ -109,6 +113,7 @@ void Inspector::ProcessWindow() {
             if (!selected->HasComponent<RigidBodyComponent>() && std::string("Rigid Body Component").find(search) != std::string::npos)
                 if (ImGui::MenuItem("Rigid Body Component")) {
                     selected->AddComponent(std::make_unique<RigidBodyComponent>(selected));
+                    EngineManager::getInstance().EngineChangeEvent();
                     m_SearchBuffer[0] = '\0';
                     ImGui::CloseCurrentPopup();
                 }
@@ -116,6 +121,7 @@ void Inspector::ProcessWindow() {
             if (!selected->HasComponent<SoftBodyComponent>() && std::string("Soft Body Component").find(search) != std::string::npos)
                 if (ImGui::MenuItem("Soft Body Component")) {
                     selected->AddComponent(std::make_unique<SoftBodyComponent>(selected));
+                    EngineManager::getInstance().EngineChangeEvent();
                     m_SearchBuffer[0] = '\0';
                     ImGui::CloseCurrentPopup();
                 }
@@ -123,6 +129,7 @@ void Inspector::ProcessWindow() {
             if (!selected->HasComponent<CollisionComponent>() && std::string("Collision Component").find(search) != std::string::npos)
                 if (ImGui::MenuItem("Collision Component")) {
                     selected->AddComponent(std::make_unique<CollisionComponent>(selected));
+                    EngineManager::getInstance().EngineChangeEvent();
                     m_SearchBuffer[0] = '\0';
                     ImGui::CloseCurrentPopup();
                 }
@@ -130,6 +137,7 @@ void Inspector::ProcessWindow() {
             if (!selected->HasComponent<ConstraintComponent>() && std::string("Constraint Component").find(search) != std::string::npos)
                 if (ImGui::MenuItem("Constraint Component")) {
                     selected->AddComponent(std::make_unique<ConstraintComponent>(selected));
+                    EngineManager::getInstance().EngineChangeEvent();
                     m_SearchBuffer[0] = '\0';
                     ImGui::CloseCurrentPopup();
                 }

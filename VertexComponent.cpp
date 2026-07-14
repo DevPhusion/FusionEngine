@@ -87,7 +87,6 @@ void VertexComponent::Deserialize(BinaryReader& r) {
 		vPoints.push_back(vp.get());
 		ObjectManager::getInstance().allObjects.push_back(std::move(vp));
 	}
-	std::cout << vPoints.size() << std::endl;
 	SetVertexPoints(vPoints);
 	UpdateTransform();
 }

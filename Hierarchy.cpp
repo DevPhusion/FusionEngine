@@ -109,6 +109,7 @@ void Hierarchy::ProcessWindow() {
 
 				if (ImGui::IsKeyPressed(ImGuiKey_Escape) || (ImGui::IsMouseClicked(0) && !ImGui::IsItemHovered())) {
 					currentObj->name = std::string(renameBuffer);
+					EngineManager::getInstance().EngineChangeEvent();
 					IsRenaming = false;
 				}
 			}

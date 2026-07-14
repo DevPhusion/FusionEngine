@@ -8,6 +8,7 @@ void ObjectManager::ProcessObjects(float delta) {
 }
 
 void ObjectManager::AddObject() {
+	EngineManager::getInstance().EngineChangeEvent();
 	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("vertex.txt", "fragment.txt"));
 
 	obj->AddComponent(std::make_unique<RenderComponent>(obj.get(), std::vector<float> {}, obj.get()->shader, "floorTiled.png"));
@@ -24,11 +25,13 @@ void ObjectManager::AddObject() {
 }
 
 void ObjectManager::AddBox() {
+	EngineManager::getInstance().EngineChangeEvent();
 	std::unique_ptr<Box> box = std::make_unique<Box>(Shader("vertex.txt", "fragment.txt"), "floorTiled.png");
 	allObjects.push_back(std::move(box));
 }
 
 void ObjectManager::AddCircle() {
+	EngineManager::getInstance().EngineChangeEvent();
 	std::unique_ptr<Circle> circle = std::make_unique<Circle>(Shader("vertex.txt", "fragment.txt"), "floorTiled.png");
 	allObjects.push_back(std::move(circle));
 }
@@ -45,6 +48,7 @@ void ObjectManager::AddPolygon() {
 		return;
 	}
 
+	EngineManager::getInstance().EngineChangeEvent();
 	std::unique_ptr<Polygon> poly = std::make_unique<Polygon>(vertices, Shader("vertex.txt", "fragment.txt"), "floorTiled.png");
 
 	auto* vc = poly->GetComponent<VertexComponent>();
@@ -66,6 +70,7 @@ void ObjectManager::AddPolygon() {
 }
 
 void ObjectManager::AddSoftBox() {
+	EngineManager::getInstance().EngineChangeEvent();
 	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("vertex.txt", "fragment.txt"));
 	obj->AddComponent(std::make_unique<RenderComponent>(obj.get(), std::vector<float> {}, obj->shader, "floorTiled.png"));
 	auto* render = obj->GetComponent<RenderComponent>();
@@ -83,6 +88,7 @@ void ObjectManager::AddSoftBox() {
 }
 
 void ObjectManager::AddSoftCircle() {
+	EngineManager::getInstance().EngineChangeEvent();
 	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("vertex.txt", "fragment.txt"));
 	obj->AddComponent(std::make_unique<RenderComponent>(obj.get(), std::vector<float> {}, obj->shader, "floorTiled.png"));
 	auto* render = obj->GetComponent<RenderComponent>();
@@ -110,6 +116,7 @@ void ObjectManager::AddSoftPolygon() {
 		return;
 	}
 
+	EngineManager::getInstance().EngineChangeEvent();
 	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("vertex.txt", "fragment.txt"));
 	obj->AddComponent(std::make_unique<RenderComponent>(obj.get(), vertices, obj->shader, "floorTiled.png"));
 	auto* render = obj->GetComponent<RenderComponent>();
@@ -177,6 +184,7 @@ Object* ObjectManager::CopyObject(Object* obj) {
 }
 
 void ObjectManager::RemoveObject(Object* obj) {
+	EngineManager::getInstance().EngineChangeEvent();
 	for (int i = 0; i < allObjects.size(); i++)
 	{
 		if (allObjects[i].get() == obj) {

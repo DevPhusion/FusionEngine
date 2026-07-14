@@ -78,6 +78,7 @@ void SoftBodyComponent::ProcessInspectorUI() {
 	ImGui::SameLine();
 	float vel[2] = { CenterPM->velocity.x, CenterPM->velocity.y };
 	if (ImGui::InputFloat2("##Velocity", vel, "%.3f m/s")) {
+		EngineManager::getInstance().EngineChangeEvent();
 		CenterPM->velocity.x = vel[0];
 		CenterPM->velocity.y = vel[1];
 	}
@@ -93,6 +94,7 @@ void SoftBodyComponent::ProcessInspectorUI() {
 	if (ImGui::InputFloat("##Stiffness ", &stiffness, 0.0f, 0.0f, "%.3f N/m")) {
 		float compliance = (stiffness > 0.0f) ? (1.0f / stiffness) : 0.0f;
 		areaConstraint->compliance = compliance;
+		EngineManager::getInstance().EngineChangeEvent();
 		for (int i = 0; i < springs.size(); i++)
 		{
 			springs[i]->compliance = compliance;
@@ -102,6 +104,7 @@ void SoftBodyComponent::ProcessInspectorUI() {
 	ImGui::Text("Damping ");
 	ImGui::SameLine();
 	if (ImGui::InputFloat("##Damping ", &damping, 0.0f, 0.0f, "%.3f Ns/m")) {
+		EngineManager::getInstance().EngineChangeEvent();
 		for (int i = 0; i < springs.size(); i++)
 		{
 			springs[i]->damping = damping;
@@ -110,12 +113,15 @@ void SoftBodyComponent::ProcessInspectorUI() {
 
 	ImGui::Separator();
 	if (ImGui::Checkbox("Gas Pressure Mode", &useGasPressure)) {
+		EngineManager::getInstance().EngineChangeEvent();
 		RebuildMassAggregate();
 	}
 	if (useGasPressure) {
 		ImGui::Text("Gas Amount");
 		ImGui::SameLine();
-		ImGui::InputFloat("##GasAmount", &gasAmount, 0.0f, 0.0f, "%.3f");
+		if (ImGui::InputFloat("##GasAmount", &gasAmount, 0.0f, 0.0f, "%.3f")) {
+			EngineManager::getInstance().EngineChangeEvent();
+		}
 	}
 
 	if (ImGui::Button("Reset shape")) {
@@ -337,6 +343,8 @@ void SoftBodyComponent::BuildMassAggregate() {
 	MassAggregate.clear();
 	RenderComponent* rc = parent->GetComponent<RenderComponent>();
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
+
+	EngineManager::getInstance().EngineChangeEvent();
 
 	int physicsPointCount = (int)rc->points.size();
 	if (std::holds_alternative<CircleShape>(rc->currentShape)) {

@@ -24,6 +24,7 @@ public:
 	void AddWindow(EditorWindow* window);
 	void SetSelectedObject(Object* object);
 	void ProcessEditor();
+	void ProcessDockSpace();
 
 private:
 	EditorManager() = default;

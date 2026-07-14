@@ -144,7 +144,7 @@ void InputManager::OnKeyButton(GLFWwindow* window, int key, int scancode, int ac
 	else if (action == GLFW_RELEASE) {
 		keys[key] = false;
 	}
-	
+
 	if (EditorManager::getInstance().WindowTyped) {
 		return;
 	}

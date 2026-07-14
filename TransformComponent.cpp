@@ -197,6 +197,7 @@ void TransformComponent::SetRotationCenter(glm::vec3 rotation_center) {
 void TransformComponent::SetOriginTransform(glm::mat4 transform) {
 	this->OriginTransform = transform;
 	worldMatrixDirty = true;
+	EngineManager::getInstance().EngineChangeEvent();
 	for (const auto& [id, func] : transformCallback) {
 		func();
 	}
@@ -205,6 +206,7 @@ void TransformComponent::SetOriginTransform(glm::mat4 transform) {
 void TransformComponent::Translate(glm::vec3 translation) {
 	position = translation;
 	worldMatrixDirty = true;
+	EngineManager::getInstance().EngineChangeEvent();
 	for (const auto& [id, func] : transformCallback) {
 		func();
 	}
@@ -214,6 +216,7 @@ void TransformComponent::Rotate(float angle)
 {
 	rotation = angle;
 	worldMatrixDirty = true;
+	EngineManager::getInstance().EngineChangeEvent();
 	for (const auto& [id, func] : transformCallback) {
 		func();
 	}
@@ -222,6 +225,7 @@ void TransformComponent::Rotate(float angle)
 void TransformComponent::Scale(glm::vec3 scale) {
 	size = scale;
 	worldMatrixDirty = true;
+	EngineManager::getInstance().EngineChangeEvent();
 	for (const auto& [id, func] : transformCallback) {
 		func();
 	}
