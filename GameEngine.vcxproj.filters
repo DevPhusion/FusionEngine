@@ -288,6 +288,9 @@
     <ClCompile Include="FileDialog.cpp">
       <Filter>Source Files\Core\Files</Filter>
     </ClCompile>
+    <ClCompile Include="FractureComponent.cpp">
+      <Filter>Source Files\Components</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stb_image.h">
@@ -505,6 +508,9 @@
     </ClInclude>
     <ClInclude Include="FileDialog.h">
       <Filter>Header Files\Core\Files</Filter>
+    </ClInclude>
+    <ClInclude Include="FractureComponent.h">
+      <Filter>Header Files\Components</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

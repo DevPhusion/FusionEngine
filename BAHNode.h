@@ -32,8 +32,8 @@ public:
 	void recalculateBoundingArea();
 	BAHNode<BoundingAreaClass>* searchFor(Object* target);
 	bool overlaps(const BAHNode<BoundingAreaClass>* other) const;
-	unsigned getPotentialContacts(PotentialContact* contacts, unsigned limit) const;
-	unsigned getPotentialContactsWith(const BAHNode<BoundingAreaClass>* other, PotentialContact* contacts, unsigned limit) const;
+	unsigned getPotentialContacts(std::vector<PotentialContact>& contacts) const;
+	unsigned getPotentialContactsWith(const BAHNode<BoundingAreaClass>* other, std::vector<PotentialContact>& contacts) const;
 	void DrawBoundingArea() const;
 };
 
@@ -102,60 +102,38 @@ bool BAHNode<BoundingAreaClass>::overlaps(const BAHNode<BoundingAreaClass>* othe
 }
 
 template<class BoundingAreaClass>
-unsigned BAHNode<BoundingAreaClass>::getPotentialContacts(PotentialContact* contacts, unsigned limit) const {
-	if ((children[0] == nullptr && children[1] == nullptr) || isLeaf() || limit == 0) return 0; // if no room for contacts / is a leaf node -> return
+unsigned BAHNode<BoundingAreaClass>::getPotentialContacts(std::vector<PotentialContact>& contacts) const {
+	if ((children[0] == nullptr && children[1] == nullptr) || isLeaf()) return 0;
 
-	unsigned count = children[0]->getPotentialContactsWith(children[1], contacts, limit);
-
-	if (limit > count) {
-		count += children[0]->getPotentialContacts(contacts + count, limit - count);
-	}
-
-	if (limit > count) {
-		count += children[1]->getPotentialContacts(contacts + count, limit - count);
-	}
+	unsigned count = children[0]->getPotentialContactsWith(children[1], contacts);
+	count += children[0]->getPotentialContacts(contacts);
+	count += children[1]->getPotentialContacts(contacts);
 
 	return count;
 }
 
 template<class BoundingAreaClass>
-unsigned BAHNode<BoundingAreaClass>::getPotentialContactsWith(const BAHNode<BoundingAreaClass>* other, PotentialContact* contacts, unsigned limit) const {
-	if (other == nullptr) {
-		return 0;
-	}
-	if (!overlaps(other) || limit == 0) {
-		return 0;
-	}
+unsigned BAHNode<BoundingAreaClass>::getPotentialContactsWith(const BAHNode<BoundingAreaClass>* other, std::vector<PotentialContact>& contacts) const {
+	if (other == nullptr) return 0;
+	if (!overlaps(other)) return 0;
 
 	if (isLeaf() && other->isLeaf()) {
-		contacts->obj[0] = obj;
-		contacts->obj[1] = other->obj;
+		PotentialContact pc;
+		pc.obj[0] = obj;
+		pc.obj[1] = other->obj;
+		contacts.push_back(pc);
 		return 1;
 	}
 
 	if (other->isLeaf() || (!isLeaf() && area.getSize() >= other->area.getSize())) {
-		unsigned count = children[0]->getPotentialContactsWith(other, contacts, limit);
-
-		if (limit > count) {
-			return count + children[1]->getPotentialContactsWith(
-				other, contacts + count, limit - count
-			);
-		}
-		else {
-			return count;
-		}
+		unsigned count = children[0]->getPotentialContactsWith(other, contacts);
+		count += children[1]->getPotentialContactsWith(other, contacts);
+		return count;
 	}
 	else {
-		unsigned count = getPotentialContactsWith(other->children[0], contacts, limit);
-
-		if (limit > count) {
-			return count + getPotentialContactsWith(
-				other->children[1], contacts + count, limit - count
-			);
-		}
-		else {
-			return count;
-		}
+		unsigned count = getPotentialContactsWith(other->children[0], contacts);
+		count += getPotentialContactsWith(other->children[1], contacts);
+		return count;
 	}
 }
 

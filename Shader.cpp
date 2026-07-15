@@ -1,50 +1,58 @@
 #include "Shader.h"
 
+std::unordered_map<std::string, std::string>& Shader::SourceCache() {
+    static std::unordered_map<std::string, std::string> cache;
+    return cache;
+}
+
+const std::string& Shader::LoadOrGetCachedSource(const std::string& path) {
+    auto& cache = SourceCache();
+    auto it = cache.find(path);
+    if (it != cache.end()) return it->second;
+
+    std::ifstream file;
+    file.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    std::string code;
+    try {
+        file.open(path);
+        std::stringstream stream;
+        stream << file.rdbuf();
+        code = stream.str();
+    }
+    catch (std::ifstream::failure e) {
+        std::cout << "FILE NOT SUCCESSFULLY READ" << std::endl;
+    }
+
+    return cache.emplace(path, std::move(code)).first->second;
+}
+
 Shader::Shader(const char* vertexPath, const char* fragmentPath) {
-	this->vertexPath = vertexPath;
-	this->fragmentPath = fragmentPath;
+    this->vertexPath = vertexPath;
+    this->fragmentPath = fragmentPath;
 
-	std::ifstream vertexFile;
-	std::ifstream fragmentFile;
-	std::string vertexCode;
-	std::string fragmentCode;
+    const std::string& vertexCode = LoadOrGetCachedSource(this->vertexPath);
+    const std::string& fragmentCode = LoadOrGetCachedSource(this->fragmentPath);
 
-	vertexFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
-	fragmentFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    const char* vertexSrc = vertexCode.c_str();
+    const char* fragmentSrc = fragmentCode.c_str();
 
-	try {
-		vertexFile.open(vertexPath);
-		fragmentFile.open(fragmentPath);
-		std::stringstream vertexStream, fragmentStream;
-		vertexStream << vertexFile.rdbuf();
-		fragmentStream << fragmentFile.rdbuf();
-		vertexCode = vertexStream.str();
-		fragmentCode = fragmentStream.str();
-	}
-	catch(std::ifstream::failure e){
-		std::cout << "FILE NOT SUCCESSFULLY READ" << std::endl;
-	}
+    unsigned int vertexShader;
+    vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vertexShader, 1, &vertexSrc, NULL);
+    glCompileShader(vertexShader);
 
-	const char* vertexSrc = vertexCode.c_str();
-	const char* fragmentSrc = fragmentCode.c_str();
+    unsigned int fragmentShader;
+    fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fragmentShader, 1, &fragmentSrc, NULL);
+    glCompileShader(fragmentShader);
 
-	unsigned int vertexShader;
-	vertexShader = glCreateShader(GL_VERTEX_SHADER);
-	glShaderSource(vertexShader, 1, &vertexSrc, NULL);
-	glCompileShader(vertexShader);
+    this->ID = glCreateProgram();
+    glAttachShader(this->ID, vertexShader);
+    glAttachShader(this->ID, fragmentShader);
+    glLinkProgram(this->ID);
 
-	unsigned int fragmentShader;
-	fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-	glShaderSource(fragmentShader, 1, &fragmentSrc, NULL);
-	glCompileShader(fragmentShader);
-
-	this->ID = glCreateProgram();
-	glAttachShader(this->ID, vertexShader);
-	glAttachShader(this->ID, fragmentShader);
-	glLinkProgram(this->ID);
-
-	glDeleteShader(vertexShader);
-	glDeleteShader(fragmentShader);
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
 }
 
 void Shader::use() {

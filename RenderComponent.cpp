@@ -114,14 +114,31 @@ void RenderComponent::SetShape(Shape shape) {
 }
 
 void RenderComponent::SetTexture(std::string texture_path) {
+	if (this->texture_path != "" && this->TextureID != 0) {
+		auto& cache = TextureCache();
+		auto oldIt = cache.find(this->texture_path);
+		if (oldIt != cache.end()) {
+			if (--oldIt->second.second <= 0) {
+				glDeleteTextures(1, &oldIt->second.first);
+				cache.erase(oldIt);
+			}
+		}
+	}
+
 	this->texture_path = texture_path;
-	if (texture_path == "") return;
+	if (texture_path == "") { this->TextureID = 0; return; }
+
+	auto& cache = TextureCache();
+	auto it = cache.find(texture_path);
+	if (it != cache.end()) {
+		it->second.second++;
+		this->TextureID = it->second.first;
+		EngineManager::getInstance().EngineChangeEvent();
+		return;
+	}
+
 	int width, height, nrChannels;
 	stbi_set_flip_vertically_on_load(true);
-
-	if (this->TextureID != 0) {
-		glDeleteTextures(1, &this->TextureID);
-	}
 
 	unsigned char* data = stbi_load(texture_path.c_str(), &width, &height, &nrChannels, 0);
 	glGenTextures(1, &this->TextureID);
@@ -136,15 +153,22 @@ void RenderComponent::SetTexture(std::string texture_path) {
 			glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 		}
 		glGenerateMipmap(GL_TEXTURE_2D);
+		cache[texture_path] = { this->TextureID, 1 };
 	}
 	else {
 		std::cout << "Failed to load texture" << std::endl;
+		glDeleteTextures(1, &this->TextureID);
+		this->TextureID = 0;
 	}
 	stbi_image_free(data);
 
 	EngineManager::getInstance().EngineChangeEvent();
 }
 
+std::unordered_map<std::string, std::pair<GLuint, int>>& RenderComponent::TextureCache() {
+	static std::unordered_map<std::string, std::pair<GLuint, int>> cache;
+	return cache;
+}
 
 void RenderComponent::Draw() {
 
@@ -356,6 +380,49 @@ glm::vec3 RenderComponent::GetCenter() {
 	C_y = C_y / (6.0 * A);
 
 	return glm::vec3(C_x, C_y, 0);
+}
+
+bool BarycentricWeights(const glm::vec3& p, const glm::vec3& a, const glm::vec3& b, const glm::vec3& c,
+	float& u, float& v, float& w) {
+	glm::vec3 v0 = b - a, v1 = c - a, v2 = p - a;
+	float d00 = glm::dot(v0, v0);
+	float d01 = glm::dot(v0, v1);
+	float d11 = glm::dot(v1, v1);
+	float d20 = glm::dot(v2, v0);
+	float d21 = glm::dot(v2, v1);
+	float denom = d00 * d11 - d01 * d01;
+	if (std::abs(denom) < 1e-10f) return false; 
+	v = (d11 * d20 - d01 * d21) / denom;
+	w = (d00 * d21 - d01 * d20) / denom;
+	u = 1.0f - v - w;
+	return true;
+}
+
+glm::vec2 RenderComponent::ComputeUVAtLocalPoint(const glm::vec3& localPoint) {
+	glm::vec2 bestUV(0.5f, 0.5f);
+	float bestPenalty = INFINITY;
+
+	for (size_t i = 0; i + 2 < Indices.size(); i += 3) {
+		unsigned int ia = Indices[i], ib = Indices[i + 1], ic = Indices[i + 2];
+
+		glm::vec3 a(Vertices[ia * 5 + 0], Vertices[ia * 5 + 1], 0.0f);
+		glm::vec3 b(Vertices[ib * 5 + 0], Vertices[ib * 5 + 1], 0.0f);
+		glm::vec3 c(Vertices[ic * 5 + 0], Vertices[ic * 5 + 1], 0.0f);
+
+		float u, v, w;
+		if (!BarycentricWeights(localPoint, a, b, c, u, v, w)) continue;
+
+		float penalty = std::max({ -u, -v, -w, 0.0f });
+		if (penalty < bestPenalty) {
+			bestPenalty = penalty;
+			glm::vec2 uvA(Vertices[ia * 5 + 3], Vertices[ia * 5 + 4]);
+			glm::vec2 uvB(Vertices[ib * 5 + 3], Vertices[ib * 5 + 4]);
+			glm::vec2 uvC(Vertices[ic * 5 + 3], Vertices[ic * 5 + 4]);
+			bestUV = u * uvA + v * uvB + w * uvC;
+		}
+		if (penalty <= 1e-6f) break; 
+	}
+	return bestUV;
 }
 
 void RenderComponent::UpdateShape(std::vector<float> vertices, std::vector<unsigned int> indices) {
@@ -745,4 +812,15 @@ void RenderComponent::OnDelete() {
 	glDeleteBuffers(1, &VBO);
 	glDeleteBuffers(1, &EBO);
 	glDeleteVertexArrays(1, &VAO);
+
+	if (texture_path != "" && TextureID != 0) {
+		auto& cache = TextureCache();
+		auto it = cache.find(texture_path);
+		if (it != cache.end()) {
+			if (--it->second.second <= 0) {
+				glDeleteTextures(1, &it->second.first);
+				cache.erase(it);
+			}
+		}
+	}
 }

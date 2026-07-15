@@ -8,7 +8,9 @@ AddObjectWindow::AddObjectWindow(std::string name) {
 void AddObjectWindow::ProcessWindow() {
 	if (hidden) return;
 
-	ImGui::Begin(name.c_str());
+	ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDocking;
+
+	ImGui::Begin(name.c_str(), nullptr, window_flags);
 
 	ImGuiTreeNodeFlags root_flags = ImGuiTreeNodeFlags_OpenOnArrow |
 		ImGuiTreeNodeFlags_OpenOnDoubleClick |

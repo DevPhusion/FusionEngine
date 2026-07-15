@@ -164,6 +164,7 @@
     <ClCompile Include="EngineStatus.cpp" />
     <ClCompile Include="FileDialog.cpp" />
     <ClCompile Include="ForceGenerator.cpp" />
+    <ClCompile Include="FractureComponent.cpp" />
     <ClCompile Include="Gizmos.cpp" />
     <ClCompile Include="glad.c" />
     <ClCompile Include="Hierarchy.cpp" />
@@ -234,6 +235,7 @@
     <ClInclude Include="EngineStatus.h" />
     <ClInclude Include="FileDialog.h" />
     <ClInclude Include="ForceGenerator.h" />
+    <ClInclude Include="FractureComponent.h" />
     <ClInclude Include="Gizmos.h" />
     <ClInclude Include="Hierarchy.h" />
     <ClInclude Include="imgui\dirent.h" />

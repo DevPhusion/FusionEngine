@@ -70,6 +70,7 @@ public:
 	std::vector<unsigned int> Triangulate(std::vector<float> vertices);
 	float GetArea();
 	glm::vec3 GetCenter();
+	glm::vec2 ComputeUVAtLocalPoint(const glm::vec3& localPoint);
 	void SetShape(Shape shape);
 	void SetTexture(std::string texture_path);
 	bool IsInsideShape(glm::vec3 point);
@@ -77,6 +78,7 @@ public:
 	void Draw();
 
 private:
+	static std::unordered_map<std::string, std::pair<GLuint, int>>& TextureCache();
 
 	std::unordered_map<int, std::function<void()>> OnShapeSetCallbacks;
 	int shapeCallbackID = -1;

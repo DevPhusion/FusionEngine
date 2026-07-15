@@ -29,6 +29,8 @@ public:
 	void setMat4D(const std::string& name, glm::mat4 value) const;
 	void setVec4D(const std::string& name, glm::vec4 value) const;
 private:
+	static std::unordered_map<std::string, std::string>& SourceCache();
+	static const std::string& LoadOrGetCachedSource(const std::string& path);
 	unsigned int ID;
 };
 

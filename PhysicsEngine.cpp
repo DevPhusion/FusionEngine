@@ -31,10 +31,11 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 		}
 	}
 
-	PotentialContact potentialContacts[200];
-	unsigned totalContacts = root.getPotentialContacts(potentialContacts, 200);
-	if (totalContacts > 0) {
-		ResolveContacts(potentialContacts, totalContacts);
+	std::vector<PotentialContact> potentialContacts;
+	potentialContacts.reserve(allObjects->size() * 4);
+	root.getPotentialContacts(potentialContacts);
+	if (!potentialContacts.empty()) {
+		ResolveContacts(potentialContacts.data(), (unsigned)potentialContacts.size());
 	}
 
 	ResolvePGSConstraints(delta);
@@ -49,6 +50,8 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 			(*allObjects)[i]->GetComponent<RigidBodyComponent>()->IntegratePositions(delta);
 		}
 	}
+
+	ProcessFractures();
 }
 
 void PhysicsEngine::RegisterForce(Object* object, ForceGenerator* fg) {
@@ -1351,16 +1354,31 @@ void PhysicsEngine::ResolvePGSConstraints(float delta) {
 		if (!constraint->isTemporary) continue;
 		auto* contact = static_cast<ContactConstraint*>(constraint);
 
-		if (contact->objectA.obj && contact->objectB.obj) continue;
-
-		glm::vec3 normal = contact->normal;
-
-		if (contact->penetration > 0.0f) {
-			if (!contact->objectA.obj && contact->objectA.position != nullptr) {
-				*contact->objectA.position += normal * contact->penetration;
+		if (contact->objectA.obj && contact->objectB.obj) {
+			float appliedImpulse = std::abs(contact->cacheLambda);
+			Object* a = contact->objectA.obj;
+			Object* b = contact->objectB.obj;
+			if (a->HasComponent<FractureComponent>()) {
+				FractureComponent* fc = a->GetComponent<FractureComponent>();
+				if (fc->fracturable && appliedImpulse > fc->impulseThreshold)
+					pendingFractures.push_back({ a, contact->attachPointA, appliedImpulse });
 			}
-			else if (!contact->objectB.obj && contact->objectB.position != nullptr) {
-				*contact->objectB.position -= normal * contact->penetration; // Note the negative sign depending on normal direction
+			if (b->HasComponent<FractureComponent>()) {
+				FractureComponent* fc = b->GetComponent<FractureComponent>();
+				if (fc->fracturable && appliedImpulse > fc->impulseThreshold)
+					pendingFractures.push_back({ b, contact->attachPointB, appliedImpulse });
+			}
+		}
+		else {
+			glm::vec3 normal = contact->normal;
+
+			if (contact->penetration > 0.0f) {
+				if (!contact->objectA.obj && contact->objectA.position != nullptr) {
+					*contact->objectA.position += normal * contact->penetration;
+				}
+				else if (!contact->objectB.obj && contact->objectB.position != nullptr) {
+					*contact->objectB.position -= normal * contact->penetration; // Note the negative sign depending on normal direction
+				}
 			}
 		}
 	}
@@ -1443,4 +1461,263 @@ void PhysicsEngine::ResolveXPBDConstraint(float delta) {
 			proxy->angularVelocity = dTheta / dtSub;
 		}
 	}
+}
+
+//Fracture Physics
+void PhysicsEngine::ProcessFractures() {
+	if (pendingFractures.empty()) return;
+
+	std::unordered_map<Object*, PendingFracture> strongest; // one fracture per object
+	for (auto& pf : pendingFractures) {
+		auto it = strongest.find(pf.obj);
+		if (it == strongest.end() || pf.impulse > it->second.impulse)
+			strongest[pf.obj] = pf;
+	}
+	pendingFractures.clear();
+
+	for (auto& [obj, pf] : strongest) {
+		FractureObject(obj, pf.worldPoint);
+	}
+}
+
+void PhysicsEngine::FractureObject(Object* source, const glm::vec3& worldImpactPoint) {
+	RenderComponent* srcRC = source->GetComponent<RenderComponent>();
+	TransformComponent* srcTC = source->GetComponent<TransformComponent>();
+	FractureComponent* srcFC = source->GetComponent<FractureComponent>();
+	if (!srcRC || !srcTC || !srcFC) return;
+	EditorManager::getInstance().SetSelectedObject(nullptr);
+
+	std::vector<glm::vec3> localPoly;
+	for (auto& e : srcRC->edges) localPoly.push_back(e.start);
+	if (localPoly.size() < 3) return;
+
+	glm::vec3 srcSize = srcTC->size;
+	std::vector<glm::vec3> scaledPoly;
+	scaledPoly.reserve(localPoly.size());
+	for (auto& p : localPoly) scaledPoly.push_back(p * srcSize);
+
+	glm::mat4 invWorld = glm::inverse(srcTC->WorldMatrix);
+	glm::vec3 localImpact = glm::vec3(invWorld * glm::vec4(worldImpactPoint, 1.0f));
+	glm::vec3 scaledImpact = localImpact * srcSize;
+	if (!PointInPolygon(scaledImpact, scaledPoly))
+		scaledImpact = ClosestPointOnPolygon(scaledImpact, scaledPoly);
+
+	std::vector<glm::vec3> seeds = GenerateFractureSeeds(scaledPoly, scaledImpact, srcFC->shardCount);
+
+	float totalArea = std::abs(ComputeSignedArea(scaledPoly));
+
+	struct Shard { std::vector<glm::vec3> points; glm::vec3 centroid; };
+	std::vector<Shard> shards;
+
+	for (int i = 0; i < (int)seeds.size(); i++) {
+		std::vector<glm::vec3> cell = ComputeVoronoiCell(scaledPoly, seeds, i);
+		if (cell.size() < 3) continue;
+		float area = std::abs(ComputeSignedArea(cell));
+		if (area < srcFC->minFragmentArea * totalArea) continue;
+
+		glm::vec3 centroid(0.0f);
+		for (auto& p : cell) centroid += p;
+		centroid /= (float)cell.size();
+		shards.push_back({ cell, centroid }); 
+	}
+
+	if (shards.size() < 2) return;
+
+	std::vector<Object*> shardObjects;
+	for (int i = 0; i < shards.size(); i++)
+	{
+		Shard s = shards[i];
+		shardObjects.push_back(CreateFractureShard(source, s.points, s.centroid, i));
+	}
+
+	ObjectManager::getInstance().RemoveObject(source);
+}
+
+Object* PhysicsEngine::CreateFractureShard(Object* source, const std::vector<glm::vec3>& scaledShardPoints, const glm::vec3& scaledCentroidLocal, int index) {
+	std::unique_ptr<Object> shard;
+	shard = std::make_unique<Object>(Shader(source->shader.vertexPath.c_str(), source->shader.fragmentPath.c_str()));
+	shard->name = source->name + "_shard_" + std::to_string(index);
+
+	for (auto& c : source->components) {
+		std::string compLabel = "Fracture: CopyTo " + c->Name;
+		DebugTimer t(compLabel);
+		c->CopyTo(shard.get());
+	}
+
+	glm::vec3 srcSize = source->GetComponent<TransformComponent>()->size;
+	glm::vec3 invSrcSize(
+		srcSize.x != 0.0f ? 1.0f / srcSize.x : 1.0f,
+		srcSize.y != 0.0f ? 1.0f / srcSize.y : 1.0f,
+		srcSize.z != 0.0f ? 1.0f / srcSize.z : 1.0f);
+
+	int n = (int)scaledShardPoints.size();
+	std::vector<float> polyVerts;
+	polyVerts.reserve(n * 5);
+	for (auto& p : scaledShardPoints) {
+		glm::vec3 recentered = p - scaledCentroidLocal;
+		glm::vec3 unscaledP = p * invSrcSize;
+		glm::vec2 uv = source->GetComponent<RenderComponent>()->ComputeUVAtLocalPoint(unscaledP);
+		polyVerts.insert(polyVerts.end(), { recentered.x, recentered.y, 0.0f, uv.x, uv.y });
+	}
+
+	PolygonShape shardShape;
+	shardShape.vertices = polyVerts;
+	shard->GetComponent<RenderComponent>()->SetShape(shardShape);
+
+	shard->GetComponent<TransformComponent>()->size = glm::vec3(1.0f);
+
+	glm::vec3 unscaledCentroidLocal = scaledCentroidLocal * invSrcSize;
+	glm::vec3 worldCentroid = source->GetComponent<TransformComponent>()->ProjectToWorld(unscaledCentroidLocal);
+	shard->GetComponent<TransformComponent>()->SetRotationCenter(shard->GetComponent<RenderComponent>()->GetCenter());
+	shard->GetComponent<TransformComponent>()->UpdateWorldPosition(worldCentroid);
+
+	shard->GetComponent<CollisionComponent>()->calculateBoundingCircle();
+
+	RigidBodyComponent* shardRB = shard->GetComponent<RigidBodyComponent>();
+	RigidBodyComponent* srcRB = source->GetComponent<RigidBodyComponent>();
+
+	if (!shardRB) {
+		shard->AddComponent(std::make_unique<RigidBodyComponent>(shard.get()));
+		shardRB = shard->GetComponent<RigidBodyComponent>();
+	}
+
+	float sourceArea = source->GetComponent<RenderComponent>()->GetArea();
+	float shardArea = shard->GetComponent<RenderComponent>()->GetArea();
+
+	float shardMass;
+	if (srcRB) {
+		float sourceMass = 1.0f / srcRB->inverseMass;
+		shardMass = std::max(sourceMass * (shardArea / sourceArea), 0.001f);
+	}
+	else {
+		shardMass = std::max(shardArea * source->GetComponent<FractureComponent>()->density, 0.001f);
+	}
+
+	glm::vec3 r = worldCentroid - source->GetComponent<TransformComponent>()->GetWorldPosition();
+	shardRB->inverseMass = 1.0f / shardMass;
+
+	if (srcRB) {
+		shardRB->velocity = srcRB->velocity + glm::vec3(-srcRB->angularVelocity * r.y, srcRB->angularVelocity * r.x, 0.0f);
+		shardRB->angularVelocity = srcRB->angularVelocity;
+	}
+	else {
+		shardRB->velocity = glm::vec3(0.0f);
+		shardRB->angularVelocity = 0.0f;
+	}
+	shardRB->CalculateInertia();
+
+	FractureComponent* srcFC = source->GetComponent<FractureComponent>();
+	if (srcFC->generation < srcFC->maxFractureGenerations) {
+		shard->GetComponent<FractureComponent>()->generation = srcFC->generation + 1;
+	}
+	else {
+		shard->RemoveComponent<FractureComponent>();
+	}
+
+	Object* shardPtr = shard.get();
+	allObjects->push_back(std::move(shard));
+	return shardPtr;
+}
+
+bool PhysicsEngine::PointInPolygon(const glm::vec3& point, const std::vector<glm::vec3>& polygon) {
+	bool inside = false;
+	int n = (int)polygon.size();
+	for (int i = 0, j = n - 1; i < n; j = i++) {
+		const glm::vec3& pi = polygon[i];
+		const glm::vec3& pj = polygon[j];
+		if (((pi.y > point.y) != (pj.y > point.y)) &&
+			(point.x < (pj.x - pi.x) * (point.y - pi.y) / (pj.y - pi.y) + pi.x)) {
+			inside = !inside;
+		}
+	}
+	return inside;
+}
+
+glm::vec3 PhysicsEngine::ClosestPointOnPolygon(const glm::vec3& point, const std::vector<glm::vec3>& polygon) {
+	float bestDist = INFINITY;
+	glm::vec3 best = polygon.empty() ? glm::vec3(0) : polygon[0];
+	int n = (int)polygon.size();
+	for (int i = 0; i < n; i++) {
+		glm::vec3 a = polygon[i];
+		glm::vec3 b = polygon[(i + 1) % n];
+		glm::vec3 ab = b - a;
+		float len = glm::length(ab);
+		if (len < 1e-8f) continue;
+		float t = glm::clamp(glm::dot(point - a, ab / len) / len, 0.0f, 1.0f);
+		glm::vec3 closest = a + (ab / len) * t * len;
+		float d = glm::length(point - closest);
+		if (d < bestDist) { bestDist = d; best = closest; }
+	}
+	return best;
+}
+
+std::vector<glm::vec3> PhysicsEngine::ClipPolygonHalfPlane(const std::vector<glm::vec3>& poly, const glm::vec3& normal, float offset) {
+	std::vector<glm::vec3> out;
+	int n = (int)poly.size();
+	if (n == 0) return out;
+
+	for (int i = 0; i < n; i++) {
+		const glm::vec3& curr = poly[i];
+		const glm::vec3& next = poly[(i + 1) % n];
+
+		float dCurr = glm::dot(curr, normal) - offset;
+		float dNext = glm::dot(next, normal) - offset;
+
+		bool currInside = dCurr <= 0.0f;
+		bool nextInside = dNext <= 0.0f;
+
+		if (currInside) out.push_back(curr);
+		if (currInside != nextInside) {
+			float t = dCurr / (dCurr - dNext);
+			out.push_back(curr + t * (next - curr));
+		}
+	}
+	return out;
+}
+
+std::vector<glm::vec3> PhysicsEngine::ComputeVoronoiCell(const std::vector<glm::vec3>& polygon, const std::vector<glm::vec3>& seeds, int seedIndex) {
+	std::vector<glm::vec3> cell = polygon;
+	const glm::vec3& s = seeds[seedIndex];
+
+	for (int j = 0; j < (int)seeds.size(); j++) {
+		if (j == seedIndex) continue;
+		const glm::vec3& o = seeds[j];
+
+		glm::vec3 mid = (s + o) * 0.5f;
+		glm::vec3 normal = glm::normalize(o - s); 
+		float offset = glm::dot(mid, normal);
+
+		cell = ClipPolygonHalfPlane(cell, normal, offset);
+		if (cell.empty()) break;
+	}
+	return cell;
+}
+
+std::vector<glm::vec3> PhysicsEngine::GenerateFractureSeeds(const std::vector<glm::vec3>& polygon, const glm::vec3& impactPoint, int count) {
+	std::vector<glm::vec3> seeds;
+	seeds.push_back(impactPoint); 
+
+	glm::vec3 bmin(INFINITY), bmax(-INFINITY);
+	for (auto& p : polygon) { bmin = glm::min(bmin, p); bmax = glm::max(bmax, p); }
+
+	std::mt19937 rng(std::random_device{}());
+	std::uniform_real_distribution<float> ux(bmin.x, bmax.x);
+	std::uniform_real_distribution<float> uy(bmin.y, bmax.y);
+
+	float minSeedDist = glm::length(bmax - bmin) * 0.15f;
+	int attempts = 0;
+	while ((int)seeds.size() < count && attempts < count * 50) {
+		attempts++;
+		glm::vec3 candidate(ux(rng), uy(rng), 0.0f);
+		if (!PointInPolygon(candidate, polygon)) continue;
+
+		bool tooClose = false;
+		for (auto& s : seeds) {
+			if (glm::length(s - candidate) < minSeedDist) { tooClose = true; break; }
+		}
+		if (tooClose) continue;
+
+		seeds.push_back(candidate);
+	}
+	return seeds;
 }

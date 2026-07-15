@@ -1,6 +1,7 @@
 #pragma once
 #include "Object.h"
 #include "RigidBodyComponent.h"
+#include "FractureComponent.h"
 #include "CollisionComponent.h"
 #include "ForceGenerator.h"
 #include "BAHNode.h"
@@ -12,8 +13,10 @@
 #include "ContactID.h"
 #include "PointMass.h"
 #include "DebugTimer.h"
+#include "ObjectManager.h"
 #include <numeric>
 #include <algorithm>
+#include <random>
 
 // Sutherland Hodgman
 
@@ -52,6 +55,13 @@ struct Projection {
 	bool Overlaps(const Projection& other) const {
 		return !(this->max < other.min || other.max < this->min);
 	}
+};
+
+//Fracture
+struct PendingFracture {
+	Object* obj;
+	glm::vec3 worldPoint;
+	float impulse;
 };
 
 class SoftBodyComponent;
@@ -129,6 +139,18 @@ public:
 	void UnRegisterTemporaryXPBDConstraint();
 	void ResolveXPBDConstraint(float delta);
 
+	//Fracture physics
+	std::vector<PendingFracture> pendingFractures;
+
+	void ProcessFractures();
+	void FractureObject(Object* source, const glm::vec3& worldImpactPoint);
+	Object* CreateFractureShard(Object* source, const std::vector<glm::vec3>& localShardPoints, const glm::vec3& shardCentroidLocal, int index);
+	bool PointInPolygon(const glm::vec3& point, const std::vector<glm::vec3>& polygon);
+	glm::vec3 ClosestPointOnPolygon(const glm::vec3& point, const std::vector<glm::vec3>& polygon);
+	std::vector<glm::vec3> ClipPolygonHalfPlane(const std::vector<glm::vec3>& poly, const glm::vec3& normal, float offset);
+	std::vector<glm::vec3> ComputeVoronoiCell(const std::vector<glm::vec3>& polygon, const std::vector<glm::vec3>& seeds, int seedIndex);
+	std::vector<glm::vec3> GenerateFractureSeeds(const std::vector<glm::vec3>& polygon, const glm::vec3& impactPoint, int count);
+	
 	// Others
 	PhysicsBody GetBodyFromObject(Object* obj);
 private:
