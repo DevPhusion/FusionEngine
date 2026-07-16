@@ -40,7 +40,9 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 
 	ResolvePGSConstraints(delta);
 
-	ResolveXPBDConstraint(delta);
+	ResolveXPBDConstraints(delta);
+
+	ResolvePBFConstraints(delta);
 
 	UpdateContactCache();
 
@@ -1410,7 +1412,7 @@ void PhysicsEngine::UnRegisterTemporaryXPBDConstraint() {
 	}
 }
 
-void PhysicsEngine::ResolveXPBDConstraint(float delta) {
+void PhysicsEngine::ResolveXPBDConstraints(float delta) {
 	int substeps = 8;
 	float dtSub = delta / substeps;
 
@@ -1460,6 +1462,28 @@ void PhysicsEngine::ResolveXPBDConstraint(float delta) {
 			dTheta = atan2(sin(dTheta), cos(dTheta));
 			proxy->angularVelocity = dTheta / dtSub;
 		}
+	}
+}
+
+//PBF constraints
+void PhysicsEngine::ResolvePBFConstraints(float delta) {
+	if (allFluidParticles.empty()) return;
+
+	for (auto* p : allFluidParticles) {
+		p->velocity += delta * glm::vec3(0.0f, -9.8f, 0.0f);
+		p->predictedPosition = p->position + delta * p->velocity;
+	}
+
+	std::vector<glm::vec3> predicted;
+	predicted.reserve(allFluidParticles.size());
+	for (auto& p : allFluidParticles) predicted.push_back(p->predictedPosition);
+
+	SpatialGrid.cellSize = smoothingRadius;
+	SpatialGrid.Build(predicted);
+
+	fluidNeighbors.assign(allFluidParticles.size(), {});
+	for (int i = 0; i < (int)allFluidParticles.size(); ++i) {
+		SpatialGrid.QueryNeighbourCells(predicted[i], fluidNeighbors[i]);
 	}
 }
 

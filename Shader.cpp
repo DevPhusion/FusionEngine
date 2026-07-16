@@ -20,6 +20,7 @@ const std::string& Shader::LoadOrGetCachedSource(const std::string& path) {
         code = stream.str();
     }
     catch (std::ifstream::failure e) {
+        std::cout << e.what() << std::endl;
         std::cout << "FILE NOT SUCCESSFULLY READ" << std::endl;
     }
 

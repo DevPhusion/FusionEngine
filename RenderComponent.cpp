@@ -638,6 +638,8 @@ void RenderComponent::ProcessInspectorUI() {
 				vc = parent->GetComponent<VertexComponent>();
 				vc->RemoveAllVertex();
 			}
+			FluidComponent* fc = parent->GetComponent<FluidComponent>();
+			if (fc) fc->particles.clear();
 
 			SetShape(poly);
 
@@ -701,6 +703,8 @@ void RenderComponent::ProcessInspectorUI() {
 					if (vc) {
 						vc->RemoveAllVertex();
 					}
+					FluidComponent* fc = parent->GetComponent<FluidComponent>();
+					if (fc) fc->particles.clear();
 					SetShape(s);
 					EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::AddVertex);
 					isAddVertex = true;
@@ -722,6 +726,12 @@ void RenderComponent::ProcessInspectorUI() {
 
 					SoftBodyComponent* sb = parent->GetComponent<SoftBodyComponent>();
 					if (sb) sb->RebuildMassAggregate();
+
+					FluidComponent* fc = parent->GetComponent<FluidComponent>();
+					if (fc) {
+						fc->SeedParticles();
+						fc->ResizeInstanceBuffer();
+					}
 
 					ObjectManager::getInstance().vertexPoints.clear();
 					ObjectManager::getInstance().vertices.clear();

@@ -169,6 +169,11 @@ void VertexComponent::DragPoint(double xpos, double ypos) {
 			if (sb) {
 				sb->RebuildMassAggregate();
 			}
+			FluidComponent* fc = this->parent->GetComponent<FluidComponent>();
+			if (fc) {
+				fc->SeedParticles();
+				fc->ResizeInstanceBuffer();
+			}
 		}
 	}
 	else {

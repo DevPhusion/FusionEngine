@@ -4,6 +4,7 @@
 #include "RenderComponent.h"
 #include "TransformComponent.h"
 #include "SoftBodyComponent.h"
+#include "FluidComponent.h"
 #include "PhysicsEngine.h"
 #include "InfiniteGrid.h"
 #include "Gizmos.h"

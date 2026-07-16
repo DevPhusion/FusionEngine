@@ -291,6 +291,12 @@
     <ClCompile Include="FractureComponent.cpp">
       <Filter>Source Files\Components</Filter>
     </ClCompile>
+    <ClCompile Include="FluidComponent.cpp">
+      <Filter>Source Files\Components</Filter>
+    </ClCompile>
+    <ClCompile Include="SpatialHashGrid.cpp">
+      <Filter>Source Files\Core\Physics\Collision</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stb_image.h">
@@ -512,6 +518,12 @@
     <ClInclude Include="FractureComponent.h">
       <Filter>Header Files\Components</Filter>
     </ClInclude>
+    <ClInclude Include="FluidComponent.h">
+      <Filter>Header Files\Components</Filter>
+    </ClInclude>
+    <ClInclude Include="SpatialHashGrid.h">
+      <Filter>Header Files\Core\Physics\Collision</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="fragment.txt">
@@ -524,6 +536,12 @@
       <Filter>Resource Files</Filter>
     </Text>
     <Text Include="grid_fragment.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="fluid_vertex.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="fluid_fragment.txt">
       <Filter>Resource Files</Filter>
     </Text>
   </ItemGroup>

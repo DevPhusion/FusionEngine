@@ -1,0 +1,16 @@
+#version 330 core
+in vec2 TexCoord;
+out vec4 FragColor;
+
+uniform vec4 aColor;
+
+void main()
+{
+    vec2 centered = TexCoord * 2.0 - 1.0;
+    float dist2 = dot(centered, centered);
+    if (dist2 > 1.0)
+        discard;
+
+    float alpha = smoothstep(1.0, 0.85, dist2); // soft edge
+    FragColor = vec4(aColor.rgb, aColor.a * alpha);
+}

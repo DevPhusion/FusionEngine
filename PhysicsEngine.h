@@ -14,6 +14,8 @@
 #include "PointMass.h"
 #include "DebugTimer.h"
 #include "ObjectManager.h"
+#include "SpatialHashGrid.h"
+#include "FluidComponent.h"
 #include <numeric>
 #include <algorithm>
 #include <random>
@@ -137,7 +139,14 @@ public:
 	void RegisterXPBDConstraint(XPBDConstraint* constraint);
 	void UnRegisterXPBDConstraint(XPBDConstraint* constraint);
 	void UnRegisterTemporaryXPBDConstraint();
-	void ResolveXPBDConstraint(float delta);
+	void ResolveXPBDConstraints(float delta);
+
+	//PBF Constraint resolution
+	SpatialHashGrid SpatialGrid = SpatialHashGrid(1.0f);
+	std::vector<FluidParticle*> allFluidParticles;
+	std::vector<std::vector<int>> fluidNeighbors;
+	float smoothingRadius = 1.0f;
+	void ResolvePBFConstraints(float delta);
 
 	//Fracture physics
 	std::vector<PendingFracture> pendingFractures;
@@ -150,7 +159,7 @@ public:
 	std::vector<glm::vec3> ClipPolygonHalfPlane(const std::vector<glm::vec3>& poly, const glm::vec3& normal, float offset);
 	std::vector<glm::vec3> ComputeVoronoiCell(const std::vector<glm::vec3>& polygon, const std::vector<glm::vec3>& seeds, int seedIndex);
 	std::vector<glm::vec3> GenerateFractureSeeds(const std::vector<glm::vec3>& polygon, const glm::vec3& impactPoint, int count);
-	
+
 	// Others
 	PhysicsBody GetBodyFromObject(Object* obj);
 private:

@@ -8,6 +8,7 @@
 #include "RigidBodyComponent.h"
 #include "SoftBodyComponent.h"
 #include "FractureComponent.h"
+#include "FluidComponent.h"
 
 std::unique_ptr<Component> CreateComponentFromName(Object* parent, std::string name) {
 	if (name == "Render Component") {
@@ -36,6 +37,9 @@ std::unique_ptr<Component> CreateComponentFromName(Object* parent, std::string n
 	}
 	if (name == "Fracture Component") {
 		return std::make_unique<FractureComponent>(parent);
+	}
+	if (name == "Fluid Component") {
+		return std::make_unique<FluidComponent>(parent);
 	}
 
 	return nullptr;

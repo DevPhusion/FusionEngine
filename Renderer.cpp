@@ -40,7 +40,13 @@ void Renderer::Draw() {
         });
 
     for (Object* obj : renderQueue) {
-        obj->GetComponent<RenderComponent>()->Draw();
+        if (obj->HasComponent<FluidComponent>()) {
+            obj->GetComponent<FluidComponent>()->Draw();
+        }
+        else {
+            obj->GetComponent<RenderComponent>()->Draw();
+        }
+        
         if (obj->HasComponent<TransformComponent>()) {
             obj->GetComponent<TransformComponent>()->ProcessTransform();
         }

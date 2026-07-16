@@ -5,6 +5,7 @@
 #include "ConstraintComponent.h"
 #include "SoftBodyComponent.h"
 #include "FractureComponent.h"
+#include "FluidComponent.h"
 
 Inspector::Inspector(std::string main) : EditorWindow(main) {
 
@@ -146,6 +147,13 @@ void Inspector::ProcessWindow() {
             if (!selected->HasComponent<FractureComponent>() && std::string("Fracture Component").find(search) != std::string::npos)
                 if (ImGui::MenuItem("Fracture Component")) {
                     selected->AddComponent(std::make_unique<FractureComponent>(selected));
+                    EngineManager::getInstance().EngineChangeEvent();
+                    m_SearchBuffer[0] = '\0';
+                    ImGui::CloseCurrentPopup();
+                }
+            if (!selected->HasComponent<FluidComponent>() && std::string("Fluid Component").find(search) != std::string::npos)
+                if (ImGui::MenuItem("Fluid Component")) {
+                    selected->AddComponent(std::make_unique<FluidComponent>(selected));
                     EngineManager::getInstance().EngineChangeEvent();
                     m_SearchBuffer[0] = '\0';
                     ImGui::CloseCurrentPopup();

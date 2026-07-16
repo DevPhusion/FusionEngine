@@ -163,6 +163,7 @@
     <ClCompile Include="EngineManager.cpp" />
     <ClCompile Include="EngineStatus.cpp" />
     <ClCompile Include="FileDialog.cpp" />
+    <ClCompile Include="FluidComponent.cpp" />
     <ClCompile Include="ForceGenerator.cpp" />
     <ClCompile Include="FractureComponent.cpp" />
     <ClCompile Include="Gizmos.cpp" />
@@ -196,6 +197,7 @@
     <ClCompile Include="RevoluteConstraint.cpp" />
     <ClCompile Include="Shader.cpp" />
     <ClCompile Include="SoftBodyComponent.cpp" />
+    <ClCompile Include="SpatialHashGrid.cpp" />
     <ClCompile Include="SpringConstraint.cpp" />
     <ClCompile Include="stb_image.cpp" />
     <ClCompile Include="TransformComponent.cpp" />
@@ -234,6 +236,7 @@
     <ClInclude Include="EngineManager.h" />
     <ClInclude Include="EngineStatus.h" />
     <ClInclude Include="FileDialog.h" />
+    <ClInclude Include="FluidComponent.h" />
     <ClInclude Include="ForceGenerator.h" />
     <ClInclude Include="FractureComponent.h" />
     <ClInclude Include="Gizmos.h" />
@@ -271,6 +274,7 @@
     <ClInclude Include="RevoluteConstraint.h" />
     <ClInclude Include="Shader.h" />
     <ClInclude Include="SoftBodyComponent.h" />
+    <ClInclude Include="SpatialHashGrid.h" />
     <ClInclude Include="SpringConstraint.h" />
     <ClInclude Include="stb_image.h" />
     <ClInclude Include="TransformComponent.h" />
@@ -284,6 +288,8 @@
     <ClInclude Include="XPBDProxyPointConstraint.h" />
   </ItemGroup>
   <ItemGroup>
+    <Text Include="fluid_fragment.txt" />
+    <Text Include="fluid_vertex.txt" />
     <Text Include="fragment.txt" />
     <Text Include="grid_fragment.txt" />
     <Text Include="grid_vertex.txt" />
