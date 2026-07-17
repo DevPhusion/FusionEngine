@@ -44,8 +44,8 @@ void InfiniteGrid::Draw(glm::vec2 cameraPos, glm::vec2 screenSize, float zoom) {
     gridShader->use();
 
     gridShader->setVec4D("bgColor", EngineManager::getInstance().EngineSettings.backgroundColor);
-    gridShader->setVec2("u_cameraPos", cameraPos);
-    gridShader->setVec2("u_screenSize", screenSize);
+    gridShader->setVec2D("u_cameraPos", cameraPos);
+    gridShader->setVec2D("u_screenSize", screenSize);
     gridShader->setFloat("u_zoom", zoom);
 
     glBindVertexArray(quadVAO);

@@ -544,6 +544,18 @@
     <Text Include="fluid_fragment.txt">
       <Filter>Resource Files</Filter>
     </Text>
+    <Text Include="fluid_composite_fragment.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="fluid_composite_vertex.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="fluid_density_fragment.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="fluid_density_vertex.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
   </ItemGroup>
   <ItemGroup>
     <Image Include="wall.jpg">

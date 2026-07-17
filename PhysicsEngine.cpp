@@ -42,7 +42,7 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 
 	ResolveXPBDConstraints(delta);
 
-	ResolvePBFConstraints(delta);
+	ResolvePBF(delta);
 
 	UpdateContactCache();
 
@@ -54,6 +54,7 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 	}
 
 	ProcessFractures();
+	DebugTimer::ReportIfDue(glfwGetTime());
 }
 
 void PhysicsEngine::RegisterForce(Object* object, ForceGenerator* fg) {
@@ -1465,25 +1466,182 @@ void PhysicsEngine::ResolveXPBDConstraints(float delta) {
 	}
 }
 
-//PBF constraints
-void PhysicsEngine::ResolvePBFConstraints(float delta) {
-	if (allFluidParticles.empty()) return;
+//PBF 
 
-	for (auto* p : allFluidParticles) {
-		p->velocity += delta * glm::vec3(0.0f, -9.8f, 0.0f);
-		p->predictedPosition = p->position + delta * p->velocity;
+float PhysicsEngine::Poly6Coefficient(float h) {
+	return 315.0f / (64.0f * (float)std::numbers::pi * std::powf(h, 9));
+}
+float PhysicsEngine::SpikyCoefficient(float h) {
+	return -45.0f / ((float)std::numbers::pi * std::powf(h, 6));
+}
+
+void PhysicsEngine::SolvePBFLambda(int particleIdx, std::vector<int>& neighboursIdx) {
+	FluidParticle* pi = allFluidParticles[particleIdx];
+	float rho0 = pi->fluidPressure;
+	float h = pi->smoothingRadius;
+	float h2 = h * h;
+	float poly6Coeff = pi->poly6Coeff;
+	float spikyCoeff = pi->spikyCoeff;
+
+	float density = 0.0f;
+	glm::vec3 gradSelf(0.0f);
+	float sumGradSq = 0.0f;
+
+	for (int j : neighboursIdx) {
+		FluidParticle* pj = allFluidParticles[j];
+		glm::vec3 rVec = pi->predictedPosition - pj->predictedPosition;
+		float r2 = rVec.x * rVec.x + rVec.y * rVec.y + rVec.z * rVec.z;
+		if (r2 > h2) continue;
+
+		float term = h2 - r2;
+		density += pj->mass * (poly6Coeff * term * term * term);
+
+		float r = std::sqrt(r2);
+		if (r > 1e-6f) {
+			float rSafe = std::max(r, 0.1f * h); 
+			float hr = h - r;
+			glm::vec3 grad = (spikyCoeff * hr * hr / rSafe / rho0) * (rVec / r);
+			sumGradSq += glm::dot(grad, grad);
+			gradSelf += grad;
+		}
+	}
+	sumGradSq += glm::dot(gradSelf, gradSelf);
+
+	float C = density / rho0 - 1.0f;
+	pi->lambda = -C / (sumGradSq + pi->epsilon);
+}
+
+void PhysicsEngine::SolvePBFPosition(int particleIdx, std::vector<int>& neighboursIdx, std::vector<glm::vec3>& outPositions) {
+	FluidParticle* pi = allFluidParticles[particleIdx];
+	float rho0 = pi->fluidPressure;
+	float h = pi->smoothingRadius;
+	float h2 = h * h;
+	float poly6Coeff = pi->poly6Coeff;
+	float spikyCoeff = pi->spikyCoeff;
+
+	float deltaQ = 0.2f * h;
+	float wqTerm = h2 - deltaQ * deltaQ;
+	float wq = poly6Coeff * wqTerm * wqTerm * wqTerm;
+	bool wqValid = wq > 1e-8f;
+
+	glm::vec3 deltaP(0.0f);
+	for (int j : neighboursIdx) {
+		FluidParticle* pj = allFluidParticles[j];
+		glm::vec3 rVec = pi->predictedPosition - pj->predictedPosition; // read-only now - safe, nobody writes predictedPosition during this pass
+		float r2 = rVec.x * rVec.x + rVec.y * rVec.y + rVec.z * rVec.z;
+		if (r2 > h2) continue;
+
+		float r = std::sqrt(r2);
+
+		float sCorr = 0.0f;
+		if (wqValid) {
+			float term = h2 - r2;
+			float w = poly6Coeff * term * term * term;
+			float x = w / wq;
+			float x2 = x * x;
+			sCorr = -0.1f * (x2 * x2);
+		}
+
+		glm::vec3 grad(0.0f);
+		if (r > 1e-6f) {
+			float rSafe = std::max(r, 0.1f * h);
+			float hr = h - r;
+			grad = (spikyCoeff * hr * hr / rSafe) * (rVec / r);
+		}
+
+		deltaP += (pi->lambda + pj->lambda + sCorr) * grad;
 	}
 
-	std::vector<glm::vec3> predicted;
-	predicted.reserve(allFluidParticles.size());
-	for (auto& p : allFluidParticles) predicted.push_back(p->predictedPosition);
+	// write to the OUTPUT buffer, not pi->predictedPosition directly
+	glm::vec3 result = pi->predictedPosition + deltaP / rho0;
 
-	SpatialGrid.cellSize = smoothingRadius;
-	SpatialGrid.Build(predicted);
+	// boundary clamp applied to the buffered result, not the live shared value
+	if (result.y < 0) result.y = 0;
+	if (result.x < 0) result.x = 0;
+	if (result.x > 10) result.x = 10;
 
-	fluidNeighbors.assign(allFluidParticles.size(), {});
-	for (int i = 0; i < (int)allFluidParticles.size(); ++i) {
-		SpatialGrid.QueryNeighbourCells(predicted[i], fluidNeighbors[i]);
+	outPositions[particleIdx] = result;
+}
+
+void PhysicsEngine::ResolvePBF(float delta) {
+	if (allFluidParticles.empty()) return;
+
+	TIME_BLOCK("PBF_Total");
+
+	int pbfSubsteps = 2;
+	float dtSub = delta / pbfSubsteps;
+
+	// reused every call - avoids reallocating every substep/frame
+	if (particleIndices.size() != allFluidParticles.size()) {
+		particleIndices.resize(allFluidParticles.size());
+		std::iota(particleIndices.begin(), particleIndices.end(), 0);
+	}
+
+	for (int sub = 0; sub < pbfSubsteps; sub++) {
+		{
+			TIME_BLOCK("PBF_PredictPositions");
+			std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+				[&](int i) {
+					FluidParticle* p = allFluidParticles[i];
+					p->velocity += dtSub * glm::vec3(0.0f, -9.8f, 0.0f);
+					p->predictedPosition = p->position + dtSub * p->velocity;
+				});
+		}
+
+		std::vector<glm::vec3> predicted;
+		predicted.resize(allFluidParticles.size());
+		float max_smoothing = 0.0f;
+		for (size_t i = 0; i < allFluidParticles.size(); i++) {
+			predicted[i] = allFluidParticles[i]->predictedPosition;
+			max_smoothing = std::max(allFluidParticles[i]->smoothingRadius, max_smoothing);
+		}
+
+		{
+			TIME_BLOCK("PBF_GridBuild");
+			SpatialGrid.cellSize = max_smoothing;
+			SpatialGrid.Build(predicted); // stays sequential - counting-sort scatter isn't thread-safe as written
+		}
+
+		fluidNeighbors.assign(allFluidParticles.size(), {});
+		{
+			TIME_BLOCK("PBF_NeighborQuery");
+			std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+				[&](int i) {
+					SpatialGrid.QueryNeighbourCells(predicted[i], fluidNeighbors[i]);
+				});
+		}
+
+		int solveIterations = 4;
+		for (int iter = 0; iter < solveIterations; iter++)
+		{
+			{
+				TIME_BLOCK("PBF_SolveLambda");
+				std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+					[&](int i) { SolvePBFLambda(i, fluidNeighbors[i]); });
+			}
+
+			if (correctedPositions.size() != allFluidParticles.size())
+				correctedPositions.resize(allFluidParticles.size());
+
+			{
+				TIME_BLOCK("PBF_SolvePosition");
+				std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+					[&](int i) { SolvePBFPosition(i, fluidNeighbors[i], correctedPositions); });
+
+				std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+					[&](int i) { allFluidParticles[i]->predictedPosition = correctedPositions[i]; });
+			}
+		}
+
+		{
+			TIME_BLOCK("PBF_VelocityUpdate");
+			std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+				[&](int i) {
+					FluidParticle* p = allFluidParticles[i];
+					p->velocity = (1 / dtSub) * (p->predictedPosition - p->position);
+					p->position = p->predictedPosition;
+				});
+		}
 	}
 }
 

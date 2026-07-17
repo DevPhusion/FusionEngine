@@ -19,6 +19,8 @@
 #include <numeric>
 #include <algorithm>
 #include <random>
+#include <numbers>
+#include <execution>
 
 // Sutherland Hodgman
 
@@ -141,12 +143,18 @@ public:
 	void UnRegisterTemporaryXPBDConstraint();
 	void ResolveXPBDConstraints(float delta);
 
-	//PBF Constraint resolution
+	//PBF resolution
 	SpatialHashGrid SpatialGrid = SpatialHashGrid(1.0f);
 	std::vector<FluidParticle*> allFluidParticles;
+	std::vector<int> particleIndices;
 	std::vector<std::vector<int>> fluidNeighbors;
-	float smoothingRadius = 1.0f;
-	void ResolvePBFConstraints(float delta);
+	std::vector<glm::vec3> correctedPositions;
+	float Poly6Coefficient(float h);
+	float SpikyCoefficient(float h);
+	void SolvePBFLambda(int particleIdx, std::vector<int>& neighboursIdx);
+	void SolvePBFPosition(int particleIdx, std::vector<int>& neighboursIdx, std::vector<glm::vec3>& outPositions);
+	void ResolveFluidBoundaries(FluidParticle* p, const std::vector<Edge>& worldEdges);
+	void ResolvePBF(float delta);
 
 	//Fracture physics
 	std::vector<PendingFracture> pendingFractures;

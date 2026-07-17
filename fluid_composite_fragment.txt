@@ -1,0 +1,39 @@
+#version 330 core
+in vec2 TexCoord;
+out vec4 FragColor;
+
+uniform sampler2D densityTex;
+uniform vec4 fillColor;
+uniform vec4 outlineColor;
+uniform float threshold;    // e.g. 0.6
+uniform float edgeSoft;     // e.g. 0.05
+uniform vec2 texelSize;
+uniform float outlineWidth; // in texels, e.g. 2.0
+
+void main() {
+    float d = texture(densityTex, TexCoord).r;
+    float inside = smoothstep(threshold - edgeSoft, threshold + edgeSoft, d);
+    if (inside <= 0.0) discard;
+
+    // Sample a ring around this pixel to see if we're near the boundary.
+    float minD = d, maxD = d;
+    for (int i = 0; i < 8; i++) {
+        float a = float(i) / 8.0 * 6.28318;
+        vec2 off = vec2(cos(a), sin(a)) * texelSize * outlineWidth;
+        float s = texture(densityTex, TexCoord + off).r;
+        minD = min(minD, s);
+        maxD = max(maxD, s);
+    }
+    bool onEdge = (maxD >= threshold) && (minD < threshold);
+
+    vec4 col = fillColor;
+    // Cheap fake shading: lighten toward the top, darken toward the bottom.
+    col.rgb = mix(col.rgb * 0.85, col.rgb * 1.15, smoothstep(0.0, 1.0, TexCoord.y));
+
+    if (onEdge) {
+        col = outlineColor;
+    }
+
+    col.a *= inside;
+    FragColor = col;
+}
