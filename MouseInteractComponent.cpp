@@ -188,4 +188,12 @@ void MouseInteractComponent::OnPhysicsModeChanged() {
 	if (parent->HasComponent<VertexComponent>() && EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) {
 		parent->GetComponent<VertexComponent>()->SetEnabled(false);
 	}
+	if (parent->HasComponent<FluidComponent>()) {
+		if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) {
+			SetEnabled(false);
+		}
+		else {
+			SetEnabled(true);
+		}
+	}
 }

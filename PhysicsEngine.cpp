@@ -31,6 +31,8 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 		}
 	}
 
+	ResolvePBF(delta);
+
 	std::vector<PotentialContact> potentialContacts;
 	potentialContacts.reserve(allObjects->size() * 4);
 	root.getPotentialContacts(potentialContacts);
@@ -41,8 +43,6 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 	ResolvePGSConstraints(delta);
 
 	ResolveXPBDConstraints(delta);
-
-	ResolvePBF(delta);
 
 	UpdateContactCache();
 
@@ -255,6 +255,134 @@ void PhysicsEngine::ResolveContacts(PotentialContact* contacts, unsigned numCont
 		else if (EngineManager::getInstance().EngineSettings.colorCollisions) {
 			objA->GetComponent<RenderComponent>()->color = glm::vec4(1, 0, 0, 1);
 			objB->GetComponent<RenderComponent>()->color = glm::vec4(1, 0, 0, 1);
+		}
+	}
+}
+
+FluidRigidContact PhysicsEngine::DetectFluidRigidContact(const glm::vec3& particlePos, float radius, const RigidBoundary& rigid) {
+	FluidRigidContact contact;
+	bool centerInside = true;
+	float minFaceDist = -INFINITY;
+	glm::vec3 minFaceNormal(0.0f);
+
+	for (auto& edge : rigid.worldEdges) {
+		glm::vec3 ab = edge.end - edge.start;
+		float len = glm::length(ab);
+		if (len < 1e-8f) continue;
+		glm::vec3 abNorm = ab / len;
+		glm::vec3 edgeNormal = glm::normalize(glm::vec3(abNorm.y, -abNorm.x, 0.0f));
+		glm::vec3 toCenter = rigid.worldCenter - edge.start;
+		if (glm::dot(edgeNormal, toCenter) > 0.0f) edgeNormal = -edgeNormal;
+
+		float signedDist = glm::dot(edgeNormal, particlePos - edge.start);
+		if (signedDist > 0.0f) centerInside = false;
+		if (signedDist > minFaceDist) { minFaceDist = signedDist; minFaceNormal = edgeNormal; }
+	}
+
+	if (centerInside) {
+		contact.hit = true;
+		contact.normal = minFaceNormal;
+		contact.penetration = radius - minFaceDist;
+		contact.point = particlePos - minFaceNormal * minFaceDist;
+		return contact;
+	}
+
+	float bestDist = INFINITY;
+	glm::vec3 bestPoint(0.0f), bestNormal(0.0f);
+	for (auto& edge : rigid.worldEdges) {
+		glm::vec3 ab = edge.end - edge.start;
+		float len = glm::length(ab);
+		if (len < 1e-8f) continue;
+		glm::vec3 abNorm = ab / len;
+		glm::vec3 ac = particlePos - edge.start;
+		float t = glm::clamp(glm::dot(ac, abNorm), 0.0f, len);
+		glm::vec3 closest = edge.start + abNorm * t;
+		glm::vec3 edgeNormal = glm::normalize(glm::vec3(abNorm.y, -abNorm.x, 0.0f));
+		glm::vec3 toCenter = rigid.worldCenter - edge.start;
+		if (glm::dot(edgeNormal, toCenter) > 0.0f) edgeNormal = -edgeNormal;
+
+		float dist = glm::length(particlePos - closest);
+		if (dist < bestDist) { bestDist = dist; bestPoint = closest; bestNormal = edgeNormal; }
+	}
+
+	if (bestDist < radius) {
+		contact.hit = true;
+		contact.normal = bestNormal;
+		contact.penetration = radius - bestDist;
+		contact.point = bestPoint;
+	}
+	return contact;
+}
+
+void PhysicsEngine::ResolveFluidRigidContacts(float dtSub) {
+	if (allFluidParticles.empty() || rigidBoundaries.empty()) return;
+
+	if (fluidRigidContacts.size() != allFluidParticles.size())
+		fluidRigidContacts.resize(allFluidParticles.size());
+
+	std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+		[&](int i) {
+			FluidParticle* p = allFluidParticles[i];
+			FluidRigidContact best;
+			for (int r = 0; r < (int)rigidBoundaries.size(); r++) {
+				if (rigidBoundaries[r].obj == p->parent) continue; 
+				FluidRigidContact c = DetectFluidRigidContact(p->predictedPosition, p->collisionRadius, rigidBoundaries[r]);
+				if (c.hit && c.penetration > best.penetration) {
+					c.rigidIndex = r;
+					best = c;
+				}
+			}
+
+			fluidRigidContacts[i] = best;
+			if (best.hit) {
+				p->predictedPosition += best.normal * best.penetration;
+			}
+		});
+}
+
+void PhysicsEngine::ResolveFluidRigidImpulses(float dtSub) {
+	int contactIterations = 4;   
+	float beta = 0.2f;           
+	float slop = 0.0005f;        
+	float restitution = 0.0f;    
+
+	for (int iter = 0; iter < contactIterations; iter++) {
+		for (int i = 0; i < (int)allFluidParticles.size(); i++) {
+			const FluidRigidContact& c = fluidRigidContacts[i];
+			if (!c.hit) continue;
+
+			FluidParticle* p = allFluidParticles[i];
+			RigidBoundary& rigid = rigidBoundaries[c.rigidIndex];
+			RigidBodyComponent* rb = rigid.rb;
+
+			float invMassP = p->invMass;
+			float invMassR = rb ? rb->inverseMass : 0.0f;
+			float invInertiaR = rb ? rb->inverseInertia : 0.0f;
+
+			glm::vec3 r = c.point - rigid.worldCenter;
+			float rn = r.x * c.normal.y - r.y * c.normal.x;
+			float invMassSum = invMassP + invMassR + rn * rn * invInertiaR;
+			if (invMassSum <= 1e-8f) continue;
+
+			glm::vec3 velAtContact = rb
+				? rb->velocity + glm::vec3(-rb->angularVelocity * r.y, rb->angularVelocity * r.x, 0.0f)
+				: glm::vec3(0.0f);
+
+			glm::vec3 vRel = p->velocity - velAtContact;
+			float vn = glm::dot(vRel, c.normal);
+
+			float bias = (beta / dtSub) * std::max(0.0f, c.penetration - slop);
+
+			float lambda = (-(1.0f + restitution) * vn + bias) / invMassSum;
+			lambda = std::max(lambda, 0.0f); 
+
+			glm::vec3 impulse = lambda * c.normal;
+
+			p->velocity += invMassP * impulse;
+			if (rb) {
+				rb->velocity -= invMassR * impulse;
+				rb->angularVelocity -= invInertiaR * rn * lambda;
+			}
 		}
 	}
 }
@@ -939,6 +1067,40 @@ CollisionData PhysicsEngine::SAT(Object* objA, Object* objB) {
 	return data;
 }
 
+void PhysicsEngine::GenerateRigidBoundaries() {
+	rigidBoundaries.clear();
+	for (auto& objPtr : *allObjects) {
+		Object* obj = objPtr.get();
+		if (obj->hidden) continue;
+		if (!obj->HasComponent<CollisionComponent>()) continue;
+
+		RenderComponent* rc = obj->GetComponent<RenderComponent>();
+		TransformComponent* tc = obj->GetComponent<TransformComponent>();
+		if (!rc || !tc || rc->edges.empty()) continue;
+
+		RigidBoundary b;
+		b.obj = obj;
+		b.rb = obj->GetComponent<RigidBodyComponent>(); 
+		b.tc = tc;
+		b.localEdges = rc->edges;
+		rigidBoundaries.push_back(b);
+	}
+}
+
+void PhysicsEngine::RefreshRigidBoundariesEdges() {
+	for (auto& b : rigidBoundaries) {
+		b.worldEdges.clear();
+		b.worldEdges.reserve(b.localEdges.size());
+		for (auto& e : b.localEdges) {
+			Edge we;
+			we.start = b.tc->ProjectToWorld(e.start);
+			we.end = b.tc->ProjectToWorld(e.end);
+			b.worldEdges.push_back(we);
+		}
+		b.worldCenter = b.tc->GetWorldPosition();
+	}
+}
+
 glm::vec3 PhysicsEngine::ComputeSoftSoftAxis(SoftBodyComponent* sbA, const std::vector<SoftEdge>& edgesA,
 	SoftBodyComponent* sbB, const std::vector<SoftEdge>& edgesB, bool* outValid) {
 	*outValid = false;
@@ -1477,7 +1639,7 @@ float PhysicsEngine::SpikyCoefficient(float h) {
 
 void PhysicsEngine::SolvePBFLambda(int particleIdx, std::vector<int>& neighboursIdx) {
 	FluidParticle* pi = allFluidParticles[particleIdx];
-	float rho0 = pi->fluidPressure;
+	float rho0 = pi->density;
 	float h = pi->smoothingRadius;
 	float h2 = h * h;
 	float poly6Coeff = pi->poly6Coeff;
@@ -1513,7 +1675,7 @@ void PhysicsEngine::SolvePBFLambda(int particleIdx, std::vector<int>& neighbours
 
 void PhysicsEngine::SolvePBFPosition(int particleIdx, std::vector<int>& neighboursIdx, std::vector<glm::vec3>& outPositions) {
 	FluidParticle* pi = allFluidParticles[particleIdx];
-	float rho0 = pi->fluidPressure;
+	float rho0 = pi->density;
 	float h = pi->smoothingRadius;
 	float h2 = h * h;
 	float poly6Coeff = pi->poly6Coeff;
@@ -1527,7 +1689,7 @@ void PhysicsEngine::SolvePBFPosition(int particleIdx, std::vector<int>& neighbou
 	glm::vec3 deltaP(0.0f);
 	for (int j : neighboursIdx) {
 		FluidParticle* pj = allFluidParticles[j];
-		glm::vec3 rVec = pi->predictedPosition - pj->predictedPosition; // read-only now - safe, nobody writes predictedPosition during this pass
+		glm::vec3 rVec = pi->predictedPosition - pj->predictedPosition; 
 		float r2 = rVec.x * rVec.x + rVec.y * rVec.y + rVec.z * rVec.z;
 		if (r2 > h2) continue;
 
@@ -1552,15 +1714,196 @@ void PhysicsEngine::SolvePBFPosition(int particleIdx, std::vector<int>& neighbou
 		deltaP += (pi->lambda + pj->lambda + sCorr) * grad;
 	}
 
-	// write to the OUTPUT buffer, not pi->predictedPosition directly
 	glm::vec3 result = pi->predictedPosition + deltaP / rho0;
-
-	// boundary clamp applied to the buffered result, not the live shared value
-	if (result.y < 0) result.y = 0;
-	if (result.x < 0) result.x = 0;
-	if (result.x > 10) result.x = 10;
-
 	outPositions[particleIdx] = result;
+}
+
+void PhysicsEngine::SolveXSPHViscosity(int particleIdx, std::vector<int>& neighboursIdx, std::vector<glm::vec3>& outDeltas) {
+	FluidParticle* pi = allFluidParticles[particleIdx];
+	float h2 = pi->smoothingRadius * pi->smoothingRadius;
+	float poly6Coeff = pi->poly6Coeff;
+
+	glm::vec3 delta(0.0f);
+	for (int j : neighboursIdx) {
+		FluidParticle* pj = allFluidParticles[j];
+		glm::vec3 rVec = pi->position - pj->position;
+		float r2 = glm::dot(rVec, rVec);
+		if (r2 > h2) continue;
+
+		float term = h2 - r2;
+		float w = poly6Coeff * term * term * term;
+		delta += w * (pj->velocity - pi->velocity); 
+	}
+	outDeltas[particleIdx] = pi->viscosity * delta;
+}
+
+void PhysicsEngine::SolveVorticityConfinement(int particleIdx, std::vector<int>& neighboursIdx, std::vector<float>& omega, std::vector<glm::vec3>& outForce) {
+	FluidParticle* pi = allFluidParticles[particleIdx];
+	float h = pi->smoothingRadius;
+	float spikyCoeff = pi->spikyCoeff;
+
+	glm::vec3 eta(0.0f);
+	for (int j : neighboursIdx) {
+		FluidParticle* pj = allFluidParticles[j];
+		glm::vec3 rVec = pi->position - pj->position;
+		float r2 = glm::dot(rVec, rVec);
+		if (r2 > h * h) continue;
+		float r = std::sqrt(r2);
+		if (r < 1e-6f) continue;
+
+		float rSafe = std::max(r, 0.1f * h);
+		float hr = h - r;
+		glm::vec3 grad = (spikyCoeff * hr * hr / rSafe) * (rVec / r);
+
+		eta += std::abs(omega[j]) * grad;
+	}
+
+	float etaLen = glm::length(eta);
+	if (etaLen < 1e-6f) { outForce[particleIdx] = glm::vec3(0.0f); return; }
+
+	glm::vec3 N = eta / etaLen;
+	glm::vec3 omegaVec = glm::vec3(0.0f, 0.0f, omega[particleIdx]);
+
+	outForce[particleIdx] = pi->vorticityEps * glm::cross(N, omegaVec);
+}
+
+void PhysicsEngine::ComputeVorticity(int particleIdx, std::vector<int>& neighboursIdx, std::vector<float>& outOmegas) {
+	FluidParticle* pi = allFluidParticles[particleIdx];
+	float h = pi->smoothingRadius;
+	float spikyCoeff = pi->spikyCoeff;
+
+	float omega = 0.0f;
+	for (int j : neighboursIdx)
+	{
+		FluidParticle* pj = allFluidParticles[j];
+		glm::vec3 rVec = pi->position - pj->position;
+		float r2 = glm::dot(rVec, rVec);
+		if (r2 > h * h) continue;
+		float r = std::sqrt(r2);
+		if (r < 1e-6f) continue;
+
+		float rSafe = std::max(r, 0.1f * h);
+		float hr = h - r;
+		glm::vec3 grad = (spikyCoeff * hr * hr / rSafe) * (rVec / r);
+
+		glm::vec3 vij = pj->velocity - pi->velocity;
+		omega += vij.x * grad.y - vij.y * grad.x;
+	}
+
+	outOmegas[particleIdx] = omega;
+}
+
+void PhysicsEngine::ApplyBuoyancyForces(float delta) {
+	if (allFluidParticles.empty() || rigidBoundaries.empty()) return;
+	float gravity = 9.8f;
+	float dragCoeff = 5.0f;      
+	int   minNeighbors = 4;      
+
+	glm::vec3 fMin(INFINITY), fMax(-INFINITY);
+	for (auto* p : allFluidParticles) {
+		glm::vec3 r(p->collisionRadius);
+		fMin = glm::min(fMin, p->position - r);
+		fMax = glm::max(fMax, p->position + r);
+	}
+
+	for (auto& rigid : rigidBoundaries) {
+		RigidBodyComponent* rb = rigid.rb;
+		if (!rb || rb->inverseMass <= 0.0f) continue; 
+
+		glm::vec3 rMin(INFINITY), rMax(-INFINITY);
+		for (auto& e : rigid.worldEdges) {
+			rMin = glm::min(rMin, glm::min(e.start, e.end));
+			rMax = glm::max(rMax, glm::max(e.start, e.end));
+		}
+		if (rMin.x > rMax.x) continue;
+
+		if (rMin.x > fMax.x || rMax.x < fMin.x) continue;
+		if (rMin.y > fMax.y || rMax.y < fMin.y) continue;
+
+		std::vector<FluidParticle*> candidates;
+		for (auto* p : allFluidParticles) {
+			glm::vec3 r(p->collisionRadius);
+			glm::vec3 pMin = p->position - r;
+			glm::vec3 pMax = p->position + r;
+			if (pMin.x > rMax.x || pMax.x < rMin.x) continue;
+			if (pMin.y > rMax.y || pMax.y < rMin.y) continue;
+			candidates.push_back(p);
+		}
+		if (candidates.empty()) continue;
+
+	
+		float surfaceY = -INFINITY;
+		glm::vec3 fluidVelSum(0.0f);
+		int qualifyingCount = 0;
+		bool foundFluid = false;
+		for (auto* c : candidates) {
+			int neighborCount = 0;
+			for (auto* other : allFluidParticles) {
+				if (other == c) continue;
+				if (glm::distance(other->position, c->position) <= c->smoothingRadius) {
+					neighborCount++;
+					if (neighborCount >= minNeighbors) break;
+				}
+			}
+			if (neighborCount < minNeighbors) continue; 
+
+			surfaceY = std::max(surfaceY, c->position.y);
+			fluidVelSum += c->velocity; 
+			qualifyingCount++;
+			foundFluid = true;
+		}
+		if (!foundFluid) continue;
+		glm::vec3 fluidVel = fluidVelSum / (float)qualifyingCount;
+
+		std::vector<glm::vec3> worldVerts;
+		worldVerts.reserve(rigid.worldEdges.size());
+		for (auto& e : rigid.worldEdges) worldVerts.push_back(e.start);
+
+		std::vector<glm::vec3> below;
+		int n = (int)worldVerts.size();
+		for (int i = 0; i < n; i++) {
+			glm::vec3 cur = worldVerts[i];
+			glm::vec3 nxt = worldVerts[(i + 1) % n];
+			bool curBelow = cur.y <= surfaceY;
+			bool nxtBelow = nxt.y <= surfaceY;
+			if (curBelow) below.push_back(cur);
+			if (curBelow != nxtBelow) {
+				float t = (surfaceY - cur.y) / (nxt.y - cur.y);
+				below.push_back(cur + t * (nxt - cur));
+			}
+		}
+		if (below.size() < 3) continue;
+
+		float area = 0.0f;
+		glm::vec3 centroid(0.0f);
+		for (int i = 0; i < (int)below.size(); i++) {
+			glm::vec3 a = below[i];
+			glm::vec3 b = below[(i + 1) % below.size()];
+			float cross = a.x * b.y - b.x * a.y;
+			area += cross;
+			centroid += (a + b) * cross;
+		}
+		area *= 0.5f;
+		if (std::abs(area) > 1e-8f) centroid /= (6.0f * area);
+
+		SubmergedResult sub;
+		sub.area = std::abs(area);
+		sub.centroid = centroid;
+		if (sub.area <= 1e-6f) continue;
+
+		float rho0 = 10.0f;
+		glm::vec3 buoyantForce(0.0f, rho0 * gravity * sub.area, 0.0f);
+		rb->velocity += rb->inverseMass * buoyantForce * delta;
+
+		glm::vec3 r = sub.centroid - rigid.worldCenter;
+		float torque = r.x * buoyantForce.y - r.y * buoyantForce.x;
+		rb->angularVelocity += rb->inverseInertia * torque * delta;
+
+		glm::vec3 velAtCentroid = rb->velocity + glm::vec3(-rb->angularVelocity * r.y, rb->angularVelocity * r.x, 0.0f);
+		glm::vec3 relativeVel = velAtCentroid - fluidVel; // drag now opposes motion RELATIVE to the fluid
+		glm::vec3 dragForce = -dragCoeff * rho0 * sub.area * relativeVel;
+		rb->velocity += rb->inverseMass * dragForce * delta;
+	}
 }
 
 void PhysicsEngine::ResolvePBF(float delta) {
@@ -1571,13 +1914,15 @@ void PhysicsEngine::ResolvePBF(float delta) {
 	int pbfSubsteps = 2;
 	float dtSub = delta / pbfSubsteps;
 
-	// reused every call - avoids reallocating every substep/frame
+	GenerateRigidBoundaries();
+
 	if (particleIndices.size() != allFluidParticles.size()) {
 		particleIndices.resize(allFluidParticles.size());
 		std::iota(particleIndices.begin(), particleIndices.end(), 0);
 	}
 
 	for (int sub = 0; sub < pbfSubsteps; sub++) {
+		RefreshRigidBoundariesEdges();
 		{
 			TIME_BLOCK("PBF_PredictPositions");
 			std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
@@ -1634,6 +1979,16 @@ void PhysicsEngine::ResolvePBF(float delta) {
 		}
 
 		{
+			TIME_BLOCK("PBF_RigidDetect");
+			ResolveFluidRigidContacts(dtSub);
+		}
+
+		{
+			TIME_BLOCK("PBF_RigidImpulse");
+			ResolveFluidRigidImpulses(dtSub);
+		}
+		
+		{
 			TIME_BLOCK("PBF_VelocityUpdate");
 			std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
 				[&](int i) {
@@ -1642,6 +1997,35 @@ void PhysicsEngine::ResolvePBF(float delta) {
 					p->position = p->predictedPosition;
 				});
 		}
+
+		{
+			TIME_BLOCK("PBF_Vorticity");
+			if (vorticityOmegas.size() != allFluidParticles.size()) vorticityOmegas.resize(allFluidParticles.size());
+			if (vorticityForces.size() != allFluidParticles.size()) vorticityForces.resize(allFluidParticles.size());
+
+			std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+				[&](int i) { ComputeVorticity(i, fluidNeighbors[i], vorticityOmegas); });
+
+			std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+				[&](int i) { SolveVorticityConfinement(i, fluidNeighbors[i], vorticityOmegas, vorticityForces); });
+
+			std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+				[&](int i) { allFluidParticles[i]->velocity += vorticityForces[i] * dtSub; });
+		}
+
+		{
+			TIME_BLOCK("PBF_Viscosity");
+			if (viscosityDeltas.size() != allFluidParticles.size())
+				viscosityDeltas.resize(allFluidParticles.size());
+
+			std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+				[&](int i) { SolveXSPHViscosity(i, fluidNeighbors[i], viscosityDeltas); });
+
+			std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+				[&](int i) { allFluidParticles[i]->velocity += viscosityDeltas[i]; });
+		}
+
+		ApplyBuoyancyForces(dtSub);
 	}
 }
 

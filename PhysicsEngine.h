@@ -68,6 +68,29 @@ struct PendingFracture {
 	float impulse;
 };
 
+//Fluid
+struct RigidBoundary {
+	Object* obj;
+	RigidBodyComponent* rb; 
+	TransformComponent* tc;
+	std::vector<Edge> localEdges;
+	std::vector<Edge> worldEdges;
+	glm::vec3 worldCenter;
+};
+
+struct FluidRigidContact {
+	bool hit = false;
+	int rigidIndex = -1;
+	glm::vec3 normal = glm::vec3(0.0f);
+	glm::vec3 point = glm::vec3(0.0f);
+	float penetration = 0.0f;
+};
+
+struct SubmergedResult {
+	float area = 0.0f;
+	glm::vec3 centroid = glm::vec3(0.0f);
+};
+
 class SoftBodyComponent;
 struct SoftEdge;
 
@@ -98,12 +121,17 @@ public:
 	void UnRegisterAllForce(Object* object);
 	void ClearRegistry();
 
-	//Collision detection
+	//Collision detection and resolution
 	std::vector<ContactPoint> allContactPoints;
 	BAHNode<BoundingCircle> root;
+	std::vector<RigidBoundary> rigidBoundaries;
+	std::vector<FluidRigidContact> fluidRigidContacts;
 	BAHNode<BoundingCircle>* RegisterBoundingAreaNode(Object* obj, BoundingCircle boundingCircle);
 	void UnRegisterBoundingAreaNode(Object* obj);
 	void ResolveContacts(PotentialContact* contacts, unsigned numContacts);
+	FluidRigidContact DetectFluidRigidContact(const glm::vec3& particlePos, float radius, const RigidBoundary& rigid);
+	void ResolveFluidRigidContacts(float dtSub);
+	void ResolveFluidRigidImpulses(float dtSub);
 	bool ResolveSoftPointSoftEdgeContacts(PhysicsBody pointBody, PointMass* pointMass,
 		SoftBodyComponent* otherSb, const std::vector<SoftEdge>& otherEdges,
 		float vertexRadius, const glm::vec3* forcedAxis = nullptr);
@@ -114,6 +142,8 @@ public:
 	CollisionData SAT(Object* objA, Object* objB);
 	std::vector<ContactPoint> GenerateContactPoints(CollisionData collisionData);
 
+	void GenerateRigidBoundaries();
+	void RefreshRigidBoundariesEdges();
 	glm::vec3 ComputeSoftSoftAxis(SoftBodyComponent* sbA, const std::vector<SoftEdge>& edgesA,
 		SoftBodyComponent* sbB, const std::vector<SoftEdge>& edgesB, bool* outValid);
 	glm::vec3 ComputeRigidSoftAxis(PhysicsBody rigidBody, const std::vector<Edge>& rigidEdgesLocal, SoftBodyComponent* sb, bool* outValid);
@@ -149,11 +179,17 @@ public:
 	std::vector<int> particleIndices;
 	std::vector<std::vector<int>> fluidNeighbors;
 	std::vector<glm::vec3> correctedPositions;
+	std::vector<glm::vec3> viscosityDeltas;
+	std::vector<float> vorticityOmegas;
+	std::vector<glm::vec3> vorticityForces;
 	float Poly6Coefficient(float h);
 	float SpikyCoefficient(float h);
+	void ComputeVorticity(int particleIdx, std::vector<int>& neighboursIdx, std::vector<float>& outOmegas);
 	void SolvePBFLambda(int particleIdx, std::vector<int>& neighboursIdx);
 	void SolvePBFPosition(int particleIdx, std::vector<int>& neighboursIdx, std::vector<glm::vec3>& outPositions);
-	void ResolveFluidBoundaries(FluidParticle* p, const std::vector<Edge>& worldEdges);
+	void SolveXSPHViscosity(int particleIdx, std::vector<int>& neighboursIdx, std::vector<glm::vec3>& outDeltas);
+	void SolveVorticityConfinement(int particleIdx, std::vector<int>& neighboursIdx, std::vector<float>& omega, std::vector<glm::vec3>& outForce);
+	void ApplyBuoyancyForces(float delta);
 	void ResolvePBF(float delta);
 
 	//Fracture physics

@@ -15,10 +15,6 @@ FluidComponent::FluidComponent(Object* parent) : ComponentBase<FluidComponent>(p
 		});
 }
 
-void FluidComponent::ProcessFluid(float delta) {
-
-}
-
 void FluidComponent::SeedParticles() {
 	RenderComponent* rc = parent->GetComponent<RenderComponent>();
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
@@ -65,15 +61,19 @@ void FluidComponent::SeedParticles() {
 		p->parent = parent;
 		p->position = worldPos;
 		p->predictedPosition = worldPos;
-		p->prevPosition = worldPos;
 		p->velocity = glm::vec3(0.0f);
-		p->mass = 1.0f;
+		p->collisionRadius = collisionRadius;
+		p->mass = particleMass;
 		p->invMass = 1 / p->mass;
-		p->fluidPressure = pressure;
+		p->density = density;
+		p->viscosity = viscosity;
 		p->lambda = 0.0f;
-		p->vorticity = glm::vec3(0.0f);
+		p->vorticityEps = vorticityStrength;
 		p->epsilon = epsilon;
 		p->smoothingRadius = smoothingRadius;
+		p->bouyancyDensity = bouyancyDensity;
+		p->bouyancyDamping = bouyancyDamping;
+		p->bouyancyMinNeighbours = bouyancyMinNeighbours;
 		p->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(smoothingRadius);
 		p->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(smoothingRadius);
 		PhysicsEngine::getInstance().allFluidParticles.push_back(p);
@@ -82,88 +82,162 @@ void FluidComponent::SeedParticles() {
 }
 
 void FluidComponent::ProcessInspectorUI() {
-	ImGui::Text("Particles Count");
-	ImGui::SameLine();
-	if (ImGui::InputInt("##ParticlesCount", &desiredParticleCount)) {
-		desiredParticleCount = std::max(1, desiredParticleCount);
-		SeedParticles();
-		ResizeInstanceBuffer();
-		EngineManager::getInstance().EngineChangeEvent();
-	}
-
-	ImGui::Text("Color");
-	ImGui::SameLine();
-	float displayColor[4] = { color.x, color.y, color.z, color.a };
-	if (ImGui::ColorEdit4("##Color", displayColor)) {
-		this->color = glm::vec4(displayColor[0], displayColor[1], displayColor[2], displayColor[3]);
-		EngineManager::getInstance().EngineChangeEvent();
-	}
-
-	ImGui::Text("Outline Color");
-	ImGui::SameLine();
-	float displayOutline[4] = { outlineColor.x, outlineColor.y, outlineColor.z, outlineColor.a };
-	if (ImGui::ColorEdit4("##OutlineColor", displayOutline)) {
-		this->outlineColor = glm::vec4(displayOutline[0], displayOutline[1], displayOutline[2], displayOutline[3]);
-		EngineManager::getInstance().EngineChangeEvent();
-	}
-
-	ImGui::Text("Particle Radius");
-	ImGui::SameLine();
-	if (ImGui::InputFloat("##ParticleRadius", &particleRadius)) {
-		particleRadius = std::max(0.0001f, particleRadius);
-		RebuildQuadGeometry();
-		RebuildDensityQuadGeometry();
-		EngineManager::getInstance().EngineChangeEvent();
-	}
-
-	ImGui::Text("Smoothing Radius");
-	ImGui::SameLine();
-	if (ImGui::InputFloat("##SmoothingRadius", &smoothingRadius)) {
-		smoothingRadius = std::max(0.0001f, smoothingRadius);
-		for (int i = 0; i < particles.size(); i++)
-		{
-			particles[i]->smoothingRadius = smoothingRadius;
-			particles[i]->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(smoothingRadius);
-			particles[i]->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(smoothingRadius);
+	if (ImGui::TreeNodeEx("Visuals", ImGuiTreeNodeFlags_DefaultOpen)) {
+		ImGui::Text("Color");
+		ImGui::SameLine();
+		float displayColor[4] = { color.x, color.y, color.z, color.a };
+		if (ImGui::ColorEdit4("##Color", displayColor)) {
+			this->color = glm::vec4(displayColor[0], displayColor[1], displayColor[2], displayColor[3]);
+			EngineManager::getInstance().EngineChangeEvent();
 		}
-		RebuildDensityQuadGeometry();
-		EngineManager::getInstance().EngineChangeEvent();
+
+		ImGui::Text("Outline Color");
+		ImGui::SameLine();
+		float displayOutline[4] = { outlineColor.x, outlineColor.y, outlineColor.z, outlineColor.a };
+		if (ImGui::ColorEdit4("##OutlineColor", displayOutline)) {
+			this->outlineColor = glm::vec4(displayOutline[0], displayOutline[1], displayOutline[2], displayOutline[3]);
+			EngineManager::getInstance().EngineChangeEvent();
+		}
+
+		ImGui::Text("Particle Radius");
+		ImGui::SameLine();
+		if (ImGui::InputFloat("##ParticleRadius", &particleRadius)) {
+			particleRadius = std::max(0.0001f, particleRadius);
+			RebuildDensityQuadGeometry();
+			EngineManager::getInstance().EngineChangeEvent();
+		}
+
+		ImGui::Text("Metaball Threshold");
+		ImGui::SameLine();
+		ImGui::InputFloat("##MetaballThreshold", &metaballThreshold);
+
+		ImGui::TreePop();
 	}
 
-	ImGui::Text("Metaball Threshold");
-	ImGui::SameLine();
-	ImGui::InputFloat("##MetaballThreshold", &metaballThreshold);
-
-	ImGui::Text("Epsilon");
-	ImGui::SameLine();
-	if (ImGui::InputFloat("##Epsilon", &epsilon)) {
-		epsilon = std::max(0.0001f, epsilon);
-		for (int i = 0; i < particles.size(); i++)
-		{
-			particles[i]->epsilon = epsilon;
+	if (ImGui::TreeNodeEx("Fluid Properties", ImGuiTreeNodeFlags_DefaultOpen)) {
+		ImGui::Text("Particles Count");
+		ImGui::SameLine();
+		if (ImGui::InputInt("##ParticlesCount", &desiredParticleCount)) {
+			desiredParticleCount = std::max(1, desiredParticleCount);
+			SeedParticles();
+			ResizeInstanceBuffer();
+			EngineManager::getInstance().EngineChangeEvent();
 		}
-		EngineManager::getInstance().EngineChangeEvent();
+
+		ImGui::Text("Collision Radius");
+		ImGui::SameLine();
+		if (ImGui::InputFloat("##CollisionRadius", &collisionRadius)) {
+			collisionRadius = std::max(0.0001f, collisionRadius);
+			for (int i = 0; i < particles.size(); i++)
+			{
+				particles[i]->collisionRadius = collisionRadius;
+			}
+			EngineManager::getInstance().EngineChangeEvent();
+		}
+
+		ImGui::Text("Smoothing Radius");
+		ImGui::SameLine();
+		if (ImGui::InputFloat("##SmoothingRadius", &smoothingRadius)) {
+			smoothingRadius = std::max(0.0001f, smoothingRadius);
+			for (int i = 0; i < particles.size(); i++)
+			{
+				particles[i]->smoothingRadius = smoothingRadius;
+				particles[i]->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(smoothingRadius);
+				particles[i]->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(smoothingRadius);
+			}
+			EngineManager::getInstance().EngineChangeEvent();
+		}
+
+		ImGui::Text("Epsilon");
+		ImGui::SameLine();
+		if (ImGui::InputFloat("##Epsilon", &epsilon)) {
+			epsilon = std::max(0.0001f, epsilon);
+			for (int i = 0; i < particles.size(); i++)
+			{
+				particles[i]->epsilon = epsilon;
+			}
+			EngineManager::getInstance().EngineChangeEvent();
+		}
+
+		ImGui::Text("Particle Mass");
+		ImGui::SameLine();
+		if (ImGui::InputFloat("##ParticleMass", &particleMass, 0.0f, 0.0f, "%.3f kg")) {
+			for (int i = 0; i < particles.size(); i++)
+			{
+				if (particleMass <= 0) particleMass = 0.01f;
+				particles[i]->mass = particleMass;
+				particles[i]->invMass = 1.0f / particleMass;
+			}
+		}
+
+		ImGui::Text("Density");
+		ImGui::SameLine();
+		if (ImGui::InputFloat("##Density", &density, 0.0f, 0.0f, "%.3f kg/m³")) {
+			for (int i = 0; i < particles.size(); i++)
+			{
+				if (density <= 0) density = 0.01f;
+				particles[i]->density = density;
+			}
+		}
+
+		ImGui::Text("Viscosity");
+		ImGui::SameLine();
+		if (ImGui::InputFloat("##Viscosity", &viscosity)) {
+			for (int i = 0; i < particles.size(); i++)
+			{
+				if (viscosity <= 0) viscosity = 0.01f;
+				particles[i]->viscosity = viscosity;
+			}
+		}
+
+		ImGui::Text("Vorticity Strength");
+		ImGui::SameLine();
+		if (ImGui::InputFloat("##Vorticity Strength", &vorticityStrength)) {
+			for (int i = 0; i < particles.size(); i++)
+			{
+				if (vorticityStrength <= 0) vorticityStrength = 0.0f;
+				particles[i]->vorticityEps = vorticityStrength;
+			}
+		}
+
+		ImGui::TreePop();
 	}
 
-	ImGui::Text("Particle Mass");
-	ImGui::SameLine();
-	if (ImGui::InputFloat("##ParticleMass", &particleMass, 0.0f, 0.0f, "%.3f kg")) {
-		for (int i = 0; i < particles.size(); i++)
-		{
-			if (particleMass <= 0) particleMass = 0.01f;
-			particles[i]->mass = particleMass;
-			particles[i]->invMass = 1.0f / particleMass;
+	if (ImGui::TreeNodeEx("Buoyancy", ImGuiTreeNodeFlags_DefaultOpen)) {
+		ImGui::Text("Density");
+		ImGui::SameLine();
+		if (ImGui::InputFloat("##BuoyancyDensity", &bouyancyDensity, 0.0f, 0.0f, "%.3f kg/m³")) {
+			for (int i = 0; i < particles.size(); i++)
+			{
+				if (bouyancyDensity <= 0) bouyancyDensity = 0.01f;
+				particles[i]->bouyancyDensity = bouyancyDensity;
+			}
+			EngineManager::getInstance().EngineChangeEvent();
 		}
-	}
 
-	ImGui::Text("Pressure");
-	ImGui::SameLine();
-	if (ImGui::InputFloat("##Pressure", &pressure, 0.0f, 0.0f, "%.3f N/m²")) {
-		for (int i = 0; i < particles.size(); i++)
-		{
-			if (pressure <= 0) pressure = 0.01f;
-			particles[i]->fluidPressure = pressure;
+		ImGui::Text("Damping");
+		ImGui::SameLine();
+		if (ImGui::InputFloat("##BuoyancyDamping", &bouyancyDamping)) {
+			if (bouyancyDamping < 0) bouyancyDamping = 0.0f;
+			for (int i = 0; i < particles.size(); i++)
+			{
+				particles[i]->bouyancyDamping = bouyancyDamping;
+			}
+			EngineManager::getInstance().EngineChangeEvent();
 		}
+
+		ImGui::Text("Min Neighbours");
+		ImGui::SameLine();
+		if (ImGui::InputInt("##BuoyancyMinNeighbours", &bouyancyMinNeighbours)) {
+			bouyancyMinNeighbours = std::max(0, bouyancyMinNeighbours);
+			for (int i = 0; i < particles.size(); i++)
+			{
+				particles[i]->bouyancyMinNeighbours = bouyancyMinNeighbours;
+			}
+			EngineManager::getInstance().EngineChangeEvent();
+		}
+
+		ImGui::TreePop();
 	}
 }
 
@@ -212,10 +286,16 @@ void FluidComponent::CopyTo(Object* other) {
 	target->color = color;
 	target->outlineColor = outlineColor;
 	target->particleRadius = particleRadius;
+	target->collisionRadius = collisionRadius;
 	target->particleMass = particleMass;
-	target->pressure = pressure;
+	target->density = density;
+	target->viscosity = viscosity;
+	target->vorticityStrength = vorticityStrength;
 	target->epsilon = epsilon;
 	target->smoothingRadius = smoothingRadius;
+	target->bouyancyDensity = bouyancyDensity;
+	target->bouyancyDamping = bouyancyDamping;
+	target->bouyancyMinNeighbours = bouyancyMinNeighbours;
 	target->SeedParticles();
 	target->ResizeInstanceBuffer();
 	target->RebuildQuadGeometry();
@@ -228,10 +308,16 @@ std::unique_ptr<Component> FluidComponent::Clone(Object* parent) {
 	comp->color = color;
 	comp->outlineColor = outlineColor;
 	comp->particleRadius = particleRadius;
+	comp->collisionRadius = collisionRadius;
 	comp->particleMass = particleMass;
-	comp->pressure = pressure;
+	comp->density = density;
+	comp->viscosity = viscosity;
+	comp->vorticityStrength = vorticityStrength;
 	comp->epsilon = epsilon;
 	comp->smoothingRadius = smoothingRadius;
+	comp->bouyancyDensity = bouyancyDensity;
+	comp->bouyancyDamping = bouyancyDamping;
+	comp->bouyancyMinNeighbours = bouyancyMinNeighbours;
 	comp->Enabled = false;
 	return comp;
 }
@@ -242,10 +328,16 @@ void FluidComponent::Serialize(BinaryWriter& w) {
 	w.Write(color);
 	w.Write(outlineColor);
 	w.Write(particleRadius);
+	w.Write(collisionRadius);
 	w.Write(particleMass);
-	w.Write(pressure);
+	w.Write(density);
+	w.Write(viscosity);
+	w.Write(vorticityStrength);
 	w.Write(epsilon);
 	w.Write(smoothingRadius);
+	w.Write(bouyancyDensity);
+	w.Write(bouyancyDamping);
+	w.Write(bouyancyMinNeighbours);
 }
 
 void FluidComponent::Deserialize(BinaryReader& r) {
@@ -254,10 +346,16 @@ void FluidComponent::Deserialize(BinaryReader& r) {
 	color = r.Read<glm::vec4>();
 	outlineColor = r.Read<glm::vec4>();
 	particleRadius = r.Read<float>();
+	collisionRadius = r.Read<float>();
 	particleMass = r.Read<float>();
-	pressure = r.Read<float>();
+	density = r.Read<float>();
+	viscosity = r.Read<float>();
+	vorticityStrength = r.Read<float>();
 	epsilon = r.Read<float>();
 	smoothingRadius = r.Read<float>();
+	bouyancyDensity = r.Read<float>();
+	bouyancyDensity = r.Read<float>();
+	bouyancyMinNeighbours = r.Read<int>();
 	SeedParticles();
 	ResizeInstanceBuffer();
 	RebuildQuadGeometry();
@@ -278,8 +376,6 @@ void FluidComponent::Draw() {
 	if (!renderInitialized || particles.empty()) return;
 	if (!Enabled) return;
 
-	// Lazily size the density target to the current viewport the first time
-	// we draw, in case ResizeRenderTargets() was never wired to a resize event.
 	if (!densityInitialized) {
 		GLint vp[4];
 		glGetIntegerv(GL_VIEWPORT, vp);
@@ -333,8 +429,6 @@ void FluidComponent::InitRenderResources() {
 
 	RebuildQuadGeometry();
 
-	// Second, larger instanced quad set (smoothingRadius-sized) used only for
-	// splatting particles into the density field. Shares instanceVBO.
 	glGenVertexArrays(1, &densityQuadVAO);
 	glBindVertexArray(densityQuadVAO);
 
@@ -380,10 +474,7 @@ void FluidComponent::RebuildQuadGeometry() {
 void FluidComponent::RebuildDensityQuadGeometry() {
 	if (!renderInitialized || densityQuadVBO == 0) return;
 
-	// Bigger than particleRadius on purpose: the falloff kernel needs
-	// overlapping influence between neighboring particles to read as one
-	// continuous blob instead of separated dots.
-	float h = smoothingRadius;
+	float h = particleRadius;
 	float quadVerts[] = {
 		-h, -h, 0.0f,   0.0f, 0.0f,
 		 h, -h, 0.0f,   1.0f, 0.0f,
@@ -397,9 +488,7 @@ void FluidComponent::RebuildDensityQuadGeometry() {
 }
 
 void FluidComponent::InitFullscreenQuad() {
-	// NDC quad covering the whole screen; UV goes 0..1 to match densityTex.
 	float verts[] = {
-		// pos          // uv
 		-1.0f, -1.0f,   0.0f, 0.0f,
 		 1.0f, -1.0f,   1.0f, 0.0f,
 		 1.0f,  1.0f,   1.0f, 1.0f,
@@ -472,7 +561,7 @@ void FluidComponent::DrawDensityPass() {
 	glClear(GL_COLOR_BUFFER_BIT);
 
 	glEnable(GL_BLEND);
-	glBlendFunc(GL_ONE, GL_ONE); // additive: overlapping particles build up density
+	glBlendFunc(GL_ONE, GL_ONE); 
 
 	glm::mat4 projection = glm::ortho(-EngineManager::getInstance().aspectRatio, EngineManager::getInstance().aspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
 
@@ -533,7 +622,6 @@ void FluidComponent::UpdateParticleTransforms() {
 		glm::vec3 worldPos = tc->ProjectToWorld(localParticlePositions[i]);
 		particles[i]->position = worldPos;
 		particles[i]->predictedPosition = worldPos;
-		particles[i]->prevPosition = worldPos;
 	}
 }
 
@@ -542,4 +630,31 @@ void FluidComponent::ResizeInstanceBuffer() {
 	glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
 	glBufferData(GL_ARRAY_BUFFER, particles.size() * sizeof(glm::vec3), nullptr, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+std::vector<const RigidBoundary*> FluidComponent::GetOverlappingRigidBodies() {
+	std::vector<const RigidBoundary*> result;
+	if (particles.empty()) return result;
+
+	glm::vec3 fMin(INFINITY), fMax(-INFINITY);
+	for (auto* p : particles) {
+		glm::vec3 r(p->collisionRadius);
+		fMin = glm::min(fMin, p->position - r);
+		fMax = glm::max(fMax, p->position + r);
+	}
+
+	for (const RigidBoundary& rb : PhysicsEngine::getInstance().rigidBoundaries) {
+		if (rb.obj == parent) continue; 
+
+		glm::vec3 rMin(INFINITY), rMax(-INFINITY);
+		for (auto& e : rb.worldEdges) {
+			rMin = glm::min(rMin, glm::min(e.start, e.end));
+			rMax = glm::max(rMax, glm::max(e.start, e.end));
+		}
+		if (rMin.x > fMax.x || rMax.x < fMin.x) continue;
+		if (rMin.y > fMax.y || rMax.y < fMin.y) continue;
+
+		result.push_back(&rb);
+	}
+	return result;
 }
