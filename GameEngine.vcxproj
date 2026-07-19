@@ -293,6 +293,8 @@
     <Text Include="fluid_density_fragment.txt" />
     <Text Include="fluid_density_vertex.txt" />
     <Text Include="fluid_fragment.txt" />
+    <Text Include="fluid_solidmask_fragment.txt" />
+    <Text Include="fluid_solidmask_vertex.txt" />
     <Text Include="fluid_vertex.txt" />
     <Text Include="fragment.txt" />
     <Text Include="grid_fragment.txt" />

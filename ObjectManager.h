@@ -27,6 +27,7 @@ public:
 	void AddSoftCircle();
 	void AddSoftPolygon();
 	void AddPolygonVertex();
+	void AddFluid();
 	VertexPoint* CopyVertex(VertexPoint* vert); // For copying polygon
 	Object* CopyObject(Object* obj);
 	void RemoveObject(Object* obj);

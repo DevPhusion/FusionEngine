@@ -129,9 +129,7 @@ void FluidComponent::ProcessInspectorUI() {
 		if (ImGui::InputFloat("##CollisionRadius", &collisionRadius)) {
 			collisionRadius = std::max(0.0001f, collisionRadius);
 			for (int i = 0; i < particles.size(); i++)
-			{
 				particles[i]->collisionRadius = collisionRadius;
-			}
 			EngineManager::getInstance().EngineChangeEvent();
 		}
 
@@ -242,7 +240,24 @@ void FluidComponent::ProcessInspectorUI() {
 }
 
 void FluidComponent::OnDelete() {
-	if (!renderInitialized) return;
+	auto& allParticles = PhysicsEngine::getInstance().allFluidParticles;
+	std::unordered_set<FluidParticle*> toRemove(particles.begin(), particles.end());
+	allParticles.erase(
+		std::remove_if(allParticles.begin(), allParticles.end(),
+			[&](FluidParticle* p) { return toRemove.count(p) != 0; }),
+		allParticles.end());
+
+	for (FluidParticle* p : particles) delete p;
+	particles.clear();
+
+	RenderComponent* rc = parent->GetComponent<RenderComponent>();
+	if (rc && setShapeCallbackID != -1) rc->RemoveOnShapeSetCallback(setShapeCallbackID);
+
+	TransformComponent* tc = parent->GetComponent<TransformComponent>();
+	if (tc && transformCallbackID != -1) tc->RemoveTransformCallback(transformCallbackID);
+
+	if (!renderInitialized) return;   
+
 	glDeleteBuffers(1, &quadVBO);
 	glDeleteBuffers(1, &quadEBO);
 	glDeleteBuffers(1, &instanceVBO);
@@ -258,21 +273,8 @@ void FluidComponent::OnDelete() {
 	glDeleteVertexArrays(1, &densityQuadVAO);
 	glDeleteBuffers(1, &fsQuadVBO);
 	glDeleteVertexArrays(1, &fsQuadVAO);
-
-	auto& allParticles = PhysicsEngine::getInstance().allFluidParticles;
-	for (FluidParticle* p : particles) {
-		allParticles.erase(std::remove(allParticles.begin(), allParticles.end(), p), allParticles.end());
-	}
-	for (FluidParticle* p : particles) {
-		delete p;
-	}
-	particles.clear();
-
-	RenderComponent* rc = parent->GetComponent<RenderComponent>();
-	if (rc && setShapeCallbackID != -1) rc->RemoveOnShapeSetCallback(setShapeCallbackID);
-
-	TransformComponent* tc = parent->GetComponent<TransformComponent>();
-	if (tc && transformCallbackID != -1) tc->RemoveTransformCallback(transformCallbackID);
+	glDeleteBuffers(1, &solidMaskVBO);
+	glDeleteVertexArrays(1, &solidMaskVAO);
 }
 
 void FluidComponent::CopyTo(Object* other) {
@@ -397,6 +399,16 @@ void FluidComponent::InitRenderResources() {
 	particleShader = Shader("fluid_vertex.txt", "fluid_fragment.txt");
 	densityShader = Shader("fluid_density_vertex.txt", "fluid_density_fragment.txt");
 	compositeShader = Shader("fluid_composite_vertex.txt", "fluid_composite_fragment.txt");
+	solidMaskShader = Shader("fluid_solidmask_vertex.txt", "fluid_solidmask_fragment.txt");
+
+	glGenVertexArrays(1, &solidMaskVAO);
+	glGenBuffers(1, &solidMaskVBO);
+	glBindVertexArray(solidMaskVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, solidMaskVBO);
+	glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW); // sized per-draw
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+	glBindVertexArray(0);
 
 	glGenVertexArrays(1, &quadVAO);
 	glBindVertexArray(quadVAO);
@@ -549,6 +561,27 @@ void FluidComponent::ResizeRenderTargets(int width, int height) {
 	InitDensityFBO(width, height);
 }
 
+void FluidComponent::DrawObjectSilhouette(const RigidBoundary& rb) {
+	if (rb.worldEdges.size() < 3) return;
+
+	glm::vec3 centroid(0.0f);
+	for (auto& e : rb.worldEdges) centroid += e.start;
+	centroid /= (float)rb.worldEdges.size();
+
+	std::vector<float> verts;
+	verts.reserve((rb.worldEdges.size() + 2) * 3);
+	verts.insert(verts.end(), { centroid.x, centroid.y, centroid.z });
+	for (auto& e : rb.worldEdges) verts.insert(verts.end(), { e.start.x, e.start.y, e.start.z });
+	verts.insert(verts.end(), { rb.worldEdges[0].start.x, rb.worldEdges[0].start.y, rb.worldEdges[0].start.z });
+
+	glBindBuffer(GL_ARRAY_BUFFER, solidMaskVBO);
+	glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(float), verts.data(), GL_DYNAMIC_DRAW);
+
+	glBindVertexArray(solidMaskVAO);
+	glDrawArrays(GL_TRIANGLE_FAN, 0, (GLsizei)(verts.size() / 3));
+	glBindVertexArray(0);
+}
+
 void FluidComponent::DrawDensityPass() {
 	if (!densityInitialized) return;
 
@@ -560,19 +593,39 @@ void FluidComponent::DrawDensityPass() {
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_ONE, GL_ONE); 
-
 	glm::mat4 projection = glm::ortho(-EngineManager::getInstance().aspectRatio, EngineManager::getInstance().aspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
+	glm::mat4 view = Camera::getInstance().viewMatrix;
+
+	glEnable(GL_BLEND);
+	glBlendEquation(GL_FUNC_ADD);
+	glBlendFunc(GL_ONE, GL_ONE);
 
 	densityShader.use();
 	densityShader.setMat4D("projection", projection);
-	densityShader.setMat4D("view", Camera::getInstance().viewMatrix);
+	densityShader.setMat4D("view", view);
 
 	glBindVertexArray(densityQuadVAO);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadEBO);
 	glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, (GLsizei)particles.size());
 	glBindVertexArray(0);
+
+	auto overlapping = GetOverlappingRigidBodies();
+	if (!overlapping.empty()) {
+		glBlendEquation(GL_MAX);
+		glBlendFunc(GL_ONE, GL_ONE);
+
+		solidMaskShader.use();
+		solidMaskShader.setMat4D("projection", projection);
+		solidMaskShader.setMat4D("view", view);
+
+		for (const RigidBoundary* rb : overlapping) {
+			if (IsFullySubmerged(*rb)) {
+				DrawObjectSilhouette(*rb);
+			}
+		}
+
+		glBlendEquation(GL_FUNC_ADD);
+	}
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
@@ -657,4 +710,24 @@ std::vector<const RigidBoundary*> FluidComponent::GetOverlappingRigidBodies() {
 		result.push_back(&rb);
 	}
 	return result;
+}
+
+bool FluidComponent::IsFullySubmerged(const RigidBoundary& rb) {
+	if (rb.worldEdges.empty() || particles.empty()) return false;
+
+	float coverage = particleRadius; 
+	float coverage2 = coverage * coverage;
+
+	for (auto& e : rb.worldEdges) {
+		bool vertexCovered = false;
+		for (auto* p : particles) {
+			glm::vec3 d = p->position - e.start;
+			if ((d.x * d.x + d.y * d.y) <= coverage2) {
+				vertexCovered = true;
+				break;
+			}
+		}
+		if (!vertexCovered) return false; 
+	}
+	return true;
 }

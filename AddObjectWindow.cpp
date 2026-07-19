@@ -85,6 +85,10 @@ void AddObjectWindow::ProcessWindow() {
 			else if (SelectedType == "Soft Polygon") {
 				EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::AddVertex);
 			}
+			else if (SelectedType == "Fluid") {
+				ObjectManager::getInstance().AddFluid();
+				Hide();
+			}
 		}
 		else {
 			if (SelectedType == "Rigid Polygon") {

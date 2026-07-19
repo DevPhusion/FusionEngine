@@ -148,6 +148,23 @@ void ObjectManager::AddSoftPolygon() {
 	vertexPoints.clear();
 }
 
+void ObjectManager::AddFluid() {
+	EngineManager::getInstance().EngineChangeEvent();
+	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("vertex.txt", "fragment.txt"));
+	obj->AddComponent(std::make_unique<RenderComponent>(obj.get(), std::vector<float> {}, obj->shader, "floorTiled.png"));
+	auto* render = obj->GetComponent<RenderComponent>();
+	RectangleShape shape = RectangleShape();
+	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj->shader, render->GetCenter()));
+	shape.center = obj->GetComponent<TransformComponent>()->GetWorldPosition();
+	shape.width = 10.0f;
+	shape.height = 10.0f;
+	render->SetShape(shape);
+	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), true));
+	obj->AddComponent(std::make_unique<FluidComponent>(obj.get()));
+	FluidComponent* fc = obj->GetComponent<FluidComponent>();
+	allObjects.push_back(std::move(obj));
+}
+
 void ObjectManager::AddPolygonVertex() {
 	if (EngineManager::getInstance().EngineInteractMode == EngineManager::InteractMode::AddVertex) {
 		vertices.push_back(InputManager::glX);

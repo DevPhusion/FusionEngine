@@ -556,6 +556,12 @@
     <Text Include="fluid_density_vertex.txt">
       <Filter>Resource Files</Filter>
     </Text>
+    <Text Include="fluid_solidmask_vertex.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="fluid_solidmask_fragment.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
   </ItemGroup>
   <ItemGroup>
     <Image Include="wall.jpg">

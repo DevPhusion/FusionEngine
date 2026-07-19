@@ -2,6 +2,7 @@
 #include "Component.h"
 #include "Object.h"
 #include "EngineManager.h"
+#include <unordered_set>
 
 struct FluidParticle {
     Object* parent;
@@ -40,14 +41,14 @@ public:
     std::vector<FluidParticle*> particles;
     glm::vec4 color = glm::vec4(0.2f, 0.5f, 1.0f, 0.8f);
     int desiredParticleCount = 500;
-    float particleRadius = 0.05f;
-    float collisionRadius = 0.05f;
+    float particleRadius = 0.5f;
+    float collisionRadius = 0.1f;
 
     float particleMass = 1.0f;
-    float density = 3800.0f;
-    float viscosity = 0.01f;
+    float density = 400.0f;
+    float viscosity = 0.0001f;
     float epsilon = 100.0f;
-    float smoothingRadius = 0.15f;
+    float smoothingRadius = 1.0f;
     float vorticityStrength = 0.0f;
     float bouyancyDensity = 10.0f;
     float bouyancyDamping = 5.0f;
@@ -82,12 +83,18 @@ private:
     void InitDensityFBO(int width, int height);
     void RebuildDensityQuadGeometry();
     void InitFullscreenQuad();
+    void DrawObjectSilhouette(const RigidBoundary& rb);
     void DrawDensityPass();
     void DrawComposite();
+
+    bool IsFullySubmerged(const RigidBoundary& rb);
 
     int transformCallbackID = -1;
     int setShapeCallbackID = -1;
     std::vector<glm::vec3> localParticlePositions;
+
+    GLuint solidMaskVAO = 0, solidMaskVBO = 0;
+    Shader solidMaskShader;
 
     GLuint quadVAO = 0, quadVBO = 0, quadEBO = 0;
     GLuint instanceVBO = 0;
