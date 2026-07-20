@@ -9,9 +9,16 @@
 
 class Constraint;
 
+enum class FluidHeatmapMode {
+	None,
+	Velocity,
+	Density
+};
+
 struct Settings {
 	glm::vec4 backgroundColor = glm::vec4(0.235f, 0.239f, 0.216f, 1.0f);
 	bool drawBackgroundGrid = true;
+	bool drawObjectWireframe = false;
 	bool drawBroadPhaseBounds = false;
 	bool colorCollisions = false;
 	bool drawCollisionNormals = false;
@@ -19,11 +26,13 @@ struct Settings {
 	bool drawSoftBodyPointMasses = false;
 	bool drawSoftBodySprings = false;
 	bool drawVirtualSoftBodyProxies = false;
+	bool drawFluidsAsParticles = false;
+	FluidHeatmapMode fluidHeatmapMode = FluidHeatmapMode::None;
 
-	// Everything except drawBackgroundGrid
 	bool AnyDebugGizmoEnabled() const {
-		return drawBroadPhaseBounds || drawCollisionNormals || drawContactPoints ||
-			drawSoftBodyPointMasses || drawSoftBodySprings || drawVirtualSoftBodyProxies;
+		return drawObjectWireframe || drawBroadPhaseBounds || drawCollisionNormals || drawContactPoints ||
+			drawSoftBodyPointMasses || drawSoftBodySprings || drawVirtualSoftBodyProxies
+			|| drawFluidsAsParticles || fluidHeatmapMode != FluidHeatmapMode::None;
 	}
 };
 

@@ -1,8 +1,18 @@
 #version 330 core
 in vec2 TexCoord;
 out vec4 FragColor;
+in float vHeat;
 
+uniform bool useHeatmap;
 uniform vec4 aColor;
+
+vec3 jetColormap(float t) {
+	t = clamp(t, 0.0, 1.0);
+	float r = clamp(1.5 - abs(4.0 * t - 3.0), 0.0, 1.0);
+	float g = clamp(1.5 - abs(4.0 * t - 2.0), 0.0, 1.0);
+	float b = clamp(1.5 - abs(4.0 * t - 1.0), 0.0, 1.0);
+	return vec3(r, g, b);
+}
 
 void main()
 {
@@ -11,6 +21,7 @@ void main()
     if (dist2 > 1.0)
         discard;
 
-    float alpha = smoothstep(1.0, 0.85, dist2); // soft edge
-    FragColor = vec4(aColor.rgb, aColor.a * alpha);
+    float alpha = smoothstep(1.0, 0.85, dist2); 
+    vec4 base = useHeatmap ? vec4(jetColormap(vHeat), aColor.a) : aColor;
+    FragColor = vec4(base.rgb, base.a * alpha);
 }

@@ -10,6 +10,7 @@ struct FluidParticle {
     glm::vec3 predictedPosition;
     glm::vec3 velocity;
     float collisionRadius;
+    float restDensity;
     float density;
     float viscosity;
     
@@ -31,6 +32,7 @@ struct FluidParticle {
 };
 
 struct RigidBoundary;
+struct SoftBoundary;
 
 class FluidComponent : public ComponentBase<FluidComponent>
 {
@@ -45,7 +47,7 @@ public:
     float collisionRadius = 0.1f;
 
     float particleMass = 1.0f;
-    float density = 400.0f;
+    float restDensity = 400.0f;
     float viscosity = 0.0001f;
     float epsilon = 100.0f;
     float smoothingRadius = 1.0f;
@@ -67,6 +69,7 @@ public:
     virtual void Deserialize(BinaryReader& r);
     virtual void SetEnabled(bool enabled);
 
+    void ClearParticles();
     void SeedParticles();
     void InitRenderResources();
     void UpdateInstanceBuffer();
@@ -76,6 +79,7 @@ public:
 
     void ResizeRenderTargets(int width, int height);
     std::vector<const RigidBoundary*> GetOverlappingRigidBodies();
+    std::vector<const SoftBoundary*> GetOverlappingSoftBodies();
 
 private:
     void RebuildQuadGeometry();
@@ -83,15 +87,21 @@ private:
     void InitDensityFBO(int width, int height);
     void RebuildDensityQuadGeometry();
     void InitFullscreenQuad();
+    void UpdateHeatBuffer();
     void DrawObjectSilhouette(const RigidBoundary& rb);
+    void DrawObjectSilhouette(const SoftBoundary& sb);
     void DrawDensityPass();
     void DrawComposite();
+    void DrawParticlesDebug();
 
     bool IsFullySubmerged(const RigidBoundary& rb);
+    bool IsFullySubmerged(const SoftBoundary& sb);
 
     int transformCallbackID = -1;
     int setShapeCallbackID = -1;
     std::vector<glm::vec3> localParticlePositions;
+
+    unsigned int heatVBO = 0;
 
     GLuint solidMaskVAO = 0, solidMaskVBO = 0;
     Shader solidMaskShader;

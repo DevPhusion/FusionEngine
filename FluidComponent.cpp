@@ -15,7 +15,20 @@ FluidComponent::FluidComponent(Object* parent) : ComponentBase<FluidComponent>(p
 		});
 }
 
+void FluidComponent::ClearParticles() {
+	auto& allParticles = PhysicsEngine::getInstance().allFluidParticles;
+	for (FluidParticle* p : particles) {
+		allParticles.erase(std::remove(allParticles.begin(), allParticles.end(), p), allParticles.end());
+	}
+	for (FluidParticle* p : particles) {
+		delete p;
+	}
+	particles.clear();
+}
+
 void FluidComponent::SeedParticles() {
+	if (!Enabled) return;
+
 	RenderComponent* rc = parent->GetComponent<RenderComponent>();
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
 	if (!rc || rc->points.empty()) return;
@@ -44,15 +57,7 @@ void FluidComponent::SeedParticles() {
 		}
 	}
 
-
-	auto& allParticles = PhysicsEngine::getInstance().allFluidParticles;
-	for (FluidParticle* p : particles) {
-		allParticles.erase(std::remove(allParticles.begin(), allParticles.end(), p), allParticles.end());
-	}
-	for (FluidParticle* p : particles) {
-		delete p;
-	}
-	particles.clear();
+	ClearParticles();
 	particles.reserve(localParticlePositions.size());
 	for (auto& localPos : localParticlePositions) {
 		glm::vec3 worldPos = tc ? tc->ProjectToWorld(localPos) : localPos;
@@ -65,7 +70,7 @@ void FluidComponent::SeedParticles() {
 		p->collisionRadius = collisionRadius;
 		p->mass = particleMass;
 		p->invMass = 1 / p->mass;
-		p->density = density;
+		p->restDensity = restDensity;
 		p->viscosity = viscosity;
 		p->lambda = 0.0f;
 		p->vorticityEps = vorticityStrength;
@@ -170,11 +175,11 @@ void FluidComponent::ProcessInspectorUI() {
 
 		ImGui::Text("Density");
 		ImGui::SameLine();
-		if (ImGui::InputFloat("##Density", &density, 0.0f, 0.0f, "%.3f kg/m³")) {
+		if (ImGui::InputFloat("##Density", &restDensity, 0.0f, 0.0f, "%.3f kg/m³")) {
 			for (int i = 0; i < particles.size(); i++)
 			{
-				if (density <= 0) density = 0.01f;
-				particles[i]->density = density;
+				if (restDensity <= 0) restDensity = 0.01f;
+				particles[i]->restDensity = restDensity;
 			}
 		}
 
@@ -275,6 +280,7 @@ void FluidComponent::OnDelete() {
 	glDeleteVertexArrays(1, &fsQuadVAO);
 	glDeleteBuffers(1, &solidMaskVBO);
 	glDeleteVertexArrays(1, &solidMaskVAO);
+	glDeleteBuffers(1, &heatVBO);
 }
 
 void FluidComponent::CopyTo(Object* other) {
@@ -290,7 +296,7 @@ void FluidComponent::CopyTo(Object* other) {
 	target->particleRadius = particleRadius;
 	target->collisionRadius = collisionRadius;
 	target->particleMass = particleMass;
-	target->density = density;
+	target->restDensity = restDensity;
 	target->viscosity = viscosity;
 	target->vorticityStrength = vorticityStrength;
 	target->epsilon = epsilon;
@@ -312,7 +318,7 @@ std::unique_ptr<Component> FluidComponent::Clone(Object* parent) {
 	comp->particleRadius = particleRadius;
 	comp->collisionRadius = collisionRadius;
 	comp->particleMass = particleMass;
-	comp->density = density;
+	comp->restDensity = restDensity;
 	comp->viscosity = viscosity;
 	comp->vorticityStrength = vorticityStrength;
 	comp->epsilon = epsilon;
@@ -320,7 +326,7 @@ std::unique_ptr<Component> FluidComponent::Clone(Object* parent) {
 	comp->bouyancyDensity = bouyancyDensity;
 	comp->bouyancyDamping = bouyancyDamping;
 	comp->bouyancyMinNeighbours = bouyancyMinNeighbours;
-	comp->Enabled = false;
+	comp->SetEnabled(false);
 	return comp;
 }
 
@@ -332,7 +338,7 @@ void FluidComponent::Serialize(BinaryWriter& w) {
 	w.Write(particleRadius);
 	w.Write(collisionRadius);
 	w.Write(particleMass);
-	w.Write(density);
+	w.Write(restDensity);
 	w.Write(viscosity);
 	w.Write(vorticityStrength);
 	w.Write(epsilon);
@@ -350,13 +356,13 @@ void FluidComponent::Deserialize(BinaryReader& r) {
 	particleRadius = r.Read<float>();
 	collisionRadius = r.Read<float>();
 	particleMass = r.Read<float>();
-	density = r.Read<float>();
+	restDensity = r.Read<float>();
 	viscosity = r.Read<float>();
 	vorticityStrength = r.Read<float>();
 	epsilon = r.Read<float>();
 	smoothingRadius = r.Read<float>();
 	bouyancyDensity = r.Read<float>();
-	bouyancyDensity = r.Read<float>();
+	bouyancyDamping = r.Read<float>();
 	bouyancyMinNeighbours = r.Read<int>();
 	SeedParticles();
 	ResizeInstanceBuffer();
@@ -372,11 +378,21 @@ void FluidComponent::SetEnabled(bool enabled) {
 		RebuildQuadGeometry();
 		RebuildDensityQuadGeometry();
 	}
+	else {
+		ClearParticles();
+	}
 }
 
 void FluidComponent::Draw() {
 	if (!renderInitialized || particles.empty()) return;
 	if (!Enabled) return;
+
+	UpdateInstanceBuffer();
+
+	if (EngineManager::getInstance().EngineSettings.drawFluidsAsParticles) {
+		DrawParticlesDebug();
+		return;
+	}
 
 	if (!densityInitialized) {
 		GLint vp[4];
@@ -386,8 +402,6 @@ void FluidComponent::Draw() {
 		}
 		if (!densityInitialized) return;
 	}
-
-	UpdateInstanceBuffer();
 
 	DrawDensityPass();
 	DrawComposite();
@@ -433,6 +447,13 @@ void FluidComponent::InitRenderResources() {
 	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
 	glEnableVertexAttribArray(2);
 	glVertexAttribDivisor(2, 1);
+
+	glGenBuffers(1, &heatVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, heatVBO);
+	glBufferData(GL_ARRAY_BUFFER, particles.size() * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
+	glVertexAttribPointer(3, 1, GL_FLOAT, GL_FALSE, sizeof(float), (void*)0);
+	glEnableVertexAttribArray(3);
+	glVertexAttribDivisor(3, 1);
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindVertexArray(0);
@@ -582,6 +603,27 @@ void FluidComponent::DrawObjectSilhouette(const RigidBoundary& rb) {
 	glBindVertexArray(0);
 }
 
+void FluidComponent::DrawObjectSilhouette(const SoftBoundary& soft) {
+	if (soft.worldEdges.size() < 3) return;
+
+	glm::vec3 centroid(0.0f);
+	for (auto& e : soft.worldEdges) centroid += e.edge.start;
+	centroid /= (float)soft.worldEdges.size();
+
+	std::vector<float> verts;
+	verts.reserve((soft.worldEdges.size() + 2) * 3);
+	verts.insert(verts.end(), { centroid.x, centroid.y, centroid.z });
+	for (auto& e : soft.worldEdges) verts.insert(verts.end(), { e.edge.start.x, e.edge.start.y, e.edge.start.z });
+	verts.insert(verts.end(), { soft.worldEdges[0].edge.start.x, soft.worldEdges[0].edge.start.y, soft.worldEdges[0].edge.start.z });
+
+	glBindBuffer(GL_ARRAY_BUFFER, solidMaskVBO);
+	glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(float), verts.data(), GL_DYNAMIC_DRAW);
+
+	glBindVertexArray(solidMaskVAO);
+	glDrawArrays(GL_TRIANGLE_FAN, 0, (GLsizei)(verts.size() / 3));
+	glBindVertexArray(0);
+}
+
 void FluidComponent::DrawDensityPass() {
 	if (!densityInitialized) return;
 
@@ -609,8 +651,9 @@ void FluidComponent::DrawDensityPass() {
 	glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, (GLsizei)particles.size());
 	glBindVertexArray(0);
 
-	auto overlapping = GetOverlappingRigidBodies();
-	if (!overlapping.empty()) {
+	auto overlappingRigid = GetOverlappingRigidBodies();
+	auto overlappingSoft = GetOverlappingSoftBodies();
+	if (!overlappingRigid.empty() || !overlappingSoft.empty()) {
 		glBlendEquation(GL_MAX);
 		glBlendFunc(GL_ONE, GL_ONE);
 
@@ -618,9 +661,14 @@ void FluidComponent::DrawDensityPass() {
 		solidMaskShader.setMat4D("projection", projection);
 		solidMaskShader.setMat4D("view", view);
 
-		for (const RigidBoundary* rb : overlapping) {
+		for (const RigidBoundary* rb : overlappingRigid) {
 			if (IsFullySubmerged(*rb)) {
 				DrawObjectSilhouette(*rb);
+			}
+		}
+		for (const SoftBoundary* sb : overlappingSoft) {
+			if (IsFullySubmerged(*sb)) {
+				DrawObjectSilhouette(*sb);
 			}
 		}
 
@@ -654,6 +702,29 @@ void FluidComponent::DrawComposite() {
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
+void FluidComponent::DrawParticlesDebug() {
+	glm::mat4 projection = glm::ortho(-EngineManager::getInstance().aspectRatio, EngineManager::getInstance().aspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
+	glm::mat4 view = Camera::getInstance().viewMatrix;
+
+	FluidHeatmapMode heatmapMode = EngineManager::getInstance().EngineSettings.fluidHeatmapMode;
+	bool heatmap = heatmapMode != FluidHeatmapMode::None;
+	if (heatmap) UpdateHeatBuffer();
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	particleShader.use();
+	particleShader.setMat4D("projection", projection);
+	particleShader.setMat4D("view", view);
+	particleShader.setVec4D("aColor", this->color);
+	particleShader.setBool("useHeatmap", heatmap);
+
+	glBindVertexArray(quadVAO);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadEBO);
+	glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, (GLsizei)particles.size());
+	glBindVertexArray(0);
+}
+
 void FluidComponent::UpdateInstanceBuffer() {
 	if (!renderInitialized) return;
 
@@ -663,6 +734,36 @@ void FluidComponent::UpdateInstanceBuffer() {
 
 	glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, positions.size() * sizeof(glm::vec3), positions.data());
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+void FluidComponent::UpdateHeatBuffer() {
+	if (!renderInitialized) return;
+
+	FluidHeatmapMode mode = EngineManager::getInstance().EngineSettings.fluidHeatmapMode;
+
+	std::vector<float> rawValues;
+	rawValues.reserve(particles.size());
+
+	if (mode == FluidHeatmapMode::Velocity) {
+		for (auto* p : particles) rawValues.push_back(glm::length(p->velocity));
+	}
+	else if (mode == FluidHeatmapMode::Density) {
+		for (auto* p : particles) rawValues.push_back(p->density);
+	}
+	else {
+		return; 
+	}
+
+	float maxVal = 0.0001f;
+	for (float v : rawValues) maxVal = std::max(maxVal, v);
+
+	std::vector<float> heatValues;
+	heatValues.reserve(rawValues.size());
+	for (float v : rawValues) heatValues.push_back(v / maxVal);
+
+	glBindBuffer(GL_ARRAY_BUFFER, heatVBO);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, heatValues.size() * sizeof(float), heatValues.data());
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
@@ -682,6 +783,8 @@ void FluidComponent::ResizeInstanceBuffer() {
 	if (!renderInitialized) return;
 	glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
 	glBufferData(GL_ARRAY_BUFFER, particles.size() * sizeof(glm::vec3), nullptr, GL_DYNAMIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, heatVBO);
+	glBufferData(GL_ARRAY_BUFFER, particles.size() * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
@@ -712,6 +815,34 @@ std::vector<const RigidBoundary*> FluidComponent::GetOverlappingRigidBodies() {
 	return result;
 }
 
+std::vector<const SoftBoundary*> FluidComponent::GetOverlappingSoftBodies() {
+	std::vector<const SoftBoundary*> result;
+	if (particles.empty()) return result;
+
+	glm::vec3 fMin(INFINITY), fMax(-INFINITY);
+	for (auto* p : particles) {
+		glm::vec3 r(p->collisionRadius);
+		fMin = glm::min(fMin, p->position - r);
+		fMax = glm::max(fMax, p->position + r);
+	}
+
+	for (const SoftBoundary& sb : PhysicsEngine::getInstance().softBoundaries) {
+		if (sb.obj == parent) continue;
+		if (sb.worldEdges.empty()) continue;
+
+		glm::vec3 sMin(INFINITY), sMax(-INFINITY);
+		for (auto& e : sb.worldEdges) {
+			sMin = glm::min(sMin, glm::min(e.edge.start, e.edge.end));
+			sMax = glm::max(sMax, glm::max(e.edge.start, e.edge.end));
+		}
+		if (sMin.x > fMax.x || sMax.x < fMin.x) continue;
+		if (sMin.y > fMax.y || sMax.y < fMin.y) continue;
+
+		result.push_back(&sb);
+	}
+	return result;
+}
+
 bool FluidComponent::IsFullySubmerged(const RigidBoundary& rb) {
 	if (rb.worldEdges.empty() || particles.empty()) return false;
 
@@ -728,6 +859,26 @@ bool FluidComponent::IsFullySubmerged(const RigidBoundary& rb) {
 			}
 		}
 		if (!vertexCovered) return false; 
+	}
+	return true;
+}
+
+bool FluidComponent::IsFullySubmerged(const SoftBoundary& soft) {
+	if (soft.worldEdges.empty() || particles.empty()) return false;
+
+	float coverage = particleRadius;
+	float coverage2 = coverage * coverage;
+
+	for (auto& e : soft.worldEdges) {
+		bool vertexCovered = false;
+		for (auto* p : particles) {
+			glm::vec3 d = p->position - e.edge.start;
+			if ((d.x * d.x + d.y * d.y) <= coverage2) {
+				vertexCovered = true;
+				break;
+			}
+		}
+		if (!vertexCovered) return false;
 	}
 	return true;
 }

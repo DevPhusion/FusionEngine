@@ -14,7 +14,7 @@ public:
     int   shardCount = 5;      
     float minFragmentArea = 0.02f; 
     int   maxFractureGenerations = 2;
-	float density = 1.0f; // used for static object
+	float restDensity = 1.0f; // used for static object
     int   generation = 1;
 
 	virtual void OnDelete();

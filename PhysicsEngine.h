@@ -75,11 +75,14 @@ struct PendingFracture {
 //Fluid
 struct RigidBoundary {
 	Object* obj;
-	RigidBodyComponent* rb; 
+	RigidBodyComponent* rb;
 	TransformComponent* tc;
 	std::vector<Edge> localEdges;
 	std::vector<Edge> worldEdges;
 	glm::vec3 worldCenter;
+	float surfaceY = 0.0f;
+	bool surfaceValid = false;
+	float rho0 = 0.0f;
 };
 
 struct FluidRigidContact {
@@ -93,9 +96,12 @@ struct FluidRigidContact {
 struct SoftBoundary {
 	Object* obj = nullptr;
 	SoftBodyComponent* sb = nullptr;
-	std::vector<SoftEdge> worldEdges; 
+	std::vector<SoftEdge> worldEdges;
 	glm::vec3 worldCenter = glm::vec3(0.0f);
 	bool valid = true;
+	float surfaceY = 0.0f;
+	bool surfaceValid = false;
+	float rho0 = 0.0f;
 };
 
 struct FluidSoftContact {
@@ -106,11 +112,6 @@ struct FluidSoftContact {
 	int softIndex = -1; 
 	int edgeIdx = -1;   
 	float edgeT = 0.0f; 
-};
-
-struct SubmergedResult {
-	float area = 0.0f;
-	glm::vec3 centroid = glm::vec3(0.0f);
 };
 
 class PhysicsEngine
@@ -208,6 +209,9 @@ public:
 	std::vector<glm::vec3> viscosityDeltas;
 	std::vector<float> vorticityOmegas;
 	std::vector<glm::vec3> vorticityForces;
+	std::vector<char> fluidSurfaceQualifies;
+	glm::vec3 fluidBoundsMin = glm::vec3(INFINITY);
+	glm::vec3 fluidBoundsMax = glm::vec3(-INFINITY);
 	float Poly6Coefficient(float h);
 	float SpikyCoefficient(float h);
 	float Poly6Kernel(float poly6Coeff, float h2, float r2);
@@ -217,7 +221,11 @@ public:
 	void SolvePBFPosition(int particleIdx, std::vector<int>& neighboursIdx, std::vector<glm::vec3>& outPositions);
 	void SolveXSPHViscosity(int particleIdx, std::vector<int>& neighboursIdx, std::vector<glm::vec3>& outDeltas);
 	void SolveVorticityConfinement(int particleIdx, std::vector<int>& neighboursIdx, std::vector<float>& omega, std::vector<glm::vec3>& outForce);
-	void ApplyBuoyancyForces(float delta);
+	bool FindLocalFluidSurface(const glm::vec3& bMin, const glm::vec3& bMax,
+		float& outSurfaceY, float& outRho0);
+	void ComputeFluidSurfaceQualification();
+	void RefreshRigidBoundariesSurface();
+	void RefreshSoftBoundariesSurface();
 	void ResolvePBF(float delta);
 
 	//Fracture physics

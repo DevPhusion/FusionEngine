@@ -38,7 +38,7 @@ void FractureComponent::ProcessInspectorUI() {
 	if (!parent->HasComponent<RigidBodyComponent>()) {
 		ImGui::Text("Density");
 		ImGui::SameLine();
-		if (ImGui::InputFloat("##Density", &density)) {
+		if (ImGui::InputFloat("##Density", &restDensity)) {
 			EngineManager::getInstance().EngineChangeEvent();
 		}
 	}
@@ -61,7 +61,7 @@ void FractureComponent::CopyTo(Object* other) {
 	target->minFragmentArea = minFragmentArea;
 	target->maxFractureGenerations = maxFractureGenerations;
 	target->generation = generation;
-	target->density = density;
+	target->restDensity = restDensity;
 }
 
 std::unique_ptr<Component> FractureComponent::Clone(Object* parent) {
@@ -72,7 +72,7 @@ std::unique_ptr<Component> FractureComponent::Clone(Object* parent) {
 	comp->minFragmentArea = minFragmentArea;
 	comp->maxFractureGenerations = maxFractureGenerations;
 	comp->generation = generation;
-	comp->density = density;
+	comp->restDensity = restDensity;
 	return comp;
 }
 
@@ -84,7 +84,7 @@ void FractureComponent::Serialize(BinaryWriter& w) {
 	w.Write(minFragmentArea);
 	w.Write(maxFractureGenerations);
 	w.Write(generation);
-	w.Write(density);
+	w.Write(restDensity);
 }
 
 void FractureComponent::Deserialize(BinaryReader& r) {
@@ -95,5 +95,5 @@ void FractureComponent::Deserialize(BinaryReader& r) {
 	minFragmentArea = r.Read<float>();
 	maxFractureGenerations = r.Read<int>();
 	generation = r.Read<int>();
-	density = r.Read<float>();
+	restDensity = r.Read<float>();
 }

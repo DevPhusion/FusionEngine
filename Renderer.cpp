@@ -18,6 +18,13 @@ void Renderer::Draw() {
         backgroundGrid.Draw(camPos, screenSize, zoom);
     }
 
+    if (debug.drawObjectWireframe) {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    }
+    else {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }
+
     std::vector<Object*> renderQueue;
     for (size_t i = 0; i < this->allObjects->size(); i++) {
         if ((*allObjects)[i]->HasComponent<RenderComponent>()) {

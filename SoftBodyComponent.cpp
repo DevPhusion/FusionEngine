@@ -34,7 +34,7 @@ void SoftBodyComponent::ApplyGasPressure() {
 	area = std::max(area, 1e-4f);
 	centroid /= (float)edgeCount; 
 
-	float density = gasAmount / area;
+	float restDensity = gasAmount / area;
 	const float maxForcePerEdge = 50.0f;
 
 	for (int i = 0; i < edgeCount; i++) {
@@ -49,7 +49,7 @@ void SoftBodyComponent::ApplyGasPressure() {
 		glm::vec3 toCentroid = centroid - pmA->worldPos;
 		if (glm::dot(normal, toCentroid) > 0.0f) normal = -normal;
 
-		float magnitude = std::min(density * edgeLength, maxForcePerEdge);
+		float magnitude = std::min(restDensity * edgeLength, maxForcePerEdge);
 		glm::vec3 force = normal * magnitude;
 
 		pmA->acceleration += force * 0.5f * pmA->inverseMass;

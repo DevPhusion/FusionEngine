@@ -639,7 +639,9 @@ void RenderComponent::ProcessInspectorUI() {
 				vc->RemoveAllVertex();
 			}
 			FluidComponent* fc = parent->GetComponent<FluidComponent>();
-			if (fc) fc->particles.clear();
+			if (fc) {
+				fc->ClearParticles();
+			}
 
 			SetShape(poly);
 

@@ -21,17 +21,6 @@ void cursorPressedCallback(int button, int action, int mods) {
 	}
 }
 
-void keyPressed(int key, int scancode, int action, int mods) {
-	if (key == GLFW_KEY_R) {
-		if (action == GLFW_PRESS) {
-			glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-		}
-		else if (action == GLFW_RELEASE) {
-			glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-		}
-	}
-}
-
 void SetWorkingDirectoryToExePath() {
 	char exePath[MAX_PATH];
 	GetModuleFileNameA(NULL, exePath, MAX_PATH);
@@ -78,7 +67,6 @@ int main(int argc, char* argv[]) {
 	EditorManager::getInstance().Setup(window);
 
 	InputManager::getInstance().Setup(window);
-	InputManager::getInstance().SetKeyButtonCallback(keyPressed, 999);
 	InputManager::getInstance().SetMouseButtonCallback(cursorPressedCallback, 999);
 
 	EngineManager::getInstance().Setup(window);

@@ -287,6 +287,10 @@ void EngineStatus::ProcessSettingsPopup() {
 		ImGui::Spacing();
 		ImGui::SeparatorText("Debug");
 
+		ImGui::Text("Draw object wire frame: ");
+		ImGui::SameLine();
+		ImGui::Checkbox("##Draw object wire frame", &settings.drawObjectWireframe);
+
 		ImGui::Text("Draw broad phase bounding area: ");
 		ImGui::SameLine();
 		ImGui::Checkbox("##Draw broad phase bounding area", &settings.drawBroadPhaseBounds);
@@ -314,6 +318,25 @@ void EngineStatus::ProcessSettingsPopup() {
 		ImGui::Text("Draw virtual soft body proxies: ");
 		ImGui::SameLine();
 		ImGui::Checkbox("##Draw virtual soft body proxies", &settings.drawVirtualSoftBodyProxies);
+
+		ImGui::Text("Draw fluids as particles: ");
+		ImGui::SameLine();
+		ImGui::Checkbox("##Draw fluids as particles", &settings.drawFluidsAsParticles);
+
+		ImGui::BeginDisabled(!settings.drawFluidsAsParticles);
+		ImGui::Indent();
+		ImGui::Text("Fluid heatmap: ");
+		ImGui::SameLine();
+		{
+			const char* heatmapLabels[] = { "None", "Velocity", "Density" };
+			int current = static_cast<int>(settings.fluidHeatmapMode);
+			ImGui::SetNextItemWidth(140.0f);
+			if (ImGui::Combo("##Fluid heatmap", &current, heatmapLabels, IM_ARRAYSIZE(heatmapLabels))) {
+				settings.fluidHeatmapMode = static_cast<FluidHeatmapMode>(current);
+			}
+		}
+		ImGui::Unindent();
+		ImGui::EndDisabled();
 
 		ImGui::Spacing();
 		ImGui::Separator();

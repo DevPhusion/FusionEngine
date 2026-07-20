@@ -5427,7 +5427,7 @@ ImGuiID ImFontAtlasBakedGetId(ImGuiID font_id, float baked_size, float rasterize
 }
 
 // ImFontBaked pointers are valid for the entire frame but shall never be kept between frames.
-ImFontBaked* ImFont::GetFontBaked(float size, float density)
+ImFontBaked* ImFont::GetFontBaked(float size, float restDensity)
 {
     ImFontBaked* baked = LastBaked;
 
@@ -5435,14 +5435,14 @@ ImFontBaked* ImFont::GetFontBaked(float size, float density)
     // - ImGui::PushFont() will already round, but other paths calling GetFontBaked() directly also needs it (e.g. ImFontAtlasBuildPreloadAllGlyphRanges)
     size = ImGui::GetRoundedFontSize(size);
 
-    if (density < 0.0f)
-        density = CurrentRasterizerDensity;
-    if (baked && baked->Size == size && baked->RasterizerDensity == density)
+    if (restDensity < 0.0f)
+        restDensity = CurrentRasterizerDensity;
+    if (baked && baked->Size == size && baked->RasterizerDensity == restDensity)
         return baked;
 
     ImFontAtlas* atlas = OwnerAtlas;
     ImFontAtlasBuilder* builder = atlas->Builder;
-    baked = ImFontAtlasBakedGetOrAdd(atlas, this, size, density);
+    baked = ImFontAtlasBakedGetOrAdd(atlas, this, size, restDensity);
     if (baked == NULL)
         return NULL;
     baked->LastUsedFrame = builder->FrameCount;
