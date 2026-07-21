@@ -7,6 +7,8 @@ void Renderer::Setup(std::vector<std::unique_ptr<Object>>* objects) {
 }
 
 void Renderer::Draw() {
+    TIME_BLOCK("Rendering");
+
     glm::vec2 camPos = glm::vec2(Camera::getInstance().cameraPos.x, Camera::getInstance().cameraPos.y);
 
     glm::vec2 screenSize = glm::vec2(EngineManager::getInstance().windowWidth, EngineManager::getInstance().windowHeight);
@@ -15,7 +17,10 @@ void Renderer::Draw() {
     auto& debug = EngineManager::getInstance().EngineSettings;
 
     if (debug.drawBackgroundGrid) {
-        backgroundGrid.Draw(camPos, screenSize, zoom);
+        {
+            TIME_BLOCK("Draw background grid");
+            backgroundGrid.Draw(camPos, screenSize, zoom);
+        }
     }
 
     if (debug.drawObjectWireframe) {
@@ -26,32 +31,42 @@ void Renderer::Draw() {
     }
 
     std::vector<Object*> renderQueue;
-    for (size_t i = 0; i < this->allObjects->size(); i++) {
-        if ((*allObjects)[i]->HasComponent<RenderComponent>()) {
-            renderQueue.push_back((*allObjects)[i].get());
-        }
-    }
+    
 
-    std::sort(renderQueue.begin(), renderQueue.end(), [](Object* a, Object* b) {
-        float zA = 0.0f;
-        float zB = 0.0f;
-
-        if (a->HasComponent<RenderComponent>()) {
-            zA = a->GetComponent<RenderComponent>()->z_index;
+    {
+        TIME_BLOCK("Construct draw queue");
+        for (size_t i = 0; i < this->allObjects->size(); i++) {
+            if ((*allObjects)[i]->HasComponent<RenderComponent>()) {
+                renderQueue.push_back((*allObjects)[i].get());
+            }
         }
-        if (b->HasComponent<RenderComponent>()) {
-            zB = b->GetComponent<RenderComponent>()->z_index;
-        }
+        std::sort(renderQueue.begin(), renderQueue.end(), [](Object* a, Object* b) {
+            float zA = 0.0f;
+            float zB = 0.0f;
 
-        return zA < zB;
-        });
+            if (a->HasComponent<RenderComponent>()) {
+                zA = a->GetComponent<RenderComponent>()->z_index;
+            }
+            if (b->HasComponent<RenderComponent>()) {
+                zB = b->GetComponent<RenderComponent>()->z_index;
+            }
+
+            return zA < zB;
+            });
+    }  
 
     for (Object* obj : renderQueue) {
         if (obj->HasComponent<FluidComponent>()) {
-            obj->GetComponent<FluidComponent>()->Draw();
+            {
+                TIME_BLOCK("Draw fluids");
+                obj->GetComponent<FluidComponent>()->Draw();
+            }
         }
         else {
-            obj->GetComponent<RenderComponent>()->Draw();
+            {
+                TIME_BLOCK("Draw objects");
+                obj->GetComponent<RenderComponent>()->Draw();
+            }
         }
         
         if (obj->HasComponent<TransformComponent>()) {
@@ -67,59 +82,82 @@ void Renderer::Draw() {
     }
 
     if (debug.AnyDebugGizmoEnabled()) {
-        glLineWidth(2.0f);
+        {
+            TIME_BLOCK("Draw debug");
+            glLineWidth(2.0f);
 
-        if (debug.drawBroadPhaseBounds) {
-            BAHNode<BoundingCircle>* bvhRoot = &PhysicsEngine::getInstance().root;
-            bvhRoot->DrawBoundingArea();
-        }
-
-        if (debug.drawContactPoints || debug.drawCollisionNormals) {
-            for (int i = 0; i < PhysicsEngine::getInstance().allContactPoints.size(); i++)
-            {
-                ContactPoint& cp = PhysicsEngine::getInstance().allContactPoints[i];
-
-                if (debug.drawContactPoints) {
-                    DebugPoint point = DebugPoint();
-                    point.DrawPoint(cp.point, 15, Shader("vertex.txt", "fragment.txt"));
-                }
-
-                if (debug.drawCollisionNormals) {
-                    glm::vec4 normalColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-                    float arrowLength = 0.5f;
-                    DrawArrow(cp.point, cp.normal, arrowLength, normalColor);
+            if (debug.drawBroadPhaseBounds) {
+                {
+                    TIME_BLOCK("Draw bounding area");
+                    BAHNode<BoundingCircle>* bvhRoot = &PhysicsEngine::getInstance().root;
+                    bvhRoot->DrawBoundingArea();
                 }
             }
-        }
 
-        if (debug.drawSoftBodyPointMasses || debug.drawSoftBodySprings || debug.drawVirtualSoftBodyProxies) {
-            for (int i = 0; i < (*allObjects).size(); i++)
-            {
-                SoftBodyComponent* sb = (*allObjects)[i]->GetComponent<SoftBodyComponent>();
-                if (sb) {
-                    if (debug.drawSoftBodySprings) {
-                        sb->DrawSprings();
-                    }
-                    if (debug.drawSoftBodyPointMasses) {
-                        for (int j = 0; j < sb->MassAggregate.size(); j++)
+            if (debug.drawContactPoints || debug.drawCollisionNormals) {
+                for (int i = 0; i < PhysicsEngine::getInstance().allContactPoints.size(); i++)
+                {
+                    ContactPoint& cp = PhysicsEngine::getInstance().allContactPoints[i];
+
+                    if (debug.drawContactPoints) {
                         {
-                            sb->MassAggregate[j]->DrawDebug();
+                            TIME_BLOCK("Draw contact points");
+                            DebugPoint point = DebugPoint();
+                            point.DrawPoint(cp.point, 15, Shader("vertex.txt", "fragment.txt"));
                         }
                     }
-                    if (debug.drawVirtualSoftBodyProxies) {
-                        for (int j = 0; j < sb->VirtualProxies.size(); j++)
+
+                    if (debug.drawCollisionNormals) {
                         {
-                            sb->VirtualProxies[j]->DrawDebug();
-                        }
+                            TIME_BLOCK("Draw collision normal");
+                            glm::vec4 normalColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+                            float arrowLength = 0.5f;
+                            DrawArrow(cp.point, cp.normal, arrowLength, normalColor);
+                        }         
                     }
                 }
             }
-        }
 
-        glLineWidth(1.0f);
+            if (debug.drawSoftBodyPointMasses || debug.drawSoftBodySprings || debug.drawVirtualSoftBodyProxies) {
+                for (int i = 0; i < (*allObjects).size(); i++)
+                {
+                    SoftBodyComponent* sb = (*allObjects)[i]->GetComponent<SoftBodyComponent>();
+                    if (sb) {                        
+                        if (debug.drawSoftBodySprings) {
+                            {
+                                TIME_BLOCK("Draw soft body springs");
+                                sb->DrawSprings();
+                            }
+                        }
+                        if (debug.drawSoftBodyPointMasses) {
+                            {
+                                TIME_BLOCK("Draw soft body point masses");
+                                for (int j = 0; j < sb->MassAggregate.size(); j++)
+                                {
+                                    sb->MassAggregate[j]->DrawDebug();
+                                }
+                            }
+                        }
+                        if (debug.drawVirtualSoftBodyProxies) {
+                            {
+                                TIME_BLOCK("Draw soft body proxies");
+                                for (int j = 0; j < sb->VirtualProxies.size(); j++)
+                                {
+                                    sb->VirtualProxies[j]->DrawDebug();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            glLineWidth(1.0f);
+        }
     }
 
-    gizmos->UpdateGizmos();
+    {
+        TIME_BLOCK("Draw gizmos");
+        gizmos->UpdateGizmos();
+    }
 }
 
 void Renderer::DrawLine(glm::vec3 p1, glm::vec3 p2, glm::vec4 color, float thickness, bool screenSpace) {
@@ -151,7 +189,6 @@ void Renderer::DrawLine(glm::vec3 p1, glm::vec3 p2, glm::vec4 color, float thick
 
     glm::vec3 renderP2 = p2;
     if (screenSpace) {
-        std::cout << "a" << std::endl;
         float zoom = Camera::getInstance().cameraZoom;
         if (zoom > 1e-6f) {
             glm::vec3 delta = (p2 - p1) * zoom;

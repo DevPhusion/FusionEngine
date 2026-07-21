@@ -10,60 +10,89 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 		return;
 	}
 
-	for (auto& pm : allSoftBodyPointMasses) {
-		pm->baseAcceleration = glm::vec3(0.0f, -9.8f, 0.0f);
-		if (pm->sb->isDragging) {
-			pm->ProcessDragForce();
-			pm->velocity += pm->acceleration * delta;
-			pm->acceleration = glm::vec3(0.0f);
-		}
-	}
+	TIME_BLOCK("Physics");
 
 	UnRegisterTemporaryXPBDConstraint();
 	UnRegisterTemporaryConstraint();
 
-	for (int i = 0; i < ForceRegistrations.size(); i++)
 	{
-		ForceRegistrations[i].fg->updateForce(ForceRegistrations[i].object, delta);
+		TIME_BLOCK("Update Forces");
+		for (int i = 0; i < ForceRegistrations.size(); i++)
+		{
+			ForceRegistrations[i].fg->updateForce(ForceRegistrations[i].object, delta);
+		}
 	}
 
 	for (int i = 0; i < allObjects->size(); i++)
 	{
-		if ((*allObjects)[i]->HasComponent<RigidBodyComponent>()) {
-			(*allObjects)[i]->GetComponent<RigidBodyComponent>()->IntegrateVelocities(delta);
+		{
+			TIME_BLOCK("Rigidbody integrate velocity");
+			if ((*allObjects)[i]->HasComponent<RigidBodyComponent>()) {
+				(*allObjects)[i]->GetComponent<RigidBodyComponent>()->IntegrateVelocities(delta);
+			}
 		}
-		if ((*allObjects)[i]->HasComponent<SoftBodyComponent>()) {
-			(*allObjects)[i]->GetComponent<SoftBodyComponent>()->ProcessSoftBody(delta);
+		{
+			TIME_BLOCK("Soft body sync point mass");
+			if ((*allObjects)[i]->HasComponent<SoftBodyComponent>()) {
+				(*allObjects)[i]->GetComponent<SoftBodyComponent>()->ProcessSoftBody(delta);
+			}
 		}
 		if ((*allObjects)[i]->HasComponent<CollisionComponent>() && EngineManager::getInstance().EngineSettings.colorCollisions) {
 			(*allObjects)[i]->GetComponent<RenderComponent>()->color = glm::vec4(1);
 		}
 	}
 
-	ResolvePBF(delta);
-
-	std::vector<PotentialContact> potentialContacts;
-	potentialContacts.reserve(allObjects->size() * 4);
-	root.getPotentialContacts(potentialContacts);
-	if (!potentialContacts.empty()) {
-		ResolveContacts(potentialContacts.data(), (unsigned)potentialContacts.size());
+	{
+		TIME_BLOCK("PBF Solver");
+		ResolvePBF(delta);
 	}
 
-	ResolvePGSConstraints(delta);
-
-	ResolveXPBDConstraints(delta);
-
-	UpdateContactCache();
-
-	for (int i = 0; i < allObjects->size(); i++)
 	{
-		if ((*allObjects)[i]->HasComponent<RigidBodyComponent>()) {
-			(*allObjects)[i]->GetComponent<RigidBodyComponent>()->IntegratePositions(delta);
+		TIME_BLOCK("Collision");
+		std::vector<PotentialContact> potentialContacts;
+		potentialContacts.reserve(allObjects->size() * 4);
+		{
+			TIME_BLOCK("Broad phase");
+			root.getPotentialContacts(potentialContacts);
+		}
+		if (!potentialContacts.empty()) {
+			{
+				TIME_BLOCK("Narrow phase");
+				ResolveContacts(potentialContacts.data(), (unsigned)potentialContacts.size());
+			}
 		}
 	}
 
-	ProcessFractures();
-	//DebugTimer::ReportIfDue(glfwGetTime());
+	{
+		TIME_BLOCK("PGS Solver");
+		ResolvePGSConstraints(delta);
+	}
+
+	{
+		TIME_BLOCK("XPBD Solver");
+		ResolveXPBDConstraints(delta);
+	}
+
+	{
+		TIME_BLOCK("Contact cache");
+		UpdateContactCache();
+	}
+
+
+	for (int i = 0; i < allObjects->size(); i++)
+	{
+		{
+			TIME_BLOCK("Rigidbody integrate position");
+			if ((*allObjects)[i]->HasComponent<RigidBodyComponent>()) {
+				(*allObjects)[i]->GetComponent<RigidBodyComponent>()->IntegratePositions(delta);
+			}
+		}
+	}
+
+	{
+		TIME_BLOCK("Fracture physics");
+		ProcessFractures();
+	}
 }
 
 void PhysicsEngine::RegisterForce(Object* object, ForceGenerator* fg) {
@@ -89,8 +118,6 @@ void PhysicsEngine::UnRegisterAllForce(Object* object) {
 	for (auto it = ForceRegistrations.begin(); it != ForceRegistrations.end(); )
 	{
 		if (it->object == object) {
-			std::cout << "Remove" << std::endl;
-
 			object->GetComponent<RigidBodyComponent>()->RemoveDisplayFunc(it->fg->displayFunc);
 			it->fg->displayFunc = nullptr;
 			it = ForceRegistrations.erase(it);
@@ -130,14 +157,14 @@ void PhysicsEngine::ResolveContacts(PotentialContact* contacts, unsigned numCont
 			if constexpr (std::is_same_v<T, CircleShape>) {
 				rA = s.radius;
 			}
-		}, rcA->currentShape);
+			}, rcA->currentShape);
 
 		std::visit([&](auto&& s) {
 			using T = std::decay_t<decltype(s)>;
 			if constexpr (std::is_same_v<T, CircleShape>) {
 				rB = s.radius;
 			}
-		}, rcB->currentShape);
+			}, rcB->currentShape);
 
 		PhysicsBody bodyA = PhysicsBody();
 		RigidBodyComponent* pcA = objA->GetComponent<RigidBodyComponent>();
@@ -178,83 +205,112 @@ void PhysicsEngine::ResolveContacts(PotentialContact* contacts, unsigned numCont
 		// Rigidbody & Rigidbody or Rigidbody & Staticbody
 		bool collisionResult = false;
 		if ((pcA || pcB) && (!sbA && !sbB)) {
-			if (rA > 0.0f && rB > 0.0f && tcA->size.x == tcA->size.y && tcB->size.x == tcB->size.y) {
-				collisionResult = ResolveCircleCircleContacts(bodyA, bodyB, rA * tcA->size.x, rB * tcB->size.x);
-			}
-			else if ((rA > 0.0f && tcA->size.x == tcA->size.y) || (rB > 0.0f && tcB->size.x == tcB->size.y)) {
-				PhysicsBody circle;
-				float radius = 0.0f;
-				if (rA > 0.0f) {
-					circle = bodyA;
-					radius = rA * tcA->size.x;
+			{
+				TIME_BLOCK("Rigid body collision");
+				if (rA > 0.0f && rB > 0.0f && tcA->size.x == tcA->size.y && tcB->size.x == tcB->size.y) {
+					{
+						TIME_BLOCK("Circle-Circle");
+						collisionResult = ResolveCircleCircleContacts(bodyA, bodyB, rA * tcA->size.x, rB * tcB->size.x);
+					}
+				}
+				else if ((rA > 0.0f && tcA->size.x == tcA->size.y) || (rB > 0.0f && tcB->size.x == tcB->size.y)) {
+					{
+						TIME_BLOCK("Circle-Polygon");
+						PhysicsBody circle;
+						float radius = 0.0f;
+						if (rA > 0.0f) {
+							circle = bodyA;
+							radius = rA * tcA->size.x;
+						}
+						else {
+							circle = bodyB;
+							radius = rB * tcB->size.x;
+						}
+						PhysicsBody poly = (rA > 0.0f) ? bodyB : bodyA;
+
+						collisionResult = ResolveCirclePolygonContacts(circle, poly, radius, poly.obj->GetComponent<RenderComponent>()->edges);
+					}
 				}
 				else {
-					circle = bodyB;
-					radius = rB * tcB->size.x;
+					{
+						TIME_BLOCK("Polygon-Polygon");
+						collisionResult = ResolvePolygonPolygonContacts(bodyA, bodyB);
+					}
 				}
-				PhysicsBody poly = (rA > 0.0f) ? bodyB : bodyA;
-
-				collisionResult = ResolveCirclePolygonContacts(circle, poly, radius, poly.obj->GetComponent<RenderComponent>()->edges);
-			}
-			else {
-				collisionResult = ResolvePolygonPolygonContacts(bodyA, bodyB);
 			}
 		}
 		// Rigidbody & Softbody
 		if ((sbA || sbB) && !(sbA && sbB)) {
-			PhysicsBody rigidBody = (sbA) ? bodyB : bodyA;
-			SoftBodyComponent* sb = (sbA) ? sbA : sbB;
-
-			std::vector<Edge> rigidLocalEdges = rigidBody.obj->GetComponent<RenderComponent>()->edges;
-
-			bool axisValid = false;
-			glm::vec3 globalAxis = ComputeRigidSoftAxis(rigidBody, rigidLocalEdges, sb, &axisValid);
-
-			bool anyPointContact = false;
-			for (int i = 0; i < sb->MassAggregate.size(); i++)
 			{
-				PhysicsBody pointMassBody = sb->MassAggregate[i]->body;
-				bool hit = ResolveCirclePolygonContacts(pointMassBody, rigidBody, sb->MassAggregate[i]->pointRadius, rigidBody.obj->GetComponent<RenderComponent>()->edges, axisValid ? &globalAxis : nullptr);
-				anyPointContact = anyPointContact || hit;
+				TIME_BLOCK("Rigid-Soft body collision");
+				PhysicsBody rigidBody = (sbA) ? bodyB : bodyA;
+				SoftBodyComponent* sb = (sbA) ? sbA : sbB;
+
+				std::vector<Edge> rigidLocalEdges = rigidBody.obj->GetComponent<RenderComponent>()->edges;
+
+				bool axisValid = false;
+				glm::vec3 globalAxis = ComputeRigidSoftAxis(rigidBody, rigidLocalEdges, sb, &axisValid);
+
+				bool anyPointContact = false;
+				{
+					TIME_BLOCK("Soft vertex - Rigid edge");
+					for (int i = 0; i < sb->MassAggregate.size(); i++)
+					{
+						PhysicsBody pointMassBody = sb->MassAggregate[i]->body;
+						bool hit = ResolveCirclePolygonContacts(pointMassBody, rigidBody, sb->MassAggregate[i]->pointRadius, rigidBody.obj->GetComponent<RenderComponent>()->edges, axisValid ? &globalAxis : nullptr);
+						anyPointContact = anyPointContact || hit;
+					}
+				}
+
+				std::vector<SoftEdge> softBodyEdges = sb->GetEdgesFromMassAggregate();
+				const float rigidVertexRadius = 0.01f;
+
+				std::vector<Edge> rigidEdges = rigidBody.obj->GetComponent<RenderComponent>()->edges;
+
+				{
+					TIME_BLOCK("Rigid vertex - Soft edge");
+					for (int i = 0; i < rigidEdges.size(); i++)
+					{
+						glm::vec3 point = rigidBody.obj->GetComponent<TransformComponent>()->ProjectToWorld(rigidEdges[i].start);
+
+						bool hit = ResolveRigidVertexSoftEdgeContacts(point, rigidBody, sb, softBodyEdges, rigidVertexRadius,
+							axisValid ? &globalAxis : nullptr);
+						anyPointContact = anyPointContact || hit;
+					}
+				}
+
+				collisionResult = anyPointContact;
 			}
-
-			std::vector<SoftEdge> softBodyEdges = sb->GetEdgesFromMassAggregate();
-			const float rigidVertexRadius = 0.01f;
-
-			std::vector<Edge> rigidEdges = rigidBody.obj->GetComponent<RenderComponent>()->edges;
-
-			for (int i = 0; i < rigidEdges.size(); i++)
-			{
-				glm::vec3 point = rigidBody.obj->GetComponent<TransformComponent>()->ProjectToWorld(rigidEdges[i].start);
-
-				bool hit = ResolveRigidVertexSoftEdgeContacts(point, rigidBody, sb, softBodyEdges, rigidVertexRadius,
-					axisValid ? &globalAxis : nullptr);
-				anyPointContact = anyPointContact || hit;
-			}
-
-			collisionResult = anyPointContact;
 		}
 		//Soft body & Soft body
 		if (sbA && sbB) {
-			std::vector<SoftEdge> edgesA = sbA->GetEdgesFromMassAggregate();
-			std::vector<SoftEdge> edgesB = sbB->GetEdgesFromMassAggregate();
+			{
+				TIME_BLOCK("Soft body collision");
+				std::vector<SoftEdge> edgesA = sbA->GetEdgesFromMassAggregate();
+				std::vector<SoftEdge> edgesB = sbB->GetEdgesFromMassAggregate();
 
-			bool axisValid = false;
-			glm::vec3 globalAxis = ComputeSoftSoftAxis(sbA, edgesA, sbB, edgesB, &axisValid);
-			glm::vec3 axisForAPoints = -globalAxis;
+				bool axisValid = false;
+				glm::vec3 globalAxis = ComputeSoftSoftAxis(sbA, edgesA, sbB, edgesB, &axisValid);
+				glm::vec3 axisForAPoints = -globalAxis;
 
-			bool anyPointContact = false;
+				bool anyPointContact = false;
 
-			for (auto& pm : sbA->MassAggregate) {
-				if (ResolveSoftPointSoftEdgeContacts(pm->body, pm.get(), sbB, edgesB, pm->pointRadius, axisValid ? &axisForAPoints : nullptr))
-					anyPointContact = true;
+				{
+					TIME_BLOCK("First pass");
+					for (auto& pm : sbA->MassAggregate) {
+						if (ResolveSoftPointSoftEdgeContacts(pm->body, pm.get(), sbB, edgesB, pm->pointRadius, axisValid ? &axisForAPoints : nullptr))
+							anyPointContact = true;
+					}
+				}
+
+				{
+					TIME_BLOCK("Second pass");
+					for (auto& pm : sbB->MassAggregate) {
+						if (ResolveSoftPointSoftEdgeContacts(pm->body, pm.get(), sbA, edgesA, pm->pointRadius, axisValid ? &globalAxis : nullptr))
+							anyPointContact = true;
+					}
+				}
 			}
-
-			for (auto& pm : sbB->MassAggregate) {
-				if (ResolveSoftPointSoftEdgeContacts(pm->body, pm.get(), sbA, edgesA, pm->pointRadius, axisValid ? &globalAxis : nullptr))
-					anyPointContact = true;
-			}
-
 		}
 
 		if (EngineManager::getInstance().EngineSettings.colorCollisions && collisionResult) {
@@ -364,7 +420,8 @@ void PhysicsEngine::ResolveFluidSoftImpulses(float dtSub) {
 	float beta = 0.2f;
 	float slop = 0.0005f;
 	float restitution = 0.0f;
-	float pressureGain = 1.0f;
+	float pressureGain = 5.0f;
+	float buoyancyDamping = 1.0f; 
 
 	for (int iter = 0; iter < contactIterations; iter++) {
 		for (int i = 0; i < (int)allFluidParticles.size(); i++) {
@@ -393,6 +450,11 @@ void PhysicsEngine::ResolveFluidSoftImpulses(float dtSub) {
 			if (soft.surfaceValid) {
 				float depth = std::max(0.0f, soft.surfaceY - c.point.y);
 				float pressureVel = pressureGain * soft.rho0 * 9.8f * depth * dtSub;
+
+				float risingSpeed = glm::dot(-edgeVel, c.normal);
+				pressureVel -= buoyancyDamping * risingSpeed;
+				pressureVel = std::max(pressureVel, 0.0f);
+
 				bias += pressureVel;
 			}
 
@@ -1713,81 +1775,110 @@ void PhysicsEngine::ResolvePGSConstraints(float delta) {
 		});
 
 	for (int idx : sortedIndices) {
-		auto& row = solverRows[idx];
-		if (!row.warmStart || row.lambda == 0.0f) continue;
-		if (row.objectA.velocity != nullptr && row.objectA.angularVelocity != nullptr) {
-			*row.objectA.velocity += *row.objectA.invMass * row.jacobian.linearA * row.lambda;
-			*row.objectA.angularVelocity += *row.objectA.invInertia * row.jacobian.angularA * row.lambda;
-		}
-		if (row.objectB.velocity != nullptr && row.objectB.angularVelocity != nullptr) {
-			*row.objectB.velocity += *row.objectB.invMass * row.jacobian.linearB * row.lambda;
-			*row.objectB.angularVelocity += *row.objectB.invInertia * row.jacobian.angularB * row.lambda;
+		{
+			TIME_BLOCK("Warm start");
+			auto& row = solverRows[idx];
+			if (!row.warmStart || row.lambda == 0.0f) continue;
+			if (row.objectA.velocity != nullptr && row.objectA.angularVelocity != nullptr) {
+				*row.objectA.velocity += *row.objectA.invMass * row.jacobian.linearA * row.lambda;
+				*row.objectA.angularVelocity += *row.objectA.invInertia * row.jacobian.angularA * row.lambda;
+			}
+			if (row.objectB.velocity != nullptr && row.objectB.angularVelocity != nullptr) {
+				*row.objectB.velocity += *row.objectB.invMass * row.jacobian.linearB * row.lambda;
+				*row.objectB.angularVelocity += *row.objectB.invInertia * row.jacobian.angularB * row.lambda;
+			}
 		}
 	}
 
 	const int velocityIterations = 30;
-	for (int i = 0; i < velocityIterations; i++) {
-		for (int idx : sortedIndices) {
-			auto& row = solverRows[idx];
+	{
+		TIME_BLOCK("PGS solve");
+		for (int i = 0; i < velocityIterations; i++) {
+			for (int idx : sortedIndices) {
+				auto& row = solverRows[idx];
+				float lambdaRaw = 0.0f;
+				float lambdaOld = 0.0f;
+				{
+					TIME_BLOCK("Solve lambda");
+					float relVel = 0.0f;
+					if (row.objectA.velocity != nullptr && row.objectA.angularVelocity != nullptr) relVel += glm::dot(row.jacobian.linearA, *row.objectA.velocity)
+						+ row.jacobian.angularA * *row.objectA.angularVelocity;
+					if (row.objectB.velocity != nullptr && row.objectB.angularVelocity != nullptr) relVel += glm::dot(row.jacobian.linearB, *row.objectB.velocity)
+						+ row.jacobian.angularB * *row.objectB.angularVelocity;
 
-			float relVel = 0.0f;
-			if (row.objectA.velocity != nullptr && row.objectA.angularVelocity != nullptr) relVel += glm::dot(row.jacobian.linearA, *row.objectA.velocity)
-				+ row.jacobian.angularA * *row.objectA.angularVelocity;
-			if (row.objectB.velocity != nullptr && row.objectB.angularVelocity != nullptr) relVel += glm::dot(row.jacobian.linearB, *row.objectB.velocity)
-				+ row.jacobian.angularB * *row.objectB.angularVelocity;
+					lambdaRaw = row.effectiveMass * (row.bias - relVel - row.softnessCFM * row.lambda);
+					lambdaOld = row.lambda;
+					row.lambda += lambdaRaw;
+				}
+				
+				{
+					TIME_BLOCK("Post iteration clamp");
 
-			float lambdaRaw = row.effectiveMass * (row.bias - relVel - row.softnessCFM * row.lambda);
-			float lambdaOld = row.lambda;
-			row.lambda += lambdaRaw;
+					if (row.parentConstraint) {
+						row.parentConstraint->PostIterationClamp(solverRows, idx, i);
+					}
+				}
 
-			if (row.parentConstraint) {
-				row.parentConstraint->PostIterationClamp(solverRows, idx, i);
-			}
+				{
+					TIME_BLOCK("Solve velocity");
 
-			float deltaLambda = row.lambda - lambdaOld;
-			if (row.objectA.velocity != nullptr && row.objectA.angularVelocity != nullptr) {
-				*row.objectA.velocity += *row.objectA.invMass * row.jacobian.linearA * deltaLambda;
-				*row.objectA.angularVelocity += *row.objectA.invInertia * row.jacobian.angularA * deltaLambda;
-			}
-			if (row.objectB.velocity != nullptr && row.objectB.angularVelocity != nullptr) {
-				*row.objectB.velocity += *row.objectB.invMass * row.jacobian.linearB * deltaLambda;
-				*row.objectB.angularVelocity += *row.objectB.invInertia * row.jacobian.angularB * deltaLambda;
+					float deltaLambda = row.lambda - lambdaOld;
+					if (row.objectA.velocity != nullptr && row.objectA.angularVelocity != nullptr) {
+						*row.objectA.velocity += *row.objectA.invMass * row.jacobian.linearA * deltaLambda;
+						*row.objectA.angularVelocity += *row.objectA.invInertia * row.jacobian.angularA * deltaLambda;
+					}
+					if (row.objectB.velocity != nullptr && row.objectB.angularVelocity != nullptr) {
+						*row.objectB.velocity += *row.objectB.invMass * row.jacobian.linearB * deltaLambda;
+						*row.objectB.angularVelocity += *row.objectB.invInertia * row.jacobian.angularB * deltaLambda;
+					}
+				}
 			}
 		}
 	}
+	
 
-	for (auto* constraint : registeredPGSConstraints) {
-		constraint->PostSolve(solverRows);
+	{
+		TIME_BLOCK("Post solve");
+		for (auto* constraint : registeredPGSConstraints) {
+			constraint->PostSolve(solverRows);
+		}
 	}
+
 	for (auto* constraint : registeredPGSConstraints)
 	{
 		if (!constraint->isTemporary) continue;
 		auto* contact = static_cast<ContactConstraint*>(constraint);
 
 		if (contact->objectA.obj && contact->objectB.obj) {
-			float appliedImpulse = std::abs(contact->cacheLambda);
-			Object* a = contact->objectA.obj;
-			Object* b = contact->objectB.obj;
-			if (a->HasComponent<FractureComponent>()) {
-				FractureComponent* fc = a->GetComponent<FractureComponent>();
-				if (fc->fracturable && appliedImpulse > fc->impulseThreshold)
-					pendingFractures.push_back({ a, contact->attachPointA, appliedImpulse });
-			}
-			if (b->HasComponent<FractureComponent>()) {
-				FractureComponent* fc = b->GetComponent<FractureComponent>();
-				if (fc->fracturable && appliedImpulse > fc->impulseThreshold)
-					pendingFractures.push_back({ b, contact->attachPointB, appliedImpulse });
-			}
+			{
+				TIME_BLOCK("Fracture impulse check");
+				float appliedImpulse = std::abs(contact->cacheLambda);
+				Object* a = contact->objectA.obj;
+				Object* b = contact->objectB.obj;
+				if (a->HasComponent<FractureComponent>()) {
+					FractureComponent* fc = a->GetComponent<FractureComponent>();
+					if (fc->fracturable && appliedImpulse > fc->impulseThreshold)
+						pendingFractures.push_back({ a, contact->attachPointA, appliedImpulse });
+				}
+				if (b->HasComponent<FractureComponent>()) {
+					FractureComponent* fc = b->GetComponent<FractureComponent>();
+					if (fc->fracturable && appliedImpulse > fc->impulseThreshold)
+						pendingFractures.push_back({ b, contact->attachPointB, appliedImpulse });
+				}
+			}	
 		}
 		else {
-			glm::vec3 normal = contact->normal;
+			{
+				TIME_BLOCK("Collision impulse bridge");
+				glm::vec3 normal = contact->normal;
 
-			if (contact->penetration > 0.0f) {
-				if (!contact->objectA.obj && contact->objectA.position != nullptr) {
-					*contact->objectA.position += normal * contact->penetration;
-				}
-				else if (!contact->objectB.obj && contact->objectB.position != nullptr) {
-					*contact->objectB.position -= normal * contact->penetration; // Note the negative sign depending on normal direction
+				if (contact->penetration > 0.0f) {
+					if (!contact->objectA.obj && contact->objectA.position != nullptr) {
+						*contact->objectA.position += normal * contact->penetration;
+					}
+					else if (!contact->objectB.obj && contact->objectB.position != nullptr) {
+						*contact->objectB.position -= normal * contact->penetration; // Note the negative sign depending on normal direction
+					}
 				}
 			}
 		}
@@ -1825,50 +1916,73 @@ void PhysicsEngine::ResolveXPBDConstraints(float delta) {
 	float dtSub = delta / substeps;
 
 	for (int i = 0; i < substeps; i++) {
-		for (int j = 0; j < allObjects->size(); j++)
 		{
-			SoftBodyComponent* sb = (*allObjects)[j]->GetComponent<SoftBodyComponent>();
-			if (sb && sb->Enabled && sb->useGasPressure) sb->ApplyGasPressure();
+			TIME_BLOCK("Apply gas pressure");
+			for (int j = 0; j < allObjects->size(); j++)
+			{
+				SoftBodyComponent* sb = (*allObjects)[j]->GetComponent<SoftBodyComponent>();
+				if (sb && sb->Enabled && sb->useGasPressure) sb->ApplyGasPressure();
+			}
 		}
 
-		for (auto& pm : allSoftBodyPointMasses) {
-			if (!pm->sb->Enabled) continue;
-			if (pm->sb->isDragging) pm->ProcessDragForce();
+		{
+			TIME_BLOCK("Integrate point masses");
+			for (auto& pm : allSoftBodyPointMasses) {
+				if (!pm->sb->Enabled) continue;
+				if (pm->sb->isDragging) pm->ProcessDragForce();
 
-			pm->prevPos = pm->worldPos; 
-			pm->velocity += (pm->baseAcceleration + pm->acceleration) * dtSub;
-			pm->worldPos += pm->velocity * dtSub;
-			pm->acceleration = glm::vec3(0);
+				pm->prevPos = pm->worldPos;
+				pm->velocity += (pm->baseAcceleration + pm->acceleration) * dtSub;
+				pm->worldPos += pm->velocity * dtSub;
+				pm->acceleration = glm::vec3(0);
+			}
 		}
-		for (auto* proxy : allSoftBodyProxies) {
-			if (!proxy) continue;
-			proxy->prevPos = proxy->worldPos;
-			proxy->prevRotation = proxy->rotation;
-			proxy->worldPos += proxy->velocity * dtSub;
-			proxy->rotation += proxy->angularVelocity * dtSub;
+		
+		{
+			TIME_BLOCK("Integrate proxy");
+			for (auto* proxy : allSoftBodyProxies) {
+				if (!proxy) continue;
+				proxy->prevPos = proxy->worldPos;
+				proxy->prevRotation = proxy->rotation;
+				proxy->worldPos += proxy->velocity * dtSub;
+				proxy->rotation += proxy->angularVelocity * dtSub;
+			}
 		}
 
 		for (auto* constraint : registeredXPBDConstraints) constraint->ResetLambda();
 
 		const int posIterations = 4;
 		for (int it = 0; it < posIterations; it++) {
-			for (auto* c : registeredXPBDConstraints) {
-				c->SolvePosition(dtSub);
+			{
+				TIME_BLOCK("Solve position");
+				for (auto* c : registeredXPBDConstraints) {
+					c->SolvePosition(dtSub);
+				}
 			}
 		}
-		ResolvePGSConstraintsForSubstep(dtSub);
-
-		for (auto& pm : allSoftBodyPointMasses) {
-			if (!pm->sb->Enabled) continue;
-			pm->velocity = (pm->worldPos - pm->prevPos) / dtSub;
+		{
+			TIME_BLOCK("Resolve PGS for sub step");
+			ResolvePGSConstraintsForSubstep(dtSub);
 		}
-		for (auto* proxy : allSoftBodyProxies) {
-			if (!proxy) continue;
-			proxy->velocity = (proxy->worldPos - proxy->prevPos) / dtSub;
 
-			float dTheta = proxy->rotation - proxy->prevRotation;
-			dTheta = atan2(sin(dTheta), cos(dTheta));
-			proxy->angularVelocity = dTheta / dtSub;
+		{
+			TIME_BLOCK("Solve point mass velocity");
+			for (auto& pm : allSoftBodyPointMasses) {
+				if (!pm->sb->Enabled) continue;
+				pm->velocity = (pm->worldPos - pm->prevPos) / dtSub;
+			}
+		}
+
+		{
+			TIME_BLOCK("Solve proxy velocity");
+			for (auto* proxy : allSoftBodyProxies) {
+				if (!proxy) continue;
+				proxy->velocity = (proxy->worldPos - proxy->prevPos) / dtSub;
+
+				float dTheta = proxy->rotation - proxy->prevRotation;
+				dTheta = atan2(sin(dTheta), cos(dTheta));
+				proxy->angularVelocity = dTheta / dtSub;
+			}
 		}
 	}
 }
@@ -2064,8 +2178,6 @@ bool PhysicsEngine::FindLocalFluidSurface(const glm::vec3& bMin, const glm::vec3
 void PhysicsEngine::ResolvePBF(float delta) {
 	if (allFluidParticles.empty()) return;
 
-	TIME_BLOCK("PBF_Total");
-
 	int pbfSubsteps = 2;
 	float dtSub = delta / pbfSubsteps;
 
@@ -2081,7 +2193,7 @@ void PhysicsEngine::ResolvePBF(float delta) {
 		RefreshRigidBoundariesEdges();
 		RefreshSoftBoundariesEdges();
 		{
-			TIME_BLOCK("PBF_PredictPositions");
+			TIME_BLOCK("Predict Positions");
 			std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
 				[&](int i) {
 					FluidParticle* p = allFluidParticles[i];
@@ -2099,14 +2211,14 @@ void PhysicsEngine::ResolvePBF(float delta) {
 		}
 
 		{
-			TIME_BLOCK("PBF_GridBuild");
+			TIME_BLOCK("Grid Build");
 			SpatialGrid.cellSize = max_smoothing;
-			SpatialGrid.Build(predicted); // stays sequential - counting-sort scatter isn't thread-safe as written
+			SpatialGrid.Build(predicted);
 		}
 
 		fluidNeighbors.assign(allFluidParticles.size(), {});
 		{
-			TIME_BLOCK("PBF_NeighborQuery");
+			TIME_BLOCK("Neighbor Query");
 			std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
 				[&](int i) {
 					SpatialGrid.QueryNeighbourCells(predicted[i], fluidNeighbors[i]);
@@ -2114,51 +2226,53 @@ void PhysicsEngine::ResolvePBF(float delta) {
 		}
 
 		{
-			TIME_BLOCK("PBF_SurfaceQualify");
+			TIME_BLOCK("Surface Qualify");
 			ComputeFluidSurfaceQualification();
 			RefreshRigidBoundariesSurface();
 			RefreshSoftBoundariesSurface();
 		}
 
 		int solveIterations = 4;
-		for (int iter = 0; iter < solveIterations; iter++)
 		{
+			TIME_BLOCK("Solve PBF");
+			for (int iter = 0; iter < solveIterations; iter++)
 			{
-				TIME_BLOCK("PBF_SolveLambda");
-				std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
-					[&](int i) { SolvePBFLambda(i, fluidNeighbors[i]); });
-			}
+				{
+					TIME_BLOCK("Solve Lambda");
+					std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+						[&](int i) { SolvePBFLambda(i, fluidNeighbors[i]); });
+				}
 
-			if (correctedPositions.size() != allFluidParticles.size())
-				correctedPositions.resize(allFluidParticles.size());
+				if (correctedPositions.size() != allFluidParticles.size())
+					correctedPositions.resize(allFluidParticles.size());
 
-			{
-				TIME_BLOCK("PBF_SolvePosition");
-				std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
-					[&](int i) { SolvePBFPosition(i, fluidNeighbors[i], correctedPositions); });
+				{
+					TIME_BLOCK("Solve Position");
+					std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+						[&](int i) { SolvePBFPosition(i, fluidNeighbors[i], correctedPositions); });
 
-				std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
-					[&](int i) { allFluidParticles[i]->predictedPosition = correctedPositions[i]; });
+					std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+						[&](int i) { allFluidParticles[i]->predictedPosition = correctedPositions[i]; });
+				}
 			}
 		}
-
 		{
-			TIME_BLOCK("PBF_RigidDetect");
+			TIME_BLOCK("Fluid-Rigid collision");
 			ResolveFluidRigidContacts(dtSub);
 		}
 
 		{
-			TIME_BLOCK("PBF_SoftDetect");    
+			TIME_BLOCK("Fluid-Soft collision");    
 			ResolveFluidSoftContacts(dtSub);
 		}
 
 		{
-			TIME_BLOCK("PBF_RigidImpulse");
+			TIME_BLOCK("Fluid-Rigid collision impulse");
 			ResolveFluidRigidImpulses(dtSub);
 		}
 
 		{
-			TIME_BLOCK("PBF_VelocityUpdate");
+			TIME_BLOCK("Velocity update");
 			std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
 				[&](int i) {
 					FluidParticle* p = allFluidParticles[i];
@@ -2168,12 +2282,12 @@ void PhysicsEngine::ResolvePBF(float delta) {
 		}
 
 		{
-			TIME_BLOCK("PBF_SoftImpulse");
+			TIME_BLOCK("Fluid-Soft collision impulse");
 			ResolveFluidSoftImpulses(dtSub);
 		}
 
 		{
-			TIME_BLOCK("PBF_Vorticity");
+			TIME_BLOCK("Vorticity");
 			if (vorticityOmegas.size() != allFluidParticles.size()) vorticityOmegas.resize(allFluidParticles.size());
 			if (vorticityForces.size() != allFluidParticles.size()) vorticityForces.resize(allFluidParticles.size());
 
@@ -2188,7 +2302,7 @@ void PhysicsEngine::ResolvePBF(float delta) {
 		}
 
 		{
-			TIME_BLOCK("PBF_Viscosity");
+			TIME_BLOCK("Viscosity");
 			if (viscosityDeltas.size() != allFluidParticles.size())
 				viscosityDeltas.resize(allFluidParticles.size());
 
@@ -2240,7 +2354,11 @@ void PhysicsEngine::FractureObject(Object* source, const glm::vec3& worldImpactP
 	if (!PointInPolygon(scaledImpact, scaledPoly))
 		scaledImpact = ClosestPointOnPolygon(scaledImpact, scaledPoly);
 
-	std::vector<glm::vec3> seeds = GenerateFractureSeeds(scaledPoly, scaledImpact, srcFC->shardCount);
+	std::vector<glm::vec3> seeds = {};
+	{
+		TIME_BLOCK("Generate fracture seeds");
+		seeds = GenerateFractureSeeds(scaledPoly, scaledImpact, srcFC->shardCount);
+	}
 
 	float totalArea = std::abs(ComputeSignedArea(scaledPoly));
 
@@ -2248,15 +2366,18 @@ void PhysicsEngine::FractureObject(Object* source, const glm::vec3& worldImpactP
 	std::vector<Shard> shards;
 
 	for (int i = 0; i < (int)seeds.size(); i++) {
-		std::vector<glm::vec3> cell = ComputeVoronoiCell(scaledPoly, seeds, i);
-		if (cell.size() < 3) continue;
-		float area = std::abs(ComputeSignedArea(cell));
-		if (area < srcFC->minFragmentArea * totalArea) continue;
+		{
+			TIME_BLOCK("Compute voronoi cell");
+			std::vector<glm::vec3> cell = ComputeVoronoiCell(scaledPoly, seeds, i);
+			if (cell.size() < 3) continue;
+			float area = std::abs(ComputeSignedArea(cell));
+			if (area < srcFC->minFragmentArea * totalArea) continue;
 
-		glm::vec3 centroid(0.0f);
-		for (auto& p : cell) centroid += p;
-		centroid /= (float)cell.size();
-		shards.push_back({ cell, centroid }); 
+			glm::vec3 centroid(0.0f);
+			for (auto& p : cell) centroid += p;
+			centroid /= (float)cell.size();
+			shards.push_back({ cell, centroid });
+		}
 	}
 
 	if (shards.size() < 2) return;
@@ -2264,8 +2385,11 @@ void PhysicsEngine::FractureObject(Object* source, const glm::vec3& worldImpactP
 	std::vector<Object*> shardObjects;
 	for (int i = 0; i < shards.size(); i++)
 	{
-		Shard s = shards[i];
-		shardObjects.push_back(CreateFractureShard(source, s.points, s.centroid, i));
+		{
+			TIME_BLOCK("Create shards");
+			Shard s = shards[i];
+			shardObjects.push_back(CreateFractureShard(source, s.points, s.centroid, i));
+		}
 	}
 
 	ObjectManager::getInstance().RemoveObject(source);

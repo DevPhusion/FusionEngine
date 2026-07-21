@@ -27,12 +27,13 @@ struct Settings {
 	bool drawSoftBodySprings = false;
 	bool drawVirtualSoftBodyProxies = false;
 	bool drawFluidsAsParticles = false;
+	bool drawFluidsVelocityField = false;
 	FluidHeatmapMode fluidHeatmapMode = FluidHeatmapMode::None;
 
 	bool AnyDebugGizmoEnabled() const {
 		return drawObjectWireframe || drawBroadPhaseBounds || drawCollisionNormals || drawContactPoints ||
 			drawSoftBodyPointMasses || drawSoftBodySprings || drawVirtualSoftBodyProxies
-			|| drawFluidsAsParticles || fluidHeatmapMode != FluidHeatmapMode::None;
+			|| drawFluidsAsParticles || drawFluidsVelocityField || fluidHeatmapMode != FluidHeatmapMode::None;
 	}
 };
 

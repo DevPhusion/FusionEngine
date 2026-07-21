@@ -156,7 +156,7 @@ void RenderComponent::SetTexture(std::string texture_path) {
 		cache[texture_path] = { this->TextureID, 1 };
 	}
 	else {
-		std::cout << "Failed to load texture" << std::endl;
+		Console::PrintError("Failed to load texture");
 		glDeleteTextures(1, &this->TextureID);
 		this->TextureID = 0;
 	}
@@ -244,7 +244,7 @@ std::vector<unsigned int> RenderComponent::Triangulate(std::vector<float> vertic
 				float area2 = calcTriangleArea(points[i], ear, next);
 				float area3 = calcTriangleArea(points[i], prev, next);
 
-				if (abs(area1 + area2 + area3 - areafull) < 0.0001) {
+				if (abs(area1 + area2 + area3 - areafull) < 0.00000000001) {
 					ValidEar = false;
 					break;
 				}
@@ -252,7 +252,7 @@ std::vector<unsigned int> RenderComponent::Triangulate(std::vector<float> vertic
 		}
 		if (angle > glm::pi<float>()) {
 			ValidEar = false;
-			std::cout << "Angle is concave, not an ear." << std::endl;
+			Console::PrintError("Angle is concave, not an ear");
 		}
 
 		if (ValidEar) {
@@ -270,7 +270,7 @@ std::vector<unsigned int> RenderComponent::Triangulate(std::vector<float> vertic
 		else {
 			earIndex++;
 			if (earIndex >= points.size()) {
-				std::cout << "No valid ear found, polygon might be malformed." << std::endl;
+				Console::PrintError("No valid ear found, polygon might be malformed");
 				break;
 			}
 			ear = points[earIndex];

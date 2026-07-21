@@ -5,6 +5,7 @@
 void EditorManager::Setup(GLFWwindow* window) {
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
+	ImPlot::CreateContext();
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	ImGui::StyleColorsDark();
@@ -14,6 +15,8 @@ void EditorManager::Setup(GLFWwindow* window) {
 	AddWindow(new Inspector("Inspector"));
 	AddWindow(new EngineStatus("Status"));
 	AddWindow(new Hierarchy("Hierarchy"));
+	AddWindow(new Console("Console"));
+	AddWindow(new EngineProfiler("Profiler"));
 }
 
 void EditorManager::AddWindow(EditorWindow* window) {
@@ -48,6 +51,8 @@ void EditorManager::ProcessDockSpace() {
 	ImGui::DockSpace(dockspaceId, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_PassthruCentralNode);
 
 	static bool builtLayout = false;
+	static int focusFrameCountdown = -1; 
+
 	if (!builtLayout) {
 		builtLayout = true;
 
@@ -59,12 +64,26 @@ void EditorManager::ProcessDockSpace() {
 		ImGuiID dockTop = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Up, 0.04f, nullptr, &dockMain);
 		ImGuiID dockLeft = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Left, 0.18f, nullptr, &dockMain);
 		ImGuiID dockRight = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Right, 0.25f, nullptr, &dockMain);
+		ImGuiID dockBot = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Down, 0.3, nullptr, &dockMain);
 
 		ImGui::DockBuilderDockWindow("Status", dockTop);
 		ImGui::DockBuilderDockWindow("Hierarchy", dockLeft);
 		ImGui::DockBuilderDockWindow("Inspector", dockRight);
 
+		ImGui::DockBuilderDockWindow("Console", dockBot);
+		ImGui::DockBuilderDockWindow("Profiler", dockBot);
+
 		ImGui::DockBuilderFinish(dockspaceId);
+
+
+		focusFrameCountdown = 2;
+	}
+
+	if (focusFrameCountdown > 0) {
+		focusFrameCountdown--;
+		if (focusFrameCountdown == 0) {
+			ImGui::SetWindowFocus("Console");
+		}
 	}
 
 	ImGui::End();

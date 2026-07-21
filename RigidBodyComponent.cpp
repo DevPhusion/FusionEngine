@@ -73,13 +73,11 @@ void RigidBodyComponent::ProcessInspectorUI() {
 	float mass = 1 / inverseMass;
 	if (ImGui::InputFloat("##Mass", &mass, 0.0f, 0.0f, "%.3f kg")) {
 		if (mass <= 0) {
-			std::cout << "Mass can't be 0 or lower" << std::endl;
+			mass = 0.001f;
 		}
-		else {
-			inverseMass = 1 / mass;
-			EngineManager::getInstance().EngineChangeEvent();
-			CalculateInertia();
-		}
+		inverseMass = 1 / mass;
+		EngineManager::getInstance().EngineChangeEvent();
+		CalculateInertia();
 	}
 
 	ImGui::Text("Velocity ");

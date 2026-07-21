@@ -297,6 +297,24 @@
     <ClCompile Include="SpatialHashGrid.cpp">
       <Filter>Source Files\Core\Physics\Collision</Filter>
     </ClCompile>
+    <ClCompile Include="EngineProfiler.cpp">
+      <Filter>Source Files\Core\Editor\Windows</Filter>
+    </ClCompile>
+    <ClCompile Include="Console.cpp">
+      <Filter>Source Files\Core\Editor\Windows</Filter>
+    </ClCompile>
+    <ClCompile Include="XPBDTriAreaConstraint.cpp">
+      <Filter>Source Files\Core\Physics\Constraint\XPBDConstraint</Filter>
+    </ClCompile>
+    <ClCompile Include="imgui\implot.cpp">
+      <Filter>Source Files\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="imgui\implot_demo.cpp">
+      <Filter>Source Files\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="imgui\implot_items.cpp">
+      <Filter>Source Files\ImGui</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stb_image.h">
@@ -491,9 +509,6 @@
     <ClInclude Include="DebugTimer.h">
       <Filter>Header Files\Core</Filter>
     </ClInclude>
-    <ClInclude Include="XPBDAreaConstraint.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="XPBDProxyPointConstraint.h">
       <Filter>Header Files\Core\Physics\Constraint\XPBDConstraint</Filter>
     </ClInclude>
@@ -523,6 +538,24 @@
     </ClInclude>
     <ClInclude Include="SpatialHashGrid.h">
       <Filter>Header Files\Core\Physics\Collision</Filter>
+    </ClInclude>
+    <ClInclude Include="EngineProfiler.h">
+      <Filter>Header Files\Core\Editor\Windows</Filter>
+    </ClInclude>
+    <ClInclude Include="XPBDAreaConstraint.h">
+      <Filter>Header Files\Core\Physics\Constraint\XPBDConstraint</Filter>
+    </ClInclude>
+    <ClInclude Include="Console.h">
+      <Filter>Header Files\Core\Editor\Windows</Filter>
+    </ClInclude>
+    <ClInclude Include="XPBDTriAreaConstraint.h">
+      <Filter>Header Files\Core\Physics\Constraint\XPBDConstraint</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui\implot.h">
+      <Filter>Header Files\ImGUI</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui\implot_internal.h">
+      <Filter>Header Files\ImGUI</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -560,6 +593,12 @@
       <Filter>Resource Files</Filter>
     </Text>
     <Text Include="fluid_solidmask_fragment.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="fluid_vector_vertex.txt">
+      <Filter>Resource Files</Filter>
+    </Text>
+    <Text Include="fluid_vector_fragment.txt">
       <Filter>Resource Files</Filter>
     </Text>
   </ItemGroup>

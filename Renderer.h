@@ -8,6 +8,7 @@
 #include "PhysicsEngine.h"
 #include "InfiniteGrid.h"
 #include "Gizmos.h"
+#include "DebugTimer.h"
 #include<glad/glad.h>
 #include<GLFW/glfw3.h>
 #include <vector>

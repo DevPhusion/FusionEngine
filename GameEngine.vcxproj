@@ -154,6 +154,7 @@
     <ClCompile Include="CollisionComponent.cpp" />
     <ClCompile Include="Component.cpp" />
     <ClCompile Include="ComponentTypeID.cpp" />
+    <ClCompile Include="Console.cpp" />
     <ClCompile Include="Constraint.cpp" />
     <ClCompile Include="ConstraintComponent.cpp" />
     <ClCompile Include="DebugCircle.cpp" />
@@ -161,6 +162,7 @@
     <ClCompile Include="DistanceConstraint.cpp" />
     <ClCompile Include="EditorManager.cpp" />
     <ClCompile Include="EngineManager.cpp" />
+    <ClCompile Include="EngineProfiler.cpp" />
     <ClCompile Include="EngineStatus.cpp" />
     <ClCompile Include="FileDialog.cpp" />
     <ClCompile Include="FluidComponent.cpp" />
@@ -177,6 +179,9 @@
     <ClCompile Include="imgui\imgui_impl_opengl3.cpp" />
     <ClCompile Include="imgui\imgui_tables.cpp" />
     <ClCompile Include="imgui\imgui_widgets.cpp" />
+    <ClCompile Include="imgui\implot.cpp" />
+    <ClCompile Include="imgui\implot_demo.cpp" />
+    <ClCompile Include="imgui\implot_items.cpp" />
     <ClCompile Include="InfiniteGrid.cpp" />
     <ClCompile Include="InputManager.cpp" />
     <ClCompile Include="Inspector.cpp" />
@@ -209,6 +214,7 @@
     <ClCompile Include="XPBDContactConstraint.cpp" />
     <ClCompile Include="XPBDDistanceConstraint.cpp" />
     <ClCompile Include="XPBDProxyPointConstraint.cpp" />
+    <ClCompile Include="XPBDTriAreaConstraint.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AddObjectWindow.h" />
@@ -224,6 +230,7 @@
     <ClInclude Include="Component.h" />
     <ClInclude Include="Components.h" />
     <ClInclude Include="ComponentTypeID.h" />
+    <ClInclude Include="Console.h" />
     <ClInclude Include="Constraint.h" />
     <ClInclude Include="ConstraintComponent.h" />
     <ClInclude Include="Constraints.h" />
@@ -234,6 +241,7 @@
     <ClInclude Include="DistanceConstraint.h" />
     <ClInclude Include="EditorManager.h" />
     <ClInclude Include="EngineManager.h" />
+    <ClInclude Include="EngineProfiler.h" />
     <ClInclude Include="EngineStatus.h" />
     <ClInclude Include="FileDialog.h" />
     <ClInclude Include="FluidComponent.h" />
@@ -250,6 +258,8 @@
     <ClInclude Include="imgui\imgui_impl_opengl3.h" />
     <ClInclude Include="imgui\imgui_impl_opengl3_loader.h" />
     <ClInclude Include="imgui\imgui_internal.h" />
+    <ClInclude Include="imgui\implot.h" />
+    <ClInclude Include="imgui\implot_internal.h" />
     <ClInclude Include="imgui\imstb_rectpack.h" />
     <ClInclude Include="imgui\imstb_textedit.h" />
     <ClInclude Include="imgui\imstb_truetype.h" />
@@ -286,6 +296,7 @@
     <ClInclude Include="XPBDContactConstraint.h" />
     <ClInclude Include="XPBDDistanceConstraint.h" />
     <ClInclude Include="XPBDProxyPointConstraint.h" />
+    <ClInclude Include="XPBDTriAreaConstraint.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="fluid_composite_fragment.txt" />
@@ -295,6 +306,8 @@
     <Text Include="fluid_fragment.txt" />
     <Text Include="fluid_solidmask_fragment.txt" />
     <Text Include="fluid_solidmask_vertex.txt" />
+    <Text Include="fluid_vector_fragment.txt" />
+    <Text Include="fluid_vector_vertex.txt" />
     <Text Include="fluid_vertex.txt" />
     <Text Include="fragment.txt" />
     <Text Include="grid_fragment.txt" />

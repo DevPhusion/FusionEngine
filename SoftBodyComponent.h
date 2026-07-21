@@ -4,6 +4,7 @@
 #include "XPBDDistanceConstraint.h"
 #include "XPBDAreaConstraint.h"
 #include "XPBDProxyPointConstraint.h"
+#include "XPBDTriAreaConstraint.h" 
 #include "Renderer.h"
 #include <variant>
 
@@ -24,6 +25,7 @@ public:
 	std::vector<std::unique_ptr<PointMass>> MassAggregate = {};
 	std::vector<XPBDProxyPointConstraint*> proxyLinks = {};
 	std::vector<XPBDDistanceConstraint*> springs = {};
+	std::vector<XPBDTriAreaConstraint*> triAreaConstraints = {};
 	XPBDAreaConstraint* areaConstraint = nullptr;
 
 	PointMass* CenterPM = nullptr;

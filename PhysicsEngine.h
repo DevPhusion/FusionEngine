@@ -16,6 +16,7 @@
 #include "ObjectManager.h"
 #include "SpatialHashGrid.h"
 #include "FluidComponent.h"
+#include "Console.h"
 #include <numeric>
 #include <algorithm>
 #include <random>

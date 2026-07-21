@@ -2,6 +2,9 @@
 #include "Inspector.h"
 #include "EngineStatus.h"
 #include "Hierarchy.h"
+#include "EngineProfiler.h"
+#include "Console.h"
+#include "imgui/implot.h"
 #include <vector>
 class EditorManager
 {
@@ -17,8 +20,8 @@ public:
 	Object* selectedObject;
 
 	std::vector<EditorWindow*> Windows;
-	bool WindowHovered; // mouse action in windows
-	bool WindowTyped; //keyboard action in windows
+	bool WindowHovered; 
+	bool WindowTyped; 
 
 	void Setup(GLFWwindow* window);
 	void AddWindow(EditorWindow* window);

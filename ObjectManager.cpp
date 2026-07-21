@@ -38,7 +38,7 @@ void ObjectManager::AddCircle() {
 
 void ObjectManager::AddPolygon() {
 	if (vertexPoints.size() < 3) {
-		std::cout << "Invalid polygon" << std::endl;
+		Console::PrintError("Invalid polygon");
 		for (int i = 0; i < vertexPoints.size(); i++)
 		{
 			RemoveObject(vertexPoints[i]);
@@ -106,7 +106,7 @@ void ObjectManager::AddSoftCircle() {
 
 void ObjectManager::AddSoftPolygon() {
 	if (vertexPoints.size() < 3) {
-		std::cout << "Invalid polygon" << std::endl;
+		Console::PrintError("Invalid polygon");
 		for (int i = 0; i < vertexPoints.size(); i++)
 		{
 			RemoveObject(vertexPoints[i]);

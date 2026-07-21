@@ -24,7 +24,6 @@ struct FluidParticle {
     float vorticityEps;
 
     float bouyancyDensity;
-    float bouyancyDamping;
     int bouyancyMinNeighbours;
 
     float poly6Coeff = 0.0f;
@@ -52,9 +51,8 @@ public:
     float epsilon = 100.0f;
     float smoothingRadius = 1.0f;
     float vorticityStrength = 0.0f;
-    float bouyancyDensity = 10.0f;
-    float bouyancyDamping = 5.0f;
-    int bouyancyMinNeighbours = 4;
+    float bouyancyDensity;
+    int bouyancyMinNeighbours;
     
     glm::vec4 outlineColor = glm::vec4(0.05f, 0.2f, 0.45f, 1.0f);
     float metaballThreshold = 0.6f;
@@ -87,12 +85,15 @@ private:
     void InitDensityFBO(int width, int height);
     void RebuildDensityQuadGeometry();
     void InitFullscreenQuad();
+    void InitVectorFieldResources();
     void UpdateHeatBuffer();
+    glm::vec4 VelocityHeatmapColor(float t);
     void DrawObjectSilhouette(const RigidBoundary& rb);
     void DrawObjectSilhouette(const SoftBoundary& sb);
     void DrawDensityPass();
     void DrawComposite();
     void DrawParticlesDebug();
+    void DrawVelocityField();
 
     bool IsFullySubmerged(const RigidBoundary& rb);
     bool IsFullySubmerged(const SoftBoundary& sb);
@@ -100,6 +101,9 @@ private:
     int transformCallbackID = -1;
     int setShapeCallbackID = -1;
     std::vector<glm::vec3> localParticlePositions;
+
+    GLuint vectorFieldVAO = 0, vectorFieldVBO = 0;
+    Shader vectorFieldShader;
 
     unsigned int heatVBO = 0;
 

@@ -77,7 +77,6 @@ void FluidComponent::SeedParticles() {
 		p->epsilon = epsilon;
 		p->smoothingRadius = smoothingRadius;
 		p->bouyancyDensity = bouyancyDensity;
-		p->bouyancyDamping = bouyancyDamping;
 		p->bouyancyMinNeighbours = bouyancyMinNeighbours;
 		p->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(smoothingRadius);
 		p->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(smoothingRadius);
@@ -218,17 +217,6 @@ void FluidComponent::ProcessInspectorUI() {
 			EngineManager::getInstance().EngineChangeEvent();
 		}
 
-		ImGui::Text("Damping");
-		ImGui::SameLine();
-		if (ImGui::InputFloat("##BuoyancyDamping", &bouyancyDamping)) {
-			if (bouyancyDamping < 0) bouyancyDamping = 0.0f;
-			for (int i = 0; i < particles.size(); i++)
-			{
-				particles[i]->bouyancyDamping = bouyancyDamping;
-			}
-			EngineManager::getInstance().EngineChangeEvent();
-		}
-
 		ImGui::Text("Min Neighbours");
 		ImGui::SameLine();
 		if (ImGui::InputInt("##BuoyancyMinNeighbours", &bouyancyMinNeighbours)) {
@@ -281,6 +269,8 @@ void FluidComponent::OnDelete() {
 	glDeleteBuffers(1, &solidMaskVBO);
 	glDeleteVertexArrays(1, &solidMaskVAO);
 	glDeleteBuffers(1, &heatVBO);
+	glDeleteBuffers(1, &vectorFieldVBO);
+	glDeleteVertexArrays(1, &vectorFieldVAO);
 }
 
 void FluidComponent::CopyTo(Object* other) {
@@ -302,7 +292,6 @@ void FluidComponent::CopyTo(Object* other) {
 	target->epsilon = epsilon;
 	target->smoothingRadius = smoothingRadius;
 	target->bouyancyDensity = bouyancyDensity;
-	target->bouyancyDamping = bouyancyDamping;
 	target->bouyancyMinNeighbours = bouyancyMinNeighbours;
 	target->SeedParticles();
 	target->ResizeInstanceBuffer();
@@ -324,7 +313,6 @@ std::unique_ptr<Component> FluidComponent::Clone(Object* parent) {
 	comp->epsilon = epsilon;
 	comp->smoothingRadius = smoothingRadius;
 	comp->bouyancyDensity = bouyancyDensity;
-	comp->bouyancyDamping = bouyancyDamping;
 	comp->bouyancyMinNeighbours = bouyancyMinNeighbours;
 	comp->SetEnabled(false);
 	return comp;
@@ -344,7 +332,6 @@ void FluidComponent::Serialize(BinaryWriter& w) {
 	w.Write(epsilon);
 	w.Write(smoothingRadius);
 	w.Write(bouyancyDensity);
-	w.Write(bouyancyDamping);
 	w.Write(bouyancyMinNeighbours);
 }
 
@@ -362,7 +349,6 @@ void FluidComponent::Deserialize(BinaryReader& r) {
 	epsilon = r.Read<float>();
 	smoothingRadius = r.Read<float>();
 	bouyancyDensity = r.Read<float>();
-	bouyancyDamping = r.Read<float>();
 	bouyancyMinNeighbours = r.Read<int>();
 	SeedParticles();
 	ResizeInstanceBuffer();
@@ -414,6 +400,7 @@ void FluidComponent::InitRenderResources() {
 	densityShader = Shader("fluid_density_vertex.txt", "fluid_density_fragment.txt");
 	compositeShader = Shader("fluid_composite_vertex.txt", "fluid_composite_fragment.txt");
 	solidMaskShader = Shader("fluid_solidmask_vertex.txt", "fluid_solidmask_fragment.txt");
+	vectorFieldShader = Shader("fluid_vector_vertex.txt", "fluid_vector_fragment.txt");
 
 	glGenVertexArrays(1, &solidMaskVAO);
 	glGenBuffers(1, &solidMaskVBO);
@@ -486,6 +473,7 @@ void FluidComponent::InitRenderResources() {
 
 	RebuildDensityQuadGeometry();
 	InitFullscreenQuad();
+	InitVectorFieldResources();
 }
 
 void FluidComponent::RebuildQuadGeometry() {
@@ -568,6 +556,23 @@ void FluidComponent::InitDensityFBO(int width, int height) {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 	densityInitialized = true;
+}
+
+void FluidComponent::InitVectorFieldResources() {
+	glGenVertexArrays(1, &vectorFieldVAO);
+	glGenBuffers(1, &vectorFieldVBO);
+
+	glBindVertexArray(vectorFieldVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, vectorFieldVBO);
+	glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW); // sized per-draw
+
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)0);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 7 * sizeof(float), (void*)(3 * sizeof(float)));
+	glEnableVertexAttribArray(1);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
 }
 
 void FluidComponent::ResizeRenderTargets(int width, int height) {
@@ -702,27 +707,114 @@ void FluidComponent::DrawComposite() {
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
+glm::vec4 FluidComponent::VelocityHeatmapColor(float t) {
+	t = glm::clamp(t, 0.0f, 1.0f);
+
+	glm::vec3 c0(0.05f, 0.05f, 0.35f);
+	glm::vec3 c1(0.0f, 0.75f, 0.9f);  
+	glm::vec3 c2(0.2f, 0.85f, 0.2f);  
+	glm::vec3 c3(0.95f, 0.85f, 0.1f);  
+	glm::vec3 c4(0.9f, 0.15f, 0.1f);  
+
+	glm::vec3 color;
+	if (t < 0.25f)      color = glm::mix(c0, c1, t / 0.25f);
+	else if (t < 0.5f)  color = glm::mix(c1, c2, (t - 0.25f) / 0.25f);
+	else if (t < 0.75f) color = glm::mix(c2, c3, (t - 0.5f) / 0.25f);
+	else                color = glm::mix(c3, c4, (t - 0.75f) / 0.25f);
+
+	return glm::vec4(color, 1.0f);
+}
+
+void FluidComponent::DrawVelocityField() {
+	if (!vectorFieldVAO || particles.empty()) return;
+
+	float maxSpeed = 0.0001f;
+	for (auto* p : particles) maxSpeed = std::max(maxSpeed, glm::length(p->velocity));
+
+	std::vector<float> lineVerts;
+	lineVerts.reserve(particles.size() * 6 * 7);
+
+	auto pushVert = [&](const glm::vec3& pos, const glm::vec4& col) {
+		lineVerts.insert(lineVerts.end(), { pos.x, pos.y, pos.z, col.r, col.g, col.b, col.a });
+		};
+
+	const glm::vec3 defaultDir(1.0f, 0.0f, 0.0f); 
+
+	for (auto* p : particles) {
+		float speed = glm::length(p->velocity);
+		float t = speed / maxSpeed; 
+
+		glm::vec3 dir = (speed > 1e-8f) ? (p->velocity / speed) : defaultDir;
+		glm::vec4 color = VelocityHeatmapColor(t);
+
+		glm::vec3 start = p->position;
+		glm::vec3 end = start + dir * particleRadius; 
+
+		pushVert(start, color);
+		pushVert(end, color);
+
+		glm::vec3 perp(-dir.y, dir.x, 0.0f);
+		float headLen = particleRadius * 0.35f;
+		glm::vec3 headBase = end - dir * headLen;
+
+		pushVert(end, color);
+		pushVert(headBase + perp * headLen * 0.5f, color);
+
+		pushVert(end, color);
+		pushVert(headBase - perp * headLen * 0.5f, color);
+	}
+
+	if (lineVerts.empty()) return;
+
+	glBindBuffer(GL_ARRAY_BUFFER, vectorFieldVBO);
+	glBufferData(GL_ARRAY_BUFFER, lineVerts.size() * sizeof(float), lineVerts.data(), GL_DYNAMIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	glm::mat4 projection = glm::ortho(-EngineManager::getInstance().aspectRatio, EngineManager::getInstance().aspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
+	glm::mat4 view = Camera::getInstance().viewMatrix;
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glLineWidth(1.5f);
+
+	vectorFieldShader.use();
+	vectorFieldShader.setMat4D("projection", projection);
+	vectorFieldShader.setMat4D("view", view);
+
+	glBindVertexArray(vectorFieldVAO);
+	glDrawArrays(GL_LINES, 0, (GLsizei)(lineVerts.size() / 7));
+	glBindVertexArray(0);
+}
+
 void FluidComponent::DrawParticlesDebug() {
 	glm::mat4 projection = glm::ortho(-EngineManager::getInstance().aspectRatio, EngineManager::getInstance().aspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
 	glm::mat4 view = Camera::getInstance().viewMatrix;
 
-	FluidHeatmapMode heatmapMode = EngineManager::getInstance().EngineSettings.fluidHeatmapMode;
-	bool heatmap = heatmapMode != FluidHeatmapMode::None;
-	if (heatmap) UpdateHeatBuffer();
+	bool showVectorField = EngineManager::getInstance().EngineSettings.drawFluidsVelocityField;
 
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	if (!showVectorField) {
+		FluidHeatmapMode heatmapMode = EngineManager::getInstance().EngineSettings.fluidHeatmapMode;
+		bool heatmap = heatmapMode != FluidHeatmapMode::None;
+		if (heatmap) UpdateHeatBuffer();
 
-	particleShader.use();
-	particleShader.setMat4D("projection", projection);
-	particleShader.setMat4D("view", view);
-	particleShader.setVec4D("aColor", this->color);
-	particleShader.setBool("useHeatmap", heatmap);
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	glBindVertexArray(quadVAO);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadEBO);
-	glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, (GLsizei)particles.size());
-	glBindVertexArray(0);
+		particleShader.use();
+		particleShader.setMat4D("projection", projection);
+		particleShader.setMat4D("view", view);
+		particleShader.setVec4D("aColor", this->color);
+		particleShader.setBool("useHeatmap", heatmap);
+
+		glBindVertexArray(quadVAO);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadEBO);
+		glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, (GLsizei)particles.size());
+		glBindVertexArray(0);
+	}
+	else
+	{
+		DrawVelocityField();
+	}
 }
 
 void FluidComponent::UpdateInstanceBuffer() {

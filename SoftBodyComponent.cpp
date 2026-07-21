@@ -93,7 +93,6 @@ void SoftBodyComponent::ProcessInspectorUI() {
 	ImGui::SameLine();
 	if (ImGui::InputFloat("##Stiffness ", &stiffness, 0.0f, 0.0f, "%.3f N/m")) {
 		float compliance = (stiffness > 0.0f) ? (1.0f / stiffness) : 0.0f;
-		areaConstraint->compliance = compliance;
 		EngineManager::getInstance().EngineChangeEvent();
 		for (int i = 0; i < springs.size(); i++)
 		{
@@ -196,6 +195,11 @@ void SoftBodyComponent::OnDelete() {
 		PhysicsEngine::getInstance().UnRegisterXPBDConstraint(s);
 	springs.clear();
 	PhysicsEngine::getInstance().UnRegisterXPBDConstraint(areaConstraint);
+
+	for (XPBDTriAreaConstraint* t : triAreaConstraints)
+		PhysicsEngine::getInstance().UnRegisterXPBDConstraint(t);
+	triAreaConstraints.clear();
+
 	auto& allProxies = PhysicsEngine::getInstance().allSoftBodyProxies;
 
 	for (int i = 0; i < proxyLinks.size(); i++)
@@ -327,6 +331,10 @@ void SoftBodyComponent::RebuildMassAggregate() {
 	springs.clear();
 	PhysicsEngine::getInstance().UnRegisterXPBDConstraint(areaConstraint);
 
+	for (XPBDTriAreaConstraint* t : triAreaConstraints)
+		PhysicsEngine::getInstance().UnRegisterXPBDConstraint(t);
+	triAreaConstraints.clear();
+
 	auto& allPms = PhysicsEngine::getInstance().allSoftBodyPointMasses;
 	for (int i = 0; i < MassAggregate.size(); i++)
 	{
@@ -422,8 +430,19 @@ void SoftBodyComponent::BuildMassAggregate() {
 		for (int i = 0; i < MassAggregate.size() - 1; i++)
 			massBody.push_back(MassAggregate[i]->body);
 
-		areaConstraint = new XPBDAreaConstraint(massBody, (stiffness > 0.0f) ? (1.0f / stiffness) : 0.0f);
+		areaConstraint = new XPBDAreaConstraint(massBody, 0.0f);
 		PhysicsEngine::getInstance().RegisterXPBDConstraint(areaConstraint);
+
+		for (int i = 0; i < edgeCount; i++)
+		{
+			PointMass* pmA = MassAggregate[i].get();
+			PointMass* pmB = MassAggregate[(i + 1) % edgeCount].get();
+
+			XPBDTriAreaConstraint* triConstraint = new XPBDTriAreaConstraint(
+				CenterPM->body, pmA->body, pmB->body, 0.001f);
+			PhysicsEngine::getInstance().RegisterXPBDConstraint(triConstraint);
+			triAreaConstraints.push_back(triConstraint);
+		}
 	}
 	else {
 		areaConstraint = nullptr;

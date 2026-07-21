@@ -91,7 +91,7 @@ namespace {
 	}
 }
 
-EngineStatus::EngineStatus(std::string main) : EditorWindow(main) {
+EngineStatus::EngineStatus(std::string name) : EditorWindow(name) {
 	EngineManager::getInstance().AddInteractModeChangedEvent([this]() {this->OnInteractModeChanged();});
 	OnInteractModeChanged();
 	InputManager::getInstance().SetKeyButtonCallback([this](int key, int scancode, int action, int mods) {OnKeyButtonPressed(key, scancode, action, mods);}, 999);
@@ -335,6 +335,11 @@ void EngineStatus::ProcessSettingsPopup() {
 				settings.fluidHeatmapMode = static_cast<FluidHeatmapMode>(current);
 			}
 		}
+
+		ImGui::Text("Draw velocity vector field: ");
+		ImGui::SameLine();
+		ImGui::Checkbox("##Draw velocity vector field", &settings.drawFluidsVelocityField);
+
 		ImGui::Unindent();
 		ImGui::EndDisabled();
 
