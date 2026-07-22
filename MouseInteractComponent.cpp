@@ -192,7 +192,7 @@ void MouseInteractComponent::OnPhysicsModeChanged() {
 		if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) {
 			SetEnabled(false);
 		}
-		else {
+		else if (parent->GetComponent<FluidComponent>()->Enabled) {
 			SetEnabled(true);
 		}
 	}

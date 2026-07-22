@@ -23,9 +23,6 @@ struct FluidParticle {
     float epsilon;
     float vorticityEps;
 
-    float bouyancyDensity;
-    int bouyancyMinNeighbours;
-
     float poly6Coeff = 0.0f;
     float spikyCoeff = 0.0f;
 };
@@ -51,8 +48,6 @@ public:
     float epsilon = 100.0f;
     float smoothingRadius = 1.0f;
     float vorticityStrength = 0.0f;
-    float bouyancyDensity;
-    int bouyancyMinNeighbours;
     
     glm::vec4 outlineColor = glm::vec4(0.05f, 0.2f, 0.45f, 1.0f);
     float metaballThreshold = 0.6f;

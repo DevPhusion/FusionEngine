@@ -57,6 +57,7 @@ public:
 	void RemoveVirtualProxy(PointMass* proxy);
 	std::vector<SoftEdge> GetEdgesFromMassAggregate();
 
+	virtual void SetEnabled(bool Enabled);
 	virtual void ProcessInspectorUI();
 	virtual void OnDelete();
 	virtual void CopyTo(Object* other);

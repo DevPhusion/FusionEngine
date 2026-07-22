@@ -81,6 +81,7 @@ struct RigidBoundary {
 	std::vector<Edge> localEdges;
 	std::vector<Edge> worldEdges;
 	glm::vec3 worldCenter;
+	float totalArea;
 	float surfaceY = 0.0f;
 	bool surfaceValid = false;
 	float rho0 = 0.0f;
@@ -100,6 +101,7 @@ struct SoftBoundary {
 	std::vector<SoftEdge> worldEdges;
 	glm::vec3 worldCenter = glm::vec3(0.0f);
 	bool valid = true;
+	float totalArea = 0.0f;
 	float surfaceY = 0.0f;
 	bool surfaceValid = false;
 	float rho0 = 0.0f;
@@ -213,6 +215,7 @@ public:
 	std::vector<char> fluidSurfaceQualifies;
 	glm::vec3 fluidBoundsMin = glm::vec3(INFINITY);
 	glm::vec3 fluidBoundsMax = glm::vec3(-INFINITY);
+	float buoyancyMinNeighbours = 4;
 	float Poly6Coefficient(float h);
 	float SpikyCoefficient(float h);
 	float Poly6Kernel(float poly6Coeff, float h2, float r2);
@@ -227,6 +230,11 @@ public:
 	void ComputeFluidSurfaceQualification();
 	void RefreshRigidBoundariesSurface();
 	void RefreshSoftBoundariesSurface();
+	bool ComputeSubmergedRegion(const std::vector<Edge>& worldEdges,
+		float surfaceY, float& outArea, glm::vec3& outCentroid);
+	void ApplyRigidBuoyancy(float dtSub);
+	void ApplySoftBuoyancy(float dtSub);
+
 	void ResolvePBF(float delta);
 
 	//Fracture physics

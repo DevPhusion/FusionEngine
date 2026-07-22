@@ -76,8 +76,6 @@ void FluidComponent::SeedParticles() {
 		p->vorticityEps = vorticityStrength;
 		p->epsilon = epsilon;
 		p->smoothingRadius = smoothingRadius;
-		p->bouyancyDensity = bouyancyDensity;
-		p->bouyancyMinNeighbours = bouyancyMinNeighbours;
 		p->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(smoothingRadius);
 		p->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(smoothingRadius);
 		PhysicsEngine::getInstance().allFluidParticles.push_back(p);
@@ -204,32 +202,6 @@ void FluidComponent::ProcessInspectorUI() {
 
 		ImGui::TreePop();
 	}
-
-	if (ImGui::TreeNodeEx("Buoyancy", ImGuiTreeNodeFlags_DefaultOpen)) {
-		ImGui::Text("Density");
-		ImGui::SameLine();
-		if (ImGui::InputFloat("##BuoyancyDensity", &bouyancyDensity, 0.0f, 0.0f, "%.3f kg/m³")) {
-			for (int i = 0; i < particles.size(); i++)
-			{
-				if (bouyancyDensity <= 0) bouyancyDensity = 0.01f;
-				particles[i]->bouyancyDensity = bouyancyDensity;
-			}
-			EngineManager::getInstance().EngineChangeEvent();
-		}
-
-		ImGui::Text("Min Neighbours");
-		ImGui::SameLine();
-		if (ImGui::InputInt("##BuoyancyMinNeighbours", &bouyancyMinNeighbours)) {
-			bouyancyMinNeighbours = std::max(0, bouyancyMinNeighbours);
-			for (int i = 0; i < particles.size(); i++)
-			{
-				particles[i]->bouyancyMinNeighbours = bouyancyMinNeighbours;
-			}
-			EngineManager::getInstance().EngineChangeEvent();
-		}
-
-		ImGui::TreePop();
-	}
 }
 
 void FluidComponent::OnDelete() {
@@ -291,8 +263,6 @@ void FluidComponent::CopyTo(Object* other) {
 	target->vorticityStrength = vorticityStrength;
 	target->epsilon = epsilon;
 	target->smoothingRadius = smoothingRadius;
-	target->bouyancyDensity = bouyancyDensity;
-	target->bouyancyMinNeighbours = bouyancyMinNeighbours;
 	target->SeedParticles();
 	target->ResizeInstanceBuffer();
 	target->RebuildQuadGeometry();
@@ -312,8 +282,6 @@ std::unique_ptr<Component> FluidComponent::Clone(Object* parent) {
 	comp->vorticityStrength = vorticityStrength;
 	comp->epsilon = epsilon;
 	comp->smoothingRadius = smoothingRadius;
-	comp->bouyancyDensity = bouyancyDensity;
-	comp->bouyancyMinNeighbours = bouyancyMinNeighbours;
 	comp->SetEnabled(false);
 	return comp;
 }
@@ -331,8 +299,6 @@ void FluidComponent::Serialize(BinaryWriter& w) {
 	w.Write(vorticityStrength);
 	w.Write(epsilon);
 	w.Write(smoothingRadius);
-	w.Write(bouyancyDensity);
-	w.Write(bouyancyMinNeighbours);
 }
 
 void FluidComponent::Deserialize(BinaryReader& r) {
@@ -348,8 +314,6 @@ void FluidComponent::Deserialize(BinaryReader& r) {
 	vorticityStrength = r.Read<float>();
 	epsilon = r.Read<float>();
 	smoothingRadius = r.Read<float>();
-	bouyancyDensity = r.Read<float>();
-	bouyancyMinNeighbours = r.Read<int>();
 	SeedParticles();
 	ResizeInstanceBuffer();
 	RebuildQuadGeometry();

@@ -190,6 +190,49 @@ void SoftBodyComponent::Deserialize(BinaryReader& r) {
 	gasAmount = r.Read<float>();
 }
 
+void SoftBodyComponent::SetEnabled(bool Enabled) {
+	Component::SetEnabled(Enabled);
+	
+	if (!Enabled) {
+		for (XPBDDistanceConstraint* s : springs)
+			PhysicsEngine::getInstance().UnRegisterXPBDConstraint(s);
+		springs.clear();
+		PhysicsEngine::getInstance().UnRegisterXPBDConstraint(areaConstraint);
+
+		for (XPBDTriAreaConstraint* t : triAreaConstraints)
+			PhysicsEngine::getInstance().UnRegisterXPBDConstraint(t);
+		triAreaConstraints.clear();
+
+		auto& allProxies = PhysicsEngine::getInstance().allSoftBodyProxies;
+
+		for (int i = 0; i < proxyLinks.size(); i++)
+		{
+			PhysicsEngine::getInstance().UnRegisterXPBDConstraint(proxyLinks[i]);
+		}
+
+		for (int i = 0; i < VirtualProxies.size(); i++)
+		{
+			PointMass* target = VirtualProxies[i].get();
+			allProxies.erase(std::remove(allProxies.begin(), allProxies.end(), target), allProxies.end());
+		}
+
+		proxyLinks.clear();
+		VirtualProxies.clear();
+
+		auto& allPms = PhysicsEngine::getInstance().allSoftBodyPointMasses;
+		for (int i = 0; i < MassAggregate.size(); i++)
+		{
+			PointMass* target = MassAggregate[i].get();
+			allPms.erase(std::remove(allPms.begin(), allPms.end(), target), allPms.end());
+		}
+
+		MassAggregate.clear();
+	}
+	else {
+		RebuildMassAggregate();
+	}
+}
+
 void SoftBodyComponent::OnDelete() {
 	for (XPBDDistanceConstraint* s : springs)
 		PhysicsEngine::getInstance().UnRegisterXPBDConstraint(s);
@@ -260,7 +303,6 @@ void SoftBodyComponent::UpdateMassAggregate() {
 
 	RenderComponent* rc = parent->GetComponent<RenderComponent>();
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
-
 	if (tc->size != prevScale) {
 		prevScale = tc->size;
 		RebuildMassAggregate();
