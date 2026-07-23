@@ -66,6 +66,33 @@ struct Projection {
 class SoftBodyComponent;
 struct SoftEdge;
 
+struct SoftRigidContact {
+	bool hit = false;
+	glm::vec3 normal = glm::vec3(0);
+	float penetration = 0.0f;
+	glm::vec3 point = glm::vec3(0);
+	int rigidIndex = -1;
+	float accumNormalImpulse = 0.0f;  
+	float accumTangentImpulse = 0.0f; 
+};
+
+struct RigidSoftContact {
+	bool hit = false;
+	glm::vec3 normal = glm::vec3(0);
+	float penetration = 0.0f;
+	glm::vec3 point = glm::vec3(0);
+	int softIndex = -1;
+	int edgeIdx = -1;
+	float edgeT = 0.0f;
+	float accumNormalImpulse = 0.0f;
+	float accumTangentImpulse = 0.0f;
+};
+
+struct RigidVertex {
+	int rigidIndex = -1;
+	glm::vec3 worldPos = glm::vec3(0);
+};
+
 //Fracture
 struct PendingFracture {
 	Object* obj;
@@ -74,6 +101,15 @@ struct PendingFracture {
 };
 
 //Fluid
+struct ClosestPointOnEdge {
+	bool found = false;
+	float dist = INFINITY;
+	glm::vec3 point = glm::vec3(0.0f);
+	glm::vec3 normal = glm::vec3(0.0f);
+	int edgeIdx = -1;
+	float edgeT = 0.0f;
+};
+
 struct RigidBoundary {
 	Object* obj;
 	RigidBodyComponent* rb;
@@ -148,13 +184,21 @@ public:
 	std::vector<ContactPoint> allContactPoints;
 	BAHNode<BoundingCircle> root;
 	std::vector<RigidBoundary> rigidBoundaries;
-	std::vector<SoftBoundary> softBoundaries;
+	std::vector<SoftBoundary> softBoundaries;      
+	std::vector<SoftRigidContact> softRigidContacts;
+    std::vector<RigidVertex> rigidVertices; 
+	std::vector<RigidSoftContact> rigidSoftContacts;
+	std::vector<std::vector<glm::vec3>> rigidSoftAxis;
+	std::vector<std::vector<bool>> rigidSoftAxisValid;
 	std::vector<FluidRigidContact> fluidRigidContacts;
 	std::vector<FluidSoftContact> fluidSoftContacts;
 	BAHNode<BoundingCircle>* RegisterBoundingAreaNode(Object* obj, BoundingCircle boundingCircle);
 	void UnRegisterBoundingAreaNode(Object* obj);
 	void ResolveContacts(PotentialContact* contacts, unsigned numContacts);
 	FluidSoftContact DetectFluidSoftContact(const glm::vec3& particlePos, float radius, const SoftBoundary& soft);
+	template<typename BoundaryT, typename ContactT, typename DetectFn>
+	void ResolveFluidBoundaryContactsGeneric(std::vector<FluidParticle*>& particles, std::vector<int>& indices,
+		std::vector<BoundaryT>& boundaries, std::vector<ContactT>& outContacts, DetectFn detect);
 	void ResolveFluidSoftContacts(float dtSub);
 	void ResolveFluidSoftImpulses(float dtSub);
 	FluidRigidContact DetectFluidRigidContact(const glm::vec3& particlePos, float radius, const RigidBoundary& rigid);
@@ -163,22 +207,39 @@ public:
 	bool ResolveSoftPointSoftEdgeContacts(PhysicsBody pointBody, PointMass* pointMass,
 		SoftBodyComponent* otherSb, const std::vector<SoftEdge>& otherEdges,
 		float vertexRadius, const glm::vec3* forcedAxis = nullptr);
-	bool ResolveRigidVertexSoftEdgeContacts(const glm::vec3& checkPoint, PhysicsBody rigidBody, SoftBodyComponent* sb, const std::vector<SoftEdge>& edges, float vertexRadius, const glm::vec3* forcedAxis = nullptr);
+	SoftRigidContact DetectSoftRigidContact(const glm::vec3& pmPos, float radius, const RigidBoundary& rigid, const glm::vec3* forcedAxis);
+	void ResolveSoftRigidContacts(float dtSub);
+	void ResolveSoftRigidImpulses(float dtSub);
+	void ApplySoftRigidPositionCorrection();
+	RigidSoftContact DetectRigidSoftContact(const glm::vec3& vertexPos, float radius, const SoftBoundary& soft, const glm::vec3* forcedAxis);
+	void ResolveRigidSoftContacts(float dtSub);
+	void ResolveRigidSoftImpulses(float dtSub);
+	void ApplyRigidSoftPositionCorrection();
 	bool ResolveCircleCircleContacts(PhysicsBody bodyA, PhysicsBody bodyB, float rA, float rB);
 	bool ResolveCirclePolygonContacts(PhysicsBody circle, PhysicsBody polygon, float radius, std::vector<Edge> edges, const glm::vec3* forcedAxis = nullptr);
 	bool ResolvePolygonPolygonContacts(PhysicsBody bodyA, PhysicsBody bodyB);
 	CollisionData SAT(Object* objA, Object* objB);
 	std::vector<ContactPoint> GenerateContactPoints(CollisionData collisionData);
 
+	void GenerateRigidVertices();
 	void GenerateRigidBoundaries();
 	void RefreshRigidBoundariesEdges();
 	void GenerateSoftBoundaries();
 	void RefreshSoftBoundariesEdges();
+	bool PointInPolygon(const glm::vec3& p, const std::vector<glm::vec3>& starts, const std::vector<glm::vec3>& ends);
+	bool PointInPolygon(const glm::vec3& p, const std::vector<Edge>& edges);
+	bool PointInPolygon(const glm::vec3& p, const std::vector<SoftEdge>& edges);
+	bool PointInPolygon(const glm::vec3& point, const std::vector<glm::vec3>& polygon);
+	ClosestPointOnEdge GetClosestPointOnEdge(const glm::vec3& p, const std::vector<glm::vec3>& starts,
+		const std::vector<glm::vec3>& ends, const glm::vec3& interiorRefPoint);
 	glm::vec3 ComputeSoftSoftAxis(SoftBodyComponent* sbA, const std::vector<SoftEdge>& edgesA,
 		SoftBodyComponent* sbB, const std::vector<SoftEdge>& edgesB, bool* outValid);
-	glm::vec3 ComputeRigidSoftAxis(PhysicsBody rigidBody, const std::vector<Edge>& rigidEdgesLocal, SoftBodyComponent* sb, bool* outValid);
+	glm::vec3 ComputeRigidSoftAxis(const RigidBoundary& rigid, const SoftBoundary& soft, bool* outValid);
+	void RefreshRigidSoftAxes();
 	Projection ProjectOntoAxis(std::vector<glm::vec3>& vertices, SeparatingAxis axis);
 	float ComputeSignedArea(const std::vector<glm::vec3>& vertices);
+	template<typename ProjectFnA, typename ProjectFnB>
+	glm::vec3 FindMinOverlapAxis(const std::vector<glm::vec3>& axes, ProjectFnA projectA, ProjectFnB projectB, bool& outValid);
 	Edge FindMostParallelEdge(const std::vector<Edge>& edges, const glm::vec3& normal);
 	Edge FindMostAntiParallelEdge(const std::vector<Edge>& edges, const glm::vec3& normal);
 	int ClipSegmentToLine(ClipVertex vOut[2], const ClipVertex vIn[2], int numInPoints,
@@ -243,7 +304,6 @@ public:
 	void ProcessFractures();
 	void FractureObject(Object* source, const glm::vec3& worldImpactPoint);
 	Object* CreateFractureShard(Object* source, const std::vector<glm::vec3>& localShardPoints, const glm::vec3& shardCentroidLocal, int index);
-	bool PointInPolygon(const glm::vec3& point, const std::vector<glm::vec3>& polygon);
 	glm::vec3 ClosestPointOnPolygon(const glm::vec3& point, const std::vector<glm::vec3>& polygon);
 	std::vector<glm::vec3> ClipPolygonHalfPlane(const std::vector<glm::vec3>& poly, const glm::vec3& normal, float offset);
 	std::vector<glm::vec3> ComputeVoronoiCell(const std::vector<glm::vec3>& polygon, const std::vector<glm::vec3>& seeds, int seedIndex);

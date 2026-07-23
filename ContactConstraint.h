@@ -7,9 +7,6 @@ class ContactConstraint : public Constraint
 public:
 	ContactConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB, ContactID id,
 		glm::vec3 normal, float penetration, float restitution, float staticFriction, float dynamicFriction);
-	ContactConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB, ContactID id,
-		glm::vec3 normal, float penetration, float restitution, float staticFriction, float dynamicFriction,
-		float weightA, float weightB);
 	ContactConstraint() = default;
 
 	ContactID contactId;
@@ -19,9 +16,6 @@ public:
 	float restitution;
 	float staticFriction;
 	float dynamicFriction;
-
-	float weightA = 1.0f;
-	float weightB = 1.0f;
 
 	int normalRowOffsetIndex = 0;
 	int frictionRowOffsetIndex = -1;

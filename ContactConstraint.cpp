@@ -14,28 +14,7 @@ ContactConstraint::ContactConstraint(PhysicsBody objectA, PhysicsBody objectB, g
     this->restitution = restitution;
     this->staticFriction = staticFriction;
     this->dynamicFriction = dynamicFriction;
-    this->weightA = 1.0f;
-    this->weightB = 1.0f;
     this->isTemporary = true;
-}
-
-ContactConstraint::ContactConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB, ContactID id,
-    glm::vec3 normal, float penetration, float restitution, float staticFriction, float dynamicFriction,
-    float weightA, float weightB)
-{
-    this->objectA = objectA;
-    this->objectB = objectB;
-    this->attachPointA = attachPointA;
-    this->attachPointB = attachPointB;
-    this->contactId = id;
-    this->normal = normal;
-    this->penetration = penetration;
-    this->restitution = restitution;
-    this->staticFriction = staticFriction;
-    this->dynamicFriction = dynamicFriction;
-    this->isTemporary = true;
-    this->weightA = weightA;
-    this->weightB = weightB;
 }
 
 void ContactConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
@@ -45,10 +24,10 @@ void ContactConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
     this->normalRowOffsetIndex = static_cast<int>(rows.size());
 
     JacobianRow nJac;
-    nJac.linearA = glm::vec3(normal.x, normal.y, 0.0f) * weightA;
-    nJac.linearB = -glm::vec3(normal.x, normal.y, 0.0f) * weightB;
-    nJac.angularA = (rA.x * normal.y - rA.y * normal.x) * weightA;
-    nJac.angularB = -(rB.x * normal.y - rB.y * normal.x) * weightB;
+    nJac.linearA = glm::vec3(normal.x, normal.y, 0.0f) ;
+    nJac.linearB = -glm::vec3(normal.x, normal.y, 0.0f);
+    nJac.angularA = (rA.x * normal.y - rA.y * normal.x);
+    nJac.angularB = -(rB.x * normal.y - rB.y * normal.x);
 
     float invMassA = objectA.invMass ? *objectA.invMass : 0.0f;
     float invMassB = objectB.invMass ? *objectB.invMass : 0.0f;
@@ -67,8 +46,7 @@ void ContactConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
     const float slop = 0.005f; 
     const float maxBias = 4.0f;   
 
-    float weightScale = std::min(weightA, weightB);
-    float posBias = (beta / delta) * std::max(0.0f, penetration - slop) * weightScale;
+    float posBias = (beta / delta) * std::max(0.0f, penetration - slop);
     posBias = std::min(posBias, maxBias);
 
     float restitutionBias = 0.0f;
