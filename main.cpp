@@ -4,16 +4,14 @@
 #include<iostream>
 #include <windows.h>
 #include <filesystem>
-#include "Polygon.h"
-#include "InputManager.h"
-#include "Renderer.h"
-#include "PhysicsEngine.h"
-#include "EngineManager.h"
-#include "EditorManager.h"
-#include "ObjectManager.h"
-#include "Shader.h"
-#include "VertexPoint.h"
-#include "MouseDrag.h"
+#include "Header Files/Core/InputManager.h"
+#include "Header Files/Core/Rendering/Renderer.h"
+#include "Header Files/Core/Physics/PhysicsEngine.h"
+#include "Header Files/Core/EngineManager.h"
+#include "Header Files/Core/Editor/EditorManager.h"
+#include "Header Files/Core/ObjectManager.h"
+#include "Header Files/Core/Files/ProjectLauncher.h"
+#include "Header Files/Core/Rendering/Shader.h"
 
 void cursorPressedCallback(int button, int action, int mods) {
 	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
@@ -37,34 +35,34 @@ int main(int argc, char* argv[]) {
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-	/*
-	GLFWmonitor* monitor = glfwGetPrimaryMonitor();
-	const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+	const int launcherWidth = 900;
+	const int launcherHeight = 600;
 
-	glfwWindowHint(GLFW_RED_BITS, mode->redBits);
-	glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
-	glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
-	glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
-
-	GLFWwindow* window = glfwCreateWindow(
-		mode->width, mode->height, "Fusion physics", monitor, NULL
-	);
-	*/
-
-	GLFWwindow* window = glfwCreateWindow(1920, 1080, "Fusion physics", NULL, NULL);
+	glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+	GLFWwindow* window = glfwCreateWindow(launcherWidth, launcherHeight, "Fusion Physics - Projects", NULL, NULL);
 	glfwMakeContextCurrent(window);
 	gladLoadGL();
 
+	{
+		const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+		if (mode) {
+			int posX = (mode->width - launcherWidth) / 2;
+			int posY = (mode->height - launcherHeight) / 2;
+			glfwSetWindowPos(window, posX, posY);
+		}
+	}
+	glfwShowWindow(window);
+
 	GLFWimage images[1];
-	images[0].pixels = stbi_load("engineIcon.png", &images[0].width, &images[0].height, 0, 4); // Forces RGBA channels
+	images[0].pixels = stbi_load("engineIcon.png", &images[0].width, &images[0].height, 0, 4);
 
 	if (images[0].pixels) {
 		glfwSetWindowIcon(window, 1, images);
-		stbi_image_free(images[0].pixels); // Clean up memory safely after setting
+		stbi_image_free(images[0].pixels); 
 	}
-	
+
 	Renderer::getInstance().Setup(&ObjectManager::getInstance().allObjects);
-	EditorManager::getInstance().Setup(window);
+	EditorManager::getInstance().Setup(window); 
 
 	InputManager::getInstance().Setup(window);
 	InputManager::getInstance().SetMouseButtonCallback(cursorPressedCallback, 999);
@@ -75,30 +73,54 @@ int main(int argc, char* argv[]) {
 	Camera::getInstance().Setup();
 	Renderer::getInstance().SetupGrid();
 
-	glfwMaximizeWindow(window);
+	ProjectLauncher::getInstance().Setup(window);
+
 	glfwPollEvents();
 
 	if (argc > 1) {
 		std::string launchPath = argv[1];
-		try {
-			EngineManager::getInstance().currentProjectFile = launchPath;
-			EngineManager::getInstance().LoadProjectFromFile(launchPath);
-		}
-		catch (const std::exception& e) {
-			std::cerr << "Failed to load project from launch args: " << e.what() << std::endl;
+		if (!ProjectLauncher::getInstance().OpenProjectFile(launchPath)) {
+			std::cerr << "Failed to load project from launch args: " << launchPath << std::endl;
 		}
 	}
 
-	float prev_t = glfwGetTime(); 
+	float prev_t = glfwGetTime();
 	float physicsAccumulator = 0.0f;
 	const float PHYSICS_STEP = 1.0f / 60.0f;
+	bool enteredEditor = false;
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
+		if (!ProjectLauncher::getInstance().HasEnteredProject()) {
+			glClearColor(0.11f, 0.11f, 0.13f, 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT);
+
+			ImGui_ImplOpenGL3_NewFrame();
+			ImGui_ImplGlfw_NewFrame();
+			ImGui::NewFrame();
+
+			ProjectLauncher::getInstance().ProcessLauncher();
+
+			ImGui::Render();
+			ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+			glfwSwapBuffers(window);
+			continue;
+		}
+
+		if (!enteredEditor) {
+			enteredEditor = true;
+			glfwSetWindowTitle(window, "Fusion Physics");
+			glfwMaximizeWindow(window);
+			glfwPollEvents();
+			prev_t = glfwGetTime();
+			physicsAccumulator = 0.0f;
+		}
+
 		float now = glfwGetTime();
 		float delta = now - prev_t;
-		prev_t = now; 
+		prev_t = now;
 
 		if (delta > 0.1f) delta = 0.1f;
 		physicsAccumulator += delta;

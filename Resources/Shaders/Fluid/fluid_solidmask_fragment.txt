@@ -1,0 +1,13 @@
+#version 330 core
+in vec3 worldPos;
+out vec4 FragColor;
+
+uniform float waterLevel;
+uniform float softness; 
+
+void main() {
+	float depth = waterLevel - worldPos.y; 
+	float m = smoothstep(-softness, softness, depth);
+	if (m <= 0.0) discard;
+	FragColor = vec4(m, 0.0, 0.0, 1.0);
+}

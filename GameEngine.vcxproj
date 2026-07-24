@@ -104,10 +104,11 @@
       <AdditionalIncludeDirectories>D:\Programming\GameEngine\Libraries\include;D:\Programming\GameEngine\Libraries\include\glad;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>D:\Programming\GameEngine\Libraries\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -136,41 +137,15 @@
       <AdditionalIncludeDirectories>D:\Programming\GameEngine\Libraries\include;D:\Programming\GameEngine\Libraries\include\glad;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>D:\Programming\GameEngine\Libraries\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="AddObjectWindow.cpp" />
-    <ClCompile Include="BinaryReader.cpp" />
-    <ClCompile Include="BinaryWriter.cpp" />
-    <ClCompile Include="BoundingCircle.cpp" />
-    <ClCompile Include="Box.cpp" />
-    <ClCompile Include="Camera.cpp" />
-    <ClCompile Include="BAHNode.cpp" />
-    <ClCompile Include="Circle.cpp" />
-    <ClCompile Include="CollisionComponent.cpp" />
-    <ClCompile Include="Component.cpp" />
-    <ClCompile Include="ComponentTypeID.cpp" />
-    <ClCompile Include="Console.cpp" />
-    <ClCompile Include="Constraint.cpp" />
-    <ClCompile Include="ConstraintComponent.cpp" />
-    <ClCompile Include="DebugCircle.cpp" />
-    <ClCompile Include="DebugPoint.cpp" />
-    <ClCompile Include="DistanceConstraint.cpp" />
-    <ClCompile Include="EditorManager.cpp" />
-    <ClCompile Include="EngineManager.cpp" />
-    <ClCompile Include="EngineProfiler.cpp" />
-    <ClCompile Include="EngineStatus.cpp" />
-    <ClCompile Include="FileDialog.cpp" />
-    <ClCompile Include="FluidComponent.cpp" />
-    <ClCompile Include="ForceGenerator.cpp" />
-    <ClCompile Include="FractureComponent.cpp" />
-    <ClCompile Include="Gizmos.cpp" />
     <ClCompile Include="glad.c" />
-    <ClCompile Include="Hierarchy.cpp" />
     <ClCompile Include="imgui\imgui.cpp" />
     <ClCompile Include="imgui\ImGuiFileDialog.cpp" />
     <ClCompile Include="imgui\imgui_demo.cpp" />
@@ -182,73 +157,138 @@
     <ClCompile Include="imgui\implot.cpp" />
     <ClCompile Include="imgui\implot_demo.cpp" />
     <ClCompile Include="imgui\implot_items.cpp" />
-    <ClCompile Include="InfiniteGrid.cpp" />
-    <ClCompile Include="InputManager.cpp" />
-    <ClCompile Include="Inspector.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="EditorWindow.cpp" />
-    <ClCompile Include="MouseDrag.cpp" />
-    <ClCompile Include="MouseInteractComponent.cpp" />
-    <ClCompile Include="ContactConstraint.cpp" />
-    <ClCompile Include="Object.cpp" />
-    <ClCompile Include="ObjectManager.cpp" />
-    <ClCompile Include="PointMass.cpp" />
-    <ClCompile Include="RigidBodyComponent.cpp" />
-    <ClCompile Include="PhysicsEngine.cpp" />
-    <ClCompile Include="Polygon.cpp" />
-    <ClCompile Include="PrismaticConstraint.cpp" />
-    <ClCompile Include="RenderComponent.cpp" />
-    <ClCompile Include="Renderer.cpp" />
-    <ClCompile Include="RevoluteConstraint.cpp" />
-    <ClCompile Include="Shader.cpp" />
-    <ClCompile Include="SoftBodyComponent.cpp" />
-    <ClCompile Include="SpatialHashGrid.cpp" />
-    <ClCompile Include="SpringConstraint.cpp" />
+    <ClCompile Include="Source Files\Components\CollisionComponent.cpp" />
+    <ClCompile Include="Source Files\Components\Component.cpp" />
+    <ClCompile Include="Source Files\Components\ComponentTypeID.cpp" />
+    <ClCompile Include="Source Files\Components\ConstraintComponent.cpp" />
+    <ClCompile Include="Source Files\Components\FluidComponent.cpp" />
+    <ClCompile Include="Source Files\Components\FractureComponent.cpp" />
+    <ClCompile Include="Source Files\Components\MouseInteractComponent.cpp" />
+    <ClCompile Include="Source Files\Components\RenderComponent.cpp" />
+    <ClCompile Include="Source Files\Components\RigidBodyComponent.cpp" />
+    <ClCompile Include="Source Files\Components\SoftBodyComponent.cpp" />
+    <ClCompile Include="Source Files\Components\TransformComponent.cpp" />
+    <ClCompile Include="Source Files\Components\VertexComponent.cpp" />
+    <ClCompile Include="Source Files\Core\Camera.cpp" />
+    <ClCompile Include="Source Files\Core\Editor\EditorManager.cpp" />
+    <ClCompile Include="Source Files\Core\Editor\EditorWindow.cpp" />
+    <ClCompile Include="Source Files\Core\Editor\Gizmos.cpp" />
+    <ClCompile Include="Source Files\Core\Editor\InfiniteGrid.cpp" />
+    <ClCompile Include="Source Files\Core\Editor\Windows\AddObjectWindow.cpp" />
+    <ClCompile Include="Source Files\Core\Editor\Windows\Console.cpp" />
+    <ClCompile Include="Source Files\Core\Editor\Windows\EngineProfiler.cpp" />
+    <ClCompile Include="Source Files\Core\Editor\Windows\EngineStatus.cpp" />
+    <ClCompile Include="Source Files\Core\Editor\Windows\FileSystem.cpp" />
+    <ClCompile Include="Source Files\Core\Editor\Windows\Hierarchy.cpp" />
+    <ClCompile Include="Source Files\Core\Editor\Windows\Inspector.cpp" />
+    <ClCompile Include="Source Files\Core\EngineManager.cpp" />
+    <ClCompile Include="Source Files\Core\Files\BinaryReader.cpp" />
+    <ClCompile Include="Source Files\Core\Files\BinaryWriter.cpp" />
+    <ClCompile Include="Source Files\Core\Files\FileDialog.cpp" />
+    <ClCompile Include="Source Files\Core\Files\FileManager.cpp" />
+    <ClCompile Include="Source Files\Core\Files\ProjectLauncher.cpp" />
+    <ClCompile Include="Source Files\Core\InputManager.cpp" />
+    <ClCompile Include="Source Files\Core\ObjectManager.cpp" />
+    <ClCompile Include="Source Files\Core\Physics\Collision\BAHNode.cpp" />
+    <ClCompile Include="Source Files\Core\Physics\Collision\BoundingCircle.cpp" />
+    <ClCompile Include="Source Files\Core\Physics\Collision\DebugCircle.cpp" />
+    <ClCompile Include="Source Files\Core\Physics\Collision\DebugPoint.cpp" />
+    <ClCompile Include="Source Files\Core\Physics\Collision\SpatialHashGrid.cpp" />
+    <ClCompile Include="Source Files\Core\Physics\Constraint\PGSConstraint\Constraint.cpp" />
+    <ClCompile Include="Source Files\Core\Physics\Constraint\PGSConstraint\ContactConstraint.cpp" />
+    <ClCompile Include="Source Files\Core\Physics\Constraint\PGSConstraint\DistanceConstraint.cpp" />
+    <ClCompile Include="Source Files\Core\Physics\Constraint\PGSConstraint\PrismaticConstraint.cpp" />
+    <ClCompile Include="Source Files\Core\Physics\Constraint\PGSConstraint\RevoluteConstraint.cpp" />
+    <ClCompile Include="Source Files\Core\Physics\Constraint\PGSConstraint\SpringConstraint.cpp" />
+    <ClCompile Include="Source Files\Core\Physics\Constraint\PGSConstraint\WeldConstraint.cpp" />
+    <ClCompile Include="Source Files\Core\Physics\Constraint\XPBDConstraint\XPBDAreaConstraint.cpp" />
+    <ClCompile Include="Source Files\Core\Physics\Constraint\XPBDConstraint\XPBDConstraint.cpp" />
+    <ClCompile Include="Source Files\Core\Physics\Constraint\XPBDConstraint\XPBDContactConstraint.cpp" />
+    <ClCompile Include="Source Files\Core\Physics\Constraint\XPBDConstraint\XPBDDistanceConstraint.cpp" />
+    <ClCompile Include="Source Files\Core\Physics\Constraint\XPBDConstraint\XPBDProxyPointConstraint.cpp" />
+    <ClCompile Include="Source Files\Core\Physics\Constraint\XPBDConstraint\XPBDTriAreaConstraint.cpp" />
+    <ClCompile Include="Source Files\Core\Physics\Forces\ForceGenerator.cpp" />
+    <ClCompile Include="Source Files\Core\Physics\Forces\MouseDrag.cpp" />
+    <ClCompile Include="Source Files\Core\Physics\PhysicsEngine.cpp" />
+    <ClCompile Include="Source Files\Core\Rendering\Renderer.cpp" />
+    <ClCompile Include="Source Files\Core\Rendering\Shader.cpp" />
+    <ClCompile Include="Source Files\Objects\Box.cpp" />
+    <ClCompile Include="Source Files\Objects\Circle.cpp" />
+    <ClCompile Include="Source Files\Objects\Object.cpp" />
+    <ClCompile Include="Source Files\Objects\PointMass.cpp" />
+    <ClCompile Include="Source Files\Objects\Polygon.cpp" />
+    <ClCompile Include="Source Files\Objects\VertexPoint.cpp" />
     <ClCompile Include="stb_image.cpp" />
-    <ClCompile Include="TransformComponent.cpp" />
-    <ClCompile Include="VertexComponent.cpp" />
-    <ClCompile Include="VertexPoint.cpp" />
-    <ClCompile Include="WeldConstraint.cpp" />
-    <ClCompile Include="XPBDAreaConstraint.cpp" />
-    <ClCompile Include="XPBDConstraint.cpp" />
-    <ClCompile Include="XPBDContactConstraint.cpp" />
-    <ClCompile Include="XPBDDistanceConstraint.cpp" />
-    <ClCompile Include="XPBDProxyPointConstraint.cpp" />
-    <ClCompile Include="XPBDTriAreaConstraint.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="AddObjectWindow.h" />
-    <ClInclude Include="BinaryReader.h" />
-    <ClInclude Include="BinaryWriter.h" />
-    <ClInclude Include="BoundingCircle.h" />
-    <ClInclude Include="Box.h" />
-    <ClInclude Include="Camera.h" />
-    <ClInclude Include="BAHNode.h" />
-    <ClInclude Include="Circle.h" />
-    <ClInclude Include="CollisionComponent.h" />
-    <ClInclude Include="CollisionLayerMask.h" />
-    <ClInclude Include="Component.h" />
-    <ClInclude Include="Components.h" />
-    <ClInclude Include="ComponentTypeID.h" />
-    <ClInclude Include="Console.h" />
-    <ClInclude Include="Constraint.h" />
-    <ClInclude Include="ConstraintComponent.h" />
-    <ClInclude Include="Constraints.h" />
-    <ClInclude Include="ContactID.h" />
-    <ClInclude Include="DebugCircle.h" />
-    <ClInclude Include="DebugPoint.h" />
-    <ClInclude Include="DebugTimer.h" />
-    <ClInclude Include="DistanceConstraint.h" />
-    <ClInclude Include="EditorManager.h" />
-    <ClInclude Include="EngineManager.h" />
-    <ClInclude Include="EngineProfiler.h" />
-    <ClInclude Include="EngineStatus.h" />
-    <ClInclude Include="FileDialog.h" />
-    <ClInclude Include="FluidComponent.h" />
-    <ClInclude Include="ForceGenerator.h" />
-    <ClInclude Include="FractureComponent.h" />
-    <ClInclude Include="Gizmos.h" />
-    <ClInclude Include="Hierarchy.h" />
+    <ClInclude Include="Header Files\Components\CollisionComponent.h" />
+    <ClInclude Include="Header Files\Components\Component.h" />
+    <ClInclude Include="Header Files\Components\Components.h" />
+    <ClInclude Include="Header Files\Components\ComponentTypeID.h" />
+    <ClInclude Include="Header Files\Components\ConstraintComponent.h" />
+    <ClInclude Include="Header Files\Components\FluidComponent.h" />
+    <ClInclude Include="Header Files\Components\FractureComponent.h" />
+    <ClInclude Include="Header Files\Components\MouseInteractComponent.h" />
+    <ClInclude Include="Header Files\Components\RenderComponent.h" />
+    <ClInclude Include="Header Files\Components\RigidBodyComponent.h" />
+    <ClInclude Include="Header Files\Components\SoftBodyComponent.h" />
+    <ClInclude Include="Header Files\Components\TransformComponent.h" />
+    <ClInclude Include="Header Files\Components\VertexComponent.h" />
+    <ClInclude Include="Header Files\Core\Camera.h" />
+    <ClInclude Include="Header Files\Core\DebugTimer.h" />
+    <ClInclude Include="Header Files\Core\Editor\EditorManager.h" />
+    <ClInclude Include="Header Files\Core\Editor\EditorWindow.h" />
+    <ClInclude Include="Header Files\Core\Editor\Gizmos.h" />
+    <ClInclude Include="Header Files\Core\Editor\InfiniteGrid.h" />
+    <ClInclude Include="Header Files\Core\Editor\Windows\AddObjectWindow.h" />
+    <ClInclude Include="Header Files\Core\Editor\Windows\Console.h" />
+    <ClInclude Include="Header Files\Core\Editor\Windows\EngineProfiler.h" />
+    <ClInclude Include="Header Files\Core\Editor\Windows\EngineStatus.h" />
+    <ClInclude Include="Header Files\Core\Editor\Windows\FileSystem.h" />
+    <ClInclude Include="Header Files\Core\Editor\Windows\Hierarchy.h" />
+    <ClInclude Include="Header Files\Core\Editor\Windows\Inspector.h" />
+    <ClInclude Include="Header Files\Core\EngineManager.h" />
+    <ClInclude Include="Header Files\Core\Files\BinaryReader.h" />
+    <ClInclude Include="Header Files\Core\Files\BinaryWriter.h" />
+    <ClInclude Include="Header Files\Core\Files\FileDialog.h" />
+    <ClInclude Include="Header Files\Core\Files\FileManager.h" />
+    <ClInclude Include="Header Files\Core\Files\ProjectLauncher.h" />
+    <ClInclude Include="Header Files\Core\InputManager.h" />
+    <ClInclude Include="Header Files\Core\ObjectManager.h" />
+    <ClInclude Include="Header Files\Core\Physics\Collision\BAHNode.h" />
+    <ClInclude Include="Header Files\Core\Physics\Collision\BoundingCircle.h" />
+    <ClInclude Include="Header Files\Core\Physics\Collision\CollisionLayerMask.h" />
+    <ClInclude Include="Header Files\Core\Physics\Collision\ContactID.h" />
+    <ClInclude Include="Header Files\Core\Physics\Collision\DebugCircle.h" />
+    <ClInclude Include="Header Files\Core\Physics\Collision\DebugPoint.h" />
+    <ClInclude Include="Header Files\Core\Physics\Collision\SpatialHashGrid.h" />
+    <ClInclude Include="Header Files\Core\Physics\Constraint\PGSConstraint\Constraint.h" />
+    <ClInclude Include="Header Files\Core\Physics\Constraint\PGSConstraint\Constraints.h" />
+    <ClInclude Include="Header Files\Core\Physics\Constraint\PGSConstraint\ContactConstraint.h" />
+    <ClInclude Include="Header Files\Core\Physics\Constraint\PGSConstraint\DistanceConstraint.h" />
+    <ClInclude Include="Header Files\Core\Physics\Constraint\PGSConstraint\PrismaticConstraint.h" />
+    <ClInclude Include="Header Files\Core\Physics\Constraint\PGSConstraint\RevoluteConstraint.h" />
+    <ClInclude Include="Header Files\Core\Physics\Constraint\PGSConstraint\SpringConstraint.h" />
+    <ClInclude Include="Header Files\Core\Physics\Constraint\PGSConstraint\WeldConstraint.h" />
+    <ClInclude Include="Header Files\Core\Physics\Constraint\XPBDConstraint\XPBDAreaConstraint.h" />
+    <ClInclude Include="Header Files\Core\Physics\Constraint\XPBDConstraint\XPBDConstraint.h" />
+    <ClInclude Include="Header Files\Core\Physics\Constraint\XPBDConstraint\XPBDContactConstraint.h" />
+    <ClInclude Include="Header Files\Core\Physics\Constraint\XPBDConstraint\XPBDDistanceConstraint.h" />
+    <ClInclude Include="Header Files\Core\Physics\Constraint\XPBDConstraint\XPBDProxyPointConstraint.h" />
+    <ClInclude Include="Header Files\Core\Physics\Constraint\XPBDConstraint\XPBDTriAreaConstraint.h" />
+    <ClInclude Include="Header Files\Core\Physics\Forces\ForceGenerator.h" />
+    <ClInclude Include="Header Files\Core\Physics\Forces\MouseDrag.h" />
+    <ClInclude Include="Header Files\Core\Physics\PhysicsBody.h" />
+    <ClInclude Include="Header Files\Core\Physics\PhysicsEngine.h" />
+    <ClInclude Include="Header Files\Core\Rendering\Renderer.h" />
+    <ClInclude Include="Header Files\Core\Rendering\Shader.h" />
+    <ClInclude Include="Header Files\Objects\Box.h" />
+    <ClInclude Include="Header Files\Objects\Circle.h" />
+    <ClInclude Include="Header Files\Objects\Object.h" />
+    <ClInclude Include="Header Files\Objects\PointMass.h" />
+    <ClInclude Include="Header Files\Objects\Polygon.h" />
+    <ClInclude Include="Header Files\Objects\VertexPoint.h" />
     <ClInclude Include="imgui\dirent.h" />
     <ClInclude Include="imgui\imconfig.h" />
     <ClInclude Include="imgui\imgui.h" />
@@ -263,68 +303,27 @@
     <ClInclude Include="imgui\imstb_rectpack.h" />
     <ClInclude Include="imgui\imstb_textedit.h" />
     <ClInclude Include="imgui\imstb_truetype.h" />
-    <ClInclude Include="InfiniteGrid.h" />
-    <ClInclude Include="InputManager.h" />
-    <ClInclude Include="Inspector.h" />
-    <ClInclude Include="EditorWindow.h" />
-    <ClInclude Include="MouseDrag.h" />
-    <ClInclude Include="MouseInteractComponent.h" />
-    <ClInclude Include="ContactConstraint.h" />
-    <ClInclude Include="Object.h" />
-    <ClInclude Include="ObjectManager.h" />
-    <ClInclude Include="PhysicsBody.h" />
-    <ClInclude Include="PointMass.h" />
-    <ClInclude Include="RigidBodyComponent.h" />
-    <ClInclude Include="PhysicsEngine.h" />
-    <ClInclude Include="Polygon.h" />
-    <ClInclude Include="PrismaticConstraint.h" />
-    <ClInclude Include="RenderComponent.h" />
-    <ClInclude Include="Renderer.h" />
     <ClInclude Include="resource.h" />
-    <ClInclude Include="RevoluteConstraint.h" />
-    <ClInclude Include="Shader.h" />
-    <ClInclude Include="SoftBodyComponent.h" />
-    <ClInclude Include="SpatialHashGrid.h" />
-    <ClInclude Include="SpringConstraint.h" />
     <ClInclude Include="stb_image.h" />
-    <ClInclude Include="TransformComponent.h" />
-    <ClInclude Include="VertexComponent.h" />
-    <ClInclude Include="VertexPoint.h" />
-    <ClInclude Include="WeldConstraint.h" />
-    <ClInclude Include="XPBDAreaConstraint.h" />
-    <ClInclude Include="XPBDConstraint.h" />
-    <ClInclude Include="XPBDContactConstraint.h" />
-    <ClInclude Include="XPBDDistanceConstraint.h" />
-    <ClInclude Include="XPBDProxyPointConstraint.h" />
-    <ClInclude Include="XPBDTriAreaConstraint.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <Text Include="fluid_composite_fragment.txt" />
-    <Text Include="fluid_composite_vertex.txt" />
-    <Text Include="fluid_density_fragment.txt" />
-    <Text Include="fluid_density_vertex.txt" />
-    <Text Include="fluid_fragment.txt" />
-    <Text Include="fluid_solidmask_fragment.txt" />
-    <Text Include="fluid_solidmask_vertex.txt" />
-    <Text Include="fluid_vector_fragment.txt" />
-    <Text Include="fluid_vector_vertex.txt" />
-    <Text Include="fluid_vertex.txt" />
-    <Text Include="fragment.txt" />
-    <Text Include="grid_fragment.txt" />
-    <Text Include="grid_vertex.txt" />
-    <Text Include="vertex.txt" />
-  </ItemGroup>
-  <ItemGroup>
-    <Image Include="engineIcon.ico" />
-    <Image Include="engineIcon.png" />
-    <Image Include="face.jpg" />
-    <Image Include="floor.png" />
-    <Image Include="floorTiled.png" />
-    <Image Include="red.jpg" />
-    <Image Include="wall.jpg" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="GameEngine.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="Resources\Images\engineIcon.ico" />
+    <Image Include="Resources\Images\engineIcon.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="Resources\Shaders\fragment.txt" />
+    <Text Include="Resources\Shaders\grid_fragment.txt" />
+    <Text Include="Resources\Shaders\grid_vertex.txt" />
+    <Text Include="Resources\Shaders\vertex.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include=".gitattributes" />
+    <None Include=".gitignore" />
+    <None Include="GameEngine.slnx" />
+    <None Include="imgui.ini" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
