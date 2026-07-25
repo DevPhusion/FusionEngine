@@ -31,7 +31,7 @@ Object* CreateAttachPointDisplay(const std::string& ownerName, const std::string
         -hs, +hs, 0.0f,  0.0f, 1.0f
     };
 
-    auto display = std::make_unique<Object>(Shader("vertex.txt", "fragment.txt"));
+    auto display = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
     display->name = ownerName + " " + suffix + " Attach Display";
     display->AddComponent(std::make_unique<RenderComponent>(display.get(), vertices, display->shader, "red.jpg"));
     display->GetComponent<RenderComponent>()->z_index = 999;
@@ -64,7 +64,7 @@ Object* Constraint::CreateConstraintDisplay()
         -hs, +hs, 0.0f,  0.0f, 1.0f
     };
 
-    auto display = std::make_unique<Object>(Shader("vertex.txt", "fragment.txt"));
+    auto display = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
     display->hidden = true;
     display->name = Name + " Constraint display";
     display->AddComponent(std::make_unique<RenderComponent>(display.get(), vertices, display->shader, ""));

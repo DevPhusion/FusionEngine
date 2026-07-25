@@ -13,7 +13,7 @@ InfiniteGrid::~InfiniteGrid() {
 }
 
 void InfiniteGrid::Setup() {
-    gridShader = std::make_unique<Shader>("grid_vertex.txt", "grid_fragment.txt");
+    gridShader = std::make_unique<Shader>("Resources/Shaders/grid_vertex.txt", "Resources/Shaders/grid_fragment.txt");
 
     float quadVertices[] = {
         -1.0f,  1.0f,

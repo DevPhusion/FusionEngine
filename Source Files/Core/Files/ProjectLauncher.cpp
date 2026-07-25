@@ -215,7 +215,7 @@ void ProjectLauncher::CreateProjectFromPopup() {
 
 	AddProjectFolder(newProjectFolder, displayName);
 	errorMessage.clear();
-	enteredProject = true;
+	pendingEnterProject = true;
 }
 
 bool ProjectLauncher::OpenProjectFile(const std::string& fusionFilePath) {
@@ -228,12 +228,32 @@ bool ProjectLauncher::OpenProjectFile(const std::string& fusionFilePath) {
 		FileManager::getInstance().SetupResourcesFolder();
 		AddProjectFolder(folder.string(), "");
 
-		enteredProject = true;
+		pendingEnterProject = true;
 		return true;
 	}
 	catch (const std::exception&) {
 		return false;
 	}
+}
+
+void ProjectLauncher::ProcessLoadingProjectDisplay(const std::string& message) {
+	ImGuiViewport* viewport = ImGui::GetMainViewport();
+	ImGui::SetNextWindowPos(viewport->WorkPos);
+	ImGui::SetNextWindowSize(viewport->WorkSize);
+
+	ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+		ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus |
+		ImGuiWindowFlags_NoSavedSettings;
+
+	ImGui::Begin("##ProjectSetupLoading", nullptr, flags);
+
+	ImVec2 avail = ImGui::GetContentRegionAvail();
+	ImVec2 textSize = ImGui::CalcTextSize(message.c_str());
+
+	ImGui::SetCursorPos(ImVec2((avail.x - textSize.x) * 0.5f, (avail.y - textSize.y) * 0.5f));
+	ImGui::TextUnformatted(message.c_str());
+
+	ImGui::End();
 }
 
 void ProjectLauncher::ProcessNewProjectPopup() {
@@ -289,6 +309,17 @@ void ProjectLauncher::ProcessNewProjectPopup() {
 }
 
 void ProjectLauncher::ProcessLauncher() {
+	ScriptManager::getInstance().Update();
+
+	if (pendingEnterProject) {
+		if (ScriptManager::getInstance().IsBusy()) {
+			ProcessLoadingProjectDisplay("Setting up project: " + ScriptManager::getInstance().GetStatusMessage());
+			return; 
+		}
+		pendingEnterProject = false;
+		enteredProject = true;
+	}
+
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
 	ImGui::SetNextWindowPos(viewport->WorkPos);
 	ImGui::SetNextWindowSize(viewport->WorkSize);

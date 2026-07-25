@@ -13,6 +13,13 @@ FluidComponent::FluidComponent(Object* parent) : ComponentBase<FluidComponent>(p
 	transformCallbackID = parent->GetComponent<TransformComponent>()->AddTransformCallback([this] {
 		UpdateParticleTransforms();
 		});
+
+	CollisionComponent* cc = parent->GetComponent<CollisionComponent>();
+	if (cc) {
+		TransformComponent* tc = parent->GetComponent<TransformComponent>();
+		if (tc) tc->RemoveTransformCallback(cc->onTransformCallbackID);
+		PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent);
+	}
 }
 
 void FluidComponent::ClearParticles() {
@@ -59,6 +66,7 @@ void FluidComponent::SeedParticles() {
 
 	ClearParticles();
 	particles.reserve(localParticlePositions.size());
+	CollisionComponent* cc = parent->GetComponent<CollisionComponent>();
 	for (auto& localPos : localParticlePositions) {
 		glm::vec3 worldPos = tc ? tc->ProjectToWorld(localPos) : localPos;
 
@@ -78,6 +86,10 @@ void FluidComponent::SeedParticles() {
 		p->smoothingRadius = smoothingRadius;
 		p->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(smoothingRadius);
 		p->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(smoothingRadius);
+		if (cc) {
+			p->collisionLayer = p->collisionLayer;
+			p->collisionMask = p->collisionMask;
+		}
 		PhysicsEngine::getInstance().allFluidParticles.push_back(p);
 		particles.push_back(p);
 	}
@@ -360,11 +372,11 @@ void FluidComponent::Draw() {
 void FluidComponent::InitRenderResources() {
 	unsigned int quadIdx[] = { 0, 1, 2,  2, 3, 0 };
 
-	particleShader = Shader("fluid_vertex.txt", "fluid_fragment.txt");
-	densityShader = Shader("fluid_density_vertex.txt", "fluid_density_fragment.txt");
-	compositeShader = Shader("fluid_composite_vertex.txt", "fluid_composite_fragment.txt");
-	solidMaskShader = Shader("fluid_solidmask_vertex.txt", "fluid_solidmask_fragment.txt");
-	vectorFieldShader = Shader("fluid_vector_vertex.txt", "fluid_vector_fragment.txt");
+	particleShader = Shader("Resources/Shaders/Fluid/fluid_vertex.txt", "Resources/Shaders/Fluid/fluid_fragment.txt");
+	densityShader = Shader("Resources/Shaders/Fluid/fluid_density_vertex.txt", "Resources/Shaders/Fluid/fluid_density_fragment.txt");
+	compositeShader = Shader("Resources/Shaders/Fluid/fluid_composite_vertex.txt", "Resources/Shaders/Fluid/fluid_composite_fragment.txt");
+	solidMaskShader = Shader("Resources/Shaders/Fluid/fluid_solidmask_vertex.txt", "Resources/Shaders/Fluid/fluid_solidmask_fragment.txt");
+	vectorFieldShader = Shader("Resources/Shaders/Fluid/fluid_vector_vertex.txt", "Resources/Shaders/Fluid/fluid_vector_fragment.txt");
 
 	glGenVertexArrays(1, &solidMaskVAO);
 	glGenBuffers(1, &solidMaskVBO);
@@ -781,6 +793,16 @@ void FluidComponent::DrawParticlesDebug() {
 	else
 	{
 		DrawVelocityField();
+	}
+}
+
+void FluidComponent::UpdateCollisionLayerMask() {
+	CollisionComponent* cc = parent->GetComponent<CollisionComponent>();
+	if (cc) {
+		for (auto* p : particles) {
+			p->collisionLayer = cc->collisionLayer;
+			p->collisionMask = cc->collisionMask;
+		}
 	}
 }
 

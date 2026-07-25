@@ -9,7 +9,7 @@ void ObjectManager::ProcessObjects(float delta) {
 
 void ObjectManager::AddObject() {
 	EngineManager::getInstance().EngineChangeEvent();
-	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("vertex.txt", "fragment.txt"));
+	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
 
 	obj->AddComponent(std::make_unique<RenderComponent>(obj.get(), std::vector<float> {}, obj.get()->shader, ""));
 	RectangleShape shape = RectangleShape();
@@ -26,13 +26,13 @@ void ObjectManager::AddObject() {
 
 void ObjectManager::AddBox() {
 	EngineManager::getInstance().EngineChangeEvent();
-	std::unique_ptr<Box> box = std::make_unique<Box>(Shader("vertex.txt", "fragment.txt"), "");
+	std::unique_ptr<Box> box = std::make_unique<Box>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"), "");
 	allObjects.push_back(std::move(box));
 }
 
 void ObjectManager::AddCircle() {
 	EngineManager::getInstance().EngineChangeEvent();
-	std::unique_ptr<Circle> circle = std::make_unique<Circle>(Shader("vertex.txt", "fragment.txt"), "");
+	std::unique_ptr<Circle> circle = std::make_unique<Circle>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"), "");
 	allObjects.push_back(std::move(circle));
 }
 
@@ -49,7 +49,7 @@ void ObjectManager::AddPolygon() {
 	}
 
 	EngineManager::getInstance().EngineChangeEvent();
-	std::unique_ptr<Polygon> poly = std::make_unique<Polygon>(vertices, Shader("vertex.txt", "fragment.txt"), "");
+	std::unique_ptr<Polygon> poly = std::make_unique<Polygon>(vertices, Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"), "");
 
 	auto* vc = poly->GetComponent<VertexComponent>();
 	auto* tc = poly->GetComponent<TransformComponent>();
@@ -71,7 +71,7 @@ void ObjectManager::AddPolygon() {
 
 void ObjectManager::AddSoftBox() {
 	EngineManager::getInstance().EngineChangeEvent();
-	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("vertex.txt", "fragment.txt"));
+	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
 	obj->AddComponent(std::make_unique<RenderComponent>(obj.get(), std::vector<float> {}, obj->shader, ""));
 	auto* render = obj->GetComponent<RenderComponent>();
 	RectangleShape shape = RectangleShape();
@@ -89,7 +89,7 @@ void ObjectManager::AddSoftBox() {
 
 void ObjectManager::AddSoftCircle() {
 	EngineManager::getInstance().EngineChangeEvent();
-	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("vertex.txt", "fragment.txt"));
+	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
 	obj->AddComponent(std::make_unique<RenderComponent>(obj.get(), std::vector<float> {}, obj->shader, ""));
 	auto* render = obj->GetComponent<RenderComponent>();
 	CircleShape shape = CircleShape();
@@ -117,7 +117,7 @@ void ObjectManager::AddSoftPolygon() {
 	}
 
 	EngineManager::getInstance().EngineChangeEvent();
-	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("vertex.txt", "fragment.txt"));
+	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
 	obj->AddComponent(std::make_unique<RenderComponent>(obj.get(), vertices, obj->shader, ""));
 	auto* render = obj->GetComponent<RenderComponent>();
 	PolygonShape shape = PolygonShape();
@@ -150,7 +150,7 @@ void ObjectManager::AddSoftPolygon() {
 
 void ObjectManager::AddFluid() {
 	EngineManager::getInstance().EngineChangeEvent();
-	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("vertex.txt", "fragment.txt"));
+	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
 	obj->AddComponent(std::make_unique<RenderComponent>(obj.get(), std::vector<float> {}, obj->shader, ""));
 	auto* render = obj->GetComponent<RenderComponent>();
 	RectangleShape shape = RectangleShape();
@@ -160,6 +160,7 @@ void ObjectManager::AddFluid() {
 	shape.height = 10.0f;
 	render->SetShape(shape);
 	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), true));
+	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<FluidComponent>(obj.get()));
 	FluidComponent* fc = obj->GetComponent<FluidComponent>();
 	allObjects.push_back(std::move(obj));
@@ -173,7 +174,7 @@ void ObjectManager::AddPolygonVertex() {
 		vertices.push_back(InputManager::glX); // U
 		vertices.push_back(InputManager::glY); // V
 
-		std::unique_ptr<VertexPoint> pointIndicator = std::make_unique<VertexPoint>(InputManager::glX, InputManager::glY, Shader("vertex.txt", "fragment.txt"));
+		std::unique_ptr<VertexPoint> pointIndicator = std::make_unique<VertexPoint>(InputManager::glX, InputManager::glY, Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
 		pointIndicator->hidden = true;
 		vertexPoints.push_back(pointIndicator.get());
 		allObjects.push_back(std::move(pointIndicator));
@@ -181,7 +182,7 @@ void ObjectManager::AddPolygonVertex() {
 }
 
 VertexPoint* ObjectManager::CopyVertex(VertexPoint* vert) {
-	std::unique_ptr<VertexPoint> newVert = std::make_unique<VertexPoint>(vert->x, vert->y, Shader("vertex.txt", "fragment.txt"));
+	std::unique_ptr<VertexPoint> newVert = std::make_unique<VertexPoint>(vert->x, vert->y, Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
 	VertexPoint* returnObj = newVert.get();
 	newVert->UpdatePosition(vert->x, vert->y);
 	allObjects.push_back(std::move(newVert));
@@ -189,7 +190,7 @@ VertexPoint* ObjectManager::CopyVertex(VertexPoint* vert) {
 }
 
 Object* ObjectManager::CopyObject(Object* obj) {
-	std::unique_ptr<Object> newObj = std::make_unique<Object>(Shader("vertex.txt", "fragment.txt"));
+	std::unique_ptr<Object> newObj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
 	
 	for (int i = 0; i < obj->components.size(); i++)
 	{

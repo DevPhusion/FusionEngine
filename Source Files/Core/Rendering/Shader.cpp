@@ -20,7 +20,7 @@ const std::string& Shader::LoadOrGetCachedSource(const std::string& path) {
         code = stream.str();
     }
     catch (std::ifstream::failure e) {
-        Console::PrintError("File not successfully read");
+        Console::PrintError("File {} not successfully read").Format(path);
     }
 
     return cache.emplace(path, std::move(code)).first->second;

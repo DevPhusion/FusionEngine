@@ -103,7 +103,7 @@ void Renderer::Draw() {
                         {
                             TIME_BLOCK("Draw contact points");
                             DebugPoint point = DebugPoint();
-                            point.DrawPoint(cp.point, 15, Shader("vertex.txt", "fragment.txt"));
+                            point.DrawPoint(cp.point, 15, Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
                         }
                     }
 
@@ -165,7 +165,7 @@ void Renderer::DrawLine(glm::vec3 p1, glm::vec3 p2, glm::vec4 color, float thick
     static unsigned int lineVAO = 0;
     static unsigned int lineVBO = 0;
     static unsigned int whiteTex = 0;
-    static Shader lineShader = Shader("vertex.txt", "fragment.txt");
+    static Shader lineShader = Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt");
 
     if (lineVAO == 0) {
         glGenVertexArrays(1, &lineVAO);

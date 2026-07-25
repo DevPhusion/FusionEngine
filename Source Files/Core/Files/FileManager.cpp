@@ -32,6 +32,8 @@ void FileManager::SetupResourcesFolder() {
 	resourcesRoot = resDir;
 	ClearThumbnailCache();
 	resourceGeneration++;
+
+	ScriptManager::getInstance().SetupPythonEnvironment(currentProjectDirectory);
 }
 
 std::filesystem::path FileManager::VirtualToAbsolute(const std::string& virtualPath) const {
@@ -325,6 +327,12 @@ void FileManager::LoadProjectFromFile(const std::string& path) {
 		constraint->Deserialize(r);
 		a->GetComponent<ConstraintComponent>()->AddConstraint(constraint);
 		constraint->ProcessConstraintDisplay();
+	}
+
+	for (auto& obj : ObjectManager::getInstance().allObjects) {
+		for (auto& c : obj->components) {
+			c->PostLoad();
+		}
 	}
 
 	isSaved = true;

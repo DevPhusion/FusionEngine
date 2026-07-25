@@ -8,6 +8,7 @@
 #include <fstream>
 #include <cctype>
 #include "../../../stb_image.h"
+#include "../../../Header Files/Core/Scripting/ScriptManager.h"
 
 enum class ResourceIconType {
 	Folder,

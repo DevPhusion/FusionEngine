@@ -5,7 +5,10 @@ CollisionComponent::CollisionComponent(Object* parent) : ComponentBase<Collision
 	Name = "Collision Component";
 	calculateBoundingCircle();
 	onTransformCallbackID = parent->GetComponent<TransformComponent>()->AddTransformCallback([this]() {this->calculateBoundingCircle();});
-	BAHnode = PhysicsEngine::getInstance().RegisterBoundingAreaNode(parent, boundingCircle);
+    FluidComponent* fc = parent->GetComponent<FluidComponent>();
+    if (!fc) {
+        BAHnode = PhysicsEngine::getInstance().RegisterBoundingAreaNode(parent, boundingCircle);
+    }
 }
 
 void CollisionComponent::DrawLayerMaskUI(const char* label, uint16_t* layer) {
@@ -47,6 +50,8 @@ void CollisionComponent::DrawLayerMaskUI(const char* label, uint16_t* layer) {
             boundingCircle.collisionMask = collisionMask;
             BAHnode->area.collisionLayer = collisionLayer;
             BAHnode->area.collisionMask = collisionMask;
+            FluidComponent* fc = parent->GetComponent<FluidComponent>();
+            if (fc) fc->UpdateCollisionLayerMask();
         }
 
         ImGui::PopID();
@@ -78,6 +83,8 @@ void CollisionComponent::CopyTo(Object* other) {
     target->collisionLayer = collisionLayer;
     target->collisionMask = collisionMask;
     target->calculateBoundingCircle();
+    FluidComponent* fc = other->GetComponent<FluidComponent>();
+    if (fc) fc->UpdateCollisionLayerMask();
 }
 
 std::unique_ptr<Component> CollisionComponent::Clone(Object* parent) {
@@ -101,6 +108,18 @@ void CollisionComponent::Deserialize(BinaryReader& r) {
     collisionLayer = r.Read<uint16_t>();
     collisionMask = r.Read<uint16_t>();
     calculateBoundingCircle();
+}
+
+void CollisionComponent::PostLoad() {
+    FluidComponent* fc = parent->GetComponent<FluidComponent>();
+    if (fc) {
+        fc->UpdateCollisionLayerMask();
+        if (BAHnode) {
+            TransformComponent* tc = parent->GetComponent<TransformComponent>();
+            if (tc) tc->RemoveTransformCallback(onTransformCallbackID);
+            PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent);
+        }
+    }
 }
 
 void CollisionComponent::ProcessInspectorUI() {

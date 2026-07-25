@@ -161,7 +161,7 @@ BAHNode<BoundingAreaClass>* BAHNode<BoundingAreaClass>::searchFor(Object* target
 
 template<class BoundingAreaClass>
 void BAHNode<BoundingAreaClass>::DrawBoundingArea() const {
-	DebugCircle::getInstance().DrawCircle(area.center, area.radius, Shader("vertex.txt", "fragment.txt"));
+	DebugCircle::getInstance().DrawCircle(area.center, area.radius, Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
 
 	if (children[0] != nullptr) {
 		children[0]->DrawBoundingArea();

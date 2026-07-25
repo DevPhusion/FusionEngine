@@ -25,6 +25,9 @@ struct FluidParticle {
 
     float poly6Coeff = 0.0f;
     float spikyCoeff = 0.0f;
+
+    uint16_t collisionLayer = 0xFFFF;
+    uint16_t collisionMask = 0xFFFF;
 };
 
 struct RigidBoundary;
@@ -66,6 +69,7 @@ public:
     void SeedParticles();
     void InitRenderResources();
     void UpdateInstanceBuffer();
+    void UpdateCollisionLayerMask();
     void UpdateParticleTransforms();
     void ResizeInstanceBuffer();
     void Draw();

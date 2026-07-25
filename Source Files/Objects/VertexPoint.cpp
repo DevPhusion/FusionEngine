@@ -25,7 +25,7 @@ void VertexPoint::Process(float delta) {
 }
 
 std::unique_ptr<VertexPoint> VertexPoint::CloneVertex() {
-	std::unique_ptr<VertexPoint> newVert = std::make_unique<VertexPoint>(x, y, Shader("vertex.txt", "fragment.txt"));
+	std::unique_ptr<VertexPoint> newVert = std::make_unique<VertexPoint>(x, y, Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
 	newVert->UpdatePosition(x, y);
 	newVert->id = id;
 	return newVert;

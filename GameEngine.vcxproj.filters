@@ -324,6 +324,12 @@
     <ClCompile Include="glad.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Source Files\Core\Scripting\ScriptManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source Files\Core\Scripting\PyBindings.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stb_image.h">
@@ -575,6 +581,12 @@
     <ClInclude Include="Header Files\Objects\VertexPoint.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Header Files\Core\Scripting\ScriptManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Header Files\Core\Scripting\PyBindings.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="GameEngine.rc">
@@ -594,6 +606,16 @@
     <Text Include="Resources\Shaders\grid_fragment.txt" />
     <Text Include="Resources\Shaders\grid_vertex.txt" />
     <Text Include="Resources\Shaders\vertex.txt" />
+    <Text Include="Resources\Shaders\Fluid\fluid_composite_fragment.txt" />
+    <Text Include="Resources\Shaders\Fluid\fluid_composite_vertex.txt" />
+    <Text Include="Resources\Shaders\Fluid\fluid_density_fragment.txt" />
+    <Text Include="Resources\Shaders\Fluid\fluid_density_vertex.txt" />
+    <Text Include="Resources\Shaders\Fluid\fluid_fragment.txt" />
+    <Text Include="Resources\Shaders\Fluid\fluid_solidmask_fragment.txt" />
+    <Text Include="Resources\Shaders\Fluid\fluid_solidmask_vertex.txt" />
+    <Text Include="Resources\Shaders\Fluid\fluid_vector_fragment.txt" />
+    <Text Include="Resources\Shaders\Fluid\fluid_vector_vertex.txt" />
+    <Text Include="Resources\Shaders\Fluid\fluid_vertex.txt" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitattributes" />

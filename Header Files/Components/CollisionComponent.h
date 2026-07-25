@@ -18,6 +18,8 @@ public:
 	uint16_t collisionLayer = static_cast<uint16_t>(CollisionLayer::LAYER_1);
 	uint16_t collisionMask = static_cast<uint16_t>(CollisionMask::LAYER_1);
 
+	int onTransformCallbackID = -1;
+
 	virtual void SetEnabled(bool enabled);
 	virtual void OnDelete();
 	virtual void ProcessInspectorUI();
@@ -25,10 +27,9 @@ public:
 	virtual void CopyTo(Object* other);
 	virtual void Serialize(BinaryWriter& w);
 	virtual void Deserialize(BinaryReader& r);
+	virtual void PostLoad();
 
 	void DrawLayerMaskUI(const char* label, uint16_t* layer);
 	void calculateBoundingCircle();
-private:
-	int onTransformCallbackID = -1;
 };
 

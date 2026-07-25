@@ -54,7 +54,7 @@ int main(int argc, char* argv[]) {
 	glfwShowWindow(window);
 
 	GLFWimage images[1];
-	images[0].pixels = stbi_load("engineIcon.png", &images[0].width, &images[0].height, 0, 4);
+	images[0].pixels = stbi_load("Resources/Images/engineIcon.png", &images[0].width, &images[0].height, 0, 4);
 
 	if (images[0].pixels) {
 		glfwSetWindowIcon(window, 1, images);

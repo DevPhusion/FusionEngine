@@ -90,6 +90,12 @@ void EngineManager::LoadEngineState() {
 	}
 	SavedState.Constraints.clear();
 
+	for (auto& obj : ObjectManager::getInstance().allObjects) {
+		for (auto& c : obj->components) {
+			c->PostLoad();
+		}
+	}
+
 	if (FileManager::getInstance().currentProjectFile != "") FileManager::getInstance().isSaved = false;
 }
 

@@ -404,13 +404,13 @@ void SoftBodyComponent::BuildMassAggregate() {
 	for (int i = 0; i < physicsPointCount; i++)
 	{
 		glm::vec3 p = glm::vec3(rc->points[i][0], rc->points[i][1], 0.0f);
-		std::unique_ptr<PointMass> pm = std::make_unique<PointMass>(Shader("vertex.txt", "fragment.txt"), this, tc->ProjectToWorld(p), i, false);
+		std::unique_ptr<PointMass> pm = std::make_unique<PointMass>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"), this, tc->ProjectToWorld(p), i, false);
 		pm->localPos = p;
 		PhysicsEngine::getInstance().allSoftBodyPointMasses.push_back(pm.get());
 		MassAggregate.push_back(std::move(pm));
 	}
 
-	std::unique_ptr<PointMass> pm = std::make_unique<PointMass>(Shader("vertex.txt", "fragment.txt"), this, tc->GetWorldPosition(), MassAggregate.size(), true);
+	std::unique_ptr<PointMass> pm = std::make_unique<PointMass>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"), this, tc->GetWorldPosition(), MassAggregate.size(), true);
 	pm->localPos = parent->GetComponent<RenderComponent>()->GetCenter();
 	PhysicsEngine::getInstance().allSoftBodyPointMasses.push_back(pm.get());
 	MassAggregate.push_back(std::move(pm));
@@ -529,7 +529,7 @@ float SoftBodyComponent::CalculateVirtualProxyInvInertia(glm::vec3 pos) {
 PointMass* SoftBodyComponent::AddVirtualProxy(glm::vec3 localPos) {
 	glm::vec3 worldPos = parent->GetComponent<TransformComponent>()->ProjectToWorld(localPos);
 	std::unique_ptr<PointMass> virtualRigidbody = std::make_unique<PointMass>(
-		Shader("vertex.txt", "fragment.txt"), this, worldPos, VirtualProxies.size(), false);
+		Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"), this, worldPos, VirtualProxies.size(), false);
 	PointMass* proxy = virtualRigidbody.get();
 	proxy->localPos = localPos;
 	PhysicsEngine::getInstance().allSoftBodyProxies.push_back(proxy);

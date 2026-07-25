@@ -126,6 +126,8 @@ struct RigidBoundary {
 	float surfaceY = 0.0f;
 	bool surfaceValid = false;
 	float rho0 = 0.0f;
+	uint16_t collisionLayer = 0xFFFF;
+	uint16_t collisionMask = 0xFFFF;
 };
 
 struct FluidRigidContact {
@@ -146,6 +148,8 @@ struct SoftBoundary {
 	float surfaceY = 0.0f;
 	bool surfaceValid = false;
 	float rho0 = 0.0f;
+	uint16_t collisionLayer = 0xFFFF;
+	uint16_t collisionMask = 0xFFFF;
 };
 
 struct FluidSoftContact {
@@ -301,7 +305,8 @@ public:
 	void SolvePBFPosition(int particleIdx, std::vector<int>& neighboursIdx, std::vector<glm::vec3>& outPositions);
 	void SolveXSPHViscosity(int particleIdx, std::vector<int>& neighboursIdx, std::vector<glm::vec3>& outDeltas);
 	void SolveVorticityConfinement(int particleIdx, std::vector<int>& neighboursIdx, std::vector<float>& omega, std::vector<glm::vec3>& outForce);
-	bool FindLocalFluidSurface(const glm::vec3& bMin, const glm::vec3& bMax,
+	bool FindLocalFluidSurface(const glm::vec3& bMin, const glm::vec3& bMax, 
+		uint16_t boundaryLayer, uint16_t boundaryMask,
 		float& outSurfaceY, float& outRho0);
 	void ComputeFluidSurfaceQualification();
 	void RefreshRigidBoundariesSurface();

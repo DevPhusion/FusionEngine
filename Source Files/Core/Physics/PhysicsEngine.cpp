@@ -336,6 +336,9 @@ void PhysicsEngine::ResolveFluidBoundaryContactsGeneric(std::vector<FluidParticl
 
 			for (int s = 0; s < (int)boundaries.size(); s++) {
 				if (boundaries[s].obj == p->parent) continue;
+				if (!layerOverlap(p->collisionLayer, p->collisionMask,
+					boundaries[s].collisionLayer, boundaries[s].collisionMask))
+					continue;
 				ContactT c = detect(p->predictedPosition, p->collisionRadius, boundaries[s], s);
 				if (c.hit && c.penetration > best.penetration) {
 					best = c;
@@ -644,6 +647,10 @@ void PhysicsEngine::ResolveSoftRigidContacts(float dtSub) {
 
 		SoftRigidContact best; best.penetration = -INFINITY;
 		for (int r = 0; r < (int)rigidBoundaries.size(); r++) {
+			if (softIdx >= 0 && !layerOverlap(softBoundaries[softIdx].collisionLayer, softBoundaries[softIdx].collisionMask,
+				rigidBoundaries[r].collisionLayer, rigidBoundaries[r].collisionMask))
+				continue;
+
 			const glm::vec3* axisPtr = (softIdx >= 0 && rigidSoftAxisValid[r][softIdx]) ? &rigidSoftAxis[r][softIdx] : nullptr;  // ADD
 			SoftRigidContact c = DetectSoftRigidContact(pm->worldPos, pm->pointRadius, rigidBoundaries[r], axisPtr);
 			if (c.hit && c.penetration > best.penetration) { c.rigidIndex = r; best = c; }
@@ -820,6 +827,9 @@ void PhysicsEngine::ResolveRigidSoftContacts(float dtSub) {
 		RigidSoftContact best; best.penetration = -INFINITY;
 		for (int s = 0; s < (int)softBoundaries.size(); s++) {
 			if (!softBoundaries[s].valid) continue;
+			if (!layerOverlap(rigidBoundaries[rv.rigidIndex].collisionLayer, rigidBoundaries[rv.rigidIndex].collisionMask,
+				softBoundaries[s].collisionLayer, softBoundaries[s].collisionMask))
+				continue;
 			const glm::vec3* axisPtr = rigidSoftAxisValid[rv.rigidIndex][s] ? &rigidSoftAxis[rv.rigidIndex][s] : nullptr; 
 			RigidSoftContact c = DetectRigidSoftContact(rv.worldPos, rigidVertexRadius, softBoundaries[s], axisPtr);
 			if (c.hit && c.penetration > best.penetration) { c.softIndex = s; best = c; }
@@ -1378,11 +1388,17 @@ void PhysicsEngine::GenerateRigidBoundaries() {
 		TransformComponent* tc = obj->GetComponent<TransformComponent>();
 		if (!rc || !tc || rc->edges.empty()) continue;
 
+		CollisionComponent* cc = obj->GetComponent<CollisionComponent>();
+
 		RigidBoundary b;
 		b.obj = obj;
 		b.rb = obj->GetComponent<RigidBodyComponent>(); 
 		b.tc = tc;
 		b.localEdges = rc->edges;
+		if (cc) {
+			b.collisionLayer = cc->collisionLayer;
+			b.collisionMask = cc->collisionMask;
+		}
 		rigidBoundaries.push_back(b);
 	}
 }
@@ -1413,7 +1429,7 @@ void PhysicsEngine::RefreshRigidBoundariesSurface() {
 			rMin = glm::min(rMin, glm::min(e.start, e.end));
 			rMax = glm::max(rMax, glm::max(e.start, e.end));
 		}
-		b.surfaceValid = FindLocalFluidSurface(rMin, rMax, b.surfaceY, b.rho0);
+		b.surfaceValid = FindLocalFluidSurface(rMin, rMax, b.collisionLayer, b.collisionMask, b.surfaceY, b.rho0);
 	}
 }
 
@@ -1428,9 +1444,15 @@ void PhysicsEngine::GenerateSoftBoundaries() {
 		if (!sb->Enabled) continue;
 		if (sb->MassAggregate.size() < 4) continue; // need edgeCount >= 3
 
+		CollisionComponent* cc = obj->GetComponent<CollisionComponent>();
+
 		SoftBoundary b;
 		b.obj = obj;
 		b.sb = sb;
+		if (cc) {
+			b.collisionLayer = cc->collisionLayer;
+			b.collisionMask = cc->collisionMask;
+		}
 		softBoundaries.push_back(b);
 	}
 }
@@ -1456,7 +1478,7 @@ void PhysicsEngine::RefreshSoftBoundariesSurface() {
 			sMin = glm::min(sMin, glm::min(e.edge.start, e.edge.end));
 			sMax = glm::max(sMax, glm::max(e.edge.start, e.edge.end));
 		}
-		b.surfaceValid = FindLocalFluidSurface(sMin, sMax, b.surfaceY, b.rho0);
+		b.surfaceValid = FindLocalFluidSurface(sMin, sMax, b.collisionLayer, b.collisionMask, b.surfaceY, b.rho0);
 	}
 }
 
@@ -1814,7 +1836,9 @@ BAHNode<BoundingCircle>* PhysicsEngine::RegisterBoundingAreaNode(Object* obj, Bo
 
 void PhysicsEngine::UnRegisterBoundingAreaNode(Object* obj) {
 	BAHNode<BoundingCircle>* node = root.searchFor(obj);
-	node->removeLeaf();
+	if (node) {
+		node->removeLeaf();
+	}
 }
 
 // PGS Constraints
@@ -2362,6 +2386,7 @@ void PhysicsEngine::ComputeVorticity(int particleIdx, std::vector<int>& neighbou
 }
 
 bool PhysicsEngine::FindLocalFluidSurface(const glm::vec3& bMin, const glm::vec3& bMax,
+	uint16_t boundaryLayer, uint16_t boundaryMask,
 	float& outSurfaceY, float& outRho0) {
 	if (bMin.x > fluidBoundsMax.x || bMax.x < fluidBoundsMin.x) return false;
 
@@ -2376,6 +2401,9 @@ bool PhysicsEngine::FindLocalFluidSurface(const glm::vec3& bMin, const glm::vec3
 	for (size_t idx = 0; idx < allFluidParticles.size(); idx++) {
 		if (!fluidSurfaceQualifies[idx]) continue;
 		FluidParticle* c = allFluidParticles[idx];
+
+		if (!layerOverlap(c->collisionLayer, c->collisionMask, boundaryLayer, boundaryMask)) continue;
+
 		glm::vec3 r(c->collisionRadius);
 		glm::vec3 pMin = c->position - r;
 		glm::vec3 pMax = c->position + r;
@@ -2384,7 +2412,7 @@ bool PhysicsEngine::FindLocalFluidSurface(const glm::vec3& bMin, const glm::vec3
 		surfaceY = std::max(surfaceY, c->position.y);
 		foundSurface = true;
 
-		if (!haveFallback) { fallbackRestDensity =  0.0f; haveFallback = true; }
+		if (!haveFallback) { fallbackRestDensity = 0.0f; haveFallback = true; }
 
 		if (pMin.y > bMax.y || pMax.y < bMin.y) continue;
 		rho0Sum += c->density;

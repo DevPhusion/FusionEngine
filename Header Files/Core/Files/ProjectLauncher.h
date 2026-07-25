@@ -29,6 +29,8 @@ public:
 		return instance;
 	}
 
+	bool pendingEnterProject = false;
+
 	void Setup(GLFWwindow* window);
 
 	void ProcessLauncher();
@@ -61,6 +63,7 @@ private:
 	void ImportProject();
 	void CreateProjectFromPopup();
 	void ProcessNewProjectPopup();
+	void ProcessLoadingProjectDisplay(const std::string& message);
 	void RemoveProject(int index);
 	void SortProjects();
 };

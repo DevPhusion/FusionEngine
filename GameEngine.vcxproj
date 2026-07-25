@@ -101,12 +101,12 @@
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>D:\Programming\GameEngine\Libraries\include;D:\Programming\GameEngine\Libraries\include\glad;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\User\AppData\Local\Programs\Python\Python311\include;D:\Programming\GameEngine\Libraries\include\glad;D:\Programming\GameEngine\Libraries\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>D:\Programming\GameEngine\Libraries\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Users\User\AppData\Local\Programs\Python\Python311\libs;D:\Programming\GameEngine\Libraries\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
     </Link>
@@ -134,12 +134,12 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>D:\Programming\GameEngine\Libraries\include;D:\Programming\GameEngine\Libraries\include\glad;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\User\AppData\Local\Programs\Python\Python311\include;D:\Programming\GameEngine\Libraries\include\glad;D:\Programming\GameEngine\Libraries\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>D:\Programming\GameEngine\Libraries\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Users\User\AppData\Local\Programs\Python\Python311\libs;D:\Programming\GameEngine\Libraries\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
     </Link>
@@ -158,6 +158,8 @@
     <ClCompile Include="imgui\implot_demo.cpp" />
     <ClCompile Include="imgui\implot_items.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Source Files\Core\Scripting\PyBindings.cpp" />
+    <ClCompile Include="Source Files\Core\Scripting\ScriptManager.cpp" />
     <ClCompile Include="Source Files\Components\CollisionComponent.cpp" />
     <ClCompile Include="Source Files\Components\Component.cpp" />
     <ClCompile Include="Source Files\Components\ComponentTypeID.cpp" />
@@ -303,7 +305,9 @@
     <ClInclude Include="imgui\imstb_rectpack.h" />
     <ClInclude Include="imgui\imstb_textedit.h" />
     <ClInclude Include="imgui\imstb_truetype.h" />
+    <ClInclude Include="Header Files\Core\Scripting\PyBindings.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="Header Files\Core\Scripting\ScriptManager.h" />
     <ClInclude Include="stb_image.h" />
   </ItemGroup>
   <ItemGroup>
@@ -314,6 +318,16 @@
     <Image Include="Resources\Images\engineIcon.png" />
   </ItemGroup>
   <ItemGroup>
+    <Text Include="Resources\Shaders\Fluid\fluid_composite_fragment.txt" />
+    <Text Include="Resources\Shaders\Fluid\fluid_composite_vertex.txt" />
+    <Text Include="Resources\Shaders\Fluid\fluid_density_fragment.txt" />
+    <Text Include="Resources\Shaders\Fluid\fluid_density_vertex.txt" />
+    <Text Include="Resources\Shaders\Fluid\fluid_fragment.txt" />
+    <Text Include="Resources\Shaders\Fluid\fluid_solidmask_fragment.txt" />
+    <Text Include="Resources\Shaders\Fluid\fluid_solidmask_vertex.txt" />
+    <Text Include="Resources\Shaders\Fluid\fluid_vector_fragment.txt" />
+    <Text Include="Resources\Shaders\Fluid\fluid_vector_vertex.txt" />
+    <Text Include="Resources\Shaders\Fluid\fluid_vertex.txt" />
     <Text Include="Resources\Shaders\fragment.txt" />
     <Text Include="Resources\Shaders\grid_fragment.txt" />
     <Text Include="Resources\Shaders\grid_vertex.txt" />

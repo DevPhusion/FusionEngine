@@ -29,6 +29,7 @@ public:
 	virtual size_t GetTypeID() const = 0;
 	virtual void CopyTo(Object* other) = 0;
 	virtual std::unique_ptr<Component> Clone(Object* parent) = 0;
+	virtual void PostLoad() {};
 	virtual void ProcessInspectorUI() = 0;
 	virtual void OnDelete() = 0;
 

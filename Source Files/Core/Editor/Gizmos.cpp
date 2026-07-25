@@ -51,7 +51,7 @@ void Gizmos::DrawFilledQuad(glm::vec3 center, glm::vec3 size, glm::vec4 color, b
         }
     }
 
-    Shader lineShader("vertex.txt", "fragment.txt");
+    Shader lineShader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt");
     lineShader.use();
     lineShader.setVec4D("aColor", color);
 
