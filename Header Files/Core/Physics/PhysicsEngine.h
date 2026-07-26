@@ -333,6 +333,7 @@ public:
 	PhysicsBody GetBodyFromObject(Object* obj);
 private:
 	PhysicsEngine() = default;
+	void PhysicsModeChangeEvent();
 	std::vector<std::unique_ptr<Object>>* allObjects;
 };
 

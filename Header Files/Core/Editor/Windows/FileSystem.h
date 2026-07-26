@@ -18,6 +18,7 @@ private:
 	void ProcessFilterBar();
 	void ProcessEntries();
 	void ProcessCreateFolderPopup();
+	void ProcessCreateScriptPopup();
 	void ProcessEntryContextMenu(const FileSystemEntry& entry);
 
 	void DrawNode(const FileSystemEntry& entry, int depth);
@@ -55,6 +56,10 @@ private:
 	char newFolderNameBuf[128] = "";
 	std::string newFolderTargetPath;
 	bool newFolderPopupRequested = false;
+
+	bool newScriptPopupRequested = false;
+	std::string newScriptTargetPath;
+	char newScriptNameBuf[128] = "";
 
 	int lastSeenGeneration = -1;
 };

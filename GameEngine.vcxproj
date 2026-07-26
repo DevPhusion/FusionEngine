@@ -158,6 +158,7 @@
     <ClCompile Include="imgui\implot_demo.cpp" />
     <ClCompile Include="imgui\implot_items.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Source Files\Components\ScriptComponent.cpp" />
     <ClCompile Include="Source Files\Core\Scripting\PyBindings.cpp" />
     <ClCompile Include="Source Files\Core\Scripting\ScriptManager.cpp" />
     <ClCompile Include="Source Files\Components\CollisionComponent.cpp" />
@@ -308,6 +309,7 @@
     <ClInclude Include="Header Files\Core\Scripting\PyBindings.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Header Files\Core\Scripting\ScriptManager.h" />
+    <ClInclude Include="Header Files\Components\ScriptComponent.h" />
     <ClInclude Include="stb_image.h" />
   </ItemGroup>
   <ItemGroup>

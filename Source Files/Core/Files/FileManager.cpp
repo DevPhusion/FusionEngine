@@ -16,7 +16,30 @@ ResourceIconType FileManager::ClassifyExtension(const std::string& extLower) {
 	if (std::find(imageExts.begin(), imageExts.end(), extLower) != imageExts.end())
 		return ResourceIconType::Image;
 
+	if (extLower == ".py") {
+		return ResourceIconType::Script;
+	}
+
 	return ResourceIconType::Unknown;
+}
+
+void FileManager::ProcessScriptInSubtree(const std::string& virtualPath, const std::function<void(const std::string&)>& callback) const {
+	if (!IsDirectory(virtualPath)) {
+		std::string ext = VirtualToAbsolute(virtualPath).extension().string();
+		std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+		if (ClassifyExtension(ext) == ResourceIconType::Script)
+			callback(virtualPath);
+		return;
+	}
+
+	for (auto& child : GetDirectoryContents(virtualPath))
+		ProcessScriptInSubtree(child.virtualPath, callback);
+}
+
+void FileManager::ScanForScripts(const std::string& virtualDir) {
+	ProcessScriptInSubtree(virtualDir, [](const std::string& scriptVirtualPath) {
+		ScriptManager::getInstance().RegisterScript(scriptVirtualPath);
+		});
 }
 
 void FileManager::SetupResourcesFolder() {
@@ -32,6 +55,9 @@ void FileManager::SetupResourcesFolder() {
 	resourcesRoot = resDir;
 	ClearThumbnailCache();
 	resourceGeneration++;
+
+	ScriptManager::getInstance().ClearRegisteredScripts();
+	ScanForScripts(GetRootVirtualPath());
 
 	ScriptManager::getInstance().SetupPythonEnvironment(currentProjectDirectory);
 }
@@ -113,14 +139,63 @@ bool FileManager::CreateFolder(const std::string& parentVirtualPath, const std::
 	return fs::create_directory(target, ec) && !ec;
 }
 
+bool FileManager::CreateScript(const std::string& parentVirtualPath, const std::string& scriptName) {
+	if (scriptName.empty()) return false;
+
+	std::string fileName = scriptName;
+	const std::string ext = ".py";
+	if (fileName.size() < ext.size() ||
+		fileName.compare(fileName.size() - ext.size(), ext.size(), ext) != 0) {
+		fileName += ext;
+	}
+
+	fs::path target = VirtualToAbsolute(parentVirtualPath) / fileName;
+	std::error_code ec;
+	if (fs::exists(target, ec)) return false;
+
+	std::string className = fs::path(fileName).stem().string();
+	if (!className.empty())
+		className[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(className[0])));
+
+	std::ofstream out(target);
+	if (!out.is_open()) return false;
+
+	out << "from fusion import *\n"
+		<< "\n\n"
+		<< "class " << className << "(Script):\n"
+		<< "\tdef __init__(self):\n"
+		<< "\t\tsuper().__init__()\n"
+		<< "\n"
+		<< "\tdef OnStart(self):\n"
+		<< "\t\tpass\n"
+		<< "\n"
+		<< "\tdef Process(self, delta: float):\n"
+		<< "\t\tpass\n";
+	out.close();
+
+	ScriptManager::getInstance().RegisterScript(AbsoluteToVirtual(target));
+	return true;
+}
+
 bool FileManager::DeleteResource(const std::string& virtualPath) {
 	fs::path target = VirtualToAbsolute(virtualPath);
 	std::error_code ec;
 	if (!fs::exists(target, ec)) return false;
 
 	thumbnailCache.erase(target.string());
+
+	std::vector<std::string> scriptsRemoved;
+	ProcessScriptInSubtree(virtualPath, [&](const std::string& scriptVirtualPath) {
+		scriptsRemoved.push_back(scriptVirtualPath);
+		});
+
 	fs::remove_all(target, ec);
-	return !ec;
+	if (ec) return false;
+
+	for (auto& sp : scriptsRemoved)
+		ScriptManager::getInstance().UnregisterScript(sp);
+
+	return true;
 }
 
 bool FileManager::ImportFile(const std::string& sourceAbsolutePath, const std::string& destVirtualDirectory) {
@@ -132,7 +207,14 @@ bool FileManager::ImportFile(const std::string& sourceAbsolutePath, const std::s
 	fs::path dest = destDir / source.filename();
 
 	fs::copy_file(source, dest, fs::copy_options::overwrite_existing, ec);
-	return !ec;
+	if (ec) return false;
+
+	std::string ext = dest.extension().string();
+	std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+	if (ClassifyExtension(ext) == ResourceIconType::Script)
+		ScriptManager::getInstance().RegisterScript(AbsoluteToVirtual(dest));
+
+	return true;
 }
 
 bool FileManager::RenameResource(const std::string& virtualPath, const std::string& newName) {
@@ -145,8 +227,22 @@ bool FileManager::RenameResource(const std::string& virtualPath, const std::stri
 	if (fs::exists(dest, ec)) return false;
 
 	thumbnailCache.erase(source.string());
+
+	std::vector<std::string> scriptsBefore;
+	ProcessScriptInSubtree(virtualPath, [&](const std::string& scriptVirtualPath) {
+		scriptsBefore.push_back(scriptVirtualPath);
+		});
+
 	fs::rename(source, dest, ec);
-	return !ec;
+	if (ec) return false;
+
+	std::string newVirtualPath = AbsoluteToVirtual(dest);
+	for (auto& oldScriptPath : scriptsBefore) {
+		std::string suffix = oldScriptPath.substr(virtualPath.size()); // "" for a renamed file itself, "/rest/of/path.py" for a folder
+		ScriptManager::getInstance().RenameRegisteredScript(oldScriptPath, newVirtualPath + suffix);
+	}
+
+	return true;
 }
 
 bool FileManager::MoveResource(const std::string& virtualPath, const std::string& destDirVirtualPath) {
@@ -175,11 +271,25 @@ bool FileManager::MoveResource(const std::string& virtualPath, const std::string
 	}
 
 	fs::path dest = destDir / source.filename();
-	if (fs::exists(dest, ec)) return false; 
+	if (fs::exists(dest, ec)) return false;
 
 	thumbnailCache.erase(source.string());
+
+	std::vector<std::string> scriptsBefore;
+	ProcessScriptInSubtree(virtualPath, [&](const std::string& scriptVirtualPath) {
+		scriptsBefore.push_back(scriptVirtualPath);
+		});
+
 	fs::rename(source, dest, ec);
-	return !ec;
+	if (ec) return false;
+
+	std::string newVirtualPath = AbsoluteToVirtual(dest);
+	for (auto& oldScriptPath : scriptsBefore) {
+		std::string suffix = oldScriptPath.substr(virtualPath.size());
+		ScriptManager::getInstance().RenameRegisteredScript(oldScriptPath, newVirtualPath + suffix);
+	}
+
+	return true;
 }
 
 unsigned int FileManager::GetOrLoadThumbnail(const std::filesystem::path& imageAbsolutePath) {

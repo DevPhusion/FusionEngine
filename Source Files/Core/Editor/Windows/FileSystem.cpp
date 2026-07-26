@@ -3,6 +3,11 @@
 #include <algorithm>
 #include <cctype>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <shellapi.h>
+#endif
+
 namespace {
 	std::string ToLower(std::string s) {
 		std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return (char)std::tolower(c); });
@@ -25,6 +30,36 @@ namespace {
 			ImVec2(pos.x + bodyW, pos.y),
 			ImVec2(pos.x + bodyW, pos.y + foldSize),
 			IM_COL32(25, 25, 25, 255));
+	}
+
+
+	void DrawScriptIcon(ImDrawList* dl, ImVec2 pos, float size, ImU32 bodyColor, ImU32 glyphColor) {
+		DrawFileIcon(dl, pos, size, bodyColor);
+
+		float bodyW = size * 0.78f;
+		float cx = pos.x + bodyW * 0.5f;
+		float cy = pos.y + size * 0.62f;
+		float halfW = bodyW * 0.22f;
+		float halfH = size * 0.14f;
+		float thickness = size * 0.07f;
+		if (thickness < 1.0f) thickness = 1.0f;
+
+		dl->AddLine(ImVec2(cx - halfW * 0.2f, cy - halfH), ImVec2(cx - halfW, cy), glyphColor, thickness);
+		dl->AddLine(ImVec2(cx - halfW, cy), ImVec2(cx - halfW * 0.2f, cy + halfH), glyphColor, thickness);
+
+		dl->AddLine(ImVec2(cx + halfW * 0.2f, cy - halfH), ImVec2(cx + halfW, cy), glyphColor, thickness);
+		dl->AddLine(ImVec2(cx + halfW, cy), ImVec2(cx + halfW * 0.2f, cy + halfH), glyphColor, thickness);
+	}
+
+	void OpenPathInVSCode(const std::filesystem::path& projectDir, const std::filesystem::path& fileAbsPath) {
+		std::string args = "\"" + projectDir.string() + "\" -g \"" + fileAbsPath.string() + "\"";
+
+#ifdef _WIN32
+		ShellExecuteA(nullptr, "open", "code", args.c_str(), nullptr, SW_HIDE);
+#else
+		std::string command = "code " + args + " >/dev/null 2>&1 &";
+		std::system(command.c_str());
+#endif
 	}
 }
 
@@ -223,8 +258,11 @@ void FileSystem::DrawNode(const FileSystemEntry& entry, int depth) {
 	if (rowClicked && !isRenaming && !toggledOpen) {
 		SelectPath(entry.virtualPath);
 	}
-	if (rowDoubleClicked && !isRenaming && !toggledOpen) {
+	if (rowDoubleClicked && !isRenaming && !toggledOpen && entry.iconType == ResourceIconType::Folder) {
 		BeginRename(entry.virtualPath, entry.name);
+	}
+	if (rowDoubleClicked && !isRenaming && !toggledOpen && entry.iconType == ResourceIconType::Script) {
+		OpenPathInVSCode(FileManager::getInstance().currentProjectDirectory, entry.absolutePath);
 	}
 
 	bool isRoot = entry.virtualPath == FileManager::getInstance().GetRootVirtualPath();
@@ -271,6 +309,9 @@ void FileSystem::DrawNode(const FileSystemEntry& entry, int depth) {
 			dl->AddImage((ImTextureID)(intptr_t)tex, iconPos, ImVec2(iconPos.x + iconSize, iconPos.y + iconSize));
 		else
 			DrawFileIcon(dl, iconPos, iconSize, IM_COL32(120, 170, 230, 255));
+	}
+	else if (entry.iconType == ResourceIconType::Script) {
+		DrawScriptIcon(dl, iconPos, iconSize, IM_COL32(90, 160, 110, 255), IM_COL32(235, 235, 235, 255));
 	}
 	else {
 		DrawFileIcon(dl, iconPos, iconSize, IM_COL32(160, 160, 160, 255));
@@ -336,6 +377,7 @@ void FileSystem::ProcessFilterBar() {
 	ImGui::InputTextWithHint("##FilterFiles", "Filter Files", filterBuf, IM_ARRAYSIZE(filterBuf));
 
 	ProcessCreateFolderPopup();
+	ProcessCreateScriptPopup();
 }
 
 void FileSystem::ProcessCreateFolderPopup() {
@@ -370,6 +412,39 @@ void FileSystem::ProcessCreateFolderPopup() {
 	}
 }
 
+void FileSystem::ProcessCreateScriptPopup() {
+	if (newScriptPopupRequested) {
+		ImGui::OpenPopup("New Script");
+		newScriptPopupRequested = false;
+	}
+
+	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+	if (ImGui::BeginPopupModal("New Script", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+		ImGui::InputTextWithHint("##NewScriptName", "script_name", newScriptNameBuf, IM_ARRAYSIZE(newScriptNameBuf));
+
+		if (ImGui::Button("Create", ImVec2(100, 0))) {
+			std::string scriptName = newScriptNameBuf;
+			if (!scriptName.empty()) {
+				std::string targetDir = !newScriptTargetPath.empty()
+					? newScriptTargetPath
+					: FileManager::getInstance().GetRootVirtualPath();
+
+				if (FileManager::getInstance().CreateScript(targetDir, scriptName)) {
+					expandedPaths.insert(targetDir);
+					ImGui::CloseCurrentPopup();
+				}
+			}
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Cancel", ImVec2(100, 0)))
+			ImGui::CloseCurrentPopup();
+
+		ImGui::EndPopup();
+	}
+}
+
 void FileSystem::ProcessEntryContextMenu(const FileSystemEntry& entry) {
 	bool isRoot = entry.virtualPath == FileManager::getInstance().GetRootVirtualPath();
 
@@ -380,14 +455,21 @@ void FileSystem::ProcessEntryContextMenu(const FileSystemEntry& entry) {
 	}
 
 	if (entry.isDirectory) {
-		if (ImGui::MenuItem("New Folder")) {
-			newFolderTargetPath = entry.virtualPath;
-			newFolderNameBuf[0] = '\0';
-			newFolderPopupRequested = true;
-		}
-
-		if (ImGui::MenuItem("Add File")) {
-			AddFileToFolder(entry.virtualPath);
+		if (ImGui::BeginMenu("Add")) {
+			if (ImGui::MenuItem("Folder...")) {
+				newFolderTargetPath = entry.virtualPath;
+				newFolderNameBuf[0] = '\0';
+				newFolderPopupRequested = true;
+			}
+			if (ImGui::MenuItem("File...")) {
+				AddFileToFolder(entry.virtualPath);
+			}
+			if (ImGui::MenuItem("Script...")) {
+				newScriptTargetPath = entry.virtualPath;
+				newScriptNameBuf[0] = '\0';
+				newScriptPopupRequested = true;
+			}
+			ImGui::EndMenu();
 		}
 	}
 
@@ -439,6 +521,14 @@ void FileSystem::ProcessWindow() {
 	ProcessFilterBar();
 	ImGui::Dummy(ImVec2(0, 4));
 	ProcessEntries();
+
+	if (!selectedPath.empty() && renamingPath.empty() &&
+		selectedPath != FileManager::getInstance().GetRootVirtualPath() &&
+		ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+		ImGui::IsKeyPressed(ImGuiKey_F2, false)) {
+		std::string currentName = FileManager::getInstance().VirtualToAbsolute(selectedPath).filename().string();
+		BeginRename(selectedPath, currentName);
+	}
 
 	ImGui::End();
 }

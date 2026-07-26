@@ -1,5 +1,7 @@
 #include "../../../Header Files/Core/Scripting/ScriptManager.h"
 #include "../../../Header Files/Core/Scripting/PyBindings.h"
+#include "../../../Header Files/Core/ObjectManager.h"
+#include "../../../Header Files/Components/ScriptComponent.h"
 #include <fstream>
 #include <sstream>
 #include <cstdlib>
@@ -17,11 +19,6 @@ PYBIND11_EMBEDDED_MODULE(fusion, m) {
 }
 
 namespace {
-	// Runs a command hidden (no console window) and optionally captures its
-	// combined stdout+stderr. Invokes the target process directly via
-	// CreateProcessA rather than routing through "cmd.exe /C", since cmd's
-	// /C parsing mangles command lines containing more than two quote
-	// characters (which any command with two quoted paths will have).
 	int RunHiddenCommand(const std::string& command, std::string* outOutput = nullptr) {
 #ifdef _WIN32
 		SECURITY_ATTRIBUTES saAttr{};
@@ -392,4 +389,56 @@ void ScriptManager::WriteVsCodeSettings(const fs::path& projectDirectory,
 		<< "\t\"python.analysis.stubPath\": \"" << stubDir.generic_string() << "\",\n"
 		<< "\t\"python.analysis.extraPaths\": [\"" << stubDir.generic_string() << "\"]\n"
 		<< "}\n";
+}
+
+void ScriptManager::RegisterScript(const std::string& scriptVirtualPath) {
+	if (std::find(registeredScripts.begin(), registeredScripts.end(), scriptVirtualPath) != registeredScripts.end())
+		return;
+	registeredScripts.push_back(scriptVirtualPath);
+}
+
+void ScriptManager::UnregisterScript(const std::string& scriptVirtualPath) {
+	registeredScripts.erase(
+		std::remove(registeredScripts.begin(), registeredScripts.end(), scriptVirtualPath),
+		registeredScripts.end());
+}
+
+void ScriptManager::RenameRegisteredScript(const std::string& oldVirtualPath, const std::string& newVirtualPath) {
+	auto it = std::find(registeredScripts.begin(), registeredScripts.end(), oldVirtualPath);
+	if (it != registeredScripts.end())
+		*it = newVirtualPath;
+}
+
+void ScriptManager::ClearRegisteredScripts() {
+	registeredScripts.clear();
+}
+
+void ScriptManager::RunAllScriptsStart() {
+	for (auto& obj : ObjectManager::getInstance().allObjects) {
+		for (auto& comp : obj->components) {
+			if (auto* script = dynamic_cast<ScriptComponent*>(comp.get())) {
+				if (comp->Enabled) script->RunOnStart();
+			}
+		}
+	}
+}
+
+void ScriptManager::RunAllScriptsProcess(float delta) {
+	for (auto& obj : ObjectManager::getInstance().allObjects) {
+		for (auto& comp : obj->components) {
+			if (auto* script = dynamic_cast<ScriptComponent*>(comp.get())) {
+				if (comp->Enabled) script->RunProcess(delta);
+			}
+		}
+	}
+}
+
+void ScriptManager::RunAllScriptsStop() {
+	for (auto& obj : ObjectManager::getInstance().allObjects) {
+		for (auto& comp : obj->components) {
+			if (auto* script = dynamic_cast<ScriptComponent*>(comp.get())) {
+				script->Unload();
+			}
+		}
+	}
 }

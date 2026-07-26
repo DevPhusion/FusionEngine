@@ -75,8 +75,9 @@ public:
 
 	static void Clear();
 
-private:
 	static void AddMessage(MessageType type, const std::string& text);
+
+private:
 	static std::string FormatCount(size_t count);
 
 	static std::string ToString(bool value) { return value ? "true" : "false"; }

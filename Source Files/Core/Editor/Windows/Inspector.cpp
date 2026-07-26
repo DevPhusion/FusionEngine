@@ -6,6 +6,7 @@
 #include "../../../../Header Files/Components/SoftBodyComponent.h"
 #include "../../../../Header Files/Components/FractureComponent.h"
 #include "../../../../Header Files/Components/FluidComponent.h"
+#include "../../../../Header Files/Components/ScriptComponent.h"
 
 Inspector::Inspector(std::string main) : EditorWindow(main) {
 
@@ -59,7 +60,14 @@ void Inspector::ProcessWindow() {
                 ImGuiTreeNodeFlags_DefaultOpen |
                 ImGuiTreeNodeFlags_SpanAvailWidth;
 
-            bool nodeOpen = ImGui::TreeNodeEx("##compnode", flags, "%s", component->Name.c_str());
+            std::string displayName = component->Name;
+            ScriptComponent* script = dynamic_cast<ScriptComponent*>(component);
+            if (script) {
+                displayName = script->GetDisplayName();
+                if (displayName == "") displayName = "Unknown script";
+            }
+
+            bool nodeOpen = ImGui::TreeNodeEx("##compnode", flags, "%s", displayName.c_str());
 
             if (component->CanDisable) {
                 ImGui::SameLine(availWidth - removeButtonWidth - spacing - checkboxWidth);
@@ -103,12 +111,10 @@ void Inspector::ProcessWindow() {
 
         if (ImGui::BeginPopupModal("Add Component", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings))
         {
-            ImGui::SeparatorText("Component Type");
-
             ImGui::SetNextItemWidth(-1);
             ImGui::InputTextWithHint("##search", "Search...", m_SearchBuffer, sizeof(m_SearchBuffer));
 
-            ImGui::Spacing();
+            ImGui::SeparatorText("Components");
 
             std::string search = m_SearchBuffer;
 
@@ -158,6 +164,39 @@ void Inspector::ProcessWindow() {
                     m_SearchBuffer[0] = '\0';
                     ImGui::CloseCurrentPopup();
                 }
+
+            const auto& registeredScripts = ScriptManager::getInstance().registeredScripts;
+            if (!registeredScripts.empty()) {
+                ImGui::Spacing();
+                ImGui::SeparatorText("Scripts");
+
+                auto hasScript = [&](const std::string& scriptVirtualPath) {
+                    for (auto& comp : selected->components) {
+                        ScriptComponent* sc = dynamic_cast<ScriptComponent*>(comp.get());
+                        if (sc && sc->sourcePath == scriptVirtualPath)
+                            return true;
+                    }
+                    return false;
+                    };
+
+                for (const std::string& scriptPath : registeredScripts) {
+                    if (hasScript(scriptPath))
+                        continue;
+
+                    std::string scriptDisplayName = std::filesystem::path(scriptPath).stem().string();
+                    if (scriptDisplayName.find(search) == std::string::npos)
+                        continue;
+
+                    ImGui::PushID(scriptPath.c_str());
+                    if (ImGui::MenuItem(scriptDisplayName.c_str())) {
+                        selected->AddComponent(std::make_unique<ScriptComponent>(selected, scriptPath));
+                        EngineManager::getInstance().EngineChangeEvent();
+                        m_SearchBuffer[0] = '\0';
+                        ImGui::CloseCurrentPopup();
+                    }
+                    ImGui::PopID();
+                }
+            }
 
             ImGui::Spacing();
             ImGui::Separator();

@@ -35,6 +35,16 @@ public:
 		Failed
 	};
 
+	void RunAllScriptsStart();
+	void RunAllScriptsProcess(float delta);
+	void RunAllScriptsStop();
+
+	std::vector<std::string> registeredScripts;
+	void RegisterScript(const std::string& scriptVirtualPath);
+	void UnregisterScript(const std::string& scriptVirtualPath);
+	void RenameRegisteredScript(const std::string& oldVirtualPath, const std::string& newVirtualPath);
+	void ClearRegisteredScripts();
+
 	bool SetupPythonEnvironment(const std::string& projectDirectory);
 
 	void Update();

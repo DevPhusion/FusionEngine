@@ -169,10 +169,12 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\Header Files\Core\Editor\Windows\Console.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="pch.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\Source Files\Core\Editor\Windows\Console.cpp" />
     <ClCompile Include="..\Source Files\Core\Scripting\PyBindings.cpp" />
     <ClCompile Include="..\Source Files\Core\Scripting\PyBindingsStub.cpp" />
     <ClCompile Include="dllmain.cpp" />

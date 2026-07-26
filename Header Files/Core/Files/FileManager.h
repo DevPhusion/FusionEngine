@@ -3,7 +3,7 @@
 #include <vector>
 #include <filesystem>
 #include <unordered_map>
-
+#include <functional> 
 #include <algorithm>
 #include <fstream>
 #include <cctype>
@@ -13,6 +13,7 @@
 enum class ResourceIconType {
 	Folder,
 	Image,
+	Script,
 	Unknown
 };
 
@@ -42,6 +43,11 @@ public:
 	std::string currentProjectFile = "";
 	std::string currentProjectDirectory = "";
 
+	void ProcessScriptInSubtree(const std::string& virtualPath, const std::function<void(const std::string&)>& callback) const;
+
+	void ScanForScripts(const std::string& virtualDir);
+
+
 	void SetupResourcesFolder();
 
 	const std::filesystem::path& GetResourcesRoot() const { return resourcesRoot; }
@@ -56,6 +62,7 @@ public:
 	std::string AbsoluteToVirtual(const std::filesystem::path& absolutePath) const;
 
 	bool CreateFolder(const std::string& parentVirtualPath, const std::string& folderName);
+	bool CreateScript(const std::string& parentVirtualPath, const std::string& scriptName);
 	bool DeleteResource(const std::string& virtualPath);
 	bool ImportFile(const std::string& sourceAbsolutePath, const std::string& destVirtualDirectory);
 	bool RenameResource(const std::string& virtualPath, const std::string& newName);

@@ -3,12 +3,24 @@
 
 void PhysicsEngine::Setup(std::vector<std::unique_ptr<Object>>* objects) {
 	this->allObjects = objects;
+	EngineManager::getInstance().AddPhysicsModeChangedEvent([this]() {PhysicsModeChangeEvent();});
+}
+
+void PhysicsEngine::PhysicsModeChangeEvent() {
+	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) {
+		ScriptManager::getInstance().RunAllScriptsStart();
+	}
+	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Stop) {
+		ScriptManager::getInstance().RunAllScriptsStop();
+	}
 }
 
 void PhysicsEngine::ProcessPhysics(float delta) {
 	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Pause || EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Stop) {
 		return;
 	}
+
+	ScriptManager::getInstance().RunAllScriptsProcess(delta);
 
 	TIME_BLOCK("Physics");
 
