@@ -34,7 +34,8 @@ public:
 		Done,
 		Failed
 	};
-
+	
+	void RunAllScriptsLoad();
 	void RunAllScriptsStart();
 	void RunAllScriptsProcess(float delta);
 	void RunAllScriptsStop();

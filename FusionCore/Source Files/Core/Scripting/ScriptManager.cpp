@@ -1,5 +1,4 @@
 #include "../../../Header Files/Core/Scripting/ScriptManager.h"
-#include "../../../Header Files/Core/Scripting/PyBindings.h"
 #include "../../../Header Files/Core/ObjectManager.h"
 #include "../../../Header Files/Components/ScriptComponent.h"
 #include <fstream>
@@ -12,11 +11,6 @@
 
 namespace fs = std::filesystem;
 namespace py = pybind11;
-
-
-PYBIND11_EMBEDDED_MODULE(fusion, m) {
-	RegisterEngineBindings(m);
-}
 
 namespace {
 	int RunHiddenCommand(const std::string& command, std::string* outOutput = nullptr) {
@@ -411,6 +405,16 @@ void ScriptManager::RenameRegisteredScript(const std::string& oldVirtualPath, co
 
 void ScriptManager::ClearRegisteredScripts() {
 	registeredScripts.clear();
+}
+
+void ScriptManager::RunAllScriptsLoad() {
+	for (auto& obj : ObjectManager::getInstance().allObjects) {
+		for (auto& comp : obj->components) {
+			if (auto* script = dynamic_cast<ScriptComponent*>(comp.get())) {
+				if (comp->Enabled) script->RunOnLoad();
+			}
+		}
+	}
 }
 
 void ScriptManager::RunAllScriptsStart() {

@@ -1,5 +1,6 @@
 #include "../../../Header Files/Core/Scripting/PyBindings.h"
 #include "../../../Header Files/Core/Editor/Windows/Console.h"
+#include "../../../Header Files/Components/TransformComponent.h"
 #include <pybind11/stl.h>
 #include <pybind11/operators.h>   
 #include <glm/glm.hpp>
@@ -83,13 +84,54 @@ namespace {
 				});
 	}
 
-	struct ScriptBase {
-		virtual ~ScriptBase() = default;
-	};
+	std::unordered_map<PyObject*, std::function<py::object(Object*)>>& ComponentRegistry() {
+		static std::unordered_map<PyObject*, std::function<py::object(Object*)>> registry;
+		return registry;
+	}
+
+	py::object GetComponentByPythonType(Object* parent, const py::object& componentClass) {
+		if (!parent) return py::none();
+
+		auto& registry = ComponentRegistry();
+		auto it = registry.find(componentClass.ptr());
+		if (it == registry.end()) {
+			throw py::type_error(
+				"get_component: '" + py::str(componentClass).cast<std::string>() +
+				"' is not a registered engine component type");
+		}
+		return it->second(parent);
+	}
+
+	template <typename T, typename PyClass>
+	void EnableGetComponent(PyClass& cls) {
+		cls.def("get_component", [](T& self, py::object componentClass) {
+			return GetComponentByPythonType(self.parent, componentClass);
+			}, py::arg("component_class"),
+				"Look up a component on this Object");
+	}
+
+	template <typename T>
+	void RegisterComponentGetter(py::object pyClass) {
+		ComponentRegistry()[pyClass.ptr()] = [](Object* obj) -> py::object {
+			T* comp = obj->GetComponent<T>();
+			if (!comp) return py::none();
+			return py::cast(comp, py::return_value_policy::reference);
+			};
+	}
 
 	void RegisterScriptBindings(py::module_& m) {
-		py::class_<ScriptBase, std::shared_ptr<ScriptBase>>(m, "Script")
+		auto scriptClass = py::class_<ScriptBase, std::shared_ptr<ScriptBase>>(m, "Script")
 			.def(py::init<>());
+
+		EnableGetComponent<ScriptBase>(scriptClass);
+
+		py::class_<ExportMarker>(m, "_ExportMarker")
+			.def(py::init<py::object>());
+
+		m.def("export", [](py::object value) {
+			return ExportMarker{ value };
+			}, py::arg("value"),
+				"Mark a script attribute as editable in the inspector");
 	}
 
 	void RegisterConsoleBindings(py::module_& m) {
@@ -104,6 +146,23 @@ namespace {
 			Console::AddMessage(Console::MessageType::Error, text);
 				}, py::arg("text"));
 	}
+
+	void RegisterComponentBindings(py::module_& m) {
+		auto transformClass = py::class_<TransformComponent>(m, "TransformComponent")
+			.def_property("world_position", &TransformComponent::GetWorldPosition, &TransformComponent::UpdateWorldPosition)
+			.def_property("rotation",
+				[](TransformComponent& self) { return self.rotation; },
+				[](TransformComponent& self, float angle) { self.Rotate(angle); })
+			.def_property("size",
+				[](TransformComponent& self) { return self.size; },
+				[](TransformComponent& self, glm::vec3 scale) { self.Scale(scale); })
+			.def("set_size", &TransformComponent::Scale)
+			.def("set_rotation", &TransformComponent::Rotate)
+			.def("update_world_position", &TransformComponent::UpdateWorldPosition);
+
+		EnableGetComponent<TransformComponent>(transformClass);
+		RegisterComponentGetter<TransformComponent>(transformClass);
+	}
 }
 
 void RegisterEngineBindings(py::module_& m) {
@@ -111,4 +170,5 @@ void RegisterEngineBindings(py::module_& m) {
 	RegisterMathBindings(m);
 	RegisterScriptBindings(m);
 	RegisterConsoleBindings(m);
+	RegisterComponentBindings(m);
 }

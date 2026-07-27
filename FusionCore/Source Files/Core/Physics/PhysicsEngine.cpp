@@ -7,7 +7,8 @@ void PhysicsEngine::Setup(std::vector<std::unique_ptr<Object>>* objects) {
 }
 
 void PhysicsEngine::PhysicsModeChangeEvent() {
-	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) {
+	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate && 
+		EngineManager::getInstance().EnginePrevPhysicsMode == EngineManager::PhysicsMode::Stop) {
 		ScriptManager::getInstance().RunAllScriptsStart();
 	}
 	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Stop) {
@@ -16,6 +17,8 @@ void PhysicsEngine::PhysicsModeChangeEvent() {
 }
 
 void PhysicsEngine::ProcessPhysics(float delta) {
+	ScriptManager::getInstance().RunAllScriptsLoad();
+
 	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Pause || EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Stop) {
 		return;
 	}

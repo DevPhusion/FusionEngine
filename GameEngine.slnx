@@ -1,8 +1,0 @@
-<Solution>
-  <Configurations>
-    <Platform Name="x64" />
-    <Platform Name="x86" />
-  </Configurations>
-  <Project Path="FusionPyStub/FusionPyStub.vcxproj" Id="46bc93b0-3a79-474b-8613-c2b6246b1477" />
-  <Project Path="GameEngine.vcxproj" Id="a87a57a3-56de-451c-9fdc-87ddc8e0d61c" />
-</Solution>

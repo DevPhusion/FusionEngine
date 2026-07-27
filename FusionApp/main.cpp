@@ -4,14 +4,20 @@
 #include<iostream>
 #include <windows.h>
 #include <filesystem>
-#include "Header Files/Core/InputManager.h"
-#include "Header Files/Core/Rendering/Renderer.h"
-#include "Header Files/Core/Physics/PhysicsEngine.h"
-#include "Header Files/Core/EngineManager.h"
-#include "Header Files/Core/Editor/EditorManager.h"
-#include "Header Files/Core/ObjectManager.h"
-#include "Header Files/Core/Files/ProjectLauncher.h"
-#include "Header Files/Core/Rendering/Shader.h"
+#include "../FusionCore/Header Files/Core/InputManager.h"
+#include "../FusionCore/Header Files/Core/Rendering/Renderer.h"
+#include "../FusionCore/Header Files/Core/Physics/PhysicsEngine.h"
+#include "../FusionCore/Header Files/Core/EngineManager.h"
+#include "../FusionCore/Header Files/Core/Editor/EditorManager.h"
+#include "../FusionCore/Header Files/Core/ObjectManager.h"
+#include "../FusionCore/Header Files/Core/Files/ProjectLauncher.h"
+#include "../FusionCore/Header Files/Core/Rendering/Shader.h"
+#include "../FusionCore/Header Files/Core/Scripting/PyBindings.h"
+
+
+PYBIND11_EMBEDDED_MODULE(fusion, m) {
+	RegisterEngineBindings(m);
+}
 
 void cursorPressedCallback(int button, int action, int mods) {
 	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {

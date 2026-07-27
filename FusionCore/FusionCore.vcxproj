@@ -33,7 +33,7 @@
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v145</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
@@ -46,7 +46,7 @@
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v145</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
@@ -77,6 +77,16 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IncludePath>D:\Programming\GameEngine\Libraries\include;$(IncludePath)</IncludePath>
     <LibraryPath>D:\Programming\GameEngine\Libraries\lib;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <OutDir>$(ProjectDir)$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)FusionCore\$(Configuration)</IntDir>
+    <TargetExt>.lib</TargetExt>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <OutDir>$(ProjectDir)$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)FusionCore\$(Configuration)</IntDir>
+    <TargetExt>.lib</TargetExt>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -157,7 +167,6 @@
     <ClCompile Include="imgui\implot.cpp" />
     <ClCompile Include="imgui\implot_demo.cpp" />
     <ClCompile Include="imgui\implot_items.cpp" />
-    <ClCompile Include="main.cpp" />
     <ClCompile Include="Source Files\Components\ScriptComponent.cpp" />
     <ClCompile Include="Source Files\Core\Scripting\PyBindings.cpp" />
     <ClCompile Include="Source Files\Core\Scripting\ScriptManager.cpp" />
@@ -286,6 +295,7 @@
     <ClInclude Include="Header Files\Core\Physics\PhysicsEngine.h" />
     <ClInclude Include="Header Files\Core\Rendering\Renderer.h" />
     <ClInclude Include="Header Files\Core\Rendering\Shader.h" />
+    <ClInclude Include="Header Files\Core\Scripting\ExportedProperty.h" />
     <ClInclude Include="Header Files\Objects\Box.h" />
     <ClInclude Include="Header Files\Objects\Circle.h" />
     <ClInclude Include="Header Files\Objects\Object.h" />
@@ -307,13 +317,9 @@
     <ClInclude Include="imgui\imstb_textedit.h" />
     <ClInclude Include="imgui\imstb_truetype.h" />
     <ClInclude Include="Header Files\Core\Scripting\PyBindings.h" />
-    <ClInclude Include="resource.h" />
     <ClInclude Include="Header Files\Core\Scripting\ScriptManager.h" />
     <ClInclude Include="Header Files\Components\ScriptComponent.h" />
     <ClInclude Include="stb_image.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ResourceCompile Include="GameEngine.rc" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="Resources\Images\engineIcon.ico" />
@@ -334,12 +340,6 @@
     <Text Include="Resources\Shaders\grid_fragment.txt" />
     <Text Include="Resources\Shaders\grid_vertex.txt" />
     <Text Include="Resources\Shaders\vertex.txt" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include=".gitattributes" />
-    <None Include=".gitignore" />
-    <None Include="GameEngine.slnx" />
-    <None Include="imgui.ini" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

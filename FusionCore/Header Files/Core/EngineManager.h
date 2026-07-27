@@ -65,6 +65,7 @@ public:
 
 	InteractMode EngineInteractMode = EditorSelect;
 	PhysicsMode EnginePhysicsMode = Stop;
+	PhysicsMode EnginePrevPhysicsMode = Stop;
 	bool pendingClose = false;
 
 	Settings EngineSettings;

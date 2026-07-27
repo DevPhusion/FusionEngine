@@ -114,6 +114,7 @@ void EngineManager::SwitchInteractMode(InteractMode mode) {
 }
 
 void EngineManager::SwitchPhysicsMode(PhysicsMode mode) {
+	EnginePrevPhysicsMode = EnginePhysicsMode;
 	EnginePhysicsMode = mode;
 
 	for (const auto& [id, func] : PhysicsModeChangedEvents) {
