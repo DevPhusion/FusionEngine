@@ -331,7 +331,7 @@ void ProjectLauncher::ProcessLauncher() {
 
 	ImGui::Dummy(ImVec2(0, 6));
 	ImGui::Indent(8.0f);
-	ImGui::TextUnformatted("Fusion Physics - Projects");
+	ImGui::TextUnformatted("Fusion Engine - Projects");
 	ImGui::Unindent(8.0f);
 	ImGui::Dummy(ImVec2(0, 4));
 	ImGui::Separator();

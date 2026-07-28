@@ -29,6 +29,13 @@
   <ItemGroup>
     <ClInclude Include="resource.h" />
   </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="FusionApp.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="..\Resources\Images\engineIcon.ico" />
+    <Image Include="..\Resources\Images\engineIcon.png" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>

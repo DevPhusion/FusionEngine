@@ -1,16 +1,10 @@
 #include "../../../Header Files/Core/Scripting/ScriptManager.h"
 #include "../../../Header Files/Core/ObjectManager.h"
 #include "../../../Header Files/Components/ScriptComponent.h"
-#include <fstream>
-#include <sstream>
-#include <cstdlib>
 
 #ifdef _WIN32
 #include <windows.h>
 #endif
-
-namespace fs = std::filesystem;
-namespace py = pybind11;
 
 namespace {
 	int RunHiddenCommand(const std::string& command, std::string* outOutput = nullptr) {
@@ -269,27 +263,37 @@ void ScriptManager::GenerateStubFiles(const fs::path& projectDirectory, const fs
 		return;
 	}
 
-	SetStatus(SetupStage::GeneratingStubs, "Installing stub generator...");
-	if (!EnsureStubgenInstalled(venvPath)) {
-		// EnsureStubgenInstalled already logs the specific reason.
+	fs::path sitePackages = GetVenvSitePackages(venvPath);
+	if (sitePackages.empty()) {
+		Console::PrintError("ScriptManager: could not determine venv site-packages directory; stub generation will fail.");
 		WriteVsCodeSettings(projectDirectory, venvPath, stubDir);
 		return;
 	}
 
-	fs::path sitePackages = GetVenvSitePackages(venvPath);
-	if (!sitePackages.empty()) {
-		fs::path targetCopy = sitePackages / compiledModule.filename();
-		if (!fs::exists(targetCopy, ec)) {
-			fs::copy_file(compiledModule, targetCopy, fs::copy_options::overwrite_existing, ec);
-			if (ec) {
-				Console::PrintError(
-					"ScriptManager: failed to copy compiled module into venv site-packages: {}"
-				).Format(ec.message());
-			}
+	fs::path targetCopy = sitePackages / compiledModule.filename();
+	bool cachedModuleExisted = fs::exists(targetCopy, ec);
+	bool moduleChanged = !cachedModuleExisted || ModulesDiffer(compiledModule, targetCopy);
+
+	bool stubsMissing = !fs::exists(stubDir, ec) || fs::is_empty(stubDir, ec);
+
+	if (!moduleChanged && !stubsMissing) {
+		WriteVsCodeSettings(projectDirectory, venvPath, stubDir);
+		return;
+	}
+
+	if (moduleChanged) {
+		fs::copy_file(compiledModule, targetCopy, fs::copy_options::overwrite_existing, ec);
+		if (ec) {
+			Console::PrintError(
+				"ScriptManager: failed to copy compiled module into venv site-packages: {}"
+			).Format(ec.message());
 		}
 	}
-	else {
-		Console::PrintError("ScriptManager: could not determine venv site-packages directory; stub generation will fail.");
+
+	SetStatus(SetupStage::GeneratingStubs, "Installing stub generator...");
+	if (!EnsureStubgenInstalled(venvPath)) {
+		WriteVsCodeSettings(projectDirectory, venvPath, stubDir);
+		return;
 	}
 
 	SetStatus(SetupStage::GeneratingStubs, "Generating .pyi stubs...");
@@ -305,9 +309,13 @@ void ScriptManager::GenerateStubFiles(const fs::path& projectDirectory, const fs
 			"ScriptManager: pybind11-stubgen exited with code {} : {}. Stubs may be incomplete"
 		).Format(result, stubgenOutput);
 	}
+	else if (moduleChanged && cachedModuleExisted) {
+		Console::Print("ScriptManager: updated python API found, updated automatically");
+	}
 
 	WriteVsCodeSettings(projectDirectory, venvPath, stubDir);
 }
+
 
 bool ScriptManager::EnsureStubgenInstalled(const fs::path& venvPath) {
 	fs::path venvPython = GetVenvPythonExecutable(venvPath);
@@ -332,6 +340,32 @@ bool ScriptManager::EnsureStubgenInstalled(const fs::path& venvPath) {
 	}
 
 	return result == 0;
+}
+
+bool ScriptManager::ModulesDiffer(const fs::path& lhs, const fs::path& rhs) const {
+	std::error_code ec;
+	auto lhsSize = fs::file_size(lhs, ec);
+	if (ec) return true;
+	auto rhsSize = fs::file_size(rhs, ec);
+	if (ec) return true;
+	if (lhsSize != rhsSize) return true;
+
+	std::ifstream fa(lhs, std::ios::binary);
+	std::ifstream fb(rhs, std::ios::binary);
+	if (!fa.is_open() || !fb.is_open()) return true;
+
+	constexpr std::size_t kChunkSize = 1 << 16;
+	std::vector<char> bufA(kChunkSize), bufB(kChunkSize);
+	while (fa && fb) {
+		fa.read(bufA.data(), kChunkSize);
+		fb.read(bufB.data(), kChunkSize);
+		auto readA = fa.gcount();
+		auto readB = fb.gcount();
+		if (readA != readB) return true;
+		if (readA > 0 && std::memcmp(bufA.data(), bufB.data(), static_cast<size_t>(readA)) != 0)
+			return true;
+	}
+	return false;
 }
 
 std::filesystem::path ScriptManager::FindCompiledModule() const {

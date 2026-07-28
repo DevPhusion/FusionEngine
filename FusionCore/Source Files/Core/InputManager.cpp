@@ -12,6 +12,21 @@ std::unordered_map <std::vector<int>, std::function<void(double, double)>, Vecto
 
 std::unordered_map<int, bool> InputManager::keys = {};
 
+std::unordered_set<int> InputManager::keysJustPressed = {};
+std::unordered_set<int> InputManager::keysJustReleased = {};
+
+std::unordered_map<int, bool> InputManager::mouseButtons = {};
+std::unordered_set<int> InputManager::mouseButtonsJustPressed = {};
+std::unordered_set<int> InputManager::mouseButtonsJustReleased = {};
+
+std::unordered_map<int, std::unordered_map<int, std::function<void()>>> InputManager::onKeyPressedCallbacks = {};
+std::unordered_map<int, std::unordered_map<int, std::function<void()>>> InputManager::onKeyJustPressedCallbacks = {};
+std::unordered_map<int, std::unordered_map<int, std::function<void()>>> InputManager::onKeyReleasedCallbacks = {};
+
+std::unordered_map<int, std::unordered_map<int, std::function<void()>>> InputManager::onMouseButtonPressedCallbacks = {};
+std::unordered_map<int, std::unordered_map<int, std::function<void()>>> InputManager::onMouseButtonJustPressedCallbacks = {};
+std::unordered_map<int, std::unordered_map<int, std::function<void()>>> InputManager::onMouseButtonReleasedCallbacks = {};
+
 void InputManager::Setup(GLFWwindow* window) {
 	this->window = window;
 	glfwSetMouseButtonCallback(this->window, OnMouseButton);
@@ -73,7 +88,7 @@ void InputManager::OnCursorPosition(GLFWwindow* window, double xpos, double ypos
 	glfwGetCursorPos(window, &mouseX, &mouseY);
 
 	int windowWidth, windowHeight;
-	glfwGetFramebufferSize(window, &windowWidth, &windowHeight); // ← change this
+	glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
 	glX = (2.0f * static_cast<float>(xpos) / windowWidth) - 1.0f;
 	glY = 1.0f - (2.0f * static_cast<float>(ypos) / windowHeight);
 	glX = glX * EngineManager::getInstance().aspectRatio;
@@ -85,8 +100,8 @@ void InputManager::OnCursorPosition(GLFWwindow* window, double xpos, double ypos
 	}
 
 	std::sort(sortedCalls.begin(), sortedCalls.end(), [](const auto& a, const auto& b) {
-		return a.first[1] > b.first[1]; // Sort by priority index
-	});
+		return a.first[1] > b.first[1];
+		});
 
 	for (const auto& [id, func] : sortedCalls) {
 		func(xpos, ypos);
@@ -95,6 +110,15 @@ void InputManager::OnCursorPosition(GLFWwindow* window, double xpos, double ypos
 
 void InputManager::OnMouseButton(GLFWwindow* window, int button, int action, int mods) {
 	ImGui_ImplGlfw_MouseButtonCallback(window, button, action, mods);
+
+	if (action == GLFW_PRESS) {
+		mouseButtons[button] = true;
+		mouseButtonsJustPressed.insert(button);
+	}
+	else if (action == GLFW_RELEASE) {
+		mouseButtons[button] = false;
+		mouseButtonsJustReleased.insert(button);
+	}
 
 	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
 		mouseLeftHold = true;
@@ -123,7 +147,7 @@ void InputManager::OnMouseButton(GLFWwindow* window, int button, int action, int
 	}
 
 	std::sort(sortedCalls.begin(), sortedCalls.end(), [](const auto& a, const auto& b) {
-		return a.first[1] > b.first[1]; // Sort by priority index
+		return a.first[1] > b.first[1];
 		});
 
 	for (const auto& [id, func] : sortedCalls) {
@@ -140,9 +164,11 @@ void InputManager::OnKeyButton(GLFWwindow* window, int key, int scancode, int ac
 
 	if (action == GLFW_PRESS) {
 		keys[key] = true;
+		keysJustPressed.insert(key);
 	}
 	else if (action == GLFW_RELEASE) {
 		keys[key] = false;
+		keysJustReleased.insert(key);
 	}
 
 	if (EditorManager::getInstance().WindowTyped) {
@@ -156,7 +182,7 @@ void InputManager::OnKeyButton(GLFWwindow* window, int key, int scancode, int ac
 	}
 
 	std::sort(sortedCalls.begin(), sortedCalls.end(), [](const auto& a, const auto& b) {
-		return a.first[1] > b.first[1]; // Sort by priority index
+		return a.first[1] > b.first[1];
 		});
 
 	for (const auto& [id, func] : sortedCalls) {
@@ -178,10 +204,141 @@ void InputManager::OnMouseScroll(GLFWwindow* window, double xoffset, double yoff
 	}
 
 	std::sort(sortedCalls.begin(), sortedCalls.end(), [](const auto& a, const auto& b) {
-		return a.first[1] > b.first[1]; // Sort by priority index
+		return a.first[1] > b.first[1];
 		});
 
 	for (const auto& [id, func] : sortedCalls) {
 		func(xoffset, yoffset);
 	}
+}
+
+bool InputManager::IsKeyPressed(int key) {
+	auto it = keys.find(key);
+	return it != keys.end() && it->second;
+}
+
+bool InputManager::IsKeyJustPressed(int key) {
+	return keysJustPressed.count(key) != 0;
+}
+
+bool InputManager::IsKeyReleased(int key) {
+	return keysJustReleased.count(key) != 0;
+}
+
+bool InputManager::IsMouseButtonPressed(int button) {
+	auto it = mouseButtons.find(button);
+	return it != mouseButtons.end() && it->second;
+}
+
+bool InputManager::IsMouseButtonJustPressed(int button) {
+	return mouseButtonsJustPressed.count(button) != 0;
+}
+
+bool InputManager::IsMouseButtonReleased(int button) {
+	return mouseButtonsJustReleased.count(button) != 0;
+}
+
+std::pair<int, int> InputManager::OnKeyPressed(int key, std::function<void()> func) {
+	CurrentInputCallbackID += 1;
+	onKeyPressedCallbacks[key][CurrentInputCallbackID] = std::move(func);
+	return { key, CurrentInputCallbackID };
+}
+
+std::pair<int, int> InputManager::OnKeyJustPressed(int key, std::function<void()> func) {
+	CurrentInputCallbackID += 1;
+	onKeyJustPressedCallbacks[key][CurrentInputCallbackID] = std::move(func);
+	return { key, CurrentInputCallbackID };
+}
+
+std::pair<int, int> InputManager::OnKeyReleased(int key, std::function<void()> func) {
+	CurrentInputCallbackID += 1;
+	onKeyReleasedCallbacks[key][CurrentInputCallbackID] = std::move(func);
+	return { key, CurrentInputCallbackID };
+}
+
+std::pair<int, int> InputManager::OnMouseButtonPressed(int button, std::function<void()> func) {
+	CurrentInputCallbackID += 1;
+	onMouseButtonPressedCallbacks[button][CurrentInputCallbackID] = std::move(func);
+	return { button, CurrentInputCallbackID };
+}
+
+std::pair<int, int> InputManager::OnMouseButtonJustPressed(int button, std::function<void()> func) {
+	CurrentInputCallbackID += 1;
+	onMouseButtonJustPressedCallbacks[button][CurrentInputCallbackID] = std::move(func);
+	return { button, CurrentInputCallbackID };
+}
+
+std::pair<int, int> InputManager::OnMouseButtonReleased(int button, std::function<void()> func) {
+	CurrentInputCallbackID += 1;
+	onMouseButtonReleasedCallbacks[button][CurrentInputCallbackID] = std::move(func);
+	return { button, CurrentInputCallbackID };
+}
+
+void InputManager::RemoveKeyPressedCallback(std::pair<int, int> id) {
+	auto it = onKeyPressedCallbacks.find(id.first);
+	if (it != onKeyPressedCallbacks.end()) it->second.erase(id.second);
+}
+
+void InputManager::RemoveKeyJustPressedCallback(std::pair<int, int> id) {
+	auto it = onKeyJustPressedCallbacks.find(id.first);
+	if (it != onKeyJustPressedCallbacks.end()) it->second.erase(id.second);
+}
+
+void InputManager::RemoveKeyReleasedCallback(std::pair<int, int> id) {
+	auto it = onKeyReleasedCallbacks.find(id.first);
+	if (it != onKeyReleasedCallbacks.end()) it->second.erase(id.second);
+}
+
+void InputManager::RemoveMouseButtonPressedCallback(std::pair<int, int> id) {
+	auto it = onMouseButtonPressedCallbacks.find(id.first);
+	if (it != onMouseButtonPressedCallbacks.end()) it->second.erase(id.second);
+}
+
+void InputManager::RemoveMouseButtonJustPressedCallback(std::pair<int, int> id) {
+	auto it = onMouseButtonJustPressedCallbacks.find(id.first);
+	if (it != onMouseButtonJustPressedCallbacks.end()) it->second.erase(id.second);
+}
+
+void InputManager::RemoveMouseButtonReleasedCallback(std::pair<int, int> id) {
+	auto it = onMouseButtonReleasedCallbacks.find(id.first);
+	if (it != onMouseButtonReleasedCallbacks.end()) it->second.erase(id.second);
+}
+
+void InputManager::DispatchFrameEvents() {
+	for (auto& [key, callbacks] : onKeyPressedCallbacks) {
+		if (!IsKeyPressed(key)) continue;
+		for (auto& [id, func] : callbacks) func();
+	}
+	for (auto& [button, callbacks] : onMouseButtonPressedCallbacks) {
+		if (!IsMouseButtonPressed(button)) continue;
+		for (auto& [id, func] : callbacks) func();
+	}
+
+	for (int key : keysJustPressed) {
+		auto it = onKeyJustPressedCallbacks.find(key);
+		if (it == onKeyJustPressedCallbacks.end()) continue;
+		for (auto& [id, func] : it->second) func();
+	}
+	for (int key : keysJustReleased) {
+		auto it = onKeyReleasedCallbacks.find(key);
+		if (it == onKeyReleasedCallbacks.end()) continue;
+		for (auto& [id, func] : it->second) func();
+	}
+	for (int button : mouseButtonsJustPressed) {
+		auto it = onMouseButtonJustPressedCallbacks.find(button);
+		if (it == onMouseButtonJustPressedCallbacks.end()) continue;
+		for (auto& [id, func] : it->second) func();
+	}
+	for (int button : mouseButtonsJustReleased) {
+		auto it = onMouseButtonReleasedCallbacks.find(button);
+		if (it == onMouseButtonReleasedCallbacks.end()) continue;
+		for (auto& [id, func] : it->second) func();
+	}
+}
+
+void InputManager::ClearFrameState() {
+	keysJustPressed.clear();
+	keysJustReleased.clear();
+	mouseButtonsJustPressed.clear();
+	mouseButtonsJustReleased.clear();
 }

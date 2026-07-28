@@ -6,6 +6,7 @@
 #include "../../../../Header Files/Components/SoftBodyComponent.h"
 #include "../../../../Header Files/Components/FractureComponent.h"
 #include "../../../../Header Files/Components/FluidComponent.h"
+#include "../../../../Header Files/Components/CameraComponent.h"
 #include "../../../../Header Files/Components/ScriptComponent.h"
 
 Inspector::Inspector(std::string main) : EditorWindow(main) {
@@ -118,6 +119,13 @@ void Inspector::ProcessWindow() {
 
             std::string search = m_SearchBuffer;
 
+            if (!selected->HasComponent<CameraComponent>() && std::string("Camera Component").find(search) != std::string::npos)
+                if (ImGui::MenuItem("Camera Component")) {
+                    selected->AddComponent(std::make_unique<CameraComponent>(selected));
+                    EngineManager::getInstance().EngineChangeEvent();
+                    m_SearchBuffer[0] = '\0';
+                    ImGui::CloseCurrentPopup();
+                }
             if (!selected->HasComponent<RigidBodyComponent>() && std::string("Rigid Body Component").find(search) != std::string::npos)
                 if (ImGui::MenuItem("Rigid Body Component")) {
                     selected->AddComponent(std::make_unique<RigidBodyComponent>(selected));

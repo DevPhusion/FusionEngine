@@ -7,8 +7,13 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
-
+#include <fstream>
+#include <sstream>
+#include <cstdlib>
 #include "../../../Header Files/Core/Editor/Windows/Console.h"
+
+namespace fs = std::filesystem;
+namespace py = pybind11;
 
 class ScriptManager
 {
@@ -71,6 +76,7 @@ private:
 	void GenerateStubFiles(const std::filesystem::path& projectDirectory, const std::filesystem::path& venvPath);
 	bool EnsureStubgenInstalled(const std::filesystem::path& venvPath);
 	std::filesystem::path FindCompiledModule() const;
+	bool ModulesDiffer(const fs::path& lhs, const fs::path& rhs) const;
 
 	void WriteVsCodeSettings(const std::filesystem::path& projectDirectory,
 		const std::filesystem::path& venvPath, const std::filesystem::path& stubDir);

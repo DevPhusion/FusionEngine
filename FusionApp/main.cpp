@@ -45,7 +45,7 @@ int main(int argc, char* argv[]) {
 	const int launcherHeight = 600;
 
 	glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-	GLFWwindow* window = glfwCreateWindow(launcherWidth, launcherHeight, "Fusion Physics - Projects", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(launcherWidth, launcherHeight, "Fusion Engine - Projects", NULL, NULL);
 	glfwMakeContextCurrent(window);
 	gladLoadGL();
 
@@ -117,7 +117,7 @@ int main(int argc, char* argv[]) {
 
 		if (!enteredEditor) {
 			enteredEditor = true;
-			glfwSetWindowTitle(window, "Fusion Physics");
+			glfwSetWindowTitle(window, "Fusion Engine");
 			glfwMaximizeWindow(window);
 			glfwPollEvents();
 			prev_t = glfwGetTime();
@@ -130,6 +130,8 @@ int main(int argc, char* argv[]) {
 
 		if (delta > 0.1f) delta = 0.1f;
 		physicsAccumulator += delta;
+
+		InputManager::getInstance().DispatchFrameEvents();
 
 		Camera::getInstance().ProcessCamera(delta);
 
@@ -147,6 +149,8 @@ int main(int argc, char* argv[]) {
 
 		Renderer::getInstance().Draw();
 		EditorManager::getInstance().ProcessEditor();
+
+		InputManager::getInstance().ClearFrameState();
 
 		glfwSwapBuffers(window);
 	}

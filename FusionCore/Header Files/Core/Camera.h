@@ -2,6 +2,8 @@
 #include "InputManager.h"
 #include <glm/glm.hpp>
 
+class CameraComponent;
+
 class Camera
 {
 public:
@@ -13,6 +15,7 @@ public:
 		return instance;
 	}
 
+	CameraComponent* mainCam = nullptr;
 	glm::mat4 viewMatrix = glm::mat4(1.0f);
 	glm::mat4 viewMatrixInverse = glm::mat4(1.0f);
 	glm::vec3 cameraPos = glm::vec3(0);
@@ -21,12 +24,18 @@ public:
 	float cameraZoom = 5;
 	float delta = 0;
 
+	glm::vec3 savedPosition;
+	float savedZoom;
+	float savedRotation;
+
 	void Setup();
+	void PhysicsModeChanged();
 	void ProcessCamera(float delta);
 	void SetCameraPosition(glm::vec3 pos);
 	void SetCameraRotation(float rot);
 	void SetCameraZoom(float zoom);
 	void ScrollCallback(double xoffset, double yoffset);
+	glm::vec3 WorldPositionToCameraTranslation(glm::vec3 worldPos, float zoom, float rotation);
 private:
 	Camera() {};
 };
