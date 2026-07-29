@@ -24,20 +24,8 @@ void TransformComponent::CopyTo(Object* other) {
 	target->SetOriginTransform(this->OriginTransform);
 	target->UpdateWorldPosition(target->GetWorldPosition());
 
-	Shape shapeCopy = parent->GetComponent<RenderComponent>()->currentShape;
-
-	std::visit([&](auto&& s) {
-		using T = std::decay_t<decltype(s)>;
-		if constexpr (std::is_same_v<T, RectangleShape> || std::is_same_v<T, CircleShape>) {
-			s.center = target->GetWorldPosition(); 
-		}
-		}, shapeCopy);
-
-	other->GetComponent<RenderComponent>()->SetShape(shapeCopy);
-	target->SetRotationCenter(other->GetComponent<RenderComponent>()->GetCenter());
-
-	target->rotation = this->rotation;
-	target->size = this->size;
+	target->pendingRotation = this->rotation;
+	target->pendingScale = this->size;
 }
 
 std::unique_ptr<Component> TransformComponent::Clone(Object* parent) {
@@ -47,20 +35,9 @@ std::unique_ptr<Component> TransformComponent::Clone(Object* parent) {
 	comp->SetRotationCenter(rotation_center);
 	comp->SetOriginTransform(OriginTransform);
 	comp->UpdateWorldPosition(comp->GetWorldPosition());
-
-	Shape shapeCopy = this->parent->GetComponent<RenderComponent>()->currentShape;
-
-	std::visit([&](auto&& s) {
-		using T = std::decay_t<decltype(s)>;
-		if constexpr (std::is_same_v<T, RectangleShape> || std::is_same_v<T, CircleShape>) {
-			s.center = comp->GetWorldPosition();
-		}
-		}, shapeCopy);
-
-	parent->GetComponent<RenderComponent>()->SetShape(shapeCopy); 
-	comp->SetRotationCenter(parent->GetComponent<RenderComponent>()->GetCenter());
-	comp->Scale(size);
-	comp->Rotate(rotation);
+	
+	comp->pendingScale = size;
+	comp->pendingRotation = rotation;
 
 	comp->SetEnabled(false);
 	return comp;
@@ -79,22 +56,8 @@ void TransformComponent::Deserialize(BinaryReader& r) {
 	SetRotationCenter(r.Read<glm::vec3>());
 	SetOriginTransform(r.Read<glm::mat4>());
 	UpdateWorldPosition(GetWorldPosition());
-
-	RenderComponent* rc = parent->GetComponent<RenderComponent>();
-	if (rc) {
-		std::visit([&](auto&& s) {
-			using T = std::decay_t<decltype(s)>;
-			if constexpr (std::is_same_v<T, RectangleShape> || std::is_same_v<T, CircleShape>) {
-				s.center = GetWorldPosition();
-			}
-			}, rc->pendingShape);
-
-		rc->SetShape(rc->pendingShape); 
-		SetRotationCenter(rc->GetCenter());
-	}
-
-	Rotate(r.Read<float>());
-	Scale(r.Read<glm::vec3>());
+	pendingRotation = r.Read<float>();
+	pendingScale = r.Read<glm::vec3>();
 }
 
 void TransformComponent::ProcessInspectorUI() {
@@ -254,7 +217,8 @@ void TransformComponent::ProcessTransform() {
 	this->transform = glm::scale(this->transform, size);
 
 	this->transform = glm::translate(this->transform, -rotation_center); // Translate back to original pos
-	glm::mat4 projection = glm::ortho(-EngineManager::getInstance().aspectRatio, EngineManager::getInstance().aspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
+	glm::mat4 projection = glm::ortho(-EngineManager::getInstance().gameAspectRatio,
+		EngineManager::getInstance().gameAspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
 	this->shader.setMat4D("projection", projection);
 	this->shader.setMat4D("transform", this->transform);
 	this->shader.setMat4D("view", Camera::getInstance().viewMatrix);

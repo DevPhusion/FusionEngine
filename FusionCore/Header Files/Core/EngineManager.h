@@ -16,6 +16,7 @@ enum class FluidHeatmapMode {
 
 struct Settings {
 	glm::vec4 backgroundColor = glm::vec4(0.235f, 0.239f, 0.216f, 1.0f);
+	glm::vec2 gameResolution = glm::vec2(1920, 1080);
 	bool drawBackgroundGrid = true;
 	bool drawObjectWireframe = false;
 	bool drawBroadPhaseBounds = false;
@@ -79,6 +80,9 @@ public:
 	float windowWidth;
 	float windowHeight;
 	float aspectRatio;
+	float resolutionWidth = 1920;
+	float resolutionHeight = 1080;
+	float gameAspectRatio = (resolutionWidth / resolutionHeight);
 	std::unordered_map<int, std::function<void()>> InteractModeChangedEvents;
 	std::unordered_map<int, std::function<void()>> PhysicsModeChangedEvents;
 
@@ -89,6 +93,9 @@ public:
 	void EngineChangeEvent();
 	void SwitchInteractMode(InteractMode mode);
 	void SwitchPhysicsMode(PhysicsMode mode);
+	void SetGameResolution(float width, float height);
+	void SerializeEngineSettings(BinaryWriter& w);
+	void DeserializeEngineSettings(BinaryReader& r);
 	int AddInteractModeChangedEvent(std::function<void()> func);
 	int AddPhysicsModeChangedEvent(std::function<void()> func);
 	void RemovePhysicsModeChangedEvent(int ID);

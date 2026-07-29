@@ -26,7 +26,7 @@ void DebugPoint::DrawPoint(glm::vec3 position, float pixelSize, Shader shader) {
 
     shader.use();
 
-    glm::mat4 projection = glm::ortho(-EngineManager::getInstance().aspectRatio, EngineManager::getInstance().aspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
+    glm::mat4 projection = glm::ortho(-EngineManager::getInstance().gameAspectRatio, EngineManager::getInstance().gameAspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
     shader.setMat4D("projection", projection);
     shader.setMat4D("view", Camera::getInstance().viewMatrix);
 
@@ -35,7 +35,7 @@ void DebugPoint::DrawPoint(glm::vec3 position, float pixelSize, Shader shader) {
     shader.setMat4D("transform", transform);
 
  
-    shader.setVec4D("color", glm::vec4(0.0f, 0.0f, 1.0f, 1.0f));
+    shader.setVec4D("aColor", glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
 
     glPointSize(pixelSize);
 

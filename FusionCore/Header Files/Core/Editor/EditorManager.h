@@ -5,6 +5,7 @@
 #include "Windows/FileSystem.h"
 #include "Windows/EngineProfiler.h"
 #include "Windows/Console.h"
+#include "Windows/Viewport.h"
 #include "../../../imgui/implot.h"
 #include <vector>
 class EditorManager
@@ -19,6 +20,7 @@ public:
 	}
 
 	Object* selectedObject;
+	Viewport* gameViewport = nullptr;
 
 	std::vector<EditorWindow*> Windows;
 	bool WindowHovered; 

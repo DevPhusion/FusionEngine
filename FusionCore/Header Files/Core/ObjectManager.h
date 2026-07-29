@@ -1,8 +1,17 @@
 #pragma once
-#include "../Objects/Polygon.h"
-#include "../Objects/Box.h"
-#include "../Objects/Circle.h"
 #include "../Objects/VertexPoint.h"
+#include "Rendering/Shader.h"
+#include "../Components/RenderComponent.h"
+#include "../Components/TransformComponent.h"
+#include "../Components/VertexComponent.h"
+#include "../Components/RigidBodyComponent.h"
+#include "../Components/MouseInteractComponent.h"
+#include "../Components/CollisionComponent.h"
+#include "../Components/ConstraintComponent.h"
+#include <glad/glad.h>
+#include <iostream>
+#include <vector>
+#include <string>
 #include "InputManager.h"
 class ObjectManager
 {

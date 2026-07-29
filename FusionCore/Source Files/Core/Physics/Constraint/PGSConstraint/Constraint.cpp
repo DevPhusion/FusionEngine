@@ -33,7 +33,8 @@ Object* CreateAttachPointDisplay(const std::string& ownerName, const std::string
 
     auto display = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
     display->name = ownerName + " " + suffix + " Attach Display";
-    display->AddComponent(std::make_unique<RenderComponent>(display.get(), vertices, display->shader, "red.jpg"));
+    display->AddComponent(std::make_unique<RenderComponent>(display.get(), vertices, display->shader, ""));
+    display->GetComponent<RenderComponent>()->color = glm::vec4(1, 0, 0, 1);
     display->GetComponent<RenderComponent>()->z_index = 999;
     display->AddComponent(std::make_unique<TransformComponent>(
         display.get(), display->shader,

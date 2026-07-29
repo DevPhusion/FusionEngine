@@ -155,6 +155,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Source Files\Components\EditorRenderComponent.cpp" />
     <ClCompile Include="Source Files\Components\CameraComponent.cpp" />
     <ClCompile Include="glad.c" />
     <ClCompile Include="imgui\imgui.cpp" />
@@ -226,15 +227,14 @@
     <ClCompile Include="Source Files\Core\Physics\PhysicsEngine.cpp" />
     <ClCompile Include="Source Files\Core\Rendering\Renderer.cpp" />
     <ClCompile Include="Source Files\Core\Rendering\Shader.cpp" />
-    <ClCompile Include="Source Files\Objects\Box.cpp" />
-    <ClCompile Include="Source Files\Objects\Circle.cpp" />
     <ClCompile Include="Source Files\Objects\Object.cpp" />
     <ClCompile Include="Source Files\Objects\PointMass.cpp" />
-    <ClCompile Include="Source Files\Objects\Polygon.cpp" />
     <ClCompile Include="Source Files\Objects\VertexPoint.cpp" />
     <ClCompile Include="stb_image.cpp" />
+    <ClCompile Include="Source Files\Core\Editor\Windows\Viewport.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Header Files\Components\EditorRenderComponent.h" />
     <ClInclude Include="Header Files\Components\CameraComponent.h" />
     <ClInclude Include="Header Files\Components\CollisionComponent.h" />
     <ClInclude Include="Header Files\Components\Component.h" />
@@ -298,11 +298,8 @@
     <ClInclude Include="Header Files\Core\Rendering\Renderer.h" />
     <ClInclude Include="Header Files\Core\Rendering\Shader.h" />
     <ClInclude Include="Header Files\Core\Scripting\ExportedProperty.h" />
-    <ClInclude Include="Header Files\Objects\Box.h" />
-    <ClInclude Include="Header Files\Objects\Circle.h" />
     <ClInclude Include="Header Files\Objects\Object.h" />
     <ClInclude Include="Header Files\Objects\PointMass.h" />
-    <ClInclude Include="Header Files\Objects\Polygon.h" />
     <ClInclude Include="Header Files\Objects\VertexPoint.h" />
     <ClInclude Include="imgui\dirent.h" />
     <ClInclude Include="imgui\imconfig.h" />
@@ -322,6 +319,7 @@
     <ClInclude Include="Header Files\Core\Scripting\ScriptManager.h" />
     <ClInclude Include="Header Files\Components\ScriptComponent.h" />
     <ClInclude Include="stb_image.h" />
+    <ClInclude Include="Header Files\Core\Editor\Windows\Viewport.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="Resources\Images\engineIcon.ico" />

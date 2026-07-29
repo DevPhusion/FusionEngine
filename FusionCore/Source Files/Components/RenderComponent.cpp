@@ -6,8 +6,6 @@
 RenderComponent::RenderComponent(Object* parent, std::vector<float> vertices, Shader shader, std::string texture_path) : ComponentBase<RenderComponent>(parent) {
 	Name = "Render Component";
 
-	CanRemove = false;
-
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -494,12 +492,14 @@ void RenderComponent::CopyTo(Object* other) {
 	target->z_index = z_index;
 	target->SetTexture(texture_path);
 	target->color = color;
+	target->pendingShape = currentShape;
 }
 
 std::unique_ptr<Component> RenderComponent::Clone(Object* parent) {
 	std::unique_ptr<RenderComponent> comp = std::make_unique<RenderComponent>(parent, Vertices, parent->shader, texture_path);
 	comp->z_index = z_index;
 	comp->color = color;
+	comp->pendingShape = currentShape;
 	comp->SetEnabled(false);
 	return comp;
 }
@@ -561,6 +561,22 @@ void RenderComponent::Deserialize(BinaryReader& r) {
 		s.vertices = r.ReadArray<float>();
 		pendingShape = s;
 	}
+}
+
+void RenderComponent::PostLoad() {
+	TransformComponent* tc = parent->GetComponent<TransformComponent>();
+	std::visit([&](auto&& s) {
+		using T = std::decay_t<decltype(s)>;
+		if constexpr (std::is_same_v<T, RectangleShape> || std::is_same_v<T, CircleShape>) {
+			s.center = tc->GetWorldPosition();
+		}
+		}, pendingShape);
+
+	SetShape(pendingShape);
+	
+	tc->SetRotationCenter(GetCenter());
+	tc->rotation = tc->pendingRotation;
+	tc->size = tc->pendingScale;
 }
 
 void RenderComponent::ProcessInspectorUI() {

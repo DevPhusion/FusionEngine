@@ -5,7 +5,15 @@ bool MouseInteractComponent::ObjectSelected = false;
 MouseInteractComponent::MouseInteractComponent(Object* parent, bool physicsInteract) : ComponentBase<MouseInteractComponent>(parent) {
 	Name = "Mouse Interact Component";
 	this->physicsInteract = physicsInteract;
-	int priority = parent->GetComponent<RenderComponent>()->z_index;
+
+	int priority = 0;
+	if (parent->HasComponent<RenderComponent>()) {
+		priority = parent->GetComponent<RenderComponent>()->z_index;
+	}
+	else if (parent->HasComponent<EditorRenderComponent>()) {
+		priority = parent->GetComponent<EditorRenderComponent>()->z_index;
+	}
+
 	mouseButtonCallbackID = InputManager::getInstance().SetMouseButtonCallback([this](int button, int action, int mods) {this->FindSelectedPolygon(button, action, mods);}, priority);
 	cursorPosCallbackID = InputManager::getInstance().SetCursorPositionCallback([this](double xpos, double ypos) {this->DragPolygon(xpos, ypos);}, priority);
 	physicsModeChangedCallbackID = EngineManager::getInstance().AddPhysicsModeChangedEvent([this]() {this->OnPhysicsModeChanged();});
@@ -94,32 +102,36 @@ void MouseInteractComponent::FindSelectedPolygon(int button, int action, int mod
 			return;
 
 		glm::vec3 mousePos = parent->GetComponent<TransformComponent>()->GetTransformedPoint(glm::vec3(InputManager::glX, InputManager::glY, 0), true);
-		if (parent->GetComponent<RenderComponent>()->IsInsideShape(mousePos)) {
+
+		bool inside = false;
+		if (parent->HasComponent<RenderComponent>()) {
+			inside = parent->GetComponent<RenderComponent>()->IsInsideShape(mousePos);
+		}
+		else if (parent->HasComponent<EditorRenderComponent>()) {
+			inside = parent->GetComponent<EditorRenderComponent>()->IsInsideShape(mousePos);
+		}
+
+		if (inside) {
 			Selected = true;
 			ObjectSelected = true;
-			
+
 			if (physicsInteract && EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) {
 				if (parent->HasComponent<RigidBodyComponent>()) {
 					if (mouseDragForce != nullptr) {
 						PhysicsEngine::getInstance().UnRegisterForce(parent, mouseDragForce);
 					}
-
 					mouseDragForce = new MouseDrag(150.0f, 24.5f);
 					PhysicsEngine::getInstance().RegisterForce(parent, mouseDragForce);
 				}
-
 				if (parent->HasComponent<SoftBodyComponent>()) {
-					SoftBodyComponent* sb = parent->GetComponent<SoftBodyComponent>();
-					sb->isDragging = true;
+					parent->GetComponent<SoftBodyComponent>()->isDragging = true;
 				}
 			}
-
 			SetSelectedPolygon(parent, true);
 		}
 		else {
 			SetSelectedPolygon(parent, false);
 		}
-		
 	}
 
 	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS) {

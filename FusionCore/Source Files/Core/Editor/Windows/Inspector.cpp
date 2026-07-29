@@ -119,6 +119,13 @@ void Inspector::ProcessWindow() {
 
             std::string search = m_SearchBuffer;
 
+            if (!selected->HasComponent<RenderComponent>() && std::string("Render Component").find(search) != std::string::npos)
+                if (ImGui::MenuItem("Render Component")) {
+                    selected->AddComponent(std::make_unique<RenderComponent>(selected, std::vector<float> {}, selected->shader, ""));
+                    EngineManager::getInstance().EngineChangeEvent();
+                    m_SearchBuffer[0] = '\0';
+                    ImGui::CloseCurrentPopup();
+                }
             if (!selected->HasComponent<CameraComponent>() && std::string("Camera Component").find(search) != std::string::npos)
                 if (ImGui::MenuItem("Camera Component")) {
                     selected->AddComponent(std::make_unique<CameraComponent>(selected));

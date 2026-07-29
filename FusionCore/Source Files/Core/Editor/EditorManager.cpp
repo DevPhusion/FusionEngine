@@ -18,6 +18,9 @@ void EditorManager::Setup(GLFWwindow* window) {
 	AddWindow(new Console("Console"));
 	AddWindow(new EngineProfiler("Profiler"));
 	AddWindow(new FileSystem("File System"));
+
+	gameViewport = new Viewport("Viewport");   // NEW
+	AddWindow(gameViewport);
 }
 
 void EditorManager::AddWindow(EditorWindow* window) {
@@ -74,6 +77,7 @@ void EditorManager::ProcessDockSpace() {
 		ImGui::DockBuilderDockWindow("Console", dockBot);
 		ImGui::DockBuilderDockWindow("Profiler", dockBot);
 		ImGui::DockBuilderDockWindow("File System", dockLeftBottom);
+		ImGui::DockBuilderDockWindow("Viewport", dockMain);
 
 		ImGui::DockBuilderFinish(dockspaceId);
 
@@ -97,8 +101,9 @@ void EditorManager::ProcessEditor() {
 	ImGui::NewFrame();
 
 	ImGuiIO& io = ImGui::GetIO();
-	WindowHovered = io.WantCaptureMouse;
-	WindowTyped = io.WantCaptureKeyboard;
+	bool overGameViewport = gameViewport && gameViewport->IsHovered();
+	WindowHovered = io.WantCaptureMouse && !overGameViewport;      
+	WindowTyped = io.WantCaptureKeyboard && !overGameViewport;   
 
 	ProcessDockSpace();
 

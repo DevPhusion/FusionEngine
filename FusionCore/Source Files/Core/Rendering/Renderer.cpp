@@ -11,7 +11,7 @@ void Renderer::Draw() {
 
     glm::vec2 camPos = glm::vec2(Camera::getInstance().cameraPos.x, Camera::getInstance().cameraPos.y);
 
-    glm::vec2 screenSize = glm::vec2(EngineManager::getInstance().windowWidth, EngineManager::getInstance().windowHeight);
+    glm::vec2 screenSize = glm::vec2(EngineManager::getInstance().resolutionWidth, EngineManager::getInstance().resolutionHeight);
     float zoom = Camera::getInstance().cameraZoom;
 
     auto& debug = EngineManager::getInstance().EngineSettings;
@@ -39,6 +39,11 @@ void Renderer::Draw() {
             if ((*allObjects)[i]->HasComponent<RenderComponent>()) {
                 renderQueue.push_back((*allObjects)[i].get());
             }
+
+            if ((*allObjects)[i]->HasComponent<EditorRenderComponent>() &&
+                EngineManager::getInstance().EnginePhysicsMode != EngineManager::PhysicsMode::Simulate) {
+                renderQueue.push_back((*allObjects)[i].get());
+            }
         }
         std::sort(renderQueue.begin(), renderQueue.end(), [](Object* a, Object* b) {
             float zA = 0.0f;
@@ -47,13 +52,31 @@ void Renderer::Draw() {
             if (a->HasComponent<RenderComponent>()) {
                 zA = a->GetComponent<RenderComponent>()->z_index;
             }
+            else {
+                zA = a->GetComponent<EditorRenderComponent>()->z_index;
+            }
             if (b->HasComponent<RenderComponent>()) {
                 zB = b->GetComponent<RenderComponent>()->z_index;
+            }
+            else {
+                zB = b->GetComponent<EditorRenderComponent>()->z_index;
             }
 
             return zA < zB;
             });
     }  
+
+    if (EngineManager::getInstance().EnginePhysicsMode != EngineManager::PhysicsMode::Simulate) {
+        {
+            TIME_BLOCK("Draw camera bounds");
+            for (size_t i = 0; i < (*allObjects).size(); i++) {
+                CameraComponent* camComp = (*allObjects)[i]->GetComponent<CameraComponent>();
+                if (camComp) {
+                    camComp->DrawDebug();
+                }
+            }
+        }
+    }
 
     for (Object* obj : renderQueue) {
         if (obj->HasComponent<FluidComponent>()) {
@@ -65,7 +88,12 @@ void Renderer::Draw() {
         else {
             {
                 TIME_BLOCK("Draw objects");
-                obj->GetComponent<RenderComponent>()->Draw();
+                if (obj->HasComponent<RenderComponent>()) {
+                    obj->GetComponent<RenderComponent>()->Draw();
+                }
+                else {
+                    obj->GetComponent<EditorRenderComponent>()->Draw();
+                }
             }
         }
         
@@ -208,8 +236,8 @@ void Renderer::DrawLine(glm::vec3 p1, glm::vec3 p2, glm::vec4 color, float thick
     glBindTexture(GL_TEXTURE_2D, whiteTex);
 
     glm::mat4 identity(1.0f);
-    glm::mat4 projection = glm::ortho(-EngineManager::getInstance().aspectRatio,
-        EngineManager::getInstance().aspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
+    glm::mat4 projection = glm::ortho(-EngineManager::getInstance().gameAspectRatio,
+        EngineManager::getInstance().gameAspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
 
     lineShader.setMat4D("projection", projection);
     lineShader.setMat4D("transform", identity);

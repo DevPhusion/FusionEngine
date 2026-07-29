@@ -84,14 +84,20 @@ void InputManager::RemoveMouseScrollCallback(std::vector<int> ID) {
 void InputManager::OnCursorPosition(GLFWwindow* window, double xpos, double ypos) {
 	ImGui_ImplGlfw_CursorPosCallback(window, xpos, ypos);
 
-	double mouseX, mouseY;
-	glfwGetCursorPos(window, &mouseX, &mouseY);
+	Viewport* gameViewport = EditorManager::getInstance().gameViewport;
+	if (gameViewport) {
+		ImVec2 panelPos = gameViewport->panelPos;
+		ImVec2 panelSize = gameViewport->panelSize;
 
-	int windowWidth, windowHeight;
-	glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
-	glX = (2.0f * static_cast<float>(xpos) / windowWidth) - 1.0f;
-	glY = 1.0f - (2.0f * static_cast<float>(ypos) / windowHeight);
-	glX = glX * EngineManager::getInstance().aspectRatio;
+		if (panelSize.x > 0 && panelSize.y > 0) {
+			float localX = (float)xpos - panelPos.x;
+			float localY = (float)ypos - panelPos.y;
+
+			glX = (2.0f * localX / panelSize.x) - 1.0f;
+			glY = 1.0f - (2.0f * localY / panelSize.y);
+			glX = glX * EngineManager::getInstance().gameAspectRatio;
+		}
+	}
 
 	std::vector<std::pair<std::vector<int>, std::function<void(double, double)>>> sortedCalls;
 

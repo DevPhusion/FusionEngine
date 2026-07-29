@@ -23,7 +23,10 @@ public:
 	glm::vec3 prevPos = glm::vec3(0);
 	glm::vec3 size = glm::vec3(1);
 	std::unordered_map<int, std::function<void()>> transformCallback;
-	float rotation = 0;
+	float rotation = 0.0f;
+
+	glm::vec3 pendingScale = glm::vec3(0);
+	float pendingRotation = 0.0f;
 
 	virtual void OnDelete();
 	virtual void ProcessInspectorUI();

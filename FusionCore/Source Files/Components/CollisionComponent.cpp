@@ -120,6 +120,9 @@ void CollisionComponent::PostLoad() {
             PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent);
         }
     }
+    else {
+        calculateBoundingCircle();
+    }
 }
 
 void CollisionComponent::ProcessInspectorUI() {
@@ -133,6 +136,7 @@ void CollisionComponent::SetEnabled(bool enabled) {
         if (!BAHnode) {
             BAHnode = PhysicsEngine::getInstance().RegisterBoundingAreaNode(parent, boundingCircle);
         }
+        calculateBoundingCircle();
     }
     else {
         PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent);

@@ -58,8 +58,8 @@ void Gizmos::DrawFilledQuad(glm::vec3 center, glm::vec3 size, glm::vec4 color, b
     glm::mat4 model = glm::translate(glm::mat4(1.0f), center);
     model = glm::scale(model, renderSize);
 
-    glm::mat4 projection = glm::ortho(-EngineManager::getInstance().aspectRatio,
-        EngineManager::getInstance().aspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
+    glm::mat4 projection = glm::ortho(-EngineManager::getInstance().gameAspectRatio,
+        EngineManager::getInstance().gameAspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
 
     lineShader.setMat4D("projection", projection);
     lineShader.setMat4D("view", Camera::getInstance().viewMatrix);
@@ -96,14 +96,21 @@ void Gizmos::UpdateGizmos() {
 }
 
 glm::vec3 Gizmos::ScreenToWorld(double xpos, double ypos) {
-	float windowWidth = (float)EngineManager::getInstance().windowWidth;
-	float windowHeight = (float)EngineManager::getInstance().windowHeight;
+	Viewport* gameViewport = EditorManager::getInstance().gameViewport;
+	if (!gameViewport) return glm::vec3(0.0f);
+
+	ImVec2 panelPos = gameViewport->panelPos;
+	ImVec2 panelSize = gameViewport->panelSize;
+	if (panelSize.x <= 0.0f || panelSize.y <= 0.0f) return glm::vec3(0.0f);
+
+	float localX = (float)xpos - panelPos.x;
+	float localY = (float)ypos - panelPos.y;
+
+	float ndcX = (localX / panelSize.x) * 2.0f - 1.0f;
+	float ndcY = 1.0f - (localY / panelSize.y) * 2.0f;
+
 	float aspectRatio = EngineManager::getInstance().aspectRatio;
-
-	float ndcX = ((float)xpos / windowWidth) * 2.0f - 1.0f;
-	float ndcY = 1.0f - ((float)ypos / windowHeight) * 2.0f; 
-
-	float viewX = ndcX * aspectRatio; 
+	float viewX = ndcX * aspectRatio;
 	float viewY = ndcY;
 
 	glm::vec4 viewPos = glm::vec4(viewX, viewY, 0.0f, 1.0f);

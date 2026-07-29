@@ -5,6 +5,7 @@
 #include "../Core/Physics/Constraint/XPBDConstraint/XPBDAreaConstraint.h"
 #include "../Core/Physics/Constraint/XPBDConstraint/XPBDProxyPointConstraint.h"
 #include "../Core/Physics/Constraint/XPBDConstraint/XPBDTriAreaConstraint.h" 
+#include "../Components/MouseInteractComponent.h"
 #include "../Core/Rendering/Renderer.h"
 #include <variant>
 
@@ -57,6 +58,7 @@ public:
 	void RemoveVirtualProxy(PointMass* proxy);
 	std::vector<SoftEdge> GetEdgesFromMassAggregate();
 
+	virtual void PostLoad();
 	virtual void SetEnabled(bool Enabled);
 	virtual void ProcessInspectorUI();
 	virtual void OnDelete();

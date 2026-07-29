@@ -5,6 +5,7 @@
 #include "SoftBodyComponent.h"
 #include "TransformComponent.h"
 #include "RenderComponent.h"
+#include "EditorRenderComponent.h"
 #include "../Core/EngineManager.h"
 #include "VertexComponent.h"
 #include "../Core/Physics/Forces/MouseDrag.h"

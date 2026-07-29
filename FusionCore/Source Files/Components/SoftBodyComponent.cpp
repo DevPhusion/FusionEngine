@@ -190,6 +190,10 @@ void SoftBodyComponent::Deserialize(BinaryReader& r) {
 	gasAmount = r.Read<float>();
 }
 
+void SoftBodyComponent::PostLoad() {
+	RebuildMassAggregate();
+}
+
 void SoftBodyComponent::SetEnabled(bool Enabled) {
 	Component::SetEnabled(Enabled);
 	

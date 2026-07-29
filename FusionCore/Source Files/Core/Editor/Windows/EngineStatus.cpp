@@ -261,6 +261,21 @@ void EngineStatus::ProcessSettingsPopup() {
 		ImGui::SameLine();
 		ImGui::ColorEdit4("##Background color", &settings.backgroundColor.x);
 
+		ImGui::Text("Game resolution: ");                                  
+		ImGui::SameLine();                                                  
+		{                                                                    
+			int res[2] = {                                                  
+				(int)EngineManager::getInstance().resolutionWidth,          
+				(int)EngineManager::getInstance().resolutionHeight         
+			};                                                               
+			ImGui::SetNextItemWidth(160.0f);                                
+			if (ImGui::InputInt2("##Game resolution", res)) {              
+				EngineManager::getInstance().SetGameResolution(            
+					(float)std::max(1, res[0]),                             
+					(float)std::max(1, res[1]));                            
+			}                                                                
+		}
+
 		ImGui::Spacing();
 		ImGui::SeparatorText("Debug");
 

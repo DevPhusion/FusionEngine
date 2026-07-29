@@ -611,12 +611,16 @@ void FluidComponent::DrawDensityPass() {
 	GLint prevViewport[4];
 	glGetIntegerv(GL_VIEWPORT, prevViewport);
 
+	GLint prevFBO = 0;                                  // NEW
+	glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO);     // NEW - capture whatever's actually bound (the game's Viewport FBO)
+
 	glBindFramebuffer(GL_FRAMEBUFFER, densityFBO);
 	glViewport(0, 0, densityW, densityH);
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	glm::mat4 projection = glm::ortho(-EngineManager::getInstance().aspectRatio, EngineManager::getInstance().aspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
+	glm::mat4 projection = glm::ortho(-EngineManager::getInstance().gameAspectRatio,
+		EngineManager::getInstance().gameAspectRatio, -1.0f, 1.0f, -1.0f, 1.0f); // also fixed aspect source, see below
 	glm::mat4 view = Camera::getInstance().viewMatrix;
 
 	glEnable(GL_BLEND);
@@ -645,7 +649,7 @@ void FluidComponent::DrawDensityPass() {
 
 		for (const RigidBoundary* rb : overlappingRigid) {
 			float waterLine = GetWaterLine(*rb);
-			if (waterLine == -INFINITY) continue; // nothing touching it yet
+			if (waterLine == -INFINITY) continue;
 			solidMaskShader.setFloat("waterLevel", waterLine);
 			DrawObjectSilhouette(*rb);
 		}
@@ -659,7 +663,7 @@ void FluidComponent::DrawDensityPass() {
 		glBlendEquation(GL_FUNC_ADD);
 	}
 
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)prevFBO);   
 	glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
 }
 
@@ -749,7 +753,7 @@ void FluidComponent::DrawVelocityField() {
 	glBufferData(GL_ARRAY_BUFFER, lineVerts.size() * sizeof(float), lineVerts.data(), GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-	glm::mat4 projection = glm::ortho(-EngineManager::getInstance().aspectRatio, EngineManager::getInstance().aspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
+	glm::mat4 projection = glm::ortho(-EngineManager::getInstance().gameAspectRatio, EngineManager::getInstance().gameAspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
 	glm::mat4 view = Camera::getInstance().viewMatrix;
 
 	glEnable(GL_BLEND);
@@ -766,7 +770,7 @@ void FluidComponent::DrawVelocityField() {
 }
 
 void FluidComponent::DrawParticlesDebug() {
-	glm::mat4 projection = glm::ortho(-EngineManager::getInstance().aspectRatio, EngineManager::getInstance().aspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
+	glm::mat4 projection = glm::ortho(-EngineManager::getInstance().gameAspectRatio, EngineManager::getInstance().gameAspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
 	glm::mat4 view = Camera::getInstance().viewMatrix;
 
 	bool showVectorField = EngineManager::getInstance().EngineSettings.drawFluidsVelocityField;

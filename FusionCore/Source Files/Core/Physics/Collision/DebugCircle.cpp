@@ -32,7 +32,7 @@ void DebugCircle::DrawCircle(glm::vec3 center, float radius, Shader shader) {
 
     shader.use();
 
-    glm::mat4 projection = glm::ortho(-EngineManager::getInstance().aspectRatio, EngineManager::getInstance().aspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
+    glm::mat4 projection = glm::ortho(-EngineManager::getInstance().gameAspectRatio, EngineManager::getInstance().gameAspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
     shader.setMat4D("projection", projection);
     shader.setMat4D("view", Camera::getInstance().viewMatrix);
 

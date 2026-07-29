@@ -1,6 +1,7 @@
 #include "../../Header Files/Core/EngineManager.h"
 #include "../../Header Files/Core/ObjectManager.h"
 #include "../../Header Files/Core/Physics/Constraint/PGSConstraint/Constraint.h"
+#include "../../Header Files/Core/Editor/Windows/Viewport.h"
 
 void EngineManager::Setup(GLFWwindow* window) {
 	int windowWidth, windowHeight;
@@ -103,6 +104,62 @@ void EngineManager::EngineChangeEvent() {
 	if (EnginePhysicsMode == PhysicsMode::Stop) {
 		FileManager::getInstance().isSaved = false;
 	}
+}
+
+void EngineManager::SetGameResolution(float width, float height) {
+	if (width <= 0.0f || height <= 0.0f) return;
+
+	resolutionWidth = width;
+	resolutionHeight = height;
+	gameAspectRatio = resolutionWidth / resolutionHeight;
+
+	Viewport* gameViewport = EditorManager::getInstance().gameViewport;
+	if (gameViewport) {
+		gameViewport->Resize((int)resolutionWidth, (int)resolutionHeight); // NEW - see step 3
+	}
+}
+
+void EngineManager::SerializeEngineSettings(BinaryWriter& w) {
+	Settings& s = EngineSettings;
+
+	w.Write(resolutionWidth);
+	w.Write(resolutionHeight);
+
+	w.Write(s.backgroundColor);
+	w.Write(s.drawBackgroundGrid);
+	w.Write(s.drawObjectWireframe);
+	w.Write(s.drawBroadPhaseBounds);
+	w.Write(s.colorCollisions);
+	w.Write(s.drawCollisionNormals);
+	w.Write(s.drawContactPoints);
+	w.Write(s.drawSoftBodyPointMasses);
+	w.Write(s.drawSoftBodySprings);
+	w.Write(s.drawVirtualSoftBodyProxies);
+	w.Write(s.drawFluidsAsParticles);
+	w.Write(s.drawFluidsVelocityField);
+	w.Write(static_cast<uint32_t>(s.fluidHeatmapMode)); 
+}
+
+void EngineManager::DeserializeEngineSettings(BinaryReader& r) {
+	Settings& s = EngineSettings;
+
+	float resWidth = r.Read<float>();
+	float resHeight = r.Read<float>();
+	SetGameResolution(resWidth, resHeight); 
+
+	s.backgroundColor = r.Read<glm::vec4>();
+	s.drawBackgroundGrid = r.Read<bool>();
+	s.drawObjectWireframe = r.Read<bool>();
+	s.drawBroadPhaseBounds = r.Read<bool>();
+	s.colorCollisions = r.Read<bool>();
+	s.drawCollisionNormals = r.Read<bool>();
+	s.drawContactPoints = r.Read<bool>();
+	s.drawSoftBodyPointMasses = r.Read<bool>();
+	s.drawSoftBodySprings = r.Read<bool>();
+	s.drawVirtualSoftBodyProxies = r.Read<bool>();
+	s.drawFluidsAsParticles = r.Read<bool>();
+	s.drawFluidsVelocityField = r.Read<bool>();
+	s.fluidHeatmapMode = static_cast<FluidHeatmapMode>(r.Read<uint32_t>());
 }
 
 void EngineManager::SwitchInteractMode(InteractMode mode) {

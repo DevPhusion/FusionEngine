@@ -16,7 +16,6 @@ struct Edge {
 	glm::vec3 end;
 };
 
-
 struct PolygonShape {
 	std::vector<float> vertices;
 };
@@ -61,6 +60,7 @@ public:
 	virtual std::unique_ptr<Component> Clone(Object* parent);
 	virtual void Serialize(BinaryWriter& w);
 	virtual void Deserialize(BinaryReader& r);
+	virtual void PostLoad();
 
 	int AddOnShapeSetCallback(std::function<void()> func);
 	void RemoveOnShapeSetCallback(int ID);

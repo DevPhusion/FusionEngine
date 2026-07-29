@@ -143,12 +143,22 @@ int main(int argc, char* argv[]) {
 		EngineManager::getInstance().ProcessEngine(delta);
 		ObjectManager::getInstance().ProcessObjects(delta);
 
+		Viewport* gameViewport = EditorManager::getInstance().gameViewport;
+
 		glm::vec4& bg = EngineManager::getInstance().EngineSettings.backgroundColor;
+
+		gameViewport->BeginRenderGame();                         
 		glad_glClearColor(bg.r, bg.g, bg.b, bg.a);
 		glClear(GL_COLOR_BUFFER_BIT);
-
 		Renderer::getInstance().Draw();
-		EditorManager::getInstance().ProcessEditor();
+		gameViewport->EndRenderGame();                            
+
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);                    
+		glViewport(0, 0, (int)EngineManager::getInstance().windowWidth, (int)EngineManager::getInstance().windowHeight);
+		glClearColor(0.11f, 0.11f, 0.13f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+
+		EditorManager::getInstance().ProcessEditor();               // ImGui draws the Viewport image + all panels
 
 		InputManager::getInstance().ClearFrameState();
 

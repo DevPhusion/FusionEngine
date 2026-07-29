@@ -11,6 +11,7 @@
 #include "FluidComponent.h"
 #include "ScriptComponent.h"
 #include "CameraComponent.h"
+#include "EditorRenderComponent.h"
 
 std::unique_ptr<Component> CreateComponentFromName(Object* parent, std::string name) {
 	if (name == "Render Component") {
@@ -45,6 +46,9 @@ std::unique_ptr<Component> CreateComponentFromName(Object* parent, std::string n
 	}
 	if (name == "Camera Component") {
 		return std::make_unique<CameraComponent>(parent);
+	}
+	if (name == "Editor Render Component") {
+		return std::make_unique<EditorRenderComponent>(parent, parent->shader);
 	}
 	if (name == "Script Component") {
 		return std::make_unique<ScriptComponent>(parent, "");

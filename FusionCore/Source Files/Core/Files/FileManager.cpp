@@ -49,7 +49,9 @@ void FileManager::SetupResourcesFolder() {
 	std::error_code ec;
 	if (!fs::exists(resDir, ec)) {
 		fs::create_directories(resDir, ec);
-		fs::copy("floorTiled.png", resDir);
+		if (fs::exists("Resources/Images/floorTiled.png")) {
+			fs::copy("Resources/Images/floorTiled.png", resDir);
+		}
 	}
 
 	resourcesRoot = resDir;
@@ -338,12 +340,14 @@ void FileManager::ClearThumbnailCache() {
 void FileManager::SaveProjectToFile(const std::string& path) {
 	std::ofstream out(path, std::ios::binary);
 	if (!out.is_open())
-		throw std::runtime_error("SaveProjectToFile: failed to open file for writing: " + path);
+		Console::PrintError("SaveProject: failed to open file for writing {}").Format(path);
 
 	BinaryWriter w(out);
 
 	w.Write(magicByte);
 	w.Write(version);
+
+	EngineManager::getInstance().SerializeEngineSettings(w);
 
 	auto& objects = ObjectManager::getInstance().allObjects;
 
@@ -371,7 +375,7 @@ void FileManager::SaveProjectToFile(const std::string& path) {
 	}
 
 	if (!w.Good())
-		throw std::runtime_error("SaveProjectToFile: write failed, file may be incomplete: " + path);
+		Console::Print("SaveProject: write failed, file may be incomplete: {}").Format(path);
 
 	isSaved = true;
 }
@@ -379,17 +383,19 @@ void FileManager::SaveProjectToFile(const std::string& path) {
 void FileManager::LoadProjectFromFile(const std::string& path) {
 	std::ifstream in(path, std::ios::binary);
 	if (!in.is_open())
-		throw std::runtime_error("LoadProjectFromFile: failed to open file for reading: " + path);
+		Console::PrintError("LoadProject: failed to open file for reading {}").Format(path);
 
 	BinaryReader r(in);
 
 	uint32_t magic = r.Read<uint32_t>();
 	if (magic != magicByte)
-		throw std::runtime_error("LoadProjectFromFile: file is not a valid .fusion file: " + path);
+		Console::PrintError("LoadProject: file is not a valid .fusion file: {}").Format(path);
 
 	uint32_t ver = r.Read<uint32_t>();
 	if (ver != version)
-		throw std::runtime_error("LoadProjectFromFile: unsupported .fusion file version " + std::to_string(ver));
+		Console::PrintError("LoadProject: unsupported .fusion file version {}").Format((int)ver);
+
+	EngineManager::getInstance().DeserializeEngineSettings(r);
 
 	uint32_t objectCount = r.Read<uint32_t>();
 
@@ -444,6 +450,8 @@ void FileManager::LoadProjectFromFile(const std::string& path) {
 			c->PostLoad();
 		}
 	}
+
+	Console::Print("LoadProject: successfully load project from {} with {} objects loaded").Format(path, objectCount);
 
 	isSaved = true;
 }

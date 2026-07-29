@@ -16,6 +16,7 @@ public:
 	virtual void Serialize(BinaryWriter& w);
 	virtual void Deserialize(BinaryReader& r);
 
+	void DrawDebug();
 	void SetRange(float range);
 	float GetRange() const { return range; }
 private:

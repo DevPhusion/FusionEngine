@@ -102,7 +102,7 @@ glm::vec3 PointMass::ProjectToWorld(glm::vec3 point) {
 
 void PointMass::ProcessTransform() {
 	this->shader.use();
-	glm::mat4 projection = glm::ortho(-EngineManager::getInstance().aspectRatio, EngineManager::getInstance().aspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
+	glm::mat4 projection = glm::ortho(-EngineManager::getInstance().gameAspectRatio, EngineManager::getInstance().gameAspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
 	this->shader.setMat4D("projection", projection);
 	this->shader.setMat4D("transform", this->transform);
 	this->shader.setMat4D("view", Camera::getInstance().viewMatrix);
@@ -122,7 +122,7 @@ void PointMass::DrawDebug() {
 	glm::vec4 screenPos = Camera::getInstance().viewMatrix * glm::vec4(worldPosition, 1.0f);
 	glm::mat4 markerTransform = glm::translate(glm::mat4(1.0f), glm::vec3(screenPos));
 
-	glm::mat4 projection = glm::ortho(-EngineManager::getInstance().aspectRatio, EngineManager::getInstance().aspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
+	glm::mat4 projection = glm::ortho(-EngineManager::getInstance().gameAspectRatio, EngineManager::getInstance().gameAspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
 
 	this->shader.use();
 	this->shader.setVec4D("aColor", debugColor);
