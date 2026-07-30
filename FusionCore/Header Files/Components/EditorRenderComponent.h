@@ -25,7 +25,7 @@ public:
 
 	std::vector<Edge> edges;
 	glm::vec4 color = glm::vec4(1, 1, 1, 1);
-	int z_index = 0;
+	int z_index = 999;
 	float halfSize = 0.15f;
 	std::string texture_path;
 

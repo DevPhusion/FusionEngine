@@ -141,7 +141,6 @@ int main(int argc, char* argv[]) {
 		}
 
 		EngineManager::getInstance().ProcessEngine(delta);
-		ObjectManager::getInstance().ProcessObjects(delta);
 
 		Viewport* gameViewport = EditorManager::getInstance().gameViewport;
 

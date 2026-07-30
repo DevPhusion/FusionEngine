@@ -5,6 +5,10 @@ CameraComponent::CameraComponent(Object* parent) : ComponentBase<CameraComponent
 	Name = "Camera Component";
 	RegisterCallbacks();
 	Camera::getInstance().mainCam = this;
+	EditorRenderComponent* erc = parent->GetComponent<EditorRenderComponent>();
+	if (erc) {
+		erc->SetTexture("Resources/Images/Camera.png");
+	}
 }
 
 void CameraComponent::RegisterCallbacks() {
@@ -138,13 +142,11 @@ void CameraComponent::DrawDebug() {
 	float aspect = EngineManager::getInstance().gameAspectRatio;
 	float zoom = range;
 
-	// Unit corners before scale/rotate - matches the ortho frustum
-	// (-aspect..aspect, -1..1) used by Renderer's line-drawing projection.
 	glm::vec2 localCorners[4] = {
-		glm::vec2(-aspect, -1.0f), // bottom-left
-		glm::vec2(aspect, -1.0f), // bottom-right
-		glm::vec2(aspect,  1.0f), // top-right
-		glm::vec2(-aspect,  1.0f)  // top-left
+		glm::vec2(-aspect, -1.0f),
+		glm::vec2(aspect, -1.0f),
+		glm::vec2(aspect,  1.0f),
+		glm::vec2(-aspect,  1.0f) 
 	};
 
 	glm::mat4 rotMat = glm::rotate(glm::mat4(1.0f), rot, glm::vec3(0.0f, 0.0f, 1.0f));

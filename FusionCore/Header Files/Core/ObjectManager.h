@@ -29,6 +29,7 @@ public:
 	std::vector<float> vertices;
 
 	void AddObject();
+	void AddCamera();
 	void AddPolygon();
 	void AddBox();
 	void AddCircle();
@@ -37,11 +38,10 @@ public:
 	void AddSoftPolygon();
 	void AddPolygonVertex();
 	void AddFluid();
+	std::string GenerateUniqueName(const std::string& baseName, Object* exclude = nullptr);
 	VertexPoint* CopyVertex(VertexPoint* vert); // For copying polygon
 	Object* CopyObject(Object* obj);
 	void RemoveObject(Object* obj);
-
-	void ProcessObjects(float delta);
 
 private:
 	ObjectManager() = default;

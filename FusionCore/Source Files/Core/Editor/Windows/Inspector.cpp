@@ -9,6 +9,58 @@
 #include "../../../../Header Files/Components/CameraComponent.h"
 #include "../../../../Header Files/Components/ScriptComponent.h"
 
+
+namespace {
+    static ImU32 EyeIconColor(bool isHidden) {
+        if (isHidden) return IM_COL32(128, 128, 128, 255);
+        return IM_COL32(255, 255, 255, 255);
+    }
+
+    static void DrawEyeIcon(ImDrawList* drawList, ImVec2 center, float size, bool isHidden) {
+        ImU32 color = EyeIconColor(isHidden);
+        ImU32 bgColor = ImGui::GetColorU32(ImGuiCol_WindowBg);
+
+        float rx = size * 0.52f;
+        float ry = size * 0.33f;
+
+        const int segments = 24;
+        ImVec2 points[segments];
+        for (int i = 0; i < segments; i++) {
+            float t = (2.0f * std::numbers::pi * i) / segments;
+            points[i] = ImVec2(center.x + rx * cosf(t), center.y + ry * sinf(t));
+        }
+        drawList->AddConvexPolyFilled(points, segments, color);
+
+        float ringOuterR = ry * 0.62f;
+        float ringInnerR = ry * 0.30f;
+        drawList->AddCircleFilled(center, ringOuterR, bgColor, 16);
+        drawList->AddCircleFilled(center, ringInnerR, color, 16);
+
+        if (isHidden) {
+            float lineHalf = size * 0.58f;
+            ImVec2 dir(0.82f, 0.57f);
+            float len = sqrtf(dir.x * dir.x + dir.y * dir.y);
+            dir.x /= len; dir.y /= len;
+            ImVec2 p0(center.x - dir.x * lineHalf, center.y + dir.y * lineHalf);
+            ImVec2 p1(center.x + dir.x * lineHalf, center.y - dir.y * lineHalf);
+            drawList->AddLine(p0, p1, color, size * 0.14f);
+        }
+    }
+
+    static bool DrawEyeToggleButton(const char* strId, bool isHidden, float size) {
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+        ImGui::InvisibleButton(strId, ImVec2(size, size));
+        bool clicked = ImGui::IsItemClicked();
+
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        ImVec2 center(pos.x + size * 0.5f, pos.y + size * 0.5f);
+        DrawEyeIcon(drawList, center, size, isHidden);
+
+        return clicked;
+    }
+}
+
+
 Inspector::Inspector(std::string main) : EditorWindow(main) {
 
 }
@@ -30,11 +82,26 @@ void Inspector::ProcessWindow() {
         strcpy_s(objectNameBuffer, selected->name.c_str());
 #else
         strncpy(objectNameBuffer, selected->name.c_str(), sizeof(objectNameBuffer) - 1);
+        objectNameBuffer[sizeof(objectNameBuffer) - 1] = '\0';
 #endif
         ImGui::Text("Name ");
         ImGui::SameLine();
-        if (ImGui::InputText("##ObjectName", objectNameBuffer, 128)) {
+        if (ImGui::InputText("##ObjectName", objectNameBuffer, sizeof(objectNameBuffer))) {
             selected->name = std::string(objectNameBuffer);
+            EngineManager::getInstance().EngineChangeEvent();
+        }
+
+        if (ImGui::IsItemDeactivatedAfterEdit()) {
+            std::string desiredName = selected->name.empty() ? "Object" : selected->name;
+            selected->name = ObjectManager::getInstance().GenerateUniqueName(desiredName, selected);
+            EngineManager::getInstance().EngineChangeEvent();
+        }
+
+        ImGui::SameLine();
+        float eyeIconSize = ImGui::GetFrameHeight() * 1.0f;
+        if (DrawEyeToggleButton("##InspectorEyeToggle", selected->hidden, eyeIconSize)) {
+            if (selected->hidden) selected->Show();
+            else selected->Hide();
             EngineManager::getInstance().EngineChangeEvent();
         }
 

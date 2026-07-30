@@ -16,13 +16,33 @@ public:
 	Object(Shader shader);
 	Object() = default;
 
+	Object(const Object&) = delete;
+	Object& operator=(const Object&) = delete;
+	Object(Object&&) = default;
+	Object& operator=(Object&&) = default;
+
 	uint64_t id = NextID();
 
 	std::string name;
+	bool hideInHierarchy = false;
 	bool hidden = false;
 	std::vector<std::unique_ptr<Component>> components = {};
 	std::vector<Component*> componentByType;
+	Object* parent = nullptr;
+	uint64_t parentID = -1;
+	std::vector<Object*> children;
 	Shader shader;
+
+	void SetParent(Object* newParent) {
+		parent = newParent;
+		parentID = newParent ? static_cast<int>(newParent->id) : -1;
+		if (parent) {
+			parent->children.push_back(this);
+		}
+	}
+
+	void Show();
+	void Hide();
 
 	template <AllowedTypes T>
 	T* GetComponent() {
@@ -63,10 +83,6 @@ public:
 			}
 		}
 	}
-	
-	virtual void Process(float delta) {
-
-	}
 
 	virtual void OnDelete() {
 		auto safeCallbacks = OnDeleteCallbacks;
@@ -90,6 +106,8 @@ public:
 		}
 		obj->id = id;
 		obj->name = name;
+		obj->parentID = parentID;
+		obj->hidden = hidden;
 		return obj;
 	}
 

@@ -4,7 +4,7 @@ VertexPoint::VertexPoint(float x, float y, Shader shader) : Object(shader) {
 	this->x = x;
 	this->y = y;
 
-	this->hidden = true;
+	this->hideInHierarchy = true;
 
 	float sizeY = 0.01f;
 	float sizeX = 0.01f;
@@ -18,10 +18,6 @@ VertexPoint::VertexPoint(float x, float y, Shader shader) : Object(shader) {
 
 	AddComponent(std::make_unique<RenderComponent>(this, vertices, shader, ""));
 	AddComponent(std::make_unique<TransformComponent>(this, shader, glm::vec3(0)));
-}
-
-void VertexPoint::Process(float delta) {
-	
 }
 
 std::unique_ptr<VertexPoint> VertexPoint::CloneVertex() {

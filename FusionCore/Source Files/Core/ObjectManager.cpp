@@ -1,12 +1,5 @@
 #include "../../Header Files/Core/ObjectManager.h"
 
-void ObjectManager::ProcessObjects(float delta) {
-	for (int i = 0; i < allObjects.size(); i++)
-	{
-		allObjects[i]->Process(delta);
-	}
-}
-
 void ObjectManager::AddObject() {
 	EngineManager::getInstance().EngineChangeEvent();
 	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
@@ -14,6 +7,18 @@ void ObjectManager::AddObject() {
 	obj->AddComponent(std::make_unique<EditorRenderComponent>(obj.get(), obj.get()->shader, "Resources/Images/Object.png", 0.075f));
 	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj.get()->shader, obj.get()->GetComponent<EditorRenderComponent>()->GetCenter()));
 	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), false));
+
+	allObjects.push_back(std::move(obj));
+}
+
+void ObjectManager::AddCamera() {
+	EngineManager::getInstance().EngineChangeEvent();
+	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
+
+	obj->AddComponent(std::make_unique<EditorRenderComponent>(obj.get(), obj.get()->shader, "Resources/Images/Object.png", 0.075f));
+	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj.get()->shader, obj.get()->GetComponent<EditorRenderComponent>()->GetCenter()));
+	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), false));
+	obj->AddComponent(std::make_unique<CameraComponent>(obj.get()));
 
 	allObjects.push_back(std::move(obj));
 }
@@ -75,10 +80,11 @@ void ObjectManager::AddPolygon() {
 	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj->shader, glm::vec3(0.0f)));
 	obj->AddComponent(std::make_unique<RenderComponent>(obj.get(), vertices, obj->shader, ""));
 	auto* render = obj->GetComponent<RenderComponent>();
-	obj->GetComponent<TransformComponent>()->SetRotationCenter(render->GetCenter());
 	PolygonShape shape = PolygonShape();
 	shape.vertices = vertices;
 	render->SetShape(shape);
+	obj->GetComponent<TransformComponent>()->SetRotationCenter(render->GetCenter());
+	obj->GetComponent<TransformComponent>()->UpdateWorldPosition(obj->GetComponent<TransformComponent>()->GetWorldPosition());
 	obj->AddComponent(std::make_unique<VertexComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), true));
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
@@ -160,10 +166,11 @@ void ObjectManager::AddSoftPolygon() {
 	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj->shader, glm::vec3(0.0f)));
 	obj->AddComponent(std::make_unique<RenderComponent>(obj.get(), vertices, obj->shader, ""));
 	auto* render = obj->GetComponent<RenderComponent>();
-	obj->GetComponent<TransformComponent>()->SetRotationCenter(render->GetCenter());
 	PolygonShape shape = PolygonShape();
 	shape.vertices = vertices;
 	render->SetShape(shape);
+	obj->GetComponent<TransformComponent>()->SetRotationCenter(render->GetCenter());
+	obj->GetComponent<TransformComponent>()->UpdateWorldPosition(obj->GetComponent<TransformComponent>()->GetWorldPosition());
 	obj->AddComponent(std::make_unique<VertexComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), true));
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
@@ -217,10 +224,33 @@ void ObjectManager::AddPolygonVertex() {
 		vertices.push_back(InputManager::glY); // V
 
 		std::unique_ptr<VertexPoint> pointIndicator = std::make_unique<VertexPoint>(InputManager::glX, InputManager::glY, Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
-		pointIndicator->hidden = true;
+		pointIndicator->hideInHierarchy = true;
 		vertexPoints.push_back(pointIndicator.get());
 		allObjects.push_back(std::move(pointIndicator));
 	}
+}
+
+std::string ObjectManager::GenerateUniqueName(const std::string& baseName, Object* exclude) {
+	std::string candidate = baseName;
+	int suffix = 1;
+	bool exists = true;
+
+	while (exists) {
+		exists = false;
+		for (auto& o : allObjects) {
+			if (o && o.get() != exclude && o->name == candidate) {
+				exists = true;
+				break;
+			}
+		}
+
+		if (exists) {
+			candidate = baseName + " (" + std::to_string(suffix) + ")";
+			suffix++;
+		}
+	}
+
+	return candidate;
 }
 
 VertexPoint* ObjectManager::CopyVertex(VertexPoint* vert) {
@@ -233,7 +263,7 @@ VertexPoint* ObjectManager::CopyVertex(VertexPoint* vert) {
 
 Object* ObjectManager::CopyObject(Object* obj) {
 	std::unique_ptr<Object> newObj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
-	
+
 	for (int i = 0; i < obj->components.size(); i++)
 	{
 		obj->components[i]->CopyTo(newObj.get());
@@ -243,6 +273,11 @@ Object* ObjectManager::CopyObject(Object* obj) {
 	{
 		newObj->components[i]->PostLoad();
 	}
+
+	std::string baseName = obj->name.empty() ? "Object" : obj->name;
+	newObj->name = GenerateUniqueName(baseName, nullptr);
+
+	newObj->SetParent(obj->parent);
 
 	Object* returnObj = newObj.get();
 	allObjects.push_back(std::move(newObj));
@@ -257,6 +292,10 @@ void ObjectManager::RemoveObject(Object* obj) {
 			if (obj->HasComponent<VertexComponent>()) {
 				std::vector<VertexPoint*> points = obj->GetComponent<VertexComponent>()->vertexPoints;
 				obj->OnDelete();
+				for (auto* obj : allObjects[i]->children)
+				{
+					obj->SetParent(allObjects[i]->parent);
+				}
 				allObjects.erase(allObjects.begin() + i);
 				for (int j = 0; j < points.size(); j++)
 				{
@@ -265,6 +304,10 @@ void ObjectManager::RemoveObject(Object* obj) {
 			}
 			else {
 				obj->OnDelete();
+				for (auto* obj : allObjects[i]->children)
+				{
+					obj->SetParent(allObjects[i]->parent);
+				}
 				allObjects.erase(allObjects.begin() + i);
 			}
 		}

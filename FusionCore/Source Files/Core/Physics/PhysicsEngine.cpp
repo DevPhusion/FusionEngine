@@ -13,6 +13,12 @@ void PhysicsEngine::PhysicsModeChangeEvent() {
 	}
 	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Stop) {
 		ScriptManager::getInstance().RunAllScriptsStop();
+		rigidBoundaries.clear();
+		softBoundaries.clear();
+	}
+	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Pause) {
+		rigidBoundaries.clear();
+		softBoundaries.clear();
 	}
 }
 
@@ -1395,7 +1401,7 @@ void PhysicsEngine::GenerateRigidBoundaries() {
 	rigidBoundaries.clear();
 	for (auto& objPtr : *allObjects) {
 		Object* obj = objPtr.get();
-		if (obj->hidden) continue;
+		if (obj->hideInHierarchy) continue;
 		if (obj->HasComponent<SoftBodyComponent>() || obj->HasComponent<FluidComponent>()) continue;
 		if (!obj->HasComponent<CollisionComponent>()) continue;
 
@@ -1452,7 +1458,7 @@ void PhysicsEngine::GenerateSoftBoundaries() {
 	softBoundaries.clear();
 	for (auto& objPtr : *allObjects) {
 		Object* obj = objPtr.get();
-		if (obj->hidden) continue;
+		if (obj->hideInHierarchy) continue;
 		if (!obj->HasComponent<SoftBodyComponent>()) continue;
 
 		SoftBodyComponent* sb = obj->GetComponent<SoftBodyComponent>();

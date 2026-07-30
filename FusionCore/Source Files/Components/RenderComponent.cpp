@@ -577,6 +577,7 @@ void RenderComponent::PostLoad() {
 	tc->SetRotationCenter(GetCenter());
 	tc->rotation = tc->pendingRotation;
 	tc->size = tc->pendingScale;
+	tc->worldMatrixDirty = true;
 }
 
 void RenderComponent::ProcessInspectorUI() {

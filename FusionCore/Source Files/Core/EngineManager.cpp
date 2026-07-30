@@ -34,7 +34,7 @@ void EngineManager::SaveEngineState() {
 	for (int i = 0; i < ObjectManager::getInstance().allObjects.size(); i++)
 	{
 		Object* obj = ObjectManager::getInstance().allObjects[i].get();
-		if (obj->hidden) continue;
+		if (obj->hideInHierarchy) continue;
 
 		if (auto* cc = obj->GetComponent<ConstraintComponent>()) {
 			for (auto& c : cc->appliedConstraints)
@@ -72,6 +72,16 @@ void EngineManager::LoadEngineState() {
 	std::unordered_map<uint64_t, Object*> objectsById;
 	for (auto& obj : ObjectManager::getInstance().allObjects)
 		objectsById[obj->id] = obj.get();
+
+	for (auto& obj : ObjectManager::getInstance().allObjects) {
+		if (obj->parentID != -1 && objectsById.count(obj->parentID)) {
+			obj->SetParent(objectsById[obj->parentID]);
+		}
+		else {
+			obj->parent = nullptr;
+			obj->parentID = -1; 
+		}
+	}
 
 	for (auto& constraint : SavedState.Constraints)
 	{

@@ -270,6 +270,16 @@ namespace {
 		return registry;
 	}
 
+	std::unordered_map<PyObject*, std::function<void(Object*)>>& ComponentRemoverRegistry() {
+		static std::unordered_map<PyObject*, std::function<void(Object*)>> registry;
+		return registry;
+	}
+
+	std::unordered_map<PyObject*, std::function<py::object(Object&)>>& ComponentAdderRegistry() {
+		static std::unordered_map<PyObject*, std::function<py::object(Object&)>> registry;
+		return registry;
+	}
+
 	py::object GetComponentByPythonType(Object* parent, const py::object& componentClass) {
 		if (!parent) return py::none();
 
@@ -283,12 +293,96 @@ namespace {
 		return it->second(parent);
 	}
 
+	void RemoveComponentFromObject(Object& obj, py::object componentClass) {
+		auto& registry = ComponentRemoverRegistry();
+		auto it = registry.find(componentClass.ptr());
+		if (it == registry.end()) {
+			throw py::type_error(
+				"remove_component: '" + py::str(componentClass).cast<std::string>() +
+				"' is not a registered engine component type");
+		}
+		it->second(&obj);
+	}
+
+	bool HasComponentOnObject(Object* obj, const py::object& componentClass) {
+		if (!obj) return false;
+
+		auto& registry = ComponentRegistry();
+		auto it = registry.find(componentClass.ptr());
+		if (it == registry.end()) {
+			throw py::type_error(
+				"has_component: '" + py::str(componentClass).cast<std::string>() +
+				"' is not a registered engine component type");
+		}
+		return !it->second(obj).is_none();
+	}
+
+	py::object AddComponentToObject(Object& obj, py::object componentClass) {
+		auto& registry = ComponentAdderRegistry();
+		auto it = registry.find(componentClass.ptr());
+		if (it == registry.end()) {
+			throw py::type_error(
+				"add_component: '" + py::str(componentClass).cast<std::string>() +
+				"' is not a registered engine component type");
+		}
+
+		if (HasComponentOnObject(&obj, componentClass)) {
+			throw py::value_error(
+				"add_component: Object '" + obj.name + "' already has a '" +
+				py::str(componentClass).cast<std::string>() + "'");
+		}
+
+		return it->second(obj);
+	}
+
 	template <typename T, typename PyClass>
 	void EnableGetComponent(PyClass& cls) {
 		cls.def("get_component", [](T& self, py::object componentClass) {
 			return GetComponentByPythonType(self.parent, componentClass);
 			}, py::arg("component_class"),
 				"Look up a component on this Object");
+	}
+
+	template <typename T, typename PyClass>
+	void EnableAddComponent(PyClass& cls) {
+		cls.def("add_component", [](T& self, py::object componentClass) {
+			if (!self.parent) {
+				throw py::value_error("add_component: component has no owning Object");
+			}
+			return AddComponentToObject(*self.parent, componentClass);
+			}, py::arg("component_class"),
+				"Attach a new component of the given type to this component's owning Object, "
+				"e.g. render = self.add_component(RenderComponent)");
+	}
+
+	template <typename T, typename PyClass>
+	void EnableRemoveComponent(PyClass& cls) {
+		cls.def("remove_component", [](T& self, py::object componentClass) {
+			if (!self.parent) {
+				throw py::value_error("remove_component: component has no owning Object");
+			}
+			RemoveComponentFromObject(*self.parent, componentClass);
+			}, py::arg("component_class"),
+				"Remove a component of the given type from this component's owning Object");
+	}
+
+	template <typename T, typename PyClass>
+	void EnableHasComponent(PyClass& cls) {
+		cls.def("has_component", [](T& self, py::object componentClass) {
+			return HasComponentOnObject(self.parent, componentClass);
+			}, py::arg("component_class"),
+				"Check whether this component's owning Object has a component of the given type");
+	}
+
+	template <typename T, typename PyClass>
+	void EnableGetOwner(PyClass& cls) {
+		cls.def_property_readonly("owner", [](T& self) -> Object* {
+			return self.parent;
+			}, py::return_value_policy::reference,
+			"The Object that owns this component")
+			.def("get_owner", [](T& self) -> Object* {
+			return self.parent;
+				}, py::return_value_policy::reference);
 	}
 
 	template <typename T>
@@ -300,11 +394,33 @@ namespace {
 			};
 	}
 
+	template <typename T>
+	void RegisterComponentRemover(py::object pyClass) {
+		ComponentRemoverRegistry()[pyClass.ptr()] = [](Object* obj) {
+			obj->RemoveComponent<T>();
+			};
+	}
+
+	template <typename T>
+	void RegisterComponentAdder(py::object pyClass, std::function<std::unique_ptr<T>(Object&)> factory) {
+		ComponentAdderRegistry()[pyClass.ptr()] = [factory](Object& obj) -> py::object {
+			auto comp = factory(obj);
+			T* raw = comp.get();
+			obj.RegisterComponentPointer(raw);
+			obj.AddComponent(std::move(comp));
+			return py::cast(raw, py::return_value_policy::reference);
+			};
+	}
+
 	void RegisterScriptBindings(py::module_& m) {
 		auto scriptClass = py::class_<ScriptBase, std::shared_ptr<ScriptBase>>(m, "Script")
 			.def(py::init<>());
 
 		EnableGetComponent<ScriptBase>(scriptClass);
+		EnableGetOwner<ScriptBase>(scriptClass);
+		EnableHasComponent<ScriptBase>(scriptClass);
+		EnableAddComponent<ScriptBase>(scriptClass);    
+		EnableRemoveComponent<ScriptBase>(scriptClass); 
 
 		py::class_<ExportMarker>(m, "_ExportMarker")
 			.def(py::init<py::object>());
@@ -434,7 +550,16 @@ namespace {
 
 			
 		EnableGetComponent<RenderComponent>(renderClass);
+		EnableHasComponent<RenderComponent>(renderClass);
 		RegisterComponentGetter<RenderComponent>(renderClass);
+		EnableGetOwner<RenderComponent>(renderClass);          
+		RegisterComponentRemover<RenderComponent>(renderClass); 
+		RegisterComponentAdder<RenderComponent>(renderClass,
+			[](Object& obj) {
+				return std::make_unique<RenderComponent>(&obj, std::vector<float>{}, obj.shader, "");
+			});
+		EnableAddComponent<RenderComponent>(renderClass);    
+		EnableRemoveComponent<RenderComponent>(renderClass);
 
 		auto transformClass = py::class_<TransformComponent>(m, "TransformComponent")
 			.def_property("world_position",
@@ -461,8 +586,48 @@ namespace {
 			.def("to_local_coordinates", [](TransformComponent& self, glm::vec3 worldCoordinates) {self.ProjectToWorld(worldCoordinates, true);})
 			.def("to_world_coordinates", [](TransformComponent& self, glm::vec3 localCoordinates) {self.ProjectToWorld(localCoordinates, false);});
 		EnableGetComponent<TransformComponent>(transformClass);
+		EnableHasComponent<TransformComponent>(transformClass);
 		RegisterComponentGetter<TransformComponent>(transformClass);
+		EnableGetOwner<TransformComponent>(transformClass);         
+		EnableAddComponent<TransformComponent>(transformClass);
+		EnableRemoveComponent<TransformComponent>(transformClass);
 	}
+
+	void RegisterObjectBindings(py::module_& m) {
+		py::class_<Object, std::unique_ptr<Object, py::nodelete>>(m, "Object")
+			.def_readwrite("name", &Object::name)
+			.def_readwrite("hidden", &Object::hidden)
+			.def_property_readonly("id", [](Object& self) { return self.id; })
+			.def_property_readonly("parent", [](Object& self) -> Object* {
+			return self.parent;
+				}, py::return_value_policy::reference)
+			.def_property_readonly("parent_id", [](Object& self) { return self.parentID; })
+			.def_property_readonly("children", [](Object& self) {
+			return self.children;
+				}, py::return_value_policy::reference)
+
+			.def("set_name", [](Object& self, const std::string& name) { self.name = name; },
+				py::arg("name"))
+			.def("show", &Object::Show)
+			.def("hide", &Object::Hide)
+			.def("get_parent", [](Object& self) -> Object* {
+			return self.parent;
+				}, py::return_value_policy::reference)
+			.def("get_parent_id", [](Object& self) { return self.parentID; })
+			.def("get_children", [](Object& self) {
+			return self.children;
+				}, py::return_value_policy::reference)
+			.def("get_children_count", [](Object& self) { return self.children.size(); })
+			.def("get_component", [](Object& self, py::object componentClass) {
+			return GetComponentByPythonType(&self, componentClass);
+				}, py::arg("component_class"),
+					"Look up a component on this Object")
+			.def("add_component", &AddComponentToObject, py::arg("component"),
+				"Attach a component instance to this Object, e.g. obj.add_component(RenderComponent)")
+			.def("remove_component", &RemoveComponentFromObject, py::arg("component_class"),
+				"Remove a component of the given type from this Object, e.g. obj.remove_component(RenderComponent)");
+	}
+
 }
 
 void RegisterEngineBindings(py::module_& m) {
@@ -473,4 +638,5 @@ void RegisterEngineBindings(py::module_& m) {
 	RegisterInputBindings(m);
 	RegisterConsoleBindings(m);
 	RegisterComponentBindings(m);
+	RegisterObjectBindings(m);
 }

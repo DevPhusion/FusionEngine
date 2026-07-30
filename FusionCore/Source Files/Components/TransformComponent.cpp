@@ -1,5 +1,6 @@
 #include "../../Header Files/Components/TransformComponent.h"
 #include "../../Header Files/Components/RigidBodyComponent.h"
+#include "../../Header Files/Core/ObjectManager.h"
 
 TransformComponent::TransformComponent(Object* parent, Shader shader, glm::vec3 rotation_center) : ComponentBase<TransformComponent>(parent) {
 	Name = "Transform Component";
@@ -125,10 +126,35 @@ void TransformComponent::UpdateWorldPosition(glm::vec3 targetWorldPos) {
 	glm::vec3 delta = targetWorldPos - currentPosVec3;
 
 	glm::mat4 newOriginTransform = glm::translate(glm::mat4(1.0f), delta) * OriginTransform;
-	
+
 	SetOriginTransform(newOriginTransform);
 	prevPos = worldPosition;
 	worldPosition = GetWorldPosition();
+
+	PropagateDeltaToChildren(delta);
+}
+
+void TransformComponent::TranslateByDelta(glm::vec3 delta) {
+	glm::mat4 newOriginTransform = glm::translate(glm::mat4(1.0f), delta) * OriginTransform;
+
+	SetOriginTransform(newOriginTransform);
+	prevPos = worldPosition;
+	worldPosition = GetWorldPosition();
+
+	PropagateDeltaToChildren(delta);
+}
+
+void TransformComponent::PropagateDeltaToChildren(glm::vec3 delta) {
+	if (delta == glm::vec3(0.0f)) return; 
+
+	Object* owner = this->parent; 
+
+	for (auto* obj : this->parent->children) {
+		TransformComponent* childTransform = obj->GetComponent<TransformComponent>();
+		if (childTransform) {
+			childTransform->TranslateByDelta(delta);
+		}
+	}
 }
 
 glm::vec3 TransformComponent::GetTransformedPoint(glm::vec3 point, bool inverseTransform) {

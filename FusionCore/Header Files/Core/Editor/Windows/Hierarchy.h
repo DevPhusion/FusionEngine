@@ -2,6 +2,9 @@
 #include "../EditorWindow.h"
 #include "AddObjectWindow.h"
 #include "../../InputManager.h"
+#include <string>
+
+class Object;
 
 class Hierarchy : public EditorWindow
 {
@@ -14,5 +17,7 @@ public:
 
 	virtual void ProcessWindow();
 	void OnKeyPressed(int key, int scancode, int action, int mods);
-};
 
+private:
+	void DrawObjectNode(Object* currentObj, char* filter_buffer, char* renameBuffer);
+};

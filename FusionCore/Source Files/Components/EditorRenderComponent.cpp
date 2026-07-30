@@ -14,11 +14,10 @@ EditorRenderComponent::EditorRenderComponent(Object* parent, Shader shader, std:
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	Vertices = {
-		//   x,    y,   z,   u,   v
-		-halfSize, -halfSize, 0.0f, 0.0f, 0.0f,
-		 halfSize, -halfSize, 0.0f, 1.0f, 0.0f,
-		 halfSize,  halfSize, 0.0f, 1.0f, 1.0f,
-		-halfSize,  halfSize, 0.0f, 0.0f, 1.0f,
+		-0.5f, -0.5f, 0.0f, 0.0f, 0.0f,
+		 0.5f, -0.5f, 0.0f, 1.0f, 0.0f,
+		 0.5f,  0.5f, 0.0f, 1.0f, 1.0f,
+		-0.5f,  0.5f, 0.0f, 0.0f, 1.0f,
 	};
 	Indices = { 0, 1, 2, 2, 3, 0 };
 
@@ -125,17 +124,31 @@ std::unordered_map<std::string, std::pair<GLuint, int>>& EditorRenderComponent::
 }
 
 void EditorRenderComponent::Draw() {
-
-	this->shader.use();
 	if (!Enabled)
 		return;
 
+	this->shader.use();
 	this->shader.setVec4D("aColor", this->color);
 
 	if (this->TextureID != 0) {
-		glActiveTexture(this->TextureID);
+		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, this->TextureID);
 	}
+
+	glm::vec3 center = GetCenter();
+
+	float zoom = Camera::getInstance().cameraZoom;
+	if (zoom < 1e-6f) zoom = 1.0f;
+
+	glm::mat4 model = glm::translate(glm::mat4(1.0f), center);
+	model = glm::scale(model, glm::vec3(halfSize * zoom, halfSize * zoom, 1.0f));
+
+	glm::mat4 projection = glm::ortho(-EngineManager::getInstance().gameAspectRatio,
+		EngineManager::getInstance().gameAspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
+
+	this->shader.setMat4D("projection", projection);
+	this->shader.setMat4D("view", Camera::getInstance().viewMatrix);
+	this->shader.setMat4D("transform", model);
 
 	glBindVertexArray(this->VAO);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->EBO);

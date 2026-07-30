@@ -36,6 +36,8 @@ void Renderer::Draw() {
     {
         TIME_BLOCK("Construct draw queue");
         for (size_t i = 0; i < this->allObjects->size(); i++) {
+            if ((*allObjects)[i]->hidden) continue;
+
             if ((*allObjects)[i]->HasComponent<RenderComponent>()) {
                 renderQueue.push_back((*allObjects)[i].get());
             }
@@ -66,18 +68,6 @@ void Renderer::Draw() {
             });
     }  
 
-    if (EngineManager::getInstance().EnginePhysicsMode != EngineManager::PhysicsMode::Simulate) {
-        {
-            TIME_BLOCK("Draw camera bounds");
-            for (size_t i = 0; i < (*allObjects).size(); i++) {
-                CameraComponent* camComp = (*allObjects)[i]->GetComponent<CameraComponent>();
-                if (camComp) {
-                    camComp->DrawDebug();
-                }
-            }
-        }
-    }
-
     for (Object* obj : renderQueue) {
         if (obj->HasComponent<FluidComponent>()) {
             {
@@ -105,6 +95,19 @@ void Renderer::Draw() {
             for (int i = 0; i < sb->MassAggregate.size(); i++)
             {
                 sb->MassAggregate[i]->ProcessTransform();
+            }
+        }
+    }
+
+
+    if (EngineManager::getInstance().EnginePhysicsMode != EngineManager::PhysicsMode::Simulate) {
+        {
+            TIME_BLOCK("Draw camera bounds");
+            for (size_t i = 0; i < (*allObjects).size(); i++) {
+                CameraComponent* camComp = (*allObjects)[i]->GetComponent<CameraComponent>();
+                if (camComp) {
+                    camComp->DrawDebug();
+                }
             }
         }
     }

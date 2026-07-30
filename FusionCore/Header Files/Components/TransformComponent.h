@@ -41,6 +41,7 @@ public:
 	//model space -> world space (inverse: world space -> model space)
 	glm::vec3 ProjectToWorld(glm::vec3 point, bool inverseTransform = false);
 	void UpdateWorldPosition(glm::vec3 newPos);
+	void TranslateByDelta(glm::vec3 delta);
 	void SetOriginTransform(glm::mat4 transform);
 	void SetRotationCenter(glm::vec3 rotation_center);
 	void Translate(glm::vec3 translation);
@@ -51,6 +52,7 @@ public:
 	void ProcessTransform();
 private:
 	glm::mat4 GetWorldMatrix();
+	void PropagateDeltaToChildren(glm::vec3 delta);
 	int CurrentTransformCallbackID = -1;
 	Shader shader;
 };

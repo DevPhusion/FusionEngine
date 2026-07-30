@@ -63,6 +63,10 @@ void AddObjectWindow::ProcessWindow() {
 				ObjectManager::getInstance().AddObject();
 				Hide();
 			}
+			else if (SelectedType == "Camera") {
+				ObjectManager::getInstance().AddCamera();
+				Hide();
+			}
 			else if (SelectedType == "Rigid Box") {
 				ObjectManager::getInstance().AddBox();
 				Hide();

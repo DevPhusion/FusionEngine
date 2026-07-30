@@ -41,7 +41,7 @@ Object* CreateAttachPointDisplay(const std::string& ownerName, const std::string
         display->GetComponent<RenderComponent>()->GetCenter()));
     display->AddComponent(std::make_unique<MouseInteractComponent>(display.get(), false));
 
-    display->hidden = true;
+    display->hideInHierarchy = true;
     display->GetComponent<RenderComponent>()->Enabled = false;
     display->GetComponent<MouseInteractComponent>()->Enabled = false;
     display->GetComponent<MouseInteractComponent>()->Inspectable = false;
@@ -66,7 +66,7 @@ Object* Constraint::CreateConstraintDisplay()
     };
 
     auto display = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
-    display->hidden = true;
+    display->hideInHierarchy = true;
     display->name = Name + " Constraint display";
     display->AddComponent(std::make_unique<RenderComponent>(display.get(), vertices, display->shader, ""));
     RenderComponent* rc = display->GetComponent<RenderComponent>();
@@ -439,7 +439,7 @@ void Constraint::ProcessInspectorUI(Object* parent)
             for (auto& objPtr : om.allObjects)
             {
                 Object* candidate = objPtr.get();
-                if (candidate->hidden || candidate == objectA.obj) continue;
+                if (candidate->hideInHierarchy || candidate == objectA.obj) continue;
 
                 if (ImGui::Selectable(candidate->name.c_str()))
                 {

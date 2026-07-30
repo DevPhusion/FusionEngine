@@ -355,7 +355,7 @@ void FileManager::SaveProjectToFile(const std::string& path) {
 	toSave.reserve(objects.size());
 	for (auto& obj : objects)
 	{
-		if (obj->hidden) continue;
+		if (obj->hideInHierarchy) continue;
 		toSave.push_back(obj.get());
 	}
 
@@ -420,6 +420,16 @@ void FileManager::LoadProjectFromFile(const std::string& path) {
 	std::unordered_map<uint64_t, Object*> objectsById;
 	for (auto& obj : ObjectManager::getInstance().allObjects)
 		objectsById[obj->id] = obj.get();
+
+	for (auto& obj : ObjectManager::getInstance().allObjects) {
+		if (obj->parentID != -1 && objectsById.count(static_cast<uint64_t>(obj->parentID))) {
+			obj->SetParent(objectsById[static_cast<uint64_t>(obj->parentID)]);
+		}
+		else {
+			obj->parent = nullptr;
+			obj->parentID = -1; 
+		}
+	}
 
 	uint32_t constraintCount = r.Read<uint32_t>();
 	for (uint32_t i = 0; i < constraintCount; i++)

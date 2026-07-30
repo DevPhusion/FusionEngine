@@ -3854,10 +3854,10 @@ void CancelPlotSelection() {
         plot.Selected = plot.Selecting = false;
 }
 
-void HideNextItem(bool hidden, ImPlotCond cond) {
+void HideNextItem(bool hideInHierarchy, ImPlotCond cond) {
     ImPlotContext& gp = *GImPlot;
     gp.NextItemData.HasHidden  = true;
-    gp.NextItemData.Hidden     = hidden;
+    gp.NextItemData.Hidden     = hideInHierarchy;
     gp.NextItemData.HiddenCond = cond;
 }
 

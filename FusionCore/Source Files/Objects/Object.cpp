@@ -5,6 +5,20 @@ Object::Object(Shader shader) {
 	this->shader = shader;
 }
 
+void Object::Show() {
+	hidden = false;
+	for (auto* obj : children) {
+		obj->Show();
+	}
+}
+
+void Object::Hide() {
+	hidden = true;
+	for (auto* obj : children) {
+		obj->Hide();
+	}
+}
+
 int Object::AddOnDeleteCallback(std::function<void()> func) {
 	CurrentOnRemoveID += 1;
 	OnDeleteCallbacks[CurrentOnRemoveID] = func;
@@ -18,7 +32,9 @@ void Object::RemoveOnDeleteCallback(int ID) {
 void Object::Serialize(BinaryWriter& w) {
 	w.Write(id);
 	w.WriteString(name);
+	w.Write(hideInHierarchy);
 	w.Write(hidden);
+	w.Write(parentID);
 
 	w.WriteString(shader.vertexPath);
 	w.WriteString(shader.fragmentPath);
@@ -33,7 +49,9 @@ void Object::Serialize(BinaryWriter& w) {
 void Object::Deserialize(BinaryReader& r) {
 	this->id = r.Read<uint64_t>();
 	this->name = r.ReadString();
+	this->hideInHierarchy = r.Read<bool>();
 	this->hidden = r.Read<bool>();
+	this->parentID = r.Read<uint64_t>();
 	std::string vertPath = r.ReadString();
 	std::string fragPath = r.ReadString();
 	this->shader = Shader(vertPath.c_str(), fragPath.c_str());
