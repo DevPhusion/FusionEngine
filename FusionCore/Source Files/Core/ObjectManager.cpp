@@ -7,7 +7,7 @@ void ObjectManager::AddObject() {
 	obj->AddComponent(std::make_unique<EditorRenderComponent>(obj.get(), obj.get()->shader, "Resources/Images/Object.png", 0.075f));
 	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj.get()->shader, obj.get()->GetComponent<EditorRenderComponent>()->GetCenter()));
 	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), false));
-
+	obj->addedToScene = true;
 	allObjects.push_back(std::move(obj));
 }
 
@@ -20,6 +20,7 @@ void ObjectManager::AddCamera() {
 	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), false));
 	obj->AddComponent(std::make_unique<CameraComponent>(obj.get()));
 
+	obj->addedToScene = true;
 	allObjects.push_back(std::move(obj));
 }
 
@@ -40,6 +41,8 @@ void ObjectManager::AddBox() {
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<RigidBodyComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<ConstraintComponent>(obj.get()));
+
+	obj->addedToScene = true;
 	allObjects.push_back(std::move(obj));
 }
 
@@ -59,6 +62,8 @@ void ObjectManager::AddCircle() {
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<RigidBodyComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<ConstraintComponent>(obj.get()));
+
+	obj->addedToScene = true;
 	allObjects.push_back(std::move(obj));
 }
 
@@ -104,6 +109,7 @@ void ObjectManager::AddPolygon() {
 		}
 	}
 	tc->SetOriginTransform(Camera::getInstance().viewMatrixInverse);
+	obj->addedToScene = true;
 	allObjects.push_back(std::move(obj));
 	vertices.clear();
 	vertexPoints.clear();
@@ -126,6 +132,7 @@ void ObjectManager::AddSoftBox() {
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<SoftBodyComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<ConstraintComponent>(obj.get()));
+	obj->addedToScene = true;
 	allObjects.push_back(std::move(obj));
 }
 
@@ -145,6 +152,7 @@ void ObjectManager::AddSoftCircle() {
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<SoftBodyComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<ConstraintComponent>(obj.get()));
+	obj->addedToScene = true;
 	allObjects.push_back(std::move(obj));
 }
 
@@ -190,6 +198,7 @@ void ObjectManager::AddSoftPolygon() {
 		}
 	}
 	tc->SetOriginTransform(Camera::getInstance().viewMatrixInverse);
+	obj->addedToScene = true;
 	allObjects.push_back(std::move(obj));
 	vertices.clear();
 	vertexPoints.clear();
@@ -212,7 +221,35 @@ void ObjectManager::AddFluid() {
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<FluidComponent>(obj.get()));
 	FluidComponent* fc = obj->GetComponent<FluidComponent>();
+	obj->addedToScene = true;
 	allObjects.push_back(std::move(obj));
+}
+
+Object* ObjectManager::AddExistingObject(std::unique_ptr<Object> obj, Object* parent) {
+	if (!obj) return nullptr;
+
+	EngineManager::getInstance().EngineChangeEvent();
+
+	Object* raw = obj.get();
+	raw->name = GenerateUniqueName(raw->name.empty() ? "Object" : raw->name, nullptr);
+
+	if (parent) {
+		raw->SetParent(parent);
+	}
+
+	raw->addedToScene = true;
+
+	pendingObjects.push_back(std::move(obj));
+	return raw;
+}
+
+void ObjectManager::FlushPendingObjects() {
+	if (pendingObjects.empty()) return;
+
+	for (auto& obj : pendingObjects) {
+		allObjects.push_back(std::move(obj));
+	}
+	pendingObjects.clear();
 }
 
 void ObjectManager::AddPolygonVertex() {
@@ -280,6 +317,7 @@ Object* ObjectManager::CopyObject(Object* obj) {
 	newObj->SetParent(obj->parent);
 
 	Object* returnObj = newObj.get();
+	newObj->addedToScene = true;
 	allObjects.push_back(std::move(newObj));
 	return returnObj;
 }
@@ -311,5 +349,25 @@ void ObjectManager::RemoveObject(Object* obj) {
 				allObjects.erase(allObjects.begin() + i);
 			}
 		}
+	}
+}
+
+void ObjectManager::QueueRemoveObject(Object* obj) {
+	if (!obj) return;
+
+	for (Object* o : pendingRemovals) {
+		if (o == obj) return; // already queued, don't double-remove
+	}
+	pendingRemovals.push_back(obj);
+}
+
+void ObjectManager::FlushPendingRemovals() {
+	if (pendingRemovals.empty()) return;
+
+	std::vector<Object*> toRemove = std::move(pendingRemovals);
+	pendingRemovals.clear();
+
+	for (Object* obj : toRemove) {
+		RemoveObject(obj); 
 	}
 }

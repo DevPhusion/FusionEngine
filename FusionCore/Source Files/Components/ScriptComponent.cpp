@@ -13,11 +13,13 @@ namespace {
 				w.WriteString(v);
 			}
 			else if constexpr (std::is_same_v<T, glm::vec2>) {
-				w.Write(v.x);
-				w.Write(v.y);
+				w.Write(v.x); w.Write(v.y);
+			}
+			else if constexpr (std::is_same_v<T, glm::vec4>) {
+				w.Write(v.x); w.Write(v.y); w.Write(v.z); w.Write(v.w);
 			}
 			else {
-				w.Write(v); 
+				w.Write(v);
 			}
 			}, value);
 	}
@@ -35,9 +37,17 @@ namespace {
 			return glm::vec2(x, y);
 		}
 		case 5: return r.Read<glm::vec3>();
+		case 6: {
+			float x = r.Read<float>();
+			float y = r.Read<float>();
+			float z = r.Read<float>();
+			float w = r.Read<float>();
+			return glm::vec4(x, y, z, w);
+		}
 		default: return std::string();
 		}
 	}
+		
 }
 
 ScriptComponent::ScriptComponent(Object* parent, std::string sourcePath) : ComponentBase<ScriptComponent>(parent) {
@@ -105,10 +115,9 @@ void ScriptComponent::Deserialize(BinaryReader& r) {
 }
 
 void ScriptComponent::Unload() {
-	if (scriptInstance || scriptModule) {
+	if (scriptInstance) {
 		py::gil_scoped_acquire gil;
 		scriptInstance = py::object();
-		scriptModule = py::object();
 	}
 	exportedProperties.clear();
 	onLoadRan = false;
@@ -139,18 +148,35 @@ void ScriptComponent::Reload() {
 	std::vector<ExportedProperty> previousValues = std::move(exportedProperties);
 	pendingExportedValues = std::move(exportedProperties);
 
+	if (Py_IsInitialized() && !sourcePath.empty()) {
+		py::gil_scoped_acquire gil;
+		std::string moduleName = VirtualPathToModuleName(sourcePath);
+
+		py::object sysModule = py::module_::import("sys");
+		py::dict sysModules = sysModule.attr("modules");
+
+		if (sysModules.contains(moduleName)) {
+			sysModules.attr("pop")(moduleName, py::none()); 
+		}
+	}
+
 	Unload();
-	EnsureLoaded();
+	EnsureLoaded(); 
 
-	if (loaded) {
-		for (auto& prop : exportedProperties) {
-			auto it = std::find_if(previousValues.begin(), previousValues.end(),
-				[&](const ExportedProperty& p) { return p.name == prop.name; });
+	if (!loaded) {
+		Console::PrintError("ScriptComponent: reload failed for {} — keeping previous instance unloaded").Format(sourcePath);
+		pendingExportedValues = std::move(previousValues);
+		EngineManager::getInstance().EngineChangeEvent();
+		return;
+	}
 
-			if (it != previousValues.end() && it->value.index() == prop.value.index()) {
-				prop.value = it->value;
-				SetInstanceAttrFromVariant(prop.name, prop.value);
-			}
+	for (auto& prop : exportedProperties) {
+		auto it = std::find_if(previousValues.begin(), previousValues.end(),
+			[&](const ExportedProperty& p) { return p.name == prop.name; });
+
+		if (it != previousValues.end() && it->value.index() == prop.value.index()) {
+			prop.value = it->value;
+			SetInstanceAttrFromVariant(prop.name, prop.value);
 		}
 	}
 
@@ -177,53 +203,11 @@ void ScriptComponent::EnsureLoaded() {
 	std::error_code ecStat;
 	lastWriteTime = std::filesystem::last_write_time(absPath, ecStat);
 
-	std::ifstream in(absPath);
-	if (!in.is_open()) {
-		Console::PrintError("ScriptComponent: failed to open script file: {}").Format(absPath.string());
-		return;
-	}
-	std::ostringstream sourceBuf;
-	sourceBuf << in.rdbuf();
-	std::string source = sourceBuf.str();
-
 	py::gil_scoped_acquire gil;
 
 	try {
-		std::string moduleName = "fusion_script_" + absPath.stem().string();
+		py::object foundClass = ImportScriptClass(sourcePath);
 
-		py::object typesModule = py::module_::import("types");
-		py::object moduleObj = typesModule.attr("ModuleType")(moduleName);
-		py::dict moduleDict = moduleObj.attr("__dict__");
-		moduleDict["__name__"] = moduleName;
-		moduleDict["__file__"] = absPath.string();
-
-		py::exec(source, moduleDict, moduleDict);
-
-		py::object fusionModule = py::module_::import("fusion");
-		py::object scriptBaseClass = fusionModule.attr("Script");
-
-		py::object foundClass;
-		for (auto item : moduleDict) {
-			py::object value = py::reinterpret_borrow<py::object>(item.second);
-			if (!PyType_Check(value.ptr())) continue;
-			if (value.is(scriptBaseClass)) continue;
-
-			int isSub = PyObject_IsSubclass(value.ptr(), scriptBaseClass.ptr());
-			if (isSub == 1) {
-				foundClass = value;
-				break;
-			}
-			else if (isSub < 0) {
-				PyErr_Clear();
-			}
-		}
-
-		if (!foundClass) {
-			Console::PrintError("ScriptComponent: no class inheriting from Script found in {}").Format(absPath.string());
-			return;
-		}
-
-		scriptModule = moduleObj;
 		scriptInstance = foundClass();
 
 		try {
@@ -231,19 +215,20 @@ void ScriptComponent::EnsureLoaded() {
 		}
 		catch (const py::cast_error&) {
 			Console::PrintError("ScriptComponent: class in {} does not properly inherit from Script").Format(absPath.string());
-			scriptModule = py::object();
 			scriptInstance = py::object();
 			return;
 		}
 
 		ScanExportedProperties();
-
 		loaded = true;
 		loadFailed = false;
 	}
 	catch (const py::error_already_set& e) {
 		Console::PrintError("ScriptComponent: failed to load script {}: {}").Format(absPath.string(), e.what());
-		scriptModule = py::object();
+		scriptInstance = py::object();
+	}
+	catch (const std::exception& e) {
+		Console::PrintError("ScriptComponent: failed to load script {}: {}").Format(absPath.string(), e.what());
 		scriptInstance = py::object();
 	}
 }
@@ -262,10 +247,16 @@ void ScriptComponent::ScanExportedProperties() {
 		if (!py::isinstance<ExportMarker>(attrValue)) continue;
 
 		std::string attrName = py::str(item.first);
-		py::object defaultValue = attrValue.cast<ExportMarker>().value;
+		ExportMarker marker = attrValue.cast<ExportMarker>();
+		py::object defaultValue = marker.value;
 
 		ExportedProperty prop;
 		prop.name = attrName;
+		prop.displayType = marker.type;
+		prop.prefix = marker.prefix;
+		prop.suffix = marker.suffix;
+		prop.min = marker.min;
+		prop.max = marker.max;
 
 		if (py::isinstance<py::bool_>(defaultValue)) {
 			prop.value = defaultValue.cast<bool>();
@@ -278,6 +269,9 @@ void ScriptComponent::ScanExportedProperties() {
 		}
 		else if (py::isinstance<py::str>(defaultValue)) {
 			prop.value = defaultValue.cast<std::string>();
+		}
+		else if (py::isinstance<glm::vec4>(defaultValue)) {
+			prop.value = defaultValue.cast<glm::vec4>();
 		}
 		else if (py::isinstance<glm::vec3>(defaultValue)) {
 			prop.value = defaultValue.cast<glm::vec3>();
@@ -294,7 +288,7 @@ void ScriptComponent::ScanExportedProperties() {
 		exportedProperties.push_back(std::move(prop));
 	}
 
-	ApplyPendingExportedValues(); 
+	ApplyPendingExportedValues();
 }
 
 void ScriptComponent::ApplyPendingExportedValues() {
@@ -370,14 +364,39 @@ void ScriptComponent::ProcessInspectorUI() {
 				}
 			}
 			else if constexpr (std::is_same_v<T, int>) {
-				if (ImGui::InputInt("##val", &value)) {
-					SetInstanceAttrFromVariant(prop.name, prop.value);
+				bool changed = false;
+				std::string format = prop.prefix + "%d" + prop.suffix;
+				switch (prop.displayType) {
+				case ExportType::Slider:
+					changed = ImGui::SliderInt("##val", &value, (int)prop.min, (int)prop.max, format.c_str());
+					break;
+				case ExportType::Drag:
+					changed = ImGui::DragInt("##val", &value, 1.0f, (int)prop.min, (int)prop.max, format.c_str());
+					break;
+				default:
+					changed = ImGui::InputInt("##val", &value);
+					break;
 				}
+				if (changed) SetInstanceAttrFromVariant(prop.name, prop.value);
 			}
 			else if constexpr (std::is_same_v<T, float>) {
-				if (ImGui::InputFloat("##val", &value)) {
-					SetInstanceAttrFromVariant(prop.name, prop.value);
+				bool changed = false;
+				std::string format = prop.prefix + "%.3f" + prop.suffix;
+				switch (prop.displayType) {
+				case ExportType::Slider:
+					changed = ImGui::SliderFloat("##val", &value, prop.min, prop.max, format.c_str());
+					break;
+				case ExportType::AngleSlider:
+					changed = ImGui::SliderAngle("##val", &value, prop.min, prop.max);
+					break;
+				case ExportType::Drag:
+					changed = ImGui::DragFloat("##val", &value, 1.0f, prop.min, prop.max, format.c_str());
+					break;
+				default:
+					changed = ImGui::InputFloat("##val", &value, 0.0f, 0.0f, format.c_str());  // FIX: pass format
+					break;
 				}
+				if (changed) SetInstanceAttrFromVariant(prop.name, prop.value);
 			}
 			else if constexpr (std::is_same_v<T, bool>) {
 				if (ImGui::Checkbox("##val", &value)) {
@@ -390,9 +409,22 @@ void ScriptComponent::ProcessInspectorUI() {
 				}
 			}
 			else if constexpr (std::is_same_v<T, glm::vec3>) {
-				if (ImGui::InputFloat3("##val", &value.x)) {
-					SetInstanceAttrFromVariant(prop.name, prop.value);
+				bool changed = false;
+				switch (prop.displayType) {
+				case ExportType::ColorEdit:   changed = ImGui::ColorEdit3("##val", &value.x); break;
+				case ExportType::ColorPicker: changed = ImGui::ColorPicker3("##val", &value.x); break;
+				default:                      changed = ImGui::InputFloat3("##val", &value.x); break;
 				}
+				if (changed) SetInstanceAttrFromVariant(prop.name, prop.value);
+			}
+			else if constexpr (std::is_same_v<T, glm::vec4>) {
+				bool changed = false;
+				switch (prop.displayType) {
+				case ExportType::ColorEdit:   changed = ImGui::ColorEdit4("##val", &value.x); break;
+				case ExportType::ColorPicker: changed = ImGui::ColorPicker4("##val", &value.x); break;
+				default:                      changed = ImGui::InputFloat4("##val", &value.x); break;
+				}
+				if (changed) SetInstanceAttrFromVariant(prop.name, prop.value);
 			}
 			}, prop.value);
 

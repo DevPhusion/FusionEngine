@@ -46,7 +46,7 @@ public:
 	void ProcessScriptInSubtree(const std::string& virtualPath, const std::function<void(const std::string&)>& callback) const;
 
 	void ScanForScripts(const std::string& virtualDir);
-
+	void UpdateScriptImportPath(const std::filesystem::path& previousRoot);
 
 	void SetupResourcesFolder();
 

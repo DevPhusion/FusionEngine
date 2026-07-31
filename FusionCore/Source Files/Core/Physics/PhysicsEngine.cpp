@@ -30,6 +30,8 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 	}
 
 	ScriptManager::getInstance().RunAllScriptsProcess(delta);
+	ObjectManager::getInstance().FlushPendingObjects();
+	ObjectManager::getInstance().FlushPendingRemovals();
 
 	TIME_BLOCK("Physics");
 

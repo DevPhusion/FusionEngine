@@ -25,6 +25,8 @@ public:
 	}
 
 	std::vector<std::unique_ptr<Object>> allObjects;
+	std::vector<std::unique_ptr<Object>> pendingObjects;
+	std::vector<Object*> pendingRemovals;
 	std::vector<VertexPoint*> vertexPoints;
 	std::vector<float> vertices;
 
@@ -38,10 +40,14 @@ public:
 	void AddSoftPolygon();
 	void AddPolygonVertex();
 	void AddFluid();
+	Object* AddExistingObject(std::unique_ptr<Object> obj, Object* parent = nullptr);
+	void FlushPendingObjects();
 	std::string GenerateUniqueName(const std::string& baseName, Object* exclude = nullptr);
 	VertexPoint* CopyVertex(VertexPoint* vert); // For copying polygon
 	Object* CopyObject(Object* obj);
 	void RemoveObject(Object* obj);
+	void QueueRemoveObject(Object* obj);
+	void FlushPendingRemovals();
 
 private:
 	ObjectManager() = default;

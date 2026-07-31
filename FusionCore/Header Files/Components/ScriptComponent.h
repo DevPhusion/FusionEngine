@@ -24,6 +24,10 @@ public:
 	std::string GetDisplayName();
 	void SetSourcePath(std::string path);
 
+	bool IsLoaded() const { return loaded; }
+	bool HasInstance() const { return loaded && static_cast<bool>(scriptInstance); }
+	py::object GetInstance() { return scriptInstance; }
+	void EnsureLoaded();
 	void RunOnLoad();
 	void RunOnStart();
 	void RunProcess(float delta);
@@ -36,10 +40,8 @@ public:
 	virtual void Serialize(BinaryWriter& w);
 	virtual void Deserialize(BinaryReader& r);
 private:
-	void EnsureLoaded();
 	void CheckForFileChanges();  
 	void Reload();
-
 
 	void ScanExportedProperties();
 	void ApplyPendingExportedValues();
@@ -54,7 +56,6 @@ private:
 	std::vector<ExportedProperty> pendingExportedValues; 
 	bool onLoadRan = false;
 
-	pybind11::object scriptModule;
 	pybind11::object scriptInstance;
 	bool loaded = false;
 	bool loadFailed = false;

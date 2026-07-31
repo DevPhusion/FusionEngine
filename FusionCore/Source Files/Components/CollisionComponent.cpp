@@ -152,7 +152,14 @@ void CollisionComponent::OnDelete() {
 
 void CollisionComponent::calculateBoundingCircle() {
     EngineManager::getInstance().EngineChangeEvent();
-    std::vector<std::vector<float>> points = parent->GetComponent<RenderComponent>()->points;
+    RenderComponent* rc = parent->GetComponent<RenderComponent>();
+    if (!rc) {
+        Console::PrintWarning("CollisionComponent: no render component in object {}, collision will not work properly").Format(parent->name);
+        PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent);
+        BAHnode = nullptr;
+        return;
+    }
+    std::vector<std::vector<float>> points = rc->points;
     TransformComponent* tc = parent->GetComponent<TransformComponent>();
     glm::vec3 center = tc->GetWorldPosition();
 

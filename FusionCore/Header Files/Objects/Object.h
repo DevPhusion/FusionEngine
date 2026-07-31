@@ -26,6 +26,7 @@ public:
 	std::string name;
 	bool hideInHierarchy = false;
 	bool hidden = false;
+	bool addedToScene = false;
 	std::vector<std::unique_ptr<Component>> components = {};
 	std::vector<Component*> componentByType;
 	Object* parent = nullptr;

@@ -1,5 +1,8 @@
 #pragma once
 #include <pybind11/pybind11.h>
+#include "ExportedProperty.h"
+
+namespace py = pybind11;
 
 class Object;
 
@@ -9,8 +12,7 @@ public:
 	Object* parent = nullptr; 
 };
 
-struct ExportMarker {
-	pybind11::object value;
-};
-
 void RegisterEngineBindings(pybind11::module_& m);
+void ResetDynamicComponentRegistries();
+py::object ImportScriptClass(const std::string& virtualSourcePath);
+std::string VirtualPathToModuleName(const std::string& virtualPath);

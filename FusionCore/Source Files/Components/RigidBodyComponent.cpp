@@ -219,6 +219,10 @@ float calculateTriangleInertia(glm::vec3 a, glm::vec3 b, glm::vec3 c, glm::vec3 
 void RigidBodyComponent::CalculateInertia() {
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
 	RenderComponent* rc = parent->GetComponent<RenderComponent>();
+	if (!rc) {
+		Console::PrintWarning("RigidBodyComponent: no render component in object {}, rigid body will not work properly").Format(parent->name);
+		return;
+	}
 	std::vector<std::vector<float>> points = rc->points;
 	std::vector<unsigned int> indices = rc->Indices;
 	

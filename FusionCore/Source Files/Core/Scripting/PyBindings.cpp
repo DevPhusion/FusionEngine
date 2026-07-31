@@ -1,13 +1,16 @@
 #include "../../../Header Files/Core/Scripting/PyBindings.h"
 #include "../../../Header Files/Core/Editor/Windows/Console.h"
 #include "../../../Header Files/Components/TransformComponent.h"
+#include "../../../Header Files/Components/EditorRenderComponent.h"
+#include "../../../Header Files/Components/MouseInteractComponent.h"
+#include "../../../Header Files/Components/ScriptComponent.h"
+#include "../../../Header Files/Core/Files/FileManager.h"
+#include "../../../Header Files/Core/ObjectManager.h"
 #include <pybind11/stl.h>
 #include <pybind11/operators.h>  
 #include <glm/glm.hpp>
 #include <sstream>
 #include <numbers>
-
-namespace py = pybind11;
 
 namespace {
 	void RegisterMathBindings(py::module_& m) {
@@ -280,11 +283,90 @@ namespace {
 		return registry;
 	}
 
+	void RegisterScriptClassAsComponentType(const py::object& classObj, const std::string& virtualPath) {
+		PyObject* key = classObj.ptr();
+		if (ComponentRegistry().count(key)) return; 
+
+		ComponentRegistry()[key] = [key](Object* obj) -> py::object {
+			py::gil_scoped_acquire gil;
+			for (auto& comp : obj->components) {
+				auto* script = dynamic_cast<ScriptComponent*>(comp.get());
+				if (!script || !script->HasInstance()) continue;
+				if (script->GetInstance().attr("__class__").ptr() == key) {
+					return script->GetInstance();
+				}
+			}
+			return py::none();
+			};
+
+		ComponentRemoverRegistry()[key] = [key](Object* obj) {
+			py::gil_scoped_acquire gil;
+			for (int i = 0; i < static_cast<int>(obj->components.size()); i++) {
+				auto* script = dynamic_cast<ScriptComponent*>(obj->components[i].get());
+				if (!script || !script->HasInstance()) continue;
+				if (script->GetInstance().attr("__class__").ptr() == key) {
+					obj->RemoveComponent(i);
+					return;
+				}
+			}
+			};
+
+		ComponentAdderRegistry()[key] = [virtualPath](Object& obj) -> py::object {
+			auto comp = std::make_unique<ScriptComponent>(&obj, virtualPath);
+			ScriptComponent* raw = comp.get();
+			obj.AddComponent(std::move(comp));
+
+			raw->EnsureLoaded();
+			if (!raw->IsLoaded()) {
+				throw py::value_error("add_component: failed to load script '" + virtualPath + "'");
+			}
+			return raw->GetInstance();
+			};
+	}
+
+	bool TryAutoRegisterScriptClass(const py::object& componentClass) {
+		py::gil_scoped_acquire gil;
+
+		py::object fusionModule = py::module_::import("fusion");
+		py::object scriptBaseClass = fusionModule.attr("Script");
+
+		if (!PyType_Check(componentClass.ptr())) return false;
+		if (componentClass.is(scriptBaseClass)) return false;
+
+		int isSub = PyObject_IsSubclass(componentClass.ptr(), scriptBaseClass.ptr());
+		if (isSub != 1) { if (isSub < 0) PyErr_Clear(); return false; }
+
+		std::string absPathStr;
+		try {
+			py::object inspectModule = py::module_::import("inspect");
+			absPathStr = inspectModule.attr("getfile")(componentClass).cast<std::string>();
+		}
+		catch (const py::error_already_set&) {
+			PyErr_Clear();
+			return false;
+		}
+
+		std::string virtualPath = FileManager::getInstance().AbsoluteToVirtual(absPathStr);
+		if (virtualPath.empty() || virtualPath == "res://") return false; 
+
+		RegisterScriptClassAsComponentType(componentClass, virtualPath);
+		return true;
+	}
+
+	template <typename Registry>
+	auto FindOrAutoRegister(Registry& registry, const py::object& componentClass) {
+		auto it = registry.find(componentClass.ptr());
+		if (it == registry.end() && TryAutoRegisterScriptClass(componentClass)) {
+			it = registry.find(componentClass.ptr());
+		}
+		return it;
+	}
+
 	py::object GetComponentByPythonType(Object* parent, const py::object& componentClass) {
 		if (!parent) return py::none();
 
 		auto& registry = ComponentRegistry();
-		auto it = registry.find(componentClass.ptr());
+		auto it = FindOrAutoRegister(registry, componentClass);
 		if (it == registry.end()) {
 			throw py::type_error(
 				"get_component: '" + py::str(componentClass).cast<std::string>() +
@@ -295,7 +377,7 @@ namespace {
 
 	void RemoveComponentFromObject(Object& obj, py::object componentClass) {
 		auto& registry = ComponentRemoverRegistry();
-		auto it = registry.find(componentClass.ptr());
+		auto it = FindOrAutoRegister(registry, componentClass);
 		if (it == registry.end()) {
 			throw py::type_error(
 				"remove_component: '" + py::str(componentClass).cast<std::string>() +
@@ -308,7 +390,7 @@ namespace {
 		if (!obj) return false;
 
 		auto& registry = ComponentRegistry();
-		auto it = registry.find(componentClass.ptr());
+		auto it = FindOrAutoRegister(registry, componentClass);
 		if (it == registry.end()) {
 			throw py::type_error(
 				"has_component: '" + py::str(componentClass).cast<std::string>() +
@@ -319,7 +401,7 @@ namespace {
 
 	py::object AddComponentToObject(Object& obj, py::object componentClass) {
 		auto& registry = ComponentAdderRegistry();
-		auto it = registry.find(componentClass.ptr());
+		auto it = FindOrAutoRegister(registry, componentClass);
 		if (it == registry.end()) {
 			throw py::type_error(
 				"add_component: '" + py::str(componentClass).cast<std::string>() +
@@ -333,6 +415,23 @@ namespace {
 		}
 
 		return it->second(obj);
+	}
+
+	Object* AddObjectToScene(Object* obj, Object* parent) {
+		if (!obj) {
+			throw py::value_error("add_object: obj cannot be None");
+		}
+		if (obj->addedToScene) {
+			throw py::value_error("add_object: object has already been added to the scene");
+		}
+		return ObjectManager::getInstance().AddExistingObject(std::unique_ptr<Object>(obj), parent);
+	}
+
+	void RemoveObjectFromScene(Object* obj) {
+		if (!obj) {
+			throw py::value_error("remove_object: obj cannot be None");
+		}
+		ObjectManager::getInstance().QueueRemoveObject(obj);
 	}
 
 	template <typename T, typename PyClass>
@@ -385,6 +484,35 @@ namespace {
 				}, py::return_value_policy::reference);
 	}
 
+	template <typename T, typename PyClass>
+	void EnableAddObject(PyClass& cls) {
+		cls.def("add_object", [](T&, Object* obj, Object* parent) {
+			return AddObjectToScene(obj, parent);
+			}, py::arg("obj"), py::arg("parent") = nullptr,
+				py::return_value_policy::reference,
+				"Add a newly created Object to the scene, optionally parented to another Object");
+	}
+
+	template <typename T, typename PyClass>
+	void EnableRemoveObject(PyClass& cls) {
+		cls.def("remove_object", [](T&, Object* obj) {
+			RemoveObjectFromScene(obj);
+			}, py::arg("obj"),
+				"Remove an object from the scene");
+	}
+
+	template <typename T, typename PyClass>
+	void EnableAddChild(PyClass& cls) {
+		cls.def("add_child", [](T& self, Object* obj) {
+			if (!self.parent) {
+				throw py::value_error("add_child: component has no owning Object");
+			}
+			return AddObjectToScene(obj, self.parent);
+			}, py::arg("obj"),
+				py::return_value_policy::reference,
+				"Add obj as a child of this component's owning Object");
+	}
+
 	template <typename T>
 	void RegisterComponentGetter(py::object pyClass) {
 		ComponentRegistry()[pyClass.ptr()] = [](Object* obj) -> py::object {
@@ -419,29 +547,60 @@ namespace {
 		EnableGetComponent<ScriptBase>(scriptClass);
 		EnableGetOwner<ScriptBase>(scriptClass);
 		EnableHasComponent<ScriptBase>(scriptClass);
-		EnableAddComponent<ScriptBase>(scriptClass);    
-		EnableRemoveComponent<ScriptBase>(scriptClass); 
+		EnableAddComponent<ScriptBase>(scriptClass);
+		EnableRemoveComponent<ScriptBase>(scriptClass);
+		EnableAddObject<ScriptBase>(scriptClass);
+		EnableAddChild<ScriptBase>(scriptClass);
+		EnableRemoveObject<ScriptBase>(scriptClass);
+
+		py::enum_<ExportType>(m, "ExportType")
+			.value("Default", ExportType::Default)
+			.value("Slider", ExportType::Slider)
+			.value("AngleSlider", ExportType::AngleSlider)
+			.value("ColorEdit", ExportType::ColorEdit)
+			.value("ColorPicker", ExportType::ColorPicker)
+			.value("Drag", ExportType::Drag)
+			.export_values();
 
 		py::class_<ExportMarker>(m, "_ExportMarker")
-			.def(py::init<py::object>());
+			.def(py::init<py::object, ExportType, std::string, std::string, float, float>(),
+				py::arg("value"), py::arg("type") = ExportType::Default,
+				py::arg("prefix") = "", py::arg("suffix") = "",
+				py::arg("min") = 0.0f, py::arg("max") = 1.0f)
+			.def_readonly("value", &ExportMarker::value)
+			.def_readonly("type", &ExportMarker::type)
+			.def_readonly("prefix", &ExportMarker::prefix)
+			.def_readonly("suffix", &ExportMarker::suffix)
+			.def_readonly("min", &ExportMarker::min)
+			.def_readonly("max", &ExportMarker::max);
 
-		m.def("export", [](py::object value) {
-			return ExportMarker{ value };
-			}, py::arg("value"),
-				"Mark a script attribute as editable in the inspector");
+		m.def("export", [](py::object value, ExportType type, std::string prefix,
+			std::string suffix, float min, float max) {
+				return ExportMarker{ value, type, prefix, suffix, min, max };
+			},
+			py::arg("value"), py::arg("type") = ExportType::Default,
+			py::arg("prefix") = "", py::arg("suffix") = "",
+			py::arg("min") = 0.0f, py::arg("max") = 1.0f,
+			"Mark a script attribute as editable in the inspector, e.g.\n"
+			"  speed = export(200.0, ExportType.Slider, min=0.0, max=500.0)");
+
+		m.def("get_script", &ImportScriptClass, py::arg("path"),
+			"Import and return the Script subclass at the given res:// path. Only needed "
+			"for genuinely dynamic/data-driven loading — for normal use, just import the "
+			"class directly, e.g. `from scripts.enemy import Enemy`.");
 	}
 
 	void RegisterConsoleBindings(py::module_& m) {
 		py::class_<Console>(m, "Console")
-			.def_static("Print", [](const std::string& text) {
-			Console::AddMessage(Console::MessageType::Info, text);
-				}, py::arg("text"))
-			.def_static("PrintWarning", [](const std::string& text) {
-			Console::AddMessage(Console::MessageType::Warning, text);
-				}, py::arg("text"))
-			.def_static("PrintError", [](const std::string& text) {
-			Console::AddMessage(Console::MessageType::Error, text);
-				}, py::arg("text"));
+			.def_static("Print", [](const py::object& obj) {
+			Console::AddMessage(Console::MessageType::Info, py::str(obj).cast<std::string>());
+				}, py::arg("value"))
+			.def_static("PrintWarning", [](const py::object& obj) {
+			Console::AddMessage(Console::MessageType::Warning, py::str(obj).cast<std::string>());
+				}, py::arg("value"))
+			.def_static("PrintError", [](const py::object& obj) {
+			Console::AddMessage(Console::MessageType::Error, py::str(obj).cast<std::string>());
+				}, py::arg("value"));
 	}
 
 	void RegisterShapeBindings(py::module_& m) {
@@ -560,6 +719,9 @@ namespace {
 			});
 		EnableAddComponent<RenderComponent>(renderClass);    
 		EnableRemoveComponent<RenderComponent>(renderClass);
+		EnableAddObject<RenderComponent>(renderClass);   
+		EnableAddChild<RenderComponent>(renderClass);
+		EnableRemoveObject<RenderComponent>(renderClass);
 
 		auto transformClass = py::class_<TransformComponent>(m, "TransformComponent")
 			.def_property("world_position",
@@ -591,10 +753,168 @@ namespace {
 		EnableGetOwner<TransformComponent>(transformClass);         
 		EnableAddComponent<TransformComponent>(transformClass);
 		EnableRemoveComponent<TransformComponent>(transformClass);
+		EnableAddObject<TransformComponent>(transformClass);   
+		EnableAddChild<TransformComponent>(transformClass);
+		EnableRemoveObject<TransformComponent>(transformClass);
+
+		auto rigidBodyClass = py::class_<RigidBodyComponent>(m, "RigidBodyComponent")
+			.def_property("enable",
+				[](RigidBodyComponent& self) { return self.Enabled; },
+				[](RigidBodyComponent& self, bool enable) { self.SetEnabled(enable); })
+			.def("set_enable", &RigidBodyComponent::SetEnabled)
+
+			.def_property("velocity",
+				[](RigidBodyComponent& self) { return self.velocity; },
+				[](RigidBodyComponent& self, glm::vec3 v) {
+					self.velocity = v;
+					EngineManager::getInstance().EngineChangeEvent();
+				})
+			.def("set_velocity", [](RigidBodyComponent& self, glm::vec3 v) {
+			self.velocity = v;
+			EngineManager::getInstance().EngineChangeEvent();
+				}, py::arg("velocity"))
+
+			.def_property("acceleration",
+				[](RigidBodyComponent& self) { return self.netAcceleration; },
+				[](RigidBodyComponent& self, glm::vec2 a) { self.netAcceleration = a; })
+			.def("set_acceleration", [](RigidBodyComponent& self, glm::vec2 a) {
+			self.netAcceleration = a;
+				}, py::arg("acceleration"))
+
+			.def_property("angular_velocity",
+				[](RigidBodyComponent& self) { return self.angularVelocity; },
+				[](RigidBodyComponent& self, float w) {
+					self.angularVelocity = w;
+					EngineManager::getInstance().EngineChangeEvent();
+				})
+			.def("set_angular_velocity", [](RigidBodyComponent& self, float w) {
+			self.angularVelocity = w;
+			EngineManager::getInstance().EngineChangeEvent();
+				}, py::arg("angular_velocity"))
+
+			.def_property("angular_acceleration",
+				[](RigidBodyComponent& self) { return self.angularAcceleration; },
+				[](RigidBodyComponent& self, float a) { self.angularAcceleration = a; })
+			.def("set_angular_acceleration", [](RigidBodyComponent& self, float a) {
+			self.angularAcceleration = a;
+				}, py::arg("angular_acceleration"))
+
+			.def_property("net_force",
+				[](RigidBodyComponent& self) { return self.netForceDisplay; },
+				[](RigidBodyComponent& self, glm::vec2 f) { self.netForceDisplay = f; })
+			.def("set_net_force", [](RigidBodyComponent& self, glm::vec2 f) {
+			self.netForceDisplay = f;
+				}, py::arg("net_force"))
+
+			.def_property("torque",
+				[](RigidBodyComponent& self) { return self.torqueDisplay; },
+				[](RigidBodyComponent& self, float t) { self.torqueDisplay = t; })
+			.def("set_torque", [](RigidBodyComponent& self, float t) {
+			self.torqueDisplay = t;
+				}, py::arg("torque"))
+
+			.def_property("mass",
+				[](RigidBodyComponent& self) { return 1.0f / self.inverseMass; },
+				[](RigidBodyComponent& self, float mass) {
+					if (mass <= 0) mass = 0.001f;
+					self.inverseMass = 1.0f / mass;
+					EngineManager::getInstance().EngineChangeEvent();
+					self.CalculateInertia();
+				})
+			.def("set_mass", [](RigidBodyComponent& self, float mass) {
+			if (mass <= 0) mass = 0.001f;
+			self.inverseMass = 1.0f / mass;
+			EngineManager::getInstance().EngineChangeEvent();
+			self.CalculateInertia();
+				}, py::arg("mass"))
+
+			.def_property("inverse_mass",
+				[](RigidBodyComponent& self) { return self.inverseMass; },
+				[](RigidBodyComponent& self, float invMass) {
+					self.inverseMass = invMass;
+					EngineManager::getInstance().EngineChangeEvent();
+					self.CalculateInertia();
+				})
+			.def("set_inverse_mass", [](RigidBodyComponent& self, float invMass) {
+			self.inverseMass = invMass;
+			EngineManager::getInstance().EngineChangeEvent();
+			self.CalculateInertia();
+				}, py::arg("inverse_mass"))
+
+			.def_property("inertia",
+				[](RigidBodyComponent& self) { return self.Inertia; },
+				[](RigidBodyComponent& self, float inertia) {
+					self.Inertia = inertia;
+					self.inverseInertia = inertia > 0 ? 1.0f / inertia : 0.0f;
+				})
+			.def("set_inertia", [](RigidBodyComponent& self, float inertia) {
+			self.Inertia = inertia;
+			self.inverseInertia = inertia > 0 ? 1.0f / inertia : 0.0f;
+				}, py::arg("inertia"))
+
+			.def_property("inverse_inertia",
+				[](RigidBodyComponent& self) { return self.inverseInertia; },
+				[](RigidBodyComponent& self, float invInertia) {
+					self.inverseInertia = invInertia;
+					self.Inertia = invInertia > 0 ? 1.0f / invInertia : 0.0f;
+				})
+			.def("set_inverse_inertia", [](RigidBodyComponent& self, float invInertia) {
+			self.inverseInertia = invInertia;
+			self.Inertia = invInertia > 0 ? 1.0f / invInertia : 0.0f;
+				}, py::arg("inverse_inertia"))
+
+			.def("recalculate_inertia", &RigidBodyComponent::CalculateInertia,
+				"Recompute inertia from the current shape and mass, e.g. after resizing")
+
+			.def_readwrite("linear_damping", &RigidBodyComponent::linearDamping)
+			.def("set_linear_damping", [](RigidBodyComponent& self, float d) { self.linearDamping = d; },
+				py::arg("linear_damping"))
+
+			.def_readwrite("angular_damping", &RigidBodyComponent::angularDamping)
+			.def("set_angular_damping", [](RigidBodyComponent& self, float d) { self.angularDamping = d; },
+				py::arg("angular_damping"))
+
+			.def("add_force", &RigidBodyComponent::AddForce, py::arg("force"),
+				"Apply a force through the center of mass")
+			.def("add_force_at_world_point", &RigidBodyComponent::AddForceAtPoint,
+				py::arg("force"), py::arg("point"),
+				"Apply a force at a point given in world coordinates")
+			.def("add_force_at_local_point", &RigidBodyComponent::AddForceAtBodyPoint,
+				py::arg("force"), py::arg("point"),
+				"Apply a force at a point given in this object's local/model coordinates");
+
+		EnableGetComponent<RigidBodyComponent>(rigidBodyClass);
+		EnableHasComponent<RigidBodyComponent>(rigidBodyClass);
+		RegisterComponentGetter<RigidBodyComponent>(rigidBodyClass);
+		EnableGetOwner<RigidBodyComponent>(rigidBodyClass);
+		RegisterComponentRemover<RigidBodyComponent>(rigidBodyClass);
+		RegisterComponentAdder<RigidBodyComponent>(rigidBodyClass,
+			[](Object& obj) {
+				return std::make_unique<RigidBodyComponent>(&obj);
+			});
+		EnableAddComponent<RigidBodyComponent>(rigidBodyClass);
+		EnableRemoveComponent<RigidBodyComponent>(rigidBodyClass);
+		EnableAddObject<RigidBodyComponent>(rigidBodyClass);
+		EnableAddChild<RigidBodyComponent>(rigidBodyClass);
+		EnableRemoveObject<RigidBodyComponent>(rigidBodyClass);
+	}
+
+	Object* CreateDefaultObject() {
+		Object* obj = new Object(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
+
+		obj->AddComponent(std::make_unique<EditorRenderComponent>(obj, obj->shader, "Resources/Images/Object.png", 0.075f));
+		obj->AddComponent(std::make_unique<TransformComponent>(obj, obj->shader,
+			obj->GetComponent<EditorRenderComponent>()->GetCenter()));
+		obj->AddComponent(std::make_unique<MouseInteractComponent>(obj, false));
+
+		return obj;
 	}
 
 	void RegisterObjectBindings(py::module_& m) {
 		py::class_<Object, std::unique_ptr<Object, py::nodelete>>(m, "Object")
+			.def(py::init(&CreateDefaultObject),
+				"Creates a new Object, not yet part of the scene — call "
+				"add_object() to insert it.")
 			.def_readwrite("name", &Object::name)
 			.def_readwrite("hidden", &Object::hidden)
 			.def_property_readonly("id", [](Object& self) { return self.id; })
@@ -625,9 +945,109 @@ namespace {
 			.def("add_component", &AddComponentToObject, py::arg("component"),
 				"Attach a component instance to this Object, e.g. obj.add_component(RenderComponent)")
 			.def("remove_component", &RemoveComponentFromObject, py::arg("component_class"),
-				"Remove a component of the given type from this Object, e.g. obj.remove_component(RenderComponent)");
+				"Remove a component of the given type from this Object, e.g. obj.remove_component(RenderComponent)")
+			.def("add_object", [](Object&, Object* obj, Object* parent) {
+			return AddObjectToScene(obj, parent);
+				}, py::arg("obj"), py::arg("parent") = nullptr,
+					py::return_value_policy::reference,
+					"Add a newly created Object to the scene, optionally parented to another Object")
+			.def("add_child", [](Object& self, Object* obj) {
+			return AddObjectToScene(obj, &self);
+				}, py::arg("obj"),
+					py::return_value_policy::reference,
+					"Add obj as a child of this Object")
+			.def("remove_object", [](Object&, Object* obj) {
+			RemoveObjectFromScene(obj);
+				}, py::arg("obj"),
+					"Remove an object from the scene");
+
 	}
 
+	void ResetDynamicComponentRegistriesImpl() {
+		ComponentRegistry().clear();
+		ComponentRemoverRegistry().clear();
+		ComponentAdderRegistry().clear();
+	}
+}
+
+std::string VirtualPathToModuleName(const std::string& virtualPath) {
+	std::string path = virtualPath;
+	const std::string prefix = "res://";
+	if (path.rfind(prefix, 0) == 0) path = path.substr(prefix.size());
+	if (path.size() >= 3 && path.substr(path.size() - 3) == ".py") {
+		path = path.substr(0, path.size() - 3);
+	}
+	std::replace(path.begin(), path.end(), '/', '.');
+	std::replace(path.begin(), path.end(), '\\', '.');
+	return path;
+}
+
+py::object ImportScriptClass(const std::string& virtualSourcePath) {
+	std::string moduleName = VirtualPathToModuleName(virtualSourcePath);
+	std::filesystem::path absPath = FileManager::getInstance().VirtualToAbsolute(virtualSourcePath);
+
+	py::gil_scoped_acquire gil;
+
+	py::object sysModule = py::module_::import("sys");
+	py::dict sysModules = sysModule.attr("modules");
+
+	py::object moduleObj;
+
+	if (sysModules.contains(moduleName)) {
+		moduleObj = sysModules[moduleName.c_str()];
+	}
+	else {
+		py::object importlibUtil = py::module_::import("importlib.util");
+
+		py::object spec = importlibUtil.attr("spec_from_file_location")(moduleName, absPath.string());
+		if (spec.is_none()) {
+			throw py::value_error("Failed to load script '" + virtualSourcePath +
+				"': could not create a module spec for '" + absPath.string() + "'");
+		}
+
+		moduleObj = importlibUtil.attr("module_from_spec")(spec);
+
+		sysModules[moduleName.c_str()] = moduleObj;
+
+		try {
+			spec.attr("loader").attr("exec_module")(moduleObj);
+		}
+		catch (const py::error_already_set&) {
+			sysModules.attr("pop")(moduleName, py::none());
+			throw;
+		}
+	}
+
+	py::object fusionModule = py::module_::import("fusion");
+	py::object scriptBaseClass = fusionModule.attr("Script");
+
+	py::object foundClass;
+	py::dict moduleDict = moduleObj.attr("__dict__");
+	for (auto item : moduleDict) {
+		py::object value = py::reinterpret_borrow<py::object>(item.second);
+		if (!PyType_Check(value.ptr())) continue;
+		if (value.is(scriptBaseClass)) continue;
+
+		int isSub = PyObject_IsSubclass(value.ptr(), scriptBaseClass.ptr());
+		if (isSub != 1) { if (isSub < 0) PyErr_Clear(); continue; }
+
+		if (py::str(value.attr("__module__")).cast<std::string>() == moduleName) {
+			foundClass = value;
+			break;
+		}
+	}
+
+	if (!foundClass) {
+		throw py::value_error("Failed to load script '" + virtualSourcePath +
+			"': no class inheriting from Script found in module '" + moduleName + "'");
+	}
+
+	RegisterScriptClassAsComponentType(foundClass, virtualSourcePath);
+	return foundClass;
+}
+
+void ResetDynamicComponentRegistries() {
+	ResetDynamicComponentRegistriesImpl();
 }
 
 void RegisterEngineBindings(py::module_& m) {

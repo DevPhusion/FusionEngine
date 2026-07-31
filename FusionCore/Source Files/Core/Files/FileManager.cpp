@@ -3,6 +3,7 @@
 #include "../../../Header Files/Core/ObjectManager.h"
 #include "../../../Header Files/Core/Physics/Constraint/PGSConstraint/Constraint.h"
 #include "../../../Header Files/Core/Physics/Constraint/PGSConstraint/Constraints.h"
+#include "../../../Header Files/Core/Scripting/PyBindings.h"
 
 namespace fs = std::filesystem;
 
@@ -36,6 +37,45 @@ void FileManager::ProcessScriptInSubtree(const std::string& virtualPath, const s
 		ProcessScriptInSubtree(child.virtualPath, callback);
 }
 
+void FileManager::UpdateScriptImportPath(const std::filesystem::path& previousRoot) {
+	if (!Py_IsInitialized()) return;
+
+	py::gil_scoped_acquire gil;
+	py::object sysModule = py::module_::import("sys");
+	py::list sysPath = sysModule.attr("path");
+
+	if (!previousRoot.empty()) {
+		std::string oldStr = previousRoot.string();
+		py::list filtered;
+		for (auto p : sysPath) {
+			if (p.cast<std::string>() != oldStr) filtered.append(p);
+		}
+		sysModule.attr("path") = filtered;
+		sysPath = sysModule.attr("path");
+	}
+
+	std::string newStr = resourcesRoot.string();
+	bool alreadyPresent = false;
+	for (auto p : sysPath) {
+		if (p.cast<std::string>() == newStr) { alreadyPresent = true; break; }
+	}
+	if (!alreadyPresent) sysPath.append(newStr);
+
+	py::dict sysModules = sysModule.attr("modules");
+	std::vector<std::string> toDelete;
+	for (auto item : sysModules) {
+		std::string name = py::str(item.first).cast<std::string>();
+		if (name == "scripts" || name.rfind("scripts.", 0) == 0) {
+			toDelete.push_back(name);
+		}
+	}
+	for (auto& name : toDelete) {
+		sysModules.attr("pop")(name, py::none());
+	}
+
+	ResetDynamicComponentRegistries(); 
+}
+
 void FileManager::ScanForScripts(const std::string& virtualDir) {
 	ProcessScriptInSubtree(virtualDir, [](const std::string& scriptVirtualPath) {
 		ScriptManager::getInstance().RegisterScript(scriptVirtualPath);
@@ -54,6 +94,7 @@ void FileManager::SetupResourcesFolder() {
 		}
 	}
 
+	fs::path previousRoot = resourcesRoot;
 	resourcesRoot = resDir;
 	ClearThumbnailCache();
 	resourceGeneration++;
@@ -62,6 +103,7 @@ void FileManager::SetupResourcesFolder() {
 	ScanForScripts(GetRootVirtualPath());
 
 	ScriptManager::getInstance().SetupPythonEnvironment(currentProjectDirectory);
+	UpdateScriptImportPath(previousRoot);
 }
 
 std::filesystem::path FileManager::VirtualToAbsolute(const std::string& virtualPath) const {
