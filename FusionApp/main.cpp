@@ -19,12 +19,6 @@ PYBIND11_EMBEDDED_MODULE(fusion, m) {
 	RegisterEngineBindings(m);
 }
 
-void cursorPressedCallback(int button, int action, int mods) {
-	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
-		ObjectManager::getInstance().AddPolygonVertex();
-	}
-}
-
 void SetWorkingDirectoryToExePath() {
 	char exePath[MAX_PATH];
 	GetModuleFileNameA(NULL, exePath, MAX_PATH);
@@ -71,7 +65,6 @@ int main(int argc, char* argv[]) {
 	EditorManager::getInstance().Setup(window); 
 
 	InputManager::getInstance().Setup(window);
-	InputManager::getInstance().SetMouseButtonCallback(cursorPressedCallback, 999);
 
 	EngineManager::getInstance().Setup(window);
 	PhysicsEngine::getInstance().Setup(&ObjectManager::getInstance().allObjects);

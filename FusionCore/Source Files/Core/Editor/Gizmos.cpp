@@ -109,7 +109,7 @@ glm::vec3 Gizmos::ScreenToWorld(double xpos, double ypos) {
 	float ndcX = (localX / panelSize.x) * 2.0f - 1.0f;
 	float ndcY = 1.0f - (localY / panelSize.y) * 2.0f;
 
-	float aspectRatio = EngineManager::getInstance().aspectRatio;
+	float aspectRatio = EngineManager::getInstance().gameAspectRatio;
 	float viewX = ndcX * aspectRatio;
 	float viewY = ndcY;
 

@@ -1,5 +1,4 @@
 #include "../../Header Files/Components/RenderComponent.h"
-#include "../../Header Files/Components/VertexComponent.h"
 #include "../../Header Files/Core/ObjectManager.h"
 #include "../../Header Files/Core/Files/FileDialog.h"
 
@@ -645,11 +644,9 @@ void RenderComponent::ProcessInspectorUI() {
 			TransformComponent* tc = parent->GetComponent<TransformComponent>();
 			rect.center = tc ? tc->GetWorldPosition() : GetCenter();
 
-			VertexComponent* vc = parent->GetComponent<VertexComponent>();
-			if (vc) {
-				vc->SetEnabled(false);
-				vc->RemoveAllVertex();
-			}
+			if (Renderer::getInstance().polygonEditGizmos->IsEditing())
+				Renderer::getInstance().polygonEditGizmos->EndEdit();
+			isAddVertex = false;
 
 			SetShape(rect);
 		}
@@ -659,11 +656,9 @@ void RenderComponent::ProcessInspectorUI() {
 			TransformComponent* tc = parent->GetComponent<TransformComponent>();
 			cir.center = tc ? tc->GetWorldPosition() : GetCenter();
 
-			VertexComponent* vc = parent->GetComponent<VertexComponent>();
-			if (vc) {
-				vc->SetEnabled(false);
-				vc->RemoveAllVertex();
-			}
+			if (Renderer::getInstance().polygonEditGizmos->IsEditing())
+				Renderer::getInstance().polygonEditGizmos->EndEdit();
+			isAddVertex = false;
 
 			SetShape(cir);
 		}
@@ -671,22 +666,15 @@ void RenderComponent::ProcessInspectorUI() {
 			PolygonShape poly;
 			poly.vertices = {};
 
-			VertexComponent* vc = parent->GetComponent<VertexComponent>();
-			if (vc) {
-				vc->SetEnabled(true);
-				vc->RemoveAllVertex();
-			}
-			else {
-				parent->AddComponent(std::make_unique<VertexComponent>(parent));
-				vc = parent->GetComponent<VertexComponent>();
-				vc->RemoveAllVertex();
-			}
 			FluidComponent* fc = parent->GetComponent<FluidComponent>();
 			if (fc) {
 				fc->ClearParticles();
 			}
 
 			SetShape(poly);
+
+			TransformComponent* tc = parent->GetComponent<TransformComponent>();
+			Renderer::getInstance().polygonEditGizmos->BeginEdit(tc);
 
 			EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::AddVertex);
 			isAddVertex = true;
@@ -744,42 +732,80 @@ void RenderComponent::ProcessInspectorUI() {
 				if (ImGui::Button("Reset vertices##PolyReset"))
 				{
 					s.vertices = {};
-					VertexComponent* vc = parent->GetComponent<VertexComponent>();
-					if (vc) {
-						vc->RemoveAllVertex();
-					}
+					
 					FluidComponent* fc = parent->GetComponent<FluidComponent>();
 					if (fc) fc->particles.clear();
 					SetShape(s);
+
+					TransformComponent* tc = parent->GetComponent<TransformComponent>();
+					Renderer::getInstance().polygonEditGizmos->BeginEdit(tc, {}, true);
+
+					EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::AddVertex);
+					isAddVertex = true;
+				}
+				ImGui::SameLine();
+				if (ImGui::Button("Edit vertices##PolyEditVerts")) {
+					std::vector<glm::vec3> localVerts;
+					localVerts.reserve(points.size());
+					for (auto& p : points) {
+						localVerts.push_back(glm::vec3(p[0], p[1], 0.0f));
+					}
+					
+					TransformComponent * tc = parent->GetComponent<TransformComponent>();
+					Renderer::getInstance().polygonEditGizmos->BeginEdit(tc, localVerts, false);
 					EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::AddVertex);
 					isAddVertex = true;
 				}
 			}
 			else {
-				ImGui::Text("Click on the screen to add vertices");
+				bool canAdd = Renderer::getInstance().polygonEditGizmos->CanAddVertices();
+				ImGui::Text(canAdd
+					 ? "Click to add, drag to move, right-click to remove"
+					 : "Drag to move, right-click to remove");
+				const auto& editedVerts = Renderer::getInstance().polygonEditGizmos->GetLocalVertices();
+				ImGui::Text("Vertices: %d", (int)editedVerts.size());
+				
+				ImGui::BeginDisabled(editedVerts.size() < 3);
 				if (ImGui::Button("Confirm")) {
-					if (ObjectManager::getInstance().vertexPoints.size() < 3) return;
+					std::vector<float> newVertices;
+					newVertices.reserve(editedVerts.size() * 5);
+					
+					glm::vec3 bmin(INFINITY), bmax(-INFINITY);
+					for (auto& v : editedVerts) { bmin = glm::min(bmin, v); bmax = glm::max(bmax, v); }
+					glm::vec3 range = glm::max(bmax - bmin, glm::vec3(1e-6f));
 
-					parent->GetComponent<VertexComponent>()->SetVertexPoints(ObjectManager::getInstance().vertexPoints);
-					EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
-
-					s.vertices = ObjectManager::getInstance().vertices;
+					for (auto& v : editedVerts) {
+						float u = (v.x - bmin.x) / range.x;
+						float uvY = (v.y - bmin.y) / range.y;
+						newVertices.insert(newVertices.end(), { v.x, v.y, 0.0f, u, uvY });
+					}
+					
+					s.vertices = newVertices;
 					SetShape(s);
-					TransformComponent* tc = parent->GetComponent<TransformComponent>();
+
+					TransformComponent * tc = parent->GetComponent<TransformComponent>();
 					tc->SetRotationCenter(GetCenter());
-					tc->SetOriginTransform(Camera::getInstance().viewMatrixInverse);
-
-					SoftBodyComponent* sb = parent->GetComponent<SoftBodyComponent>();
+					tc->worldMatrixDirty = true;
+					
+					SoftBodyComponent * sb = parent->GetComponent<SoftBodyComponent>();
 					if (sb) sb->RebuildMassAggregate();
-
-					FluidComponent* fc = parent->GetComponent<FluidComponent>();
+			
+					FluidComponent * fc = parent->GetComponent<FluidComponent>();
 					if (fc) {
 						fc->SeedParticles();
 						fc->ResizeInstanceBuffer();
 					}
-
-					ObjectManager::getInstance().vertexPoints.clear();
-					ObjectManager::getInstance().vertices.clear();
+					
+					Renderer::getInstance().polygonEditGizmos->EndEdit();
+					EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
+					isAddVertex = false;
+				}
+				ImGui::EndDisabled();
+				
+				ImGui::SameLine();
+				if (ImGui::Button("Cancel##PolyCancel")) {
+					Renderer::getInstance().polygonEditGizmos->EndEdit();
+					EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
 					isAddVertex = false;
 				}
 			}

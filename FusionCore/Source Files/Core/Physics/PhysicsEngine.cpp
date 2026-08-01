@@ -167,8 +167,8 @@ void PhysicsEngine::ResolveContacts(PotentialContact* contacts, unsigned numCont
 
 		if (objA == nullptr || objB == nullptr) continue;
 
-		RenderComponent* rcA = objA->GetComponent<RenderComponent>();
-		RenderComponent* rcB = objB->GetComponent<RenderComponent>();
+		CollisionComponent* ccA = objA->GetComponent<CollisionComponent>();
+		CollisionComponent* ccB = objB->GetComponent<CollisionComponent>();
 		TransformComponent* tcA = objA->GetComponent<TransformComponent>();
 		TransformComponent* tcB = objB->GetComponent<TransformComponent>();
 
@@ -180,14 +180,14 @@ void PhysicsEngine::ResolveContacts(PotentialContact* contacts, unsigned numCont
 			if constexpr (std::is_same_v<T, CircleShape>) {
 				rA = s.radius;
 			}
-			}, rcA->currentShape);
+			}, ccA->currentShape);
 
 		std::visit([&](auto&& s) {
 			using T = std::decay_t<decltype(s)>;
 			if constexpr (std::is_same_v<T, CircleShape>) {
 				rB = s.radius;
 			}
-			}, rcB->currentShape);
+			}, ccB->currentShape);
 
 		PhysicsBody bodyA = PhysicsBody();
 		RigidBodyComponent* pcA = objA->GetComponent<RigidBodyComponent>();
@@ -251,7 +251,7 @@ void PhysicsEngine::ResolveContacts(PotentialContact* contacts, unsigned numCont
 						}
 						PhysicsBody poly = (rA > 0.0f) ? bodyB : bodyA;
 
-						collisionResult = ResolveCirclePolygonContacts(circle, poly, radius, poly.obj->GetComponent<RenderComponent>()->edges);
+						collisionResult = ResolveCirclePolygonContacts(circle, poly, radius, poly.obj->GetComponent<CollisionComponent>()->edges);
 					}
 				}
 				else {
@@ -1271,13 +1271,13 @@ std::vector<ContactPoint> PhysicsEngine::GenerateContactPoints(CollisionData col
 }
 
 CollisionData PhysicsEngine::SAT(Object* objA, Object* objB) {
-	RenderComponent* rcA = objA->GetComponent<RenderComponent>();
+	CollisionComponent* ccA = objA->GetComponent<CollisionComponent>();
 	TransformComponent* tcA = objA->GetComponent<TransformComponent>();
-	RenderComponent* rcB = objB->GetComponent<RenderComponent>();
+	CollisionComponent* ccB = objB->GetComponent<CollisionComponent>();
 	TransformComponent* tcB = objB->GetComponent<TransformComponent>();
 
-	std::vector<Edge> edgesA = rcA->edges;
-	std::vector<Edge> edgesB = rcB->edges;
+	std::vector<Edge> edgesA = ccA->edges;
+	std::vector<Edge> edgesB = ccB->edges;
 
 	std::vector<Edge> globalEdgesA;
 	std::vector<Edge> globalEdgesB;
@@ -1407,21 +1407,17 @@ void PhysicsEngine::GenerateRigidBoundaries() {
 		if (obj->HasComponent<SoftBodyComponent>() || obj->HasComponent<FluidComponent>()) continue;
 		if (!obj->HasComponent<CollisionComponent>()) continue;
 
-		RenderComponent* rc = obj->GetComponent<RenderComponent>();
-		TransformComponent* tc = obj->GetComponent<TransformComponent>();
-		if (!rc || !tc || rc->edges.empty()) continue;
-
 		CollisionComponent* cc = obj->GetComponent<CollisionComponent>();
+		TransformComponent* tc = obj->GetComponent<TransformComponent>();
+		if (!cc || !tc || cc->edges.empty()) continue;
 
 		RigidBoundary b;
 		b.obj = obj;
-		b.rb = obj->GetComponent<RigidBodyComponent>(); 
+		b.rb = obj->GetComponent<RigidBodyComponent>();
 		b.tc = tc;
-		b.localEdges = rc->edges;
-		if (cc) {
-			b.collisionLayer = cc->collisionLayer;
-			b.collisionMask = cc->collisionMask;
-		}
+		b.localEdges = cc->edges;
+		b.collisionLayer = cc->collisionLayer;
+		b.collisionMask = cc->collisionMask;
 		rigidBoundaries.push_back(b);
 	}
 }

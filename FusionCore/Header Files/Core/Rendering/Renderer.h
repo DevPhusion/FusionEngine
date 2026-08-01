@@ -10,6 +10,7 @@
 #include "../Physics/PhysicsEngine.h"
 #include "../Editor/InfiniteGrid.h"
 #include "../Editor/Gizmos.h"
+#include "../Editor/PolygonEditGizmos.h"
 #include "../DebugTimer.h"
 #include<glad/glad.h>
 #include<GLFW/glfw3.h>
@@ -28,6 +29,7 @@ public:
 	}
 	InfiniteGrid backgroundGrid = InfiniteGrid();
 	Gizmos* gizmos;
+	PolygonEditGizmos* polygonEditGizmos;
 	void Setup(std::vector<std::unique_ptr<Object>>* objects);
 	void SetupGrid() { backgroundGrid.Setup(); }
 	void Draw();
@@ -35,6 +37,7 @@ public:
 	void DrawArrow(glm::vec3 origin, glm::vec3 direction, float length, glm::vec4 color, float thickness = 1.0f,
 		float headLength = 0.15f, float headAngleDeg = 30.0f, bool screenSpace = false);
 	void DrawCircle(glm::vec3 center, float radius, glm::vec4 color, int segments = 32, float thickness = 1.0f, bool screenSpace = false);
+	void DrawFilledPolygon(const std::vector<glm::vec3>& worldPoints, glm::vec4 fillColor, glm::vec4 outlineColor, float outlineThickness = 1.5f);
 private:
 	Renderer() = default;
 	std::vector<std::unique_ptr<Object>>* allObjects;

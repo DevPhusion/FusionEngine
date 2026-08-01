@@ -2,6 +2,7 @@
 #include "Component.h"
 #include "RenderComponent.h"
 #include "TransformComponent.h"
+#include "../Core/Rendering/Shapes.h"
 #include "../Core/Physics/Collision/BoundingCircle.h"
 #include "../Core/Physics/Collision/CollisionLayerMask.h"
 #include "../Core/Physics/Collision/BAHNode.h"
@@ -20,6 +21,16 @@ public:
 
 	int onTransformCallbackID = -1;
 
+	Shape currentShape;
+	Shape pendingShape; 
+
+	std::vector<std::vector<float>> points; 
+	std::vector<Edge> edges;               
+
+	bool syncWithRenderComponent = false;
+	int renderSyncCallbackID = -1;
+	bool isAddVertex = false; 
+
 	virtual void SetEnabled(bool enabled);
 	virtual void OnDelete();
 	virtual void ProcessInspectorUI();
@@ -31,5 +42,16 @@ public:
 
 	void DrawLayerMaskUI(const char* label, uint16_t* layer);
 	void calculateBoundingCircle();
-};
 
+	void SetShape(Shape shape);
+	std::vector<glm::vec3> VerticesFromShape(Shape& shape);
+	glm::vec3 GetCenter();
+	float GetArea();
+	void Draw();
+
+	void SetSyncWithRenderComponent(bool sync);
+	void SyncFromRenderComponent();
+
+private:
+	void RebuildFromShape(const std::vector<glm::vec3>& localVerts);
+};

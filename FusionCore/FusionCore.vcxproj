@@ -155,6 +155,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Source Files\Core\Editor\PolygonEditGizmos.cpp" />
     <ClCompile Include="Source Files\Components\EditorRenderComponent.cpp" />
     <ClCompile Include="Source Files\Components\CameraComponent.cpp" />
     <ClCompile Include="glad.c" />
@@ -183,7 +184,6 @@
     <ClCompile Include="Source Files\Components\RigidBodyComponent.cpp" />
     <ClCompile Include="Source Files\Components\SoftBodyComponent.cpp" />
     <ClCompile Include="Source Files\Components\TransformComponent.cpp" />
-    <ClCompile Include="Source Files\Components\VertexComponent.cpp" />
     <ClCompile Include="Source Files\Core\Camera.cpp" />
     <ClCompile Include="Source Files\Core\Editor\EditorManager.cpp" />
     <ClCompile Include="Source Files\Core\Editor\EditorWindow.cpp" />
@@ -229,7 +229,6 @@
     <ClCompile Include="Source Files\Core\Rendering\Shader.cpp" />
     <ClCompile Include="Source Files\Objects\Object.cpp" />
     <ClCompile Include="Source Files\Objects\PointMass.cpp" />
-    <ClCompile Include="Source Files\Objects\VertexPoint.cpp" />
     <ClCompile Include="stb_image.cpp" />
     <ClCompile Include="Source Files\Core\Editor\Windows\Viewport.cpp" />
   </ItemGroup>
@@ -248,7 +247,6 @@
     <ClInclude Include="Header Files\Components\RigidBodyComponent.h" />
     <ClInclude Include="Header Files\Components\SoftBodyComponent.h" />
     <ClInclude Include="Header Files\Components\TransformComponent.h" />
-    <ClInclude Include="Header Files\Components\VertexComponent.h" />
     <ClInclude Include="Header Files\Core\Camera.h" />
     <ClInclude Include="Header Files\Core\DebugTimer.h" />
     <ClInclude Include="Header Files\Core\Editor\EditorManager.h" />
@@ -297,10 +295,10 @@
     <ClInclude Include="Header Files\Core\Physics\PhysicsEngine.h" />
     <ClInclude Include="Header Files\Core\Rendering\Renderer.h" />
     <ClInclude Include="Header Files\Core\Rendering\Shader.h" />
+    <ClInclude Include="Header Files\Core\Rendering\Shapes.h" />
     <ClInclude Include="Header Files\Core\Scripting\ExportedProperty.h" />
     <ClInclude Include="Header Files\Objects\Object.h" />
     <ClInclude Include="Header Files\Objects\PointMass.h" />
-    <ClInclude Include="Header Files\Objects\VertexPoint.h" />
     <ClInclude Include="imgui\dirent.h" />
     <ClInclude Include="imgui\imconfig.h" />
     <ClInclude Include="imgui\imgui.h" />
@@ -318,6 +316,7 @@
     <ClInclude Include="Header Files\Core\Scripting\PyBindings.h" />
     <ClInclude Include="Header Files\Core\Scripting\ScriptManager.h" />
     <ClInclude Include="Header Files\Components\ScriptComponent.h" />
+    <ClInclude Include="Header Files\Core\Editor\PolygonEditGizmos.h" />
     <ClInclude Include="stb_image.h" />
     <ClInclude Include="Header Files\Core\Editor\Windows\Viewport.h" />
   </ItemGroup>

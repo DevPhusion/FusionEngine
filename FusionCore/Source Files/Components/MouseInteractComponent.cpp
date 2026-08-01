@@ -57,20 +57,11 @@ void MouseInteractComponent::SetSelectedPolygon(Object* obj, bool enable) {
 	if (Renderer::getInstance().gizmos->isDragging) return;
 
 	if (!enable) {
-		if (obj->HasComponent<VertexComponent>()) {
-			if (obj->GetComponent<VertexComponent>()->GetSelectedVertex() != -1) {
-				return;
-			}
-			obj->GetComponent<VertexComponent>()->SetEnabled(false);
-		}
 		if (EditorManager::getInstance().selectedObject == obj) {
 			EditorManager::getInstance().SetSelectedObject(nullptr);
 		}
 	}
 	else {
-		if (obj->HasComponent<VertexComponent>() && EngineManager::getInstance().EnginePhysicsMode != EngineManager::PhysicsMode::Simulate) {
-			obj->GetComponent<VertexComponent>()->SetEnabled(true);
-		}
 		if (this != nullptr && Inspectable) {
 			EditorManager::getInstance().SetSelectedObject(obj);
 		}
@@ -89,12 +80,6 @@ void MouseInteractComponent::FindSelectedPolygon(int button, int action, int mod
 	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
 
 		if (ObjectSelected) {
-			if (parent->HasComponent<VertexComponent>()) {
-				if (parent->GetComponent<VertexComponent>()->GetSelectedVertex() != -1) {
-					return;
-				}
-				parent->GetComponent<VertexComponent>()->SetEnabled(false);
-			}
 			return;
 		}
 
@@ -160,11 +145,10 @@ void MouseInteractComponent::DragPolygon(double xpos, double ypos) {
 
 	if (InputManager::mouseLeftHold || InputManager::mouseRightHold) 
 	{
-		if (parent->HasComponent<VertexComponent>()) {
-			if (parent->GetComponent<VertexComponent>()->selectedIndex != -1) {
-				return;
-			}
+		if (EngineManager::getInstance().EngineInteractMode == EngineManager::InteractMode::AddVertex) {
+			return;
 		}
+
 
 		if (Selected && EngineManager::getInstance().EnginePhysicsMode != EngineManager::PhysicsMode::Simulate) {
 			GizmosMode gizmoMode = Renderer::getInstance().gizmos->currentGizmosMode;
@@ -197,9 +181,6 @@ void MouseInteractComponent::DragPolygon(double xpos, double ypos) {
 }
 
 void MouseInteractComponent::OnPhysicsModeChanged() {
-	if (parent->HasComponent<VertexComponent>() && EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) {
-		parent->GetComponent<VertexComponent>()->SetEnabled(false);
-	}
 	if (parent->HasComponent<FluidComponent>()) {
 		if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) {
 			SetEnabled(false);

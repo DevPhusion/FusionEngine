@@ -40,8 +40,9 @@ void AddObjectWindow::ProcessWindow() {
 		}
 	}
 	else {
-		ImGui::Text("Click on the scene to add vertices for a new polygon.");
-		
+		const auto& editedVerts = Renderer::getInstance().polygonEditGizmos->GetLocalVertices();
+		ImGui::Text("Click to add vertices, drag to move, right-click to remove.");
+		ImGui::Text("Vertices: %d", (int)editedVerts.size());
 	}
 
 	float button_width = 100.0f;
@@ -77,6 +78,7 @@ void AddObjectWindow::ProcessWindow() {
 			}
 			else if (SelectedType == "Rigid Polygon") {
 				EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::AddVertex);
+				Renderer::getInstance().polygonEditGizmos->BeginEdit(nullptr);
 			}
 			else if (SelectedType == "Soft Box") {
 				ObjectManager::getInstance().AddSoftBox();
@@ -88,6 +90,7 @@ void AddObjectWindow::ProcessWindow() {
 			}
 			else if (SelectedType == "Soft Polygon") {
 				EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::AddVertex);
+				Renderer::getInstance().polygonEditGizmos->BeginEdit(nullptr);
 			}
 			else if (SelectedType == "Fluid") {
 				ObjectManager::getInstance().AddFluid();
@@ -109,6 +112,9 @@ void AddObjectWindow::ProcessWindow() {
 	ImGui::SameLine(); 
 
 	if (ImGui::Button("Close", ImVec2(button_width, 0.0f))) {
+		if (EngineManager::getInstance().EngineInteractMode == EngineManager::InteractMode::AddVertex) {
+			Renderer::getInstance().polygonEditGizmos->EndEdit();
+		}
 		EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
 		Hide();
 	}

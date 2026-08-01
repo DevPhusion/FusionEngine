@@ -89,9 +89,6 @@ void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* re
 	if (EditorManager::getInstance().selectedObject == currentObj) {
 		item_flags |= ImGuiTreeNodeFlags_Selected;
 	}
-	else if (currentObj->HasComponent<VertexComponent>()) {
-		currentObj->GetComponent<VertexComponent>()->SetEnabled(false);
-	}
 
 	bool isRenamingThisNode = IsRenaming && EditorManager::getInstance().selectedObject == currentObj;
 

@@ -358,16 +358,6 @@ void SoftBodyComponent::SyncMeshFromMassAggregate() {
 		rc->UpdateShape(verts, rc->Triangulate(verts));
 	}
 
-	VertexComponent* vc = parent->GetComponent<VertexComponent>();
-	if (vc && std::holds_alternative<PolygonShape>(rc->currentShape)) {
-		for (int i = 0; i < edgeCount; i++)
-		{
-			glm::vec3 worldP = MassAggregate[i]->worldPos;
-			glm::vec3 localP = tc->ProjectToWorld(worldP, true);
-			vc->vertexPoints[i]->UpdatePosition(localP.x, localP.y);
-		}
-	}
-
 	updatingFromPoints = false;
 }
 

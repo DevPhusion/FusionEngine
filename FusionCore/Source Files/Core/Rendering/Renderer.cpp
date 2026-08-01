@@ -4,6 +4,7 @@ void Renderer::Setup(std::vector<std::unique_ptr<Object>>* objects) {
     this->allObjects = objects;
     gizmos = new Gizmos();
     gizmos->Initialize();
+	polygonEditGizmos = new PolygonEditGizmos();
 }
 
 void Renderer::Draw() {
@@ -110,6 +111,16 @@ void Renderer::Draw() {
                 }
             }
         }
+
+        {
+            TIME_BLOCK("Draw collision shapes");
+            for (size_t i = 0; i < (*allObjects).size(); i++) {
+                CollisionComponent * cc = (*allObjects)[i]->GetComponent<CollisionComponent>();
+                if (cc) {
+                    cc->Draw();
+                }
+            }
+        }
     }
 
     if (debug.AnyDebugGizmoEnabled()) {
@@ -188,6 +199,7 @@ void Renderer::Draw() {
     {
         TIME_BLOCK("Draw gizmos");
         gizmos->UpdateGizmos();
+        polygonEditGizmos->UpdateGizmos();
     }
 }
 
@@ -306,5 +318,72 @@ void Renderer::DrawCircle(glm::vec3 center, float radius, glm::vec4 color, int s
         glm::vec3 p2 = center + glm::vec3(cos(angle2) * effRadius, sin(angle2) * effRadius, 0.0f);
 
         DrawLine(p1, p2, color, thickness);
+    }
+}
+
+void Renderer::DrawFilledPolygon(const std::vector<glm::vec3>& worldPoints, glm::vec4 fillColor, glm::vec4 outlineColor, float outlineThickness) {
+    if (worldPoints.size() < 3) return;
+
+    static unsigned int polyVAO = 0;
+    static unsigned int polyVBO = 0;
+    static unsigned int whiteTex = 0;
+    static Shader polyShader = Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt");
+
+    if (polyVAO == 0) {
+        glGenVertexArrays(1, &polyVAO);
+        glGenBuffers(1, &polyVBO);
+
+        glBindVertexArray(polyVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, polyVBO);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
+
+        unsigned char whitePixel[4] = { 255, 255, 255, 255 };
+        glGenTextures(1, &whiteTex);
+        glBindTexture(GL_TEXTURE_2D, whiteTex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, whitePixel);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    }
+
+    glm::vec3 centroid(0.0f);
+    for (auto& p : worldPoints) centroid += p;
+    centroid /= (float)worldPoints.size();
+
+    std::vector<float> verts;
+    verts.reserve((worldPoints.size() + 2) * 3);
+    verts.insert(verts.end(), { centroid.x, centroid.y, centroid.z });
+    for (auto& p : worldPoints) verts.insert(verts.end(), { p.x, p.y, p.z });
+    verts.insert(verts.end(), { worldPoints[0].x, worldPoints[0].y, worldPoints[0].z });
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    polyShader.use();
+    polyShader.setVec4D("aColor", fillColor);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, whiteTex);
+
+    glm::mat4 identity(1.0f);
+    glm::mat4 projection = glm::ortho(-EngineManager::getInstance().gameAspectRatio,
+        EngineManager::getInstance().gameAspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
+    polyShader.setMat4D("projection", projection);
+    polyShader.setMat4D("transform", identity);
+    polyShader.setMat4D("view", Camera::getInstance().viewMatrix);
+
+    glBindVertexArray(polyVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, polyVBO);
+    glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(float), verts.data(), GL_DYNAMIC_DRAW);
+
+    glDrawArrays(GL_TRIANGLE_FAN, 0, (GLsizei)(verts.size() / 3));
+
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindVertexArray(0);
+
+    for (size_t i = 0; i < worldPoints.size(); i++) {
+        DrawLine(worldPoints[i], worldPoints[(i + 1) % worldPoints.size()], outlineColor, outlineThickness);
     }
 }
