@@ -110,6 +110,26 @@ void RenderComponent::SetShape(Shape shape) {
 	}
 }
 
+void RenderComponent::ApplyLiveShapeUpdate(const std::vector<glm::vec3>& verts) {
+	if (verts.size() < 3) return; 
+	std::vector<float> newVertices;
+	newVertices.reserve(verts.size() * 5);
+
+	glm::vec3 bmin(INFINITY), bmax(-INFINITY);
+	for (auto& v : verts) { bmin = glm::min(bmin, v); bmax = glm::max(bmax, v); }
+	glm::vec3 range = glm::max(bmax - bmin, glm::vec3(1e-6f));
+
+	for (auto& v : verts) {
+		float u = (v.x - bmin.x) / range.x;
+		float uvY = (v.y - bmin.y) / range.y;
+		newVertices.insert(newVertices.end(), { v.x, v.y, 0.0f, u, uvY });
+	}
+
+	PolygonShape s;
+	s.vertices = newVertices;
+	SetShape(s);
+}
+
 void RenderComponent::SetTexture(std::string texture_path) {
 	if (this->texture_path != "" && this->TextureID != 0) {
 		auto& cache = TextureCache();
@@ -738,7 +758,10 @@ void RenderComponent::ProcessInspectorUI() {
 					SetShape(s);
 
 					TransformComponent* tc = parent->GetComponent<TransformComponent>();
-					Renderer::getInstance().polygonEditGizmos->BeginEdit(tc, {}, true);
+					Renderer::getInstance().polygonEditGizmos->BeginEdit(tc, {}, PolygonEditGizmos::VertexAddMode::Append);
+					polygonEditCallbackID = Renderer::getInstance().polygonEditGizmos->AddChangeCallback(
+						[this](const std::vector<glm::vec3>& verts) { this->ApplyLiveShapeUpdate(verts); });
+
 
 					EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::AddVertex);
 					isAddVertex = true;
@@ -752,16 +775,20 @@ void RenderComponent::ProcessInspectorUI() {
 					}
 					
 					TransformComponent * tc = parent->GetComponent<TransformComponent>();
-					Renderer::getInstance().polygonEditGizmos->BeginEdit(tc, localVerts, false);
+					Renderer::getInstance().polygonEditGizmos->BeginEdit(tc, localVerts, PolygonEditGizmos::VertexAddMode::InsertOnEdge);
+					polygonEditCallbackID = Renderer::getInstance().polygonEditGizmos->AddChangeCallback(
+						[this](const std::vector<glm::vec3>& verts) { this->ApplyLiveShapeUpdate(verts); });
 					EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::AddVertex);
 					isAddVertex = true;
 				}
 			}
 			else {
-				bool canAdd = Renderer::getInstance().polygonEditGizmos->CanAddVertices();
-				ImGui::Text(canAdd
-					 ? "Click to add, drag to move, right-click to remove"
-					 : "Drag to move, right-click to remove");
+				using AddMode = PolygonEditGizmos::VertexAddMode;
+				AddMode mode = Renderer::getInstance().polygonEditGizmos->GetAddMode();
+				const char* helpText =
+					(mode == AddMode::Append) ? "Click to add, drag to move, right-click to remove" :
+					(mode == AddMode::InsertOnEdge) ? "Click highlighted edge to insert, drag to move, right-click to remove" :
+					"Drag to move, right-click to remove";
 				const auto& editedVerts = Renderer::getInstance().polygonEditGizmos->GetLocalVertices();
 				ImGui::Text("Vertices: %d", (int)editedVerts.size());
 				
@@ -797,6 +824,8 @@ void RenderComponent::ProcessInspectorUI() {
 					}
 					
 					Renderer::getInstance().polygonEditGizmos->EndEdit();
+					Renderer::getInstance().polygonEditGizmos->RemoveChangeCallback(polygonEditCallbackID);
+					polygonEditCallbackID = -1;
 					EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
 					isAddVertex = false;
 				}
@@ -805,6 +834,8 @@ void RenderComponent::ProcessInspectorUI() {
 				ImGui::SameLine();
 				if (ImGui::Button("Cancel##PolyCancel")) {
 					Renderer::getInstance().polygonEditGizmos->EndEdit();
+					Renderer::getInstance().polygonEditGizmos->RemoveChangeCallback(polygonEditCallbackID);
+					polygonEditCallbackID = -1;
 					EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
 					isAddVertex = false;
 				}
@@ -890,6 +921,12 @@ void RenderComponent::ProcessInspectorUI() {
 }
 
 void RenderComponent::OnDelete() {
+	if (polygonEditCallbackID != -1) {
+		Renderer::getInstance().polygonEditGizmos->RemoveChangeCallback(polygonEditCallbackID);
+		polygonEditCallbackID = -1;
+	}
+
+
 	glDeleteBuffers(1, &VBO);
 	glDeleteBuffers(1, &EBO);
 	glDeleteVertexArrays(1, &VAO);

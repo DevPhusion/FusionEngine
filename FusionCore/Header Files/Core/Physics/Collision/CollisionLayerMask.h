@@ -39,6 +39,32 @@ enum class CollisionMask : uint16_t {
 	LAYER_16 = (1 << 15)
 };
 
+constexpr CollisionLayer operator|(CollisionLayer a, CollisionLayer b) {
+	return static_cast<CollisionLayer>(static_cast<uint16_t>(a) | static_cast<uint16_t>(b));
+}
+constexpr CollisionLayer operator&(CollisionLayer a, CollisionLayer b) {
+	return static_cast<CollisionLayer>(static_cast<uint16_t>(a) & static_cast<uint16_t>(b));
+}
+constexpr CollisionLayer operator^(CollisionLayer a, CollisionLayer b) {
+	return static_cast<CollisionLayer>(static_cast<uint16_t>(a) ^ static_cast<uint16_t>(b));
+}
+constexpr CollisionLayer operator~(CollisionLayer a) {
+	return static_cast<CollisionLayer>(~static_cast<uint16_t>(a));
+}
+
+constexpr CollisionMask operator|(CollisionMask a, CollisionMask b) {
+	return static_cast<CollisionMask>(static_cast<uint16_t>(a) | static_cast<uint16_t>(b));
+}
+constexpr CollisionMask operator&(CollisionMask a, CollisionMask b) {
+	return static_cast<CollisionMask>(static_cast<uint16_t>(a) & static_cast<uint16_t>(b));
+}
+constexpr CollisionMask operator^(CollisionMask a, CollisionMask b) {
+	return static_cast<CollisionMask>(static_cast<uint16_t>(a) ^ static_cast<uint16_t>(b));
+}
+constexpr CollisionMask operator~(CollisionMask a) {
+	return static_cast<CollisionMask>(~static_cast<uint16_t>(a));
+}
+
 inline bool layerOverlap(uint16_t objALayer, uint16_t objAMask, uint16_t objBLayer, uint16_t objBMask) {
 	if ((objAMask & objBLayer) || (objBMask & objALayer)) {
 		return true;

@@ -236,10 +236,18 @@ public:
 	bool ResolveCircleCircleContacts(PhysicsBody bodyA, PhysicsBody bodyB, float rA, float rB);
 	bool ResolveCirclePolygonContacts(PhysicsBody circle, PhysicsBody polygon, float radius, std::vector<Edge> edges, const glm::vec3* forcedAxis = nullptr);
 	bool ResolvePolygonPolygonContacts(PhysicsBody bodyA, PhysicsBody bodyB);
-	CollisionData SAT(Object* objA, Object* objB);
-	std::vector<ContactPoint> GenerateContactPoints(CollisionData collisionData);
+
+	//Static body collision
+	bool ResolveStaticCirclePolygon(TransformComponent* circleTc, float radius, bool circleStatic,
+		TransformComponent * polyTc, const std::vector<Edge>& polyLocalEdges, bool polyStatic);
+	bool ResolveStaticPolygonPolygon(Object * objA, TransformComponent * tcA, bool staticA,
+		Object * objB, TransformComponent * tcB, bool staticB);
+	void ApplyStaticPositionCorrection(TransformComponent * tcA, bool staticA,
+		TransformComponent * tcB, bool staticB, const glm::vec3 & normal, float penetration);
 
 	//Helper functions
+	CollisionData SAT(Object* objA, Object* objB);
+	std::vector<ContactPoint> GenerateContactPoints(CollisionData collisionData);
 	void GenerateRigidVertices();
 	void GenerateRigidBoundaries();
 	void RefreshRigidBoundariesEdges();

@@ -19,6 +19,8 @@ public:
 	uint16_t collisionLayer = static_cast<uint16_t>(CollisionLayer::LAYER_1);
 	uint16_t collisionMask = static_cast<uint16_t>(CollisionMask::LAYER_1);
 
+	bool isStatic = true;
+
 	int onTransformCallbackID = -1;
 
 	Shape currentShape;
@@ -49,9 +51,14 @@ public:
 	float GetArea();
 	void Draw();
 
+	void SetCollisionLayer(uint16_t layer);
+	void SetCollisionMask(uint16_t mask);
+
 	void SetSyncWithRenderComponent(bool sync);
 	void SyncFromRenderComponent();
 
 private:
 	void RebuildFromShape(const std::vector<glm::vec3>& localVerts);
+	void ApplyLiveShapeUpdate(const std::vector<glm::vec3>& verts);
+	int polygonEditCallbackID = -1;
 };

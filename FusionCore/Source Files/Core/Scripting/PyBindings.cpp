@@ -34,6 +34,10 @@ namespace {
 			.def("length", [](const glm::vec2& v) { return glm::length(v);})
 			.def("normalize", [](const glm::vec2& v) { return glm::normalize(v); })
 			.def("dot", [](const glm::vec2& a, const glm::vec2& b) {return glm::dot(a, b);})
+			.def_static("lerp", [](const glm::vec2& a, const glm::vec2& b, float t) {
+			return glm::mix(a, b, t);
+				}, py::arg("a"), py::arg("b"), py::arg("t"),
+					"Linearly interpolate between a and b (t=0 -> a, t=1 -> b), e.g. Vector2.lerp(start, end, 0.5)")
 			.def("__repr__", [](const glm::vec2& v) {
 			std::ostringstream ss;
 			ss << "Vector2(" << v.x << ", " << v.y << ")";
@@ -71,6 +75,10 @@ namespace {
 			.def("normalized", [](const glm::vec3& v) { return glm::normalize(v); })
 			.def("dot", [](const glm::vec3& a, const glm::vec3& b) { return glm::dot(a, b); })
 			.def("cross", [](const glm::vec3& a, const glm::vec3& b) { return glm::cross(a, b); })
+			.def_static("lerp", [](const glm::vec3& a, const glm::vec3& b, float t) {
+			return glm::mix(a, b, t);
+				}, py::arg("a"), py::arg("b"), py::arg("t"),
+					"Linearly interpolate between a and b (t=0 -> a, t=1 -> b), e.g. Vector3.lerp(start, end, 0.5)")
 
 			.def("__repr__", [](const glm::vec3& v) {
 			std::ostringstream ss;
@@ -114,6 +122,10 @@ namespace {
 			.def("length", [](const glm::vec4& v) { return glm::length(v); })
 			.def("normalized", [](const glm::vec4& v) { return glm::normalize(v); })
 			.def("dot", [](const glm::vec4& a, const glm::vec4& b) { return glm::dot(a, b); })
+			.def_static("lerp", [](const glm::vec4& a, const glm::vec4& b, float t) {
+			return glm::mix(a, b, t);
+				}, py::arg("a"), py::arg("b"), py::arg("t"),
+					"Linearly interpolate between a and b (t=0 -> a, t=1 -> b), e.g. Vector4.lerp(start, end, 0.5)")
 
 			.def("__repr__", [](const glm::vec4& v) {
 			std::ostringstream ss;
@@ -129,6 +141,11 @@ namespace {
 			if (i < 0 || i > 3) throw py::index_error();
 			v[i] = val;
 				});
+
+		m.def("lerp", [](float a, float b, float t) {
+			return glm::mix(a, b, t);
+			}, py::arg("a"), py::arg("b"), py::arg("t"),
+				"Linearly interpolate between two floats (t=0 -> a, t=1 -> b)");
 	}
 
 	void RegisterInputBindings(py::module_& m) {
@@ -665,6 +682,61 @@ namespace {
 			.def_readwrite("physics_segments", &CircleShape::physicsSegments);
 	}
 
+	void RegisterCollisionLayerMaskBindings(py::module_& m) {
+		py::enum_<CollisionLayer>(m, "CollisionLayer",
+			"Collision layer bit flags. Combine multiple with |, e.g. "
+			"CollisionLayer.LAYER_1 | CollisionLayer.LAYER_3")
+			.value("LAYER_1", CollisionLayer::LAYER_1)
+			.value("LAYER_2", CollisionLayer::LAYER_2)
+			.value("LAYER_3", CollisionLayer::LAYER_3)
+			.value("LAYER_4", CollisionLayer::LAYER_4)
+			.value("LAYER_5", CollisionLayer::LAYER_5)
+			.value("LAYER_6", CollisionLayer::LAYER_6)
+			.value("LAYER_7", CollisionLayer::LAYER_7)
+			.value("LAYER_8", CollisionLayer::LAYER_8)
+			.value("LAYER_9", CollisionLayer::LAYER_9)
+			.value("LAYER_10", CollisionLayer::LAYER_10)
+			.value("LAYER_11", CollisionLayer::LAYER_11)
+			.value("LAYER_12", CollisionLayer::LAYER_12)
+			.value("LAYER_13", CollisionLayer::LAYER_13)
+			.value("LAYER_14", CollisionLayer::LAYER_14)
+			.value("LAYER_15", CollisionLayer::LAYER_15)
+			.value("LAYER_16", CollisionLayer::LAYER_16)
+			.def(py::self | py::self)
+			.def(py::self & py::self)
+			.def(py::self ^ py::self)
+			.def(~py::self);
+
+		py::enum_<CollisionMask>(m, "CollisionMask",
+			"Collision mask bit flags. Combine multiple with |, e.g. "
+			"CollisionMask.LAYER_1 | CollisionMask.LAYER_3")
+			.value("LAYER_1", CollisionMask::LAYER_1)
+			.value("LAYER_2", CollisionMask::LAYER_2)
+			.value("LAYER_3", CollisionMask::LAYER_3)
+			.value("LAYER_4", CollisionMask::LAYER_4)
+			.value("LAYER_5", CollisionMask::LAYER_5)
+			.value("LAYER_6", CollisionMask::LAYER_6)
+			.value("LAYER_7", CollisionMask::LAYER_7)
+			.value("LAYER_8", CollisionMask::LAYER_8)
+			.value("LAYER_9", CollisionMask::LAYER_9)
+			.value("LAYER_10", CollisionMask::LAYER_10)
+			.value("LAYER_11", CollisionMask::LAYER_11)
+			.value("LAYER_12", CollisionMask::LAYER_12)
+			.value("LAYER_13", CollisionMask::LAYER_13)
+			.value("LAYER_14", CollisionMask::LAYER_14)
+			.value("LAYER_15", CollisionMask::LAYER_15)
+			.value("LAYER_16", CollisionMask::LAYER_16)
+			.def(py::self | py::self)
+			.def(py::self & py::self)
+			.def(py::self ^ py::self)
+			.def(~py::self);
+
+		m.def("layer_overlap", [](uint16_t layerA, uint16_t maskA, uint16_t layerB, uint16_t maskB) {
+			return layerOverlap(layerA, maskA, layerB, maskB);
+			}, py::arg("layer_a"), py::arg("mask_a"), py::arg("layer_b"), py::arg("mask_b"),
+				"Check whether an (layer, mask) pair on object A would collide with (layer, mask) on object B");
+	}
+
 	void RegisterComponentBindings(py::module_& m) {
 		auto renderClass = py::class_<RenderComponent>(m, "RenderComponent")
 			.def_property("enable",
@@ -897,6 +969,60 @@ namespace {
 		EnableAddObject<RigidBodyComponent>(rigidBodyClass);
 		EnableAddChild<RigidBodyComponent>(rigidBodyClass);
 		EnableRemoveObject<RigidBodyComponent>(rigidBodyClass);
+
+		auto collisionClass = py::class_<CollisionComponent>(m, "CollisionComponent")
+			.def_property("enable",
+				[](CollisionComponent& self) { return self.Enabled; },
+				[](CollisionComponent& self, bool enable) { self.SetEnabled(enable); })
+			.def("set_enable", &CollisionComponent::SetEnabled)
+
+			.def_property("is_static",
+				[](CollisionComponent& self) { return self.isStatic; },
+				[](CollisionComponent& self, bool s) { self.isStatic = s; })
+			.def("set_static", [](CollisionComponent& self, bool s) { self.isStatic = s; },
+				py::arg("is_static"))
+
+			.def_property("collision_layer",
+				[](CollisionComponent& self) { return self.collisionLayer; },
+				[](CollisionComponent& self, uint16_t layer) { self.SetCollisionLayer(layer); })
+			.def("set_collision_layer", &CollisionComponent::SetCollisionLayer, py::arg("layer"))
+
+			.def_property("collision_mask",
+				[](CollisionComponent& self) { return self.collisionMask; },
+				[](CollisionComponent& self, uint16_t mask) { self.SetCollisionMask(mask); })
+			.def("set_collision_mask", &CollisionComponent::SetCollisionMask, py::arg("mask"))
+
+			.def_property("sync_with_render_component",
+				[](CollisionComponent& self) { return self.syncWithRenderComponent; },
+				[](CollisionComponent& self, bool sync) { self.SetSyncWithRenderComponent(sync); })
+			.def("set_sync_with_render_component", &CollisionComponent::SetSyncWithRenderComponent,
+				py::arg("sync"))
+
+			.def_property("shape",
+				[](CollisionComponent& self) -> Shape { return self.currentShape; },
+				[](CollisionComponent& self, Shape shape) { self.SetShape(shape); })
+			.def("set_shape", [](CollisionComponent& self, Shape shape) {
+			if (self.syncWithRenderComponent) {
+				Console::PrintWarning("CollisionComponent: set_shape called while sync_with_render_component is True; shape will be overridden by RenderComponent");
+			}
+			self.SetShape(shape);
+				}, py::arg("shape"),
+					"Accepts a RectangleShape, CircleShape, or PolygonShape");
+
+		EnableGetComponent<CollisionComponent>(collisionClass);
+		EnableHasComponent<CollisionComponent>(collisionClass);
+		RegisterComponentGetter<CollisionComponent>(collisionClass);
+		EnableGetOwner<CollisionComponent>(collisionClass);
+		RegisterComponentRemover<CollisionComponent>(collisionClass);
+		RegisterComponentAdder<CollisionComponent>(collisionClass,
+			[](Object& obj) {
+				return std::make_unique<CollisionComponent>(&obj);
+			});
+		EnableAddComponent<CollisionComponent>(collisionClass);
+		EnableRemoveComponent<CollisionComponent>(collisionClass);
+		EnableAddObject<CollisionComponent>(collisionClass);
+		EnableAddChild<CollisionComponent>(collisionClass);
+		EnableRemoveObject<CollisionComponent>(collisionClass);
 	}
 
 	Object* CreateDefaultObject() {
@@ -1053,6 +1179,7 @@ void ResetDynamicComponentRegistries() {
 void RegisterEngineBindings(py::module_& m) {
 	m.doc() = "Fusion engine scripting API";
 	RegisterMathBindings(m);
+	RegisterCollisionLayerMaskBindings(m);
 	RegisterShapeBindings(m);
 	RegisterScriptBindings(m);
 	RegisterInputBindings(m);

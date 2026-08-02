@@ -93,6 +93,26 @@ void CollisionComponent::SetShape(Shape shape) {
 	RebuildFromShape(VerticesFromShape(shape));
 }
 
+void CollisionComponent::ApplyLiveShapeUpdate(const std::vector<glm::vec3>& verts) {
+	if (verts.size() < 3) return;
+	std::vector<float> newVertices;
+	newVertices.reserve(verts.size() * 5);
+
+	glm::vec3 bmin(INFINITY), bmax(-INFINITY);
+	for (auto& v : verts) { bmin = glm::min(bmin, v); bmax = glm::max(bmax, v); }
+	glm::vec3 range = glm::max(bmax - bmin, glm::vec3(1e-6f));
+
+	for (auto& v : verts) {
+		float u = (v.x - bmin.x) / range.x;
+		float uvY = (v.y - bmin.y) / range.y;
+		newVertices.insert(newVertices.end(), { v.x, v.y, 0.0f, u, uvY });
+	}
+
+	PolygonShape s;
+	s.vertices = newVertices;
+	SetShape(s);
+}
+
 glm::vec3 CollisionComponent::GetCenter() {
 	float A = 0, C_x = 0, C_y = 0;
 	int n = (int)points.size();
@@ -179,6 +199,28 @@ void CollisionComponent::SyncFromRenderComponent() {
 	EngineManager::getInstance().EngineChangeEvent();
 }
 
+void CollisionComponent::SetCollisionLayer(uint16_t layer) {
+	collisionLayer = layer;
+	boundingCircle.collisionLayer = collisionLayer;
+	if (BAHnode) BAHnode->area.collisionLayer = collisionLayer;
+
+	FluidComponent* fc = parent->GetComponent<FluidComponent>();
+	if (fc) fc->UpdateCollisionLayerMask();
+
+	EngineManager::getInstance().EngineChangeEvent();
+}
+
+void CollisionComponent::SetCollisionMask(uint16_t mask) {
+	collisionMask = mask;
+	boundingCircle.collisionMask = collisionMask;
+	if (BAHnode) BAHnode->area.collisionMask = collisionMask;
+
+	FluidComponent* fc = parent->GetComponent<FluidComponent>();
+	if (fc) fc->UpdateCollisionLayerMask();
+
+	EngineManager::getInstance().EngineChangeEvent();
+}
+
 void CollisionComponent::DrawLayerMaskUI(const char* label, uint16_t* layer) {
 	if (!layer) return;
 
@@ -211,12 +253,12 @@ void CollisionComponent::DrawLayerMaskUI(const char* label, uint16_t* layer) {
 
 		if (ImGui::Button(std::to_string(i + 1).c_str(), ImVec2(btnSize, btnSize))) {
 			*layer ^= (1 << i);
-			boundingCircle.collisionLayer = collisionLayer;
-			boundingCircle.collisionMask = collisionMask;
-			BAHnode->area.collisionLayer = collisionLayer;
-			BAHnode->area.collisionMask = collisionMask;
-			FluidComponent* fc = parent->GetComponent<FluidComponent>();
-			if (fc) fc->UpdateCollisionLayerMask();
+			if (layer == &collisionLayer) {
+				SetCollisionLayer(collisionLayer);
+			}
+			else {
+				SetCollisionMask(collisionMask);
+			}
 		}
 
 		ImGui::PopID();
@@ -236,16 +278,27 @@ void CollisionComponent::DrawLayerMaskUI(const char* label, uint16_t* layer) {
 void CollisionComponent::ProcessInspectorUI() {
 	RenderComponent* rc = parent->GetComponent<RenderComponent>();
 
+	bool needToggleSection = false;
 	if (rc) {
 		bool sync = syncWithRenderComponent;
 		if (ImGui::Checkbox("Sync with Render Component", &sync)) {
 			SetSyncWithRenderComponent(sync);
 		}
-		ImGui::Separator();
+		needToggleSection = true;
 
 		if (syncWithRenderComponent) {
 			SyncFromRenderComponent();
 		}
+	}
+
+	if (!(parent->HasComponent<RigidBodyComponent>() || parent->HasComponent<SoftBodyComponent>()
+		|| parent->HasComponent<FluidComponent>())) {
+		ImGui::Checkbox("Static", &isStatic);
+		needToggleSection = true;
+	}
+
+	if (needToggleSection) {
+		ImGui::Separator();
 	}
 
 	if (syncWithRenderComponent) {
@@ -339,7 +392,9 @@ void CollisionComponent::ProcessInspectorUI() {
 					SetShape(s);
 
 					TransformComponent* tc = parent->GetComponent<TransformComponent>();
-					Renderer::getInstance().polygonEditGizmos->BeginEdit(tc, {}, true);
+					Renderer::getInstance().polygonEditGizmos->BeginEdit(tc, {}, PolygonEditGizmos::VertexAddMode::Append);
+					polygonEditCallbackID = Renderer::getInstance().polygonEditGizmos->AddChangeCallback(
+						[this](const std::vector<glm::vec3>& verts) { this->ApplyLiveShapeUpdate(verts); });
 
 					EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::AddVertex);
 					isAddVertex = true;
@@ -354,7 +409,9 @@ void CollisionComponent::ProcessInspectorUI() {
 					}
 					
 					TransformComponent * tc = parent->GetComponent<TransformComponent>();
-					Renderer::getInstance().polygonEditGizmos->BeginEdit(tc, localVerts, false);
+					Renderer::getInstance().polygonEditGizmos->BeginEdit(tc, localVerts, PolygonEditGizmos::VertexAddMode::InsertOnEdge);
+					polygonEditCallbackID = Renderer::getInstance().polygonEditGizmos->AddChangeCallback(
+						[this](const std::vector<glm::vec3>& verts) { this->ApplyLiveShapeUpdate(verts); });
 					
 					EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::AddVertex);
 					isAddVertex = true;
@@ -362,10 +419,12 @@ void CollisionComponent::ProcessInspectorUI() {
 				}
 			}
 			else {
-				bool canAdd = Renderer::getInstance().polygonEditGizmos->CanAddVertices();
-				ImGui::Text(canAdd
-					 ? "Click to add, drag to move, right-click to remove"
-					 : "Drag to move, right-click to remove");
+				using AddMode = PolygonEditGizmos::VertexAddMode;
+				AddMode mode = Renderer::getInstance().polygonEditGizmos->GetAddMode();
+				const char* helpText =
+					(mode == AddMode::Append) ? "Click to add, drag to move, right-click to remove" :
+					(mode == AddMode::InsertOnEdge) ? "Click highlighted edge to insert, drag to move, right-click to remove" :
+					"Drag to move, right-click to remove";
 				const auto& editedVerts = Renderer::getInstance().polygonEditGizmos->GetLocalVertices();
 				ImGui::Text("Vertices: %d", (int)editedVerts.size());
 				
@@ -381,6 +440,8 @@ void CollisionComponent::ProcessInspectorUI() {
 					SetShape(s);
 					
 					Renderer::getInstance().polygonEditGizmos->EndEdit();
+					Renderer::getInstance().polygonEditGizmos->RemoveChangeCallback(polygonEditCallbackID);
+					polygonEditCallbackID = -1;
 					EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
 					isAddVertex = false;
 					
@@ -390,6 +451,8 @@ void CollisionComponent::ProcessInspectorUI() {
 				ImGui::SameLine();
 				if (ImGui::Button("Cancel##CollisionPolyCancel")) {
 					Renderer::getInstance().polygonEditGizmos->EndEdit();
+					Renderer::getInstance().polygonEditGizmos->RemoveChangeCallback(polygonEditCallbackID);
+					polygonEditCallbackID = -1;
 					EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
 					isAddVertex = false;
 				}
@@ -456,6 +519,7 @@ void CollisionComponent::CopyTo(Object* other) {
 
 	target->collisionLayer = collisionLayer;
 	target->collisionMask = collisionMask;
+	target->isStatic = isStatic;
 
 	if (syncWithRenderComponent) {
 		target->SetSyncWithRenderComponent(true);
@@ -473,6 +537,7 @@ std::unique_ptr<Component> CollisionComponent::Clone(Object* parent) {
 	std::unique_ptr<CollisionComponent> comp = std::make_unique<CollisionComponent>(parent);
 	comp->collisionLayer = collisionLayer;
 	comp->collisionMask = collisionMask;
+	comp->isStatic = isStatic;
 
 	if (syncWithRenderComponent) {
 		comp->SetSyncWithRenderComponent(true);
@@ -491,6 +556,7 @@ void CollisionComponent::Serialize(BinaryWriter& w) {
 
 	w.Write(collisionLayer);
 	w.Write(collisionMask);
+	w.Write(isStatic);
 	w.Write(syncWithRenderComponent);
 
 	if (!syncWithRenderComponent) {
@@ -521,7 +587,7 @@ void CollisionComponent::Deserialize(BinaryReader& r) {
 	Component::Deserialize(r);
 	collisionLayer = r.Read<uint16_t>();
 	collisionMask = r.Read<uint16_t>();
-
+	isStatic = r.Read<bool>();
 	syncWithRenderComponent = r.Read<bool>();
 
 	if (!syncWithRenderComponent) {
@@ -600,6 +666,11 @@ void CollisionComponent::OnDelete() {
 		RenderComponent* rc = parent->GetComponent<RenderComponent>();
 		if (rc) rc->RemoveOnShapeSetCallback(renderSyncCallbackID);
 		renderSyncCallbackID = -1;
+	}
+
+	if (polygonEditCallbackID != -1) {
+		Renderer::getInstance().polygonEditGizmos->RemoveChangeCallback(polygonEditCallbackID);
+		polygonEditCallbackID = -1;
 	}
 
 	PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent);

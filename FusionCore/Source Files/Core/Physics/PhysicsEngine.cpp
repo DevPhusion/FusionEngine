@@ -262,6 +262,45 @@ void PhysicsEngine::ResolveContacts(PotentialContact* contacts, unsigned numCont
 				}
 			}
 		}
+		//Static body & Static body
+		if (!pcA && !pcB && !sbA && !sbB) {
+			{
+				TIME_BLOCK("Static body collision");
+				bool staticA = ccA->isStatic;
+				bool staticB = ccB->isStatic;
+				
+				if (!(staticA && staticB)) {
+					if (rA > 0.0f && rB > 0.0f && tcA->size.x == tcA->size.y && tcB->size.x == tcB->size.y) {
+						glm::vec3 d = tcA->worldPosition - tcB->worldPosition;
+						if (d == glm::vec3(0.0f)) d = glm::vec3(1.0f, 0.0f, 0.0f);
+						float dist = glm::length(d);
+						float radiusA = rA * tcA->size.x;
+						float radiusB = rB * tcB->size.x;
+						
+						if (dist < radiusA + radiusB) {
+							glm::vec3 normal = glm::normalize(d);
+							float penetration = radiusA + radiusB - dist;
+							ApplyStaticPositionCorrection(tcA, staticA, tcB, staticB, normal, penetration);
+							collisionResult = true;
+						}	
+					}
+					else if ((rA > 0.0f && tcA->size.x == tcA->size.y) || (rB > 0.0f && tcB->size.x == tcB->size.y)) {
+						bool aIsCircle = (rA > 0.0f && tcA->size.x == tcA->size.y);
+						TransformComponent * circleTc = aIsCircle ? tcA : tcB;
+						float radius = aIsCircle ? rA * tcA->size.x : rB * tcB->size.x;
+						bool circleStatic = aIsCircle ? staticA : staticB;
+						TransformComponent * polyTc = aIsCircle ? tcB : tcA;
+						CollisionComponent * polyCc = aIsCircle ? ccB : ccA;
+						bool polyStatic = aIsCircle ? staticB : staticA;
+	
+						collisionResult = ResolveStaticCirclePolygon(circleTc, radius, circleStatic, polyTc, polyCc->edges, polyStatic);
+					}
+					else {
+						collisionResult = ResolveStaticPolygonPolygon(objA, tcA, staticA, objB, tcB, staticB);
+					}
+				}
+			}
+		}
 		//Soft body & Soft body
 		if (sbA && sbB) {
 			{
@@ -1268,6 +1307,106 @@ std::vector<ContactPoint> PhysicsEngine::GenerateContactPoints(CollisionData col
 	}
 
 	return ContactPoints;
+}
+
+void PhysicsEngine::ApplyStaticPositionCorrection(TransformComponent* tcA, bool staticA,
+	TransformComponent* tcB, bool staticB, const glm::vec3& normal, float penetration) {
+	if (penetration <= 0.0f) return;
+	if (staticA && staticB) return; 
+
+	if (staticA) {
+		tcB->UpdateWorldPosition(tcB->worldPosition - normal * penetration);
+	}
+	else if (staticB) {
+		tcA->UpdateWorldPosition(tcA->worldPosition + normal * penetration);
+	}
+	else {
+		tcA->UpdateWorldPosition(tcA->worldPosition + normal * (penetration * 0.5f));
+		tcB->UpdateWorldPosition(tcB->worldPosition - normal * (penetration * 0.5f));
+	}
+}
+
+bool PhysicsEngine::ResolveStaticCirclePolygon(TransformComponent* circleTc, float radius, bool circleStatic,
+	TransformComponent* polyTc, const std::vector<Edge>& polyLocalEdges, bool polyStatic) {
+
+	glm::vec3 center = circleTc->worldPosition;
+
+	std::vector<Edge> worldEdges;
+	worldEdges.reserve(polyLocalEdges.size());
+	for (auto& e : polyLocalEdges) {
+		Edge we;
+		we.start = polyTc->ProjectToWorld(e.start);
+		we.end = polyTc->ProjectToWorld(e.end);
+		worldEdges.push_back(we);
+	}
+
+	glm::vec3 polyCenter = polyTc->worldPosition;
+	bool centerInside = true;
+	float minFaceDist = -INFINITY;
+	glm::vec3 minFaceNormal(0.0f);
+
+	for (auto& edge : worldEdges) {
+		glm::vec3 ab = edge.end - edge.start;
+		float len = glm::length(ab);
+		if (len < 1e-8f) continue;
+		glm::vec3 abNorm = ab / len;
+		glm::vec3 edgeNormal = glm::normalize(glm::vec3(abNorm.y, -abNorm.x, 0.0f));
+		glm::vec3 toPolyCenter = polyCenter - edge.start;
+		if (glm::dot(edgeNormal, toPolyCenter) > 0.0f) edgeNormal = -edgeNormal;
+		float signedDist = glm::dot(edgeNormal, center - edge.start);
+		if (signedDist > 0.0f) centerInside = false;
+		if (signedDist > minFaceDist) { minFaceDist = signedDist; minFaceNormal = edgeNormal; }
+	}
+
+	float bestDist = INFINITY;
+	glm::vec3 bestPoint(0.0f), bestNormal(0.0f);
+	if (!centerInside) {
+		for (auto& edge : worldEdges) {
+			glm::vec3 ab = edge.end - edge.start;
+			float len = glm::length(ab);
+			if (len < 1e-8f) continue;
+			glm::vec3 ac = center - edge.start;
+			glm::vec3 abNorm = ab / len;
+			float t = glm::clamp(glm::dot(ac, abNorm), 0.0f, len);
+			glm::vec3 closest = edge.start + abNorm * t;
+			glm::vec3 edgeNormal = glm::normalize(glm::vec3(ab.y, -ab.x, 0.0f));
+			glm::vec3 toPolyCenter = polyCenter - edge.start;
+			if (glm::dot(edgeNormal, toPolyCenter) > 0.0f) edgeNormal = -edgeNormal;
+			float dist = glm::length(center - closest);
+			if (dist < bestDist) { bestDist = dist; bestPoint = closest; bestNormal = edgeNormal; }
+		}
+	}
+
+	bool colliding = false;
+	glm::vec3 normal(0.0f);
+	float penetration = 0.0f;
+
+	if (centerInside) {
+		normal = minFaceNormal;
+		penetration = radius - minFaceDist;
+		colliding = true;
+	}
+	else if (bestDist < radius) {
+		glm::vec3 dir = center - bestPoint;
+		normal = (glm::length(dir) > 1e-6f && glm::dot(glm::normalize(dir), bestNormal) > 0.5f)
+			? glm::normalize(dir) : bestNormal;
+		penetration = radius - bestDist;
+		colliding = true;
+	}
+
+	if (!colliding || penetration <= 0.0f) return false;
+
+	ApplyStaticPositionCorrection(circleTc, circleStatic, polyTc, polyStatic, normal, penetration);
+	return true;
+}
+
+bool PhysicsEngine::ResolveStaticPolygonPolygon(Object* objA, TransformComponent* tcA, bool staticA,
+	Object* objB, TransformComponent* tcB, bool staticB) {
+	CollisionData colData = SAT(objA, objB);
+	if (!colData.isColliding || colData.penetration <= 0.0f) return false;
+
+	ApplyStaticPositionCorrection(tcA, staticA, tcB, staticB, colData.normal, colData.penetration);
+	return true;
 }
 
 CollisionData PhysicsEngine::SAT(Object* objA, Object* objB) {

@@ -55,6 +55,9 @@ public:
 	void Draw();
 
 private:
+	void ApplyLiveShapeUpdate(const std::vector<glm::vec3>& verts);
+	int polygonEditCallbackID = -1;
+
 	static std::unordered_map<std::string, std::pair<GLuint, int>>& TextureCache();
 
 	std::unordered_map<int, std::function<void()>> OnShapeSetCallbacks;

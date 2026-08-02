@@ -19,13 +19,15 @@ PolygonEditGizmos::PolygonEditGizmos() {
 		});
 }
 
-void PolygonEditGizmos::BeginEdit(TransformComponent* transform, const std::vector<glm::vec3>& initialLocalVerts, bool allowAdd) {
+void PolygonEditGizmos::BeginEdit(TransformComponent* transform, const std::vector<glm::vec3>& initialLocalVerts, VertexAddMode mode) {
 	targetTransform = transform;
 	localVertices = initialLocalVerts;
-	allowAddVertices = allowAdd;
+	addMode = mode;
 	isEditing = true;
 	isDragging = false;
 	draggedIndex = -1;
+	hasEdgePreview = false;
+	previewEdgeIndex = -1;
 }
 
 void PolygonEditGizmos::EndEdit() {
@@ -34,8 +36,11 @@ void PolygonEditGizmos::EndEdit() {
 	localVertices.clear();
 	isDragging = false;
 	draggedIndex = -1;
-	allowAddVertices = true;
+	addMode = VertexAddMode::None;
+	hasEdgePreview = false;
+	previewEdgeIndex = -1;
 }
+
 
 glm::vec3 PolygonEditGizmos::WorldToLocal(glm::vec3 worldPos) {
 	if (!targetTransform) return worldPos;
@@ -60,6 +65,68 @@ int PolygonEditGizmos::HitTestHandle(glm::vec3 worldPos) {
 	return -1;
 }
 
+static glm::vec3 ClosestPointOnSegment(const glm::vec3& p, const glm::vec3& a, const glm::vec3& b) {
+	glm::vec2 p2(p.x, p.y), a2(a.x, a.y), b2(b.x, b.y);
+	glm::vec2 ab = b2 - a2;
+	float lengthSq = glm::dot(ab, ab);
+	float t = 0.0f;
+	if (lengthSq > 1e-8f) {
+		t = glm::dot(p2 - a2, ab) / lengthSq;
+		t = glm::clamp(t, 0.0f, 1.0f);
+	}
+	glm::vec2 closest = a2 + ab * t;
+	return glm::vec3(closest.x, closest.y, 0.0f);
+}
+
+int PolygonEditGizmos::FindClosestEdge(glm::vec3 worldPos, glm::vec3& outLocalPoint, float& outWorldDist) {
+	int best = -1;
+	float bestDistSq = INFINITY;
+	glm::vec3 bestLocal(0.0f);
+
+	int count = (int)localVertices.size();
+	for (int i = 0; i < count; i++) {
+		glm::vec3 aWorld = LocalToWorld(localVertices[i]);
+		glm::vec3 bWorld = LocalToWorld(localVertices[(i + 1) % count]);
+
+		glm::vec3 closestWorld = ClosestPointOnSegment(worldPos, aWorld, bWorld);
+		glm::vec2 diff = glm::vec2(worldPos.x, worldPos.y) - glm::vec2(closestWorld.x, closestWorld.y);
+		float distSq = glm::dot(diff, diff);
+
+		if (distSq < bestDistSq) {
+			bestDistSq = distSq;
+			best = i;
+			bestLocal = WorldToLocal(closestWorld);
+		}
+	}
+
+	outLocalPoint = bestLocal;
+	outWorldDist = std::sqrt(bestDistSq);
+	return best;
+}
+
+void PolygonEditGizmos::UpdateEdgePreview() {
+	hasEdgePreview = false;
+	previewEdgeIndex = -1;
+
+	if (addMode != VertexAddMode::InsertOnEdge) return;
+	if (localVertices.size() < 2) return;
+	if (HitTestHandle(currentMouseWorld) != -1) return; // hovering an existing vertex, don't preview
+
+	float zoom = Camera::getInstance().cameraZoom;
+	if (zoom < 1e-6f) zoom = 1.0f;
+	float threshold = hitPadding * zoom;
+
+	glm::vec3 closestLocal;
+	float worldDist;
+	int edge = FindClosestEdge(currentMouseWorld, closestLocal, worldDist);
+
+	if (edge != -1 && worldDist <= threshold) {
+		previewEdgeIndex = edge;
+		previewLocalPos = closestLocal;
+		hasEdgePreview = true;
+	}
+}
+
 void PolygonEditGizmos::OnMouseButton(int button, int action, int mods) {
 	if (!isEditing) return;
 	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) return;
@@ -71,8 +138,15 @@ void PolygonEditGizmos::OnMouseButton(int button, int action, int mods) {
 			isDragging = true;
 			draggedIndex = hit;
 		}
-		else if (allowAddVertices) {
+		else if (addMode == VertexAddMode::InsertOnEdge && hasEdgePreview) {
+			localVertices.insert(localVertices.begin() + previewEdgeIndex + 1, previewLocalPos);
+			hasEdgePreview = false;
+			previewEdgeIndex = -1;
+			NotifyChange();
+		}
+		else if (addMode == VertexAddMode::Append) {
 			localVertices.push_back(WorldToLocal(currentMouseWorld));
+			NotifyChange();
 		}
 	}
 	else if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE) {
@@ -83,6 +157,7 @@ void PolygonEditGizmos::OnMouseButton(int button, int action, int mods) {
 		int hit = HitTestHandle(currentMouseWorld);
 		if (hit != -1 && localVertices.size() > 3) {
 			localVertices.erase(localVertices.begin() + hit);
+			NotifyChange();
 		}
 	}
 }
@@ -97,7 +172,29 @@ void PolygonEditGizmos::OnCursorPosition(double xpos, double ypos) {
 
 	if (isDragging && draggedIndex != -1 && draggedIndex < (int)localVertices.size()) {
 		localVertices[draggedIndex] = WorldToLocal(currentMouseWorld);
+		NotifyChange();
+		hasEdgePreview = false;
+		return;
 	}
+
+	UpdateEdgePreview();
+}
+
+void PolygonEditGizmos::NotifyChange() {
+	for (auto& [id, func] : changeCallbacks) {
+		func(localVertices);
+	}
+}
+
+int PolygonEditGizmos::AddChangeCallback(std::function<void(const std::vector<glm::vec3>&)> func) {
+	currentChangeCallbackID += 1;
+	changeCallbacks[currentChangeCallbackID] = func;
+	return currentChangeCallbackID;
+	
+}
+
+void PolygonEditGizmos::RemoveChangeCallback(int ID) {
+	changeCallbacks.erase(ID);
 }
 
 void PolygonEditGizmos::DrawHandles() {
@@ -108,6 +205,11 @@ void PolygonEditGizmos::DrawHandles() {
 		glm::vec3 worldPos = LocalToWorld(localVertices[i]);
 		glm::vec4 color = (i == draggedIndex) ? draggedHandleColor : handleColor;
 		gizmos->DrawFilledQuad(worldPos, glm::vec3(handleScreenSize, handleScreenSize, 1.0f), color, true);
+	}
+
+	if (hasEdgePreview) {
+		glm::vec3 previewWorld = LocalToWorld(previewLocalPos);
+		gizmos->DrawFilledQuad(previewWorld, glm::vec3(handleScreenSize, handleScreenSize, 1.0f), previewHandleColor, true);
 	}
 }
 
