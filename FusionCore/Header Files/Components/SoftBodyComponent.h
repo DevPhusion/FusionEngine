@@ -37,6 +37,7 @@ public:
 	float attachmentStiffness = 3000.0f;
 	float virtualPointPercentClosest = 0.01f;
 
+	glm::vec3 velocity = glm::vec3(0.0f);
 	float inverseMass = 1.0f;
 	float stiffness = 150.0f;
 	float damping = 2.47f;

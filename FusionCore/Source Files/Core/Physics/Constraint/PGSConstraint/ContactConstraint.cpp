@@ -44,10 +44,8 @@ void ContactConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
 
     const float beta = 0.2f;  
     const float slop = 0.005f; 
-    const float maxBias = 4.0f;   
 
     float posBias = (beta / delta) * std::max(0.0f, penetration - slop);
-    posBias = std::min(posBias, maxBias);
 
     float restitutionBias = 0.0f;
     if (relVel < -bounceThreshold) {

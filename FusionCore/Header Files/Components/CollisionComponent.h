@@ -7,6 +7,25 @@
 #include "../Core/Physics/Collision/CollisionLayerMask.h"
 #include "../Core/Physics/Collision/BAHNode.h"
 
+enum CollisionType {
+	RigidVsRigid,
+	RigidVsStatic,
+	StaticVsStatic,
+	RigidVsSoft,
+	SoftVsSoft,
+	FluidVsRigid,
+	FluidVsSoft
+};
+
+struct CollisionEventData {
+	CollisionType type;
+	Object* self = nullptr;      
+	Object* other = nullptr;     
+	glm::vec3 point = glm::vec3(0.0f);
+	glm::vec3 normal = glm::vec3(0.0f); 
+	float penetration = 0.0f;
+};
+
 class CollisionComponent : public ComponentBase<CollisionComponent>
 {
 public:
@@ -57,8 +76,30 @@ public:
 	void SetSyncWithRenderComponent(bool sync);
 	void SyncFromRenderComponent();
 
+	bool isGrounded(float probeLength = 0.15f);
+	
+	int AddCollisionCallback(std::function<void(const CollisionEventData&)> callback);
+	void RemoveCollisionCallback(int id);
+	void NotifyCollision(const CollisionEventData& data);
+
+	int AddCollisionEnterCallback(std::function<void(const CollisionEventData&)> callback);
+	void RemoveCollisionEnterCallback(int id);
+	void NotifyCollisionEnter(const CollisionEventData& data);
+
+	int AddCollisionExitCallback(std::function<void(const CollisionEventData&)> callback);
+	void RemoveCollisionExitCallback(int id);
+	void NotifyCollisionExit(const CollisionEventData& data);
+
 private:
+	std::unordered_map<int, std::function<void(const CollisionEventData&)>> collisionCallbacks;
+	std::unordered_map<int, std::function<void(const CollisionEventData&)>> collisionEnterCallbacks;
+	std::unordered_map<int, std::function<void(const CollisionEventData&)>> collisionExitCallbacks;
+	int physicsChangeEventCallbackID = -1;
+	int nextCollisionEnterCallbackID = 0;
+	int nextCollisionExitCallbackID = 0;
+	int nextCollisionCallbackID = 0;
+	int polygonEditCallbackID = -1;
+
 	void RebuildFromShape(const std::vector<glm::vec3>& localVerts);
 	void ApplyLiveShapeUpdate(const std::vector<glm::vec3>& verts);
-	int polygonEditCallbackID = -1;
 };

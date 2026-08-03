@@ -79,8 +79,9 @@ void SoftBodyComponent::ProcessInspectorUI() {
 	float vel[2] = { CenterPM->velocity.x, CenterPM->velocity.y };
 	if (ImGui::InputFloat2("##Velocity", vel, "%.3f m/s")) {
 		EngineManager::getInstance().EngineChangeEvent();
-		CenterPM->velocity.x = vel[0];
-		CenterPM->velocity.y = vel[1];
+		velocity.x = vel[0];
+		velocity.y = vel[1];
+		CenterPM->velocity = velocity;
 	}
 
 	ImGui::Text("Acceleration ");
@@ -150,6 +151,16 @@ void SoftBodyComponent::CopyTo(Object* other) {
 		target->springs[i]->damping = damping;
 	}
 
+	target->inverseMass = inverseMass;
+	float unitInvMass = inverseMass * (float)target->MassAggregate.size();
+	for (int i = 0; i < target->MassAggregate.size(); i++)
+	{
+		target->MassAggregate[i]->inverseMass = unitInvMass;
+	}
+
+	target->velocity = velocity;
+	if (target->CenterPM) target->CenterPM->velocity = velocity;
+
 	target->useGasPressure = useGasPressure;
 	target->gasAmount = gasAmount;
 }
@@ -163,6 +174,16 @@ std::unique_ptr<Component> SoftBodyComponent::Clone(Object* parent) {
 	comp->damping = damping;
 	for (auto* s : comp->springs) s->damping = damping;
 
+	comp->inverseMass = inverseMass;
+	float unitInvMass = inverseMass * (float)comp->MassAggregate.size();
+	for (int i = 0; i < comp->MassAggregate.size(); i++)
+	{
+		comp->MassAggregate[i]->inverseMass = unitInvMass;
+	}
+
+	comp->velocity = velocity;
+	if (comp->CenterPM) comp->CenterPM->velocity = velocity;
+
 	comp->useGasPressure = useGasPressure;
 	comp->gasAmount = gasAmount;
 
@@ -174,6 +195,8 @@ void SoftBodyComponent::Serialize(BinaryWriter& w) {
 	Component::Serialize(w);
 	w.Write(stiffness);
 	w.Write(damping);
+	w.Write(inverseMass);
+	w.Write(velocity);
 	w.Write(useGasPressure);
 	w.Write(gasAmount);
 }
@@ -185,6 +208,15 @@ void SoftBodyComponent::Deserialize(BinaryReader& r) {
 
 	damping = r.Read<float>();
 	for (auto* s : springs) s->damping = damping;
+
+	inverseMass = r.Read<float>();
+	float unitInvMass = inverseMass * (float)MassAggregate.size();
+	for (int i = 0; i < MassAggregate.size(); i++)
+	{
+		MassAggregate[i]->inverseMass = unitInvMass;
+	}
+
+	velocity = r.Read<glm::vec3>();
 
 	useGasPressure = r.Read<bool>();
 	gasAmount = r.Read<float>();
@@ -416,6 +448,7 @@ void SoftBodyComponent::BuildMassAggregate() {
 
 	int edgeCount = MassAggregate.size() - 1;
 	CenterPM = MassAggregate.back().get();
+	CenterPM->velocity = velocity;
 
 	float compliance = (stiffness > 0.0f) ? (1.0f / stiffness) : 0.0f;
 

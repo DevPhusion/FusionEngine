@@ -23,6 +23,13 @@
 #include <numbers>
 #include <execution>
 
+// Collision registration
+struct ObjectPairHash {
+	size_t operator()(const std::pair<Object*, Object*>& p) const {
+		return std::hash<Object*>()(p.first) ^ (std::hash<Object*>()(p.second) << 1);
+	}
+};
+
 // Sutherland Hodgman
 
 struct ClipVertex {
@@ -60,6 +67,16 @@ struct Projection {
 	bool Overlaps(const Projection& other) const {
 		return !(this->max < other.min || other.max < this->min);
 	}
+};
+
+// Rigid body
+struct RigidContactRecord {
+	TransformComponent* tcA = nullptr;
+	TransformComponent* tcB = nullptr;
+	bool staticA = false;
+	bool staticB = false;
+	glm::vec3 normal = glm::vec3(0.0f);
+	float penetration = 0.0f;
 };
 
 //Soft body
@@ -162,6 +179,18 @@ struct FluidSoftContact {
 	float edgeT = 0.0f; 
 };
 
+// Ray casting
+
+struct RayCastHit {
+	bool hit = false;
+	Object* object = nullptr;
+	glm::vec3 point = glm::vec3(0.0f);   
+	glm::vec3 normal = glm::vec3(0.0f);  
+	float distance = INFINITY;          
+	int edgeIndex = -1;                  
+	bool isSoftBody = false;
+};
+
 class PhysicsEngine
 {
 protected:
@@ -233,9 +262,11 @@ public:
 	void ApplyRigidSoftPositionCorrection();
 	
 	//Rigid body collision
+	std::vector<RigidContactRecord> rigidContactRecords;
 	bool ResolveCircleCircleContacts(PhysicsBody bodyA, PhysicsBody bodyB, float rA, float rB);
 	bool ResolveCirclePolygonContacts(PhysicsBody circle, PhysicsBody polygon, float radius, std::vector<Edge> edges, const glm::vec3* forcedAxis = nullptr);
 	bool ResolvePolygonPolygonContacts(PhysicsBody bodyA, PhysicsBody bodyB);
+	void ApplyRigidPositionCorrection();
 
 	//Static body collision
 	bool ResolveStaticCirclePolygon(TransformComponent* circleTc, float radius, bool circleStatic,
@@ -244,6 +275,21 @@ public:
 		Object * objB, TransformComponent * tcB, bool staticB);
 	void ApplyStaticPositionCorrection(TransformComponent * tcA, bool staticA,
 		TransformComponent * tcB, bool staticB, const glm::vec3 & normal, float penetration);
+
+	//Notify collision
+	std::unordered_map<std::pair<Object*, Object*>, CollisionEventData, ObjectPairHash> currentFrameCollisions;
+	std::unordered_map<std::pair<Object*, Object*>, CollisionEventData, ObjectPairHash> previousFrameCollisions;
+
+	CollisionType ClassifyCollisionType(Object* objA, Object* objB);
+	void BroadcastCollision(Object* objA, Object* objB, CollisionType type,
+		const glm::vec3& point, const glm::vec3& normal, float penetration);
+	void BroadcastFluidRigidContacts();
+	void BroadcastFluidSoftContacts();
+
+	void RecordCollisionPair(Object* objA, Object* objB, CollisionType type,
+		const glm::vec3& point, const glm::vec3& normal, float penetration);
+	void ResolveCollisionEnterExit();
+	void PurgeObjectFromCollisionTracking(Object* obj);
 
 	//Helper functions
 	CollisionData SAT(Object* objA, Object* objB);
@@ -336,6 +382,26 @@ public:
 	std::vector<glm::vec3> ClipPolygonHalfPlane(const std::vector<glm::vec3>& poly, const glm::vec3& normal, float offset);
 	std::vector<glm::vec3> ComputeVoronoiCell(const std::vector<glm::vec3>& polygon, const std::vector<glm::vec3>& seeds, int seedIndex);
 	std::vector<glm::vec3> GenerateFractureSeeds(const std::vector<glm::vec3>& polygon, const glm::vec3& impactPoint, int count);
+
+	//Ray casting
+	RayCastHit RayCast(const glm::vec3& origin, const glm::vec3& direction, float length,
+		std::optional<uint16_t> collisionLayer = std::nullopt,
+		const std::vector<Object*>& ignoreObjects = {});
+
+	std::vector<RayCastHit> RayCastAll(const glm::vec3& origin, const glm::vec3& direction, float length,
+		std::optional<uint16_t> collisionLayer = std::nullopt,
+		const std::vector<Object*>& ignoreObjects = {});
+
+	bool RaySegmentIntersect(const glm::vec3& origin, const glm::vec3& dir, float length,
+		const glm::vec3& segStart, const glm::vec3& segEnd,
+		float& outT, glm::vec3& outPoint, glm::vec3& outNormal);
+
+	bool RayCircleIntersect(const glm::vec3& origin, const glm::vec3& dir, float length,
+		const glm::vec3& center, float radius,
+		float& outT, glm::vec3& outPoint, glm::vec3& outNormal);
+
+	void RayCastObject(const glm::vec3& origin, const glm::vec3& dir, float length,
+		Object* obj, std::vector<RayCastHit>& outHits);
 
 	// Others
 	PhysicsBody GetBodyFromObject(Object* obj);

@@ -61,6 +61,16 @@ RenderComponent::RenderComponent(Object* parent, std::vector<float> vertices, Sh
 
 	// Load textures
 	SetTexture(texture_path);
+
+	physicsChangeEventCallbackID = EngineManager::getInstance().AddPhysicsModeChangedEvent([this]() {
+		if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate && polygonEditCallbackID != -1) {
+			Renderer::getInstance().polygonEditGizmos->EndEdit();
+			Renderer::getInstance().polygonEditGizmos->RemoveChangeCallback(polygonEditCallbackID);
+			polygonEditCallbackID = -1;
+			EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
+			isAddVertex = false;
+		}
+		});
 }
 
 int RenderComponent::AddOnShapeSetCallback(std::function<void()> func) {
@@ -101,6 +111,8 @@ void RenderComponent::SetShape(Shape shape) {
 	else {
 		UpdateShape(verts, Triangulate(verts));
 	}
+
+	parent->GetComponent<TransformComponent>()->SetRotationCenter(GetCenter());
 
 	EngineManager::getInstance().EngineChangeEvent();
 	if (!std::holds_alternative<PolygonShape>(shape)) {
@@ -921,6 +933,11 @@ void RenderComponent::ProcessInspectorUI() {
 }
 
 void RenderComponent::OnDelete() {
+	if (physicsChangeEventCallbackID != -1) {
+		EngineManager::getInstance().RemovePhysicsModeChangedEvent(physicsChangeEventCallbackID);
+		physicsChangeEventCallbackID = -1;
+	}
+
 	if (polygonEditCallbackID != -1) {
 		Renderer::getInstance().polygonEditGizmos->RemoveChangeCallback(polygonEditCallbackID);
 		polygonEditCallbackID = -1;

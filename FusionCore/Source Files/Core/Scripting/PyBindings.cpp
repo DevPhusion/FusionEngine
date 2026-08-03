@@ -681,8 +681,8 @@ namespace {
 			.def_readwrite("segments", &CircleShape::segments)
 			.def_readwrite("physics_segments", &CircleShape::physicsSegments);
 	}
-
-	void RegisterCollisionLayerMaskBindings(py::module_& m) {
+	
+	void RegisterPhysicsBindings(py::module_& m) {
 		py::enum_<CollisionLayer>(m, "CollisionLayer",
 			"Collision layer bit flags. Combine multiple with |, e.g. "
 			"CollisionLayer.LAYER_1 | CollisionLayer.LAYER_3")
@@ -735,6 +735,69 @@ namespace {
 			return layerOverlap(layerA, maskA, layerB, maskB);
 			}, py::arg("layer_a"), py::arg("mask_a"), py::arg("layer_b"), py::arg("mask_b"),
 				"Check whether an (layer, mask) pair on object A would collide with (layer, mask) on object B");
+
+		py::enum_<CollisionType>(m, "CollisionType")
+			.value("RigidVsRigid", CollisionType::RigidVsRigid)
+			.value("RigidVsStatic", CollisionType::RigidVsStatic)
+			.value("StaticVsStatic", CollisionType::StaticVsStatic)
+			.value("RigidVsSoft", CollisionType::RigidVsSoft)
+			.value("SoftVsSoft", CollisionType::SoftVsSoft)
+			.value("FluidVsRigid", CollisionType::FluidVsRigid)
+			.value("FluidVsSoft", CollisionType::FluidVsSoft)
+			.export_values();
+
+		py::class_<CollisionEventData>(m, "CollisionEventData")
+			.def_readonly("type", &CollisionEventData::type)
+			.def_property_readonly("self", [](CollisionEventData& self) -> Object* { return self.self; },
+				py::return_value_policy::reference)
+			.def_property_readonly("other", [](CollisionEventData& self) -> Object* { return self.other; },
+				py::return_value_policy::reference)
+			.def_readonly("point", &CollisionEventData::point)
+			.def_readonly("normal", &CollisionEventData::normal)
+			.def_readonly("penetration", &CollisionEventData::penetration)
+			.def("__repr__", [](const CollisionEventData& d) {
+			std::ostringstream ss;
+			ss << "CollisionEventData(penetration=" << d.penetration << ")";
+			return ss.str();
+				});
+
+		py::class_<RayCastHit>(m, "RayCastHit")
+			.def(py::init<>())
+			.def_readonly("hit", &RayCastHit::hit)
+			.def_property_readonly("object", [](RayCastHit& self) -> Object* { return self.object; },
+				py::return_value_policy::reference)
+			.def_readonly("point", &RayCastHit::point)
+			.def_readonly("normal", &RayCastHit::normal)
+			.def_readonly("distance", &RayCastHit::distance)
+			.def_readonly("edge_index", &RayCastHit::edgeIndex)
+			.def_readonly("is_soft_body", &RayCastHit::isSoftBody)
+			.def("__bool__", [](const RayCastHit& h) { return h.hit; },
+				"Allows 'if hit:' instead of 'if hit.hit:'")
+			.def("__repr__", [](const RayCastHit& h) {
+			if (!h.hit) return std::string("RayCastHit(hit=False)");
+			std::ostringstream ss;
+			ss << "RayCastHit(hit=True, distance=" << h.distance << ")";
+			return ss.str();
+				});
+
+		py::module_ physicsMod = m.def_submodule("Physics", "Physics engine queries");
+
+		physicsMod.def("raycast", [](glm::vec3 origin, glm::vec3 direction, float length,
+			std::optional<uint16_t> collisionLayer, std::vector<Object*> ignoreObjects) {
+				return PhysicsEngine::getInstance().RayCast(origin, direction, length, collisionLayer, ignoreObjects);
+			},
+			py::arg("origin"), py::arg("direction"), py::arg("length"),
+			py::arg("collision_layer") = py::none(), py::arg("ignore_objects") = std::vector<Object*>{},
+			"Cast a ray and return the closest hit. collision_layer=None hits every layer. "
+			"e.g. hit = Physics.raycast(pos, Vector3(0,-1,0), 5.0, CollisionMask.LAYER_1, [self.owner])");
+
+		physicsMod.def("raycast_all", [](glm::vec3 origin, glm::vec3 direction, float length,
+			std::optional<uint16_t> collisionLayer, std::vector<Object*> ignoreObjects) {
+				return PhysicsEngine::getInstance().RayCastAll(origin, direction, length, collisionLayer, ignoreObjects);
+			},
+			py::arg("origin"), py::arg("direction"), py::arg("length"),
+			py::arg("collision_layer") = py::none(), py::arg("ignore_objects") = std::vector<Object*>{},
+			"Cast a ray and return every hit, sorted nearest-first.");
 	}
 
 	void RegisterComponentBindings(py::module_& m) {
@@ -1007,7 +1070,49 @@ namespace {
 			}
 			self.SetShape(shape);
 				}, py::arg("shape"),
-					"Accepts a RectangleShape, CircleShape, or PolygonShape");
+					"Accepts a RectangleShape, CircleShape, or PolygonShape")
+
+			.def("is_grounded", &CollisionComponent::isGrounded, py::arg("probe_length") = 0.15f,
+				"Cast a short ray straight down from the lowest point of this shape to check for ground")
+
+			.def("add_collision_callback", [](CollisionComponent& self, py::function func) {
+			return self.AddCollisionCallback([func](const CollisionEventData& data) {
+				py::gil_scoped_acquire gil;
+				try { func(data); }
+				catch (const py::error_already_set& e) {
+					Console::AddMessage(Console::MessageType::Error,
+						std::string("collision callback error: ") + e.what());
+				}
+				});
+				}, py::arg("callback"),
+					"Fires every physics substep while two shapes are overlapping (stay-style). Returns an id usable with remove_collision_callback().")
+			.def("remove_collision_callback", &CollisionComponent::RemoveCollisionCallback, py::arg("id"))
+
+			.def("add_collision_enter_callback", [](CollisionComponent& self, py::function func) {
+			return self.AddCollisionEnterCallback([func](const CollisionEventData& data) {
+				py::gil_scoped_acquire gil;
+				try { func(data); }
+				catch (const py::error_already_set& e) {
+					Console::AddMessage(Console::MessageType::Error,
+						std::string("collision enter callback error: ") + e.what());
+				}
+				});
+				}, py::arg("callback"),
+					"Fires once on the frame a collision first begins.")
+			.def("remove_collision_enter_callback", &CollisionComponent::RemoveCollisionEnterCallback, py::arg("id"))
+
+			.def("add_collision_exit_callback", [](CollisionComponent& self, py::function func) {
+			return self.AddCollisionExitCallback([func](const CollisionEventData& data) {
+				py::gil_scoped_acquire gil;
+				try { func(data); }
+				catch (const py::error_already_set& e) {
+					Console::AddMessage(Console::MessageType::Error,
+						std::string("collision exit callback error: ") + e.what());
+				}
+				});
+				}, py::arg("callback"),
+					"Fires once on the frame a collision stops.")
+			.def("remove_collision_exit_callback", &CollisionComponent::RemoveCollisionExitCallback, py::arg("id"));
 
 		EnableGetComponent<CollisionComponent>(collisionClass);
 		EnableHasComponent<CollisionComponent>(collisionClass);
@@ -1179,7 +1284,7 @@ void ResetDynamicComponentRegistries() {
 void RegisterEngineBindings(py::module_& m) {
 	m.doc() = "Fusion engine scripting API";
 	RegisterMathBindings(m);
-	RegisterCollisionLayerMaskBindings(m);
+	RegisterPhysicsBindings(m);
 	RegisterShapeBindings(m);
 	RegisterScriptBindings(m);
 	RegisterInputBindings(m);

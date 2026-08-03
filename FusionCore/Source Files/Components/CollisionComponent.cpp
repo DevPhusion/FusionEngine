@@ -21,6 +21,16 @@ CollisionComponent::CollisionComponent(Object* parent) : ComponentBase<Collision
 	if (!fc) {
 		BAHnode = PhysicsEngine::getInstance().RegisterBoundingAreaNode(parent, boundingCircle);
 	}
+
+	physicsChangeEventCallbackID = EngineManager::getInstance().AddPhysicsModeChangedEvent([this]() {
+		if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate && polygonEditCallbackID != -1) {
+			Renderer::getInstance().polygonEditGizmos->EndEdit();
+			Renderer::getInstance().polygonEditGizmos->RemoveChangeCallback(polygonEditCallbackID);
+			polygonEditCallbackID = -1;
+			EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
+			isAddVertex = false;
+		}
+		});
 }
 
 std::vector<glm::vec3> CollisionComponent::VerticesFromShape(Shape& shape) {
@@ -219,6 +229,73 @@ void CollisionComponent::SetCollisionMask(uint16_t mask) {
 	if (fc) fc->UpdateCollisionLayerMask();
 
 	EngineManager::getInstance().EngineChangeEvent();
+}
+
+bool CollisionComponent::isGrounded(float probeLength) {
+	TransformComponent* tc = parent->GetComponent<TransformComponent>();
+	if (!tc || points.empty()) return false;
+
+	glm::vec3 worldLowest;
+	float lowestWorldY = INFINITY;
+	for (auto& p : points) {
+		glm::vec3 worldP = tc->ProjectToWorld(glm::vec3(p[0], p[1], 0.0f));
+		if (worldP.y < lowestWorldY) {
+			lowestWorldY = worldP.y;
+			worldLowest = worldP;
+		}
+	}
+
+	const float skin = 0.05f;
+	glm::vec3 origin = worldLowest + glm::vec3(0.0f, skin, 0.0f);
+
+	RayCastHit hit = PhysicsEngine::getInstance().RayCast(
+		origin, glm::vec3(0.0f, -1.0f, 0.0f), probeLength + skin,
+		collisionMask, { parent });
+
+	return hit.hit;
+}
+
+int CollisionComponent::AddCollisionCallback(std::function<void(const CollisionEventData&)> callback) {
+	int id = nextCollisionCallbackID++;
+	collisionCallbacks[id] = std::move(callback);
+	return id;
+}
+
+void CollisionComponent::RemoveCollisionCallback(int id) {
+	collisionCallbacks.erase(id);
+}
+
+void CollisionComponent::NotifyCollision(const CollisionEventData& data) {
+	if (!Enabled) return;
+	for (auto& [id, cb] : collisionCallbacks) {
+		cb(data);
+	}
+}
+
+int CollisionComponent::AddCollisionEnterCallback(std::function<void(const CollisionEventData&)> callback) {
+	int id = nextCollisionEnterCallbackID++;
+	collisionEnterCallbacks[id] = std::move(callback);
+	return id;
+}
+void CollisionComponent::RemoveCollisionEnterCallback(int id) { collisionEnterCallbacks.erase(id); }
+void CollisionComponent::NotifyCollisionEnter(const CollisionEventData& data) {
+	if (!Enabled) return;
+	for (auto& [id, cb] : collisionEnterCallbacks) cb(data);
+}
+
+int CollisionComponent::AddCollisionExitCallback(std::function<void(const CollisionEventData&)> callback) {
+	int id = nextCollisionExitCallbackID++;
+	collisionExitCallbacks[id] = std::move(callback);
+	return id;
+}
+
+void CollisionComponent::RemoveCollisionExitCallback(int id) 
+{ 
+	collisionExitCallbacks.erase(id); 
+}
+
+void CollisionComponent::NotifyCollisionExit(const CollisionEventData& data) {
+	for (auto& [id, cb] : collisionExitCallbacks) cb(data);
 }
 
 void CollisionComponent::DrawLayerMaskUI(const char* label, uint16_t* layer) {
@@ -662,6 +739,11 @@ void CollisionComponent::OnDelete() {
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
 	if (tc) tc->RemoveTransformCallback(onTransformCallbackID);
 
+	if (physicsChangeEventCallbackID != -1) {
+		EngineManager::getInstance().RemovePhysicsModeChangedEvent(physicsChangeEventCallbackID);
+		physicsChangeEventCallbackID = -1;
+	}
+
 	if (renderSyncCallbackID != -1) {
 		RenderComponent* rc = parent->GetComponent<RenderComponent>();
 		if (rc) rc->RemoveOnShapeSetCallback(renderSyncCallbackID);
@@ -674,6 +756,7 @@ void CollisionComponent::OnDelete() {
 	}
 
 	PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent);
+	PhysicsEngine::getInstance().PurgeObjectFromCollisionTracking(parent);
 }
 
 void CollisionComponent::calculateBoundingCircle() {

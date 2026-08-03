@@ -55,6 +55,8 @@ public:
 	void Draw();
 
 private:
+	int physicsChangeEventCallbackID = -1;
+
 	void ApplyLiveShapeUpdate(const std::vector<glm::vec3>& verts);
 	int polygonEditCallbackID = -1;
 
