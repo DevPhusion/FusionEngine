@@ -4,6 +4,7 @@
 
 struct PotentialContact {
 	Object* obj[2];
+	int shapeId[2];   
 };
 
 template<class BoundingAreaClass>
@@ -13,9 +14,10 @@ public:
 	BAHNode* parent = nullptr;
 	BAHNode* children[2] = { nullptr, nullptr };
 	BoundingAreaClass area;
-	Object* obj = nullptr; //Only leaf can have object, if root -> nullptr
+	Object* obj = nullptr;
+	int shapeId = -1;   // NEW: which CollisionShapeEntry this leaf represents
 	BAHNode() = default;
-	BAHNode(BAHNode* p, const BoundingAreaClass& a, Object* o) : parent(p), area(a), obj(o) {}
+	BAHNode(BAHNode* p, const BoundingAreaClass& a, Object* o, int sid) : parent(p), area(a), obj(o), shapeId(sid) {}
 
 	~BAHNode() {
 		if (children[0]) delete children[0];
@@ -26,21 +28,22 @@ public:
 		return (obj != nullptr);
 	}
 
-	BAHNode<BoundingAreaClass>* insert(Object* newObject, const BoundingAreaClass& newArea);
+	BAHNode<BoundingAreaClass>* insert(Object* newObject, int newShapeId, const BoundingAreaClass& newArea);
 	void removeLeaf();
 
 	void recalculateBoundingArea();
-	BAHNode<BoundingAreaClass>* searchFor(Object* target);
+	BAHNode<BoundingAreaClass>* searchFor(Object* target, int targetShapeId);
 	bool overlaps(const BAHNode<BoundingAreaClass>* other) const;
 	unsigned getPotentialContacts(std::vector<PotentialContact>& contacts) const;
 	unsigned getPotentialContactsWith(const BAHNode<BoundingAreaClass>* other, std::vector<PotentialContact>& contacts) const;
 	void DrawBoundingArea() const;
 };
 
-template<class BoundingAreaClass> 
+template<class BoundingAreaClass>
 void BAHNode<BoundingAreaClass>::removeLeaf() {
 	if (!parent) {
 		obj = nullptr;
+		shapeId = -1;
 		area = BoundingAreaClass();
 		return;
 	}
@@ -49,6 +52,7 @@ void BAHNode<BoundingAreaClass>::removeLeaf() {
 
 	parent->area = sibling->area;
 	parent->obj = sibling->obj;
+	parent->shapeId = sibling->shapeId;
 	parent->children[0] = sibling->children[0];
 	parent->children[1] = sibling->children[1];
 
@@ -60,28 +64,29 @@ void BAHNode<BoundingAreaClass>::removeLeaf() {
 	delete sibling;
 
 	parent->recalculateBoundingArea();
-	
+
 	this->children[0] = nullptr;
 	this->children[1] = nullptr;
 	delete this;
 }
 
-template<class BoundingAreaClass> 
-BAHNode<BoundingAreaClass>* BAHNode<BoundingAreaClass>::insert(Object* newObject, const BoundingAreaClass& newArea) {
+template<class BoundingAreaClass>
+BAHNode<BoundingAreaClass>* BAHNode<BoundingAreaClass>::insert(Object* newObject, int newShapeId, const BoundingAreaClass& newArea) {
 	if (isLeaf()) {
-		children[0] = new BAHNode<BoundingAreaClass>(this, area, obj);
-		children[1] = new BAHNode<BoundingAreaClass>(this, newArea, newObject);
+		children[0] = new BAHNode<BoundingAreaClass>(this, area, obj, shapeId);
+		children[1] = new BAHNode<BoundingAreaClass>(this, newArea, newObject, newShapeId);
 
 		this->obj = nullptr;
+		this->shapeId = -1;
 		recalculateBoundingArea();
 		return children[1];
 	}
 	else {
 		if (children[0]->area.getGrowth(newArea) < children[1]->area.getGrowth(newArea)) {
-			return children[0]->insert(newObject, newArea);
+			return children[0]->insert(newObject, newShapeId, newArea);
 		}
 		else {
-			return children[1]->insert(newObject, newArea);
+			return children[1]->insert(newObject, newShapeId, newArea);
 		}
 	}
 }
@@ -118,9 +123,13 @@ unsigned BAHNode<BoundingAreaClass>::getPotentialContactsWith(const BAHNode<Boun
 	if (!overlaps(other)) return 0;
 
 	if (isLeaf() && other->isLeaf()) {
+		if (obj == other->obj) return 0;
+
 		PotentialContact pc;
 		pc.obj[0] = obj;
+		pc.shapeId[0] = shapeId;
 		pc.obj[1] = other->obj;
+		pc.shapeId[1] = other->shapeId;
 		contacts.push_back(pc);
 		return 1;
 	}
@@ -138,22 +147,18 @@ unsigned BAHNode<BoundingAreaClass>::getPotentialContactsWith(const BAHNode<Boun
 }
 
 template<class BoundingAreaClass>
-BAHNode<BoundingAreaClass>* BAHNode<BoundingAreaClass>::searchFor(Object* target) {
+BAHNode<BoundingAreaClass>* BAHNode<BoundingAreaClass>::searchFor(Object* target, int targetShapeId) {
 	if (isLeaf()) {
-		return (obj == target) ? this : nullptr;
+		return (obj == target && shapeId == targetShapeId) ? this : nullptr;
 	}
 
 	if (children[0]) {
-		BAHNode<BoundingAreaClass>* found = children[0]->searchFor(target);
-		if (found != nullptr) {
-			return found;
-		}
+		BAHNode<BoundingAreaClass>* found = children[0]->searchFor(target, targetShapeId);
+		if (found != nullptr) return found;
 	}
 	if (children[1]) {
-		BAHNode<BoundingAreaClass>* found = children[1]->searchFor(target);
-		if (found != nullptr) {
-			return found;
-		}
+		BAHNode<BoundingAreaClass>* found = children[1]->searchFor(target, targetShapeId);
+		if (found != nullptr) return found;
 	}
 
 	return nullptr;
@@ -163,10 +168,6 @@ template<class BoundingAreaClass>
 void BAHNode<BoundingAreaClass>::DrawBoundingArea() const {
 	DebugCircle::getInstance().DrawCircle(area.center, area.radius, Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
 
-	if (children[0] != nullptr) {
-		children[0]->DrawBoundingArea();
-	}
-	if (children[1] != nullptr) {
-		children[1]->DrawBoundingArea();
-	}
+	if (children[0] != nullptr) children[0]->DrawBoundingArea();
+	if (children[1] != nullptr) children[1]->DrawBoundingArea();
 }

@@ -112,13 +112,13 @@ void RenderComponent::SetShape(Shape shape) {
 		UpdateShape(verts, Triangulate(verts));
 	}
 
-	parent->GetComponent<TransformComponent>()->SetRotationCenter(GetCenter());
-
+	TransformComponent* tc = parent->GetComponent<TransformComponent>();
+	tc->SetRotationCenter(GetCenter());
+	tc->worldMatrixDirty = true;
+	
 	EngineManager::getInstance().EngineChangeEvent();
-	if (!std::holds_alternative<PolygonShape>(shape)) {
-		for (auto& [id, func] : OnShapeSetCallbacks) {
-			func();
-		}
+	for (auto& [id, func] : OnShapeSetCallbacks) {
+		func();
 	}
 }
 
@@ -821,10 +821,6 @@ void RenderComponent::ProcessInspectorUI() {
 					
 					s.vertices = newVertices;
 					SetShape(s);
-
-					TransformComponent * tc = parent->GetComponent<TransformComponent>();
-					tc->SetRotationCenter(GetCenter());
-					tc->worldMatrixDirty = true;
 					
 					SoftBodyComponent * sb = parent->GetComponent<SoftBodyComponent>();
 					if (sb) sb->RebuildMassAggregate();

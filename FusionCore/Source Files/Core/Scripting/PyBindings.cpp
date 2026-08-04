@@ -752,12 +752,16 @@ namespace {
 				py::return_value_policy::reference)
 			.def_property_readonly("other", [](CollisionEventData& self) -> Object* { return self.other; },
 				py::return_value_policy::reference)
+			.def_readonly("shape_id", &CollisionEventData::selfShapeId)
+			.def_readonly("other_shape_id", &CollisionEventData::otherShapeId)
 			.def_readonly("point", &CollisionEventData::point)
 			.def_readonly("normal", &CollisionEventData::normal)
 			.def_readonly("penetration", &CollisionEventData::penetration)
 			.def("__repr__", [](const CollisionEventData& d) {
 			std::ostringstream ss;
-			ss << "CollisionEventData(penetration=" << d.penetration << ")";
+			ss << "CollisionEventData(shape_id=" << d.selfShapeId
+				<< ", other_shape_id=" << d.otherShapeId
+				<< ", penetration=" << d.penetration << ")";
 			return ss.str();
 				});
 
@@ -1056,39 +1060,140 @@ namespace {
 			.def("set_collision_mask", &CollisionComponent::SetCollisionMask, py::arg("mask"))
 
 			.def_property("sync_with_render_component",
-				[](CollisionComponent& self) { return self.syncWithRenderComponent; },
-				[](CollisionComponent& self, bool sync) { self.SetSyncWithRenderComponent(sync); })
-			.def("set_sync_with_render_component", &CollisionComponent::SetSyncWithRenderComponent,
-				py::arg("sync"))
+				[](CollisionComponent& self) {
+					CollisionShapeEntry* res = self.GetResolutionShape();
+					if (!res && !self.shapes.empty()) res = &self.shapes.front();
+					return res ? res->syncWithRenderComponent : false;
+				},
+				[](CollisionComponent& self, bool sync) {
+					CollisionShapeEntry* res = self.GetResolutionShape();
+					if (!res && !self.shapes.empty()) res = &self.shapes.front();
+					if (res) self.SetSyncWithRenderComponent(*res, sync);
+				})
+			.def("set_sync_with_render_component", [](CollisionComponent& self, bool sync) {
+			CollisionShapeEntry* res = self.GetResolutionShape();
+			if (!res && !self.shapes.empty()) res = &self.shapes.front();
+			if (res) self.SetSyncWithRenderComponent(*res, sync);
+				}, py::arg("sync"))
 
 			.def_property("shape",
-				[](CollisionComponent& self) -> Shape { return self.currentShape; },
+				[](CollisionComponent& self) -> Shape { return self.resolutionShape; },
 				[](CollisionComponent& self, Shape shape) { self.SetShape(shape); })
 			.def("set_shape", [](CollisionComponent& self, Shape shape) {
-			if (self.syncWithRenderComponent) {
-				Console::PrintWarning("CollisionComponent: set_shape called while sync_with_render_component is True; shape will be overridden by RenderComponent");
+			CollisionShapeEntry* res = self.GetResolutionShape();
+			if (!res && !self.shapes.empty()) res = &self.shapes.front();
+			if (res && res->syncWithRenderComponent) {
+				Console::PrintWarning("CollisionComponent: set_shape called while sync_with_render_component "
+					"is True; shape will be overridden by RenderComponent");
 			}
 			self.SetShape(shape);
 				}, py::arg("shape"),
-					"Accepts a RectangleShape, CircleShape, or PolygonShape")
+					"Accepts a RectangleShape, CircleShape, or PolygonShape. Applies to the "
+					"resolution shape (or the first shape if none is set as resolution).")
+
+			.def("get_center", [](CollisionComponent& self) { return self.GetCenter(); },
+				"Center of the resolution shape (or first shape)")
+			.def("get_area", [](CollisionComponent& self) { return self.GetArea(); },
+				"Area of the resolution shape (or first shape)")
+
+			.def("add_shape", &CollisionComponent::AddShape,
+				py::arg("shape"), py::arg("name") = "",
+				"Add a new collision shape to this component. Returns its shape_id, e.g.\n"
+				"  sid = col.add_shape(CircleShape(Vector3(0,0,0), 1.0), 'Detector')")
+
+			.def("remove_shape", &CollisionComponent::RemoveShape, py::arg("shape_id"))
+
+			.def("get_shape_ids", [](CollisionComponent& self) {
+			std::vector<int> ids;
+			ids.reserve(self.shapes.size());
+			for (auto& e : self.shapes) ids.push_back(e.id);
+			return ids;
+				}, "Returns the ids of every collision shape on this component")
+
+			.def("get_shape_name", [](CollisionComponent& self, int shapeId) {
+			CollisionShapeEntry* e = self.GetShape(shapeId);
+			if (!e) throw py::value_error("get_shape_name: invalid shape_id");
+			return e->name;
+				}, py::arg("shape_id"))
+
+			.def("set_shape_name", [](CollisionComponent& self, int shapeId, std::string name) {
+			CollisionShapeEntry* e = self.GetShape(shapeId);
+			if (!e) throw py::value_error("set_shape_name: invalid shape_id");
+			e->name = name;
+				}, py::arg("shape_id"), py::arg("name"))
+
+			.def("get_shape", [](CollisionComponent& self, int shapeId) -> Shape {
+			CollisionShapeEntry* e = self.GetShape(shapeId);
+			if (!e) throw py::value_error("get_shape: invalid shape_id");
+			return e->currentShape;
+				}, py::arg("shape_id"))
+
+			.def("get_shape_id", &CollisionComponent::GetShapeId, py::arg("name"),
+				"Look up a shape's id by its name (as set in the inspector or via "
+				"set_shape_name). Returns -1 if no shape has that name, e.g.\n"
+				"  detector_id = self.cc.get_shape_id('Aggro Radius')")
+
+			.def("set_shape", [](CollisionComponent& self, int shapeId, Shape shape) {
+			CollisionShapeEntry* e = self.GetShape(shapeId);
+			if (!e) throw py::value_error("set_shape: invalid shape_id");
+			if (e->syncWithRenderComponent) {
+				Console::PrintWarning("CollisionComponent: set_shape called while sync_with_render_component "
+					"is True for this shape; it will be overridden by RenderComponent");
+			}
+			self.SetShape(*e, shape);
+				}, py::arg("shape_id"), py::arg("shape"))
+
+			.def("get_sync_with_render_component", [](CollisionComponent& self, int shapeId) {
+			CollisionShapeEntry* e = self.GetShape(shapeId);
+			if (!e) throw py::value_error("get_sync_with_render_component: invalid shape_id");
+			return e->syncWithRenderComponent;
+				}, py::arg("shape_id"))
+
+			.def("set_sync_with_render_component", [](CollisionComponent& self, int shapeId, bool sync) {
+			CollisionShapeEntry* e = self.GetShape(shapeId);
+			if (!e) throw py::value_error("set_sync_with_render_component: invalid shape_id");
+			self.SetSyncWithRenderComponent(*e, sync);
+				}, py::arg("shape_id"), py::arg("sync"))
+
+			.def("get_shape_center", [](CollisionComponent& self, int shapeId) {
+			CollisionShapeEntry* e = self.GetShape(shapeId);
+			if (!e) throw py::value_error("get_shape_center: invalid shape_id");
+			return self.GetCenter(*e);
+				}, py::arg("shape_id"))
+
+			.def("get_shape_area", [](CollisionComponent& self, int shapeId) {
+			CollisionShapeEntry* e = self.GetShape(shapeId);
+			if (!e) throw py::value_error("get_shape_area: invalid shape_id");
+			return self.GetArea(*e);
+				}, py::arg("shape_id"))
+
+			.def_property("resolution_shape_id",
+				[](CollisionComponent& self) { return self.resolutionShapeID; },
+				[](CollisionComponent& self, int shapeId) { self.SetResolutionShapeID(shapeId); })
+			.def("set_resolution_shape_id", &CollisionComponent::SetResolutionShapeID, py::arg("shape_id"),
+				"Pass -1 for None: shapes stay collidable for detection, but nothing is "
+				"physically resolved.")
+			.def("get_resolution_shape_id", [](CollisionComponent& self) { return self.resolutionShapeID; })
 
 			.def("is_grounded", &CollisionComponent::isGrounded, py::arg("probe_length") = 0.15f,
 				"Cast a short ray straight down from the lowest point of this shape to check for ground")
 
-			.def("add_collision_callback", [](CollisionComponent& self, py::function func) {
-			return self.AddCollisionCallback([func](const CollisionEventData& data) {
-				py::gil_scoped_acquire gil;
-				try { func(data); }
-				catch (const py::error_already_set& e) {
-					Console::AddMessage(Console::MessageType::Error,
-						std::string("collision callback error: ") + e.what());
-				}
-				});
-				}, py::arg("callback"),
-					"Fires every physics substep while two shapes are overlapping (stay-style). Returns an id usable with remove_collision_callback().")
-			.def("remove_collision_callback", &CollisionComponent::RemoveCollisionCallback, py::arg("id"))
+				.def("add_collision_callback", [](CollisionComponent& self, py::function func) {
+					return self.AddCollisionCallback([func](const CollisionEventData& data) {
+						py::gil_scoped_acquire gil;
+						try { func(data); }
+						catch (const py::error_already_set& e) {
+							Console::AddMessage(Console::MessageType::Error,
+								std::string("collision callback error: ") + e.what());
+						}
+						});
+	}, py::arg("callback"),
+		"Fires every physics substep while two shapes are overlapping (stay-style). "
+		"Check data.shape_id against resolution_shape_id or get_shape_id(name) to "
+		"filter by shape. Returns an id usable with remove_collision_callback().")
+		.def("remove_collision_callback", &CollisionComponent::RemoveCollisionCallback, py::arg("id"))
 
-			.def("add_collision_enter_callback", [](CollisionComponent& self, py::function func) {
+		.def("add_collision_enter_callback", [](CollisionComponent& self, py::function func) {
 			return self.AddCollisionEnterCallback([func](const CollisionEventData& data) {
 				py::gil_scoped_acquire gil;
 				try { func(data); }
@@ -1097,37 +1202,34 @@ namespace {
 						std::string("collision enter callback error: ") + e.what());
 				}
 				});
-				}, py::arg("callback"),
-					"Fires once on the frame a collision first begins.")
-			.def("remove_collision_enter_callback", &CollisionComponent::RemoveCollisionEnterCallback, py::arg("id"))
+	}, py::arg("callback"), "Fires once on the frame a collision first begins.")
+	.def("remove_collision_enter_callback", &CollisionComponent::RemoveCollisionEnterCallback, py::arg("id"))
 
-			.def("add_collision_exit_callback", [](CollisionComponent& self, py::function func) {
-			return self.AddCollisionExitCallback([func](const CollisionEventData& data) {
-				py::gil_scoped_acquire gil;
-				try { func(data); }
-				catch (const py::error_already_set& e) {
-					Console::AddMessage(Console::MessageType::Error,
-						std::string("collision exit callback error: ") + e.what());
-				}
-				});
-				}, py::arg("callback"),
-					"Fires once on the frame a collision stops.")
-			.def("remove_collision_exit_callback", &CollisionComponent::RemoveCollisionExitCallback, py::arg("id"));
-
-		EnableGetComponent<CollisionComponent>(collisionClass);
-		EnableHasComponent<CollisionComponent>(collisionClass);
-		RegisterComponentGetter<CollisionComponent>(collisionClass);
-		EnableGetOwner<CollisionComponent>(collisionClass);
-		RegisterComponentRemover<CollisionComponent>(collisionClass);
-		RegisterComponentAdder<CollisionComponent>(collisionClass,
-			[](Object& obj) {
-				return std::make_unique<CollisionComponent>(&obj);
+	.def("add_collision_exit_callback", [](CollisionComponent& self, py::function func) {
+		return self.AddCollisionExitCallback([func](const CollisionEventData& data) {
+			py::gil_scoped_acquire gil;
+			try { func(data); }
+			catch (const py::error_already_set& e) {
+				Console::AddMessage(Console::MessageType::Error,
+					std::string("collision exit callback error: ") + e.what());
+			}
 			});
-		EnableAddComponent<CollisionComponent>(collisionClass);
-		EnableRemoveComponent<CollisionComponent>(collisionClass);
-		EnableAddObject<CollisionComponent>(collisionClass);
-		EnableAddChild<CollisionComponent>(collisionClass);
-		EnableRemoveObject<CollisionComponent>(collisionClass);
+	}, py::arg("callback"), "Fires once on the frame a collision stops.")
+	.def("remove_collision_exit_callback", &CollisionComponent::RemoveCollisionExitCallback, py::arg("id"));
+			EnableGetComponent<CollisionComponent>(collisionClass);
+			EnableHasComponent<CollisionComponent>(collisionClass);
+			RegisterComponentGetter<CollisionComponent>(collisionClass);
+			EnableGetOwner<CollisionComponent>(collisionClass);
+			RegisterComponentRemover<CollisionComponent>(collisionClass);
+			RegisterComponentAdder<CollisionComponent>(collisionClass,
+				[](Object& obj) {
+					return std::make_unique<CollisionComponent>(&obj);
+				});
+			EnableAddComponent<CollisionComponent>(collisionClass);
+			EnableRemoveComponent<CollisionComponent>(collisionClass);
+			EnableAddObject<CollisionComponent>(collisionClass);
+			EnableAddChild<CollisionComponent>(collisionClass);
+			EnableRemoveObject<CollisionComponent>(collisionClass);
 	}
 
 	Object* CreateDefaultObject() {

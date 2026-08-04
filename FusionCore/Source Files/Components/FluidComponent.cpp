@@ -18,7 +18,7 @@ FluidComponent::FluidComponent(Object* parent) : ComponentBase<FluidComponent>(p
 	if (cc) {
 		TransformComponent* tc = parent->GetComponent<TransformComponent>();
 		if (tc) tc->RemoveTransformCallback(cc->onTransformCallbackID);
-		PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent);
+		//PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent);
 	}
 }
 

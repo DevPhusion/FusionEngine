@@ -170,187 +170,145 @@ void PhysicsEngine::ClearRegistry() {
 void PhysicsEngine::ResolveContacts(PotentialContact* contacts, unsigned numContacts) {
 	allContactPoints = {};
 
-	for (int i = 0; i < numContacts; i++)
+	for (unsigned i = 0; i < numContacts; i++)
 	{
 		Object* objA = contacts[i].obj[0];
 		Object* objB = contacts[i].obj[1];
-
 		if (objA == nullptr || objB == nullptr) continue;
 
 		CollisionComponent* ccA = objA->GetComponent<CollisionComponent>();
 		CollisionComponent* ccB = objB->GetComponent<CollisionComponent>();
 		TransformComponent* tcA = objA->GetComponent<TransformComponent>();
 		TransformComponent* tcB = objB->GetComponent<TransformComponent>();
+		if (!ccA || !ccB || !tcA || !tcB) continue;
 
-		float rA = -1;
-		float rB = -1;
+		CollisionShapeEntry* entryA = ccA->GetShape(contacts[i].shapeId[0]);
+		CollisionShapeEntry* entryB = ccB->GetShape(contacts[i].shapeId[1]);
+		if (!entryA || !entryB) continue;
 
+		bool resolvePhysically =
+			(entryA->id == ccA->resolutionShapeID) &&
+			(entryB->id == ccB->resolutionShapeID);
+
+		float rA = -1.0f, rB = -1.0f;
 		std::visit([&](auto&& s) {
 			using T = std::decay_t<decltype(s)>;
-			if constexpr (std::is_same_v<T, CircleShape>) {
-				rA = s.radius;
-			}
-			}, ccA->currentShape);
-
+			if constexpr (std::is_same_v<T, CircleShape>) rA = s.radius;
+			}, entryA->currentShape);
 		std::visit([&](auto&& s) {
 			using T = std::decay_t<decltype(s)>;
-			if constexpr (std::is_same_v<T, CircleShape>) {
-				rB = s.radius;
-			}
-			}, ccB->currentShape);
+			if constexpr (std::is_same_v<T, CircleShape>) rB = s.radius;
+			}, entryB->currentShape);
 
-		PhysicsBody bodyA = PhysicsBody();
 		RigidBodyComponent* pcA = objA->GetComponent<RigidBodyComponent>();
 		SoftBodyComponent* sbA = objA->GetComponent<SoftBodyComponent>();
-		bodyA.obj = objA;
+		RigidBodyComponent* pcB = objB->GetComponent<RigidBodyComponent>();
+		SoftBodyComponent* sbB = objB->GetComponent<SoftBodyComponent>();
 
-		if (tcA) {
+		bool collisionResult = false;
+
+		if (!resolvePhysically) {
+			collisionResult = DetectShapeOverlap(objA, tcA, *entryA, rA, objB, tcB, *entryB, rB);
+		}
+		else if ((pcA || pcB) && (!sbA && !sbB)) {
+			PhysicsBody bodyA = PhysicsBody();
+			bodyA.obj = objA;
 			bodyA.position = &tcA->worldPosition;
 			bodyA.prevPos = &tcA->prevPos;
 			bodyA.transformMatrix = &tcA->WorldMatrix;
 			bodyA.rotation = &tcA->rotation;
-		}
-		if (pcA) {
-			bodyA.velocity = &pcA->velocity;
-			bodyA.angularVelocity = &pcA->angularVelocity;
-			bodyA.invInertia = &pcA->inverseInertia;
-			bodyA.invMass = &pcA->inverseMass;
-		}
+			if (pcA) {
+				bodyA.velocity = &pcA->velocity;
+				bodyA.angularVelocity = &pcA->angularVelocity;
+				bodyA.invInertia = &pcA->inverseInertia;
+				bodyA.invMass = &pcA->inverseMass;
+			}
 
-		PhysicsBody bodyB = PhysicsBody();
-		RigidBodyComponent* pcB = objB->GetComponent<RigidBodyComponent>();
-		SoftBodyComponent* sbB = objB->GetComponent<SoftBodyComponent>();
-		bodyB.obj = objB;
-
-		if (tcB) {
+			PhysicsBody bodyB = PhysicsBody();
+			bodyB.obj = objB;
 			bodyB.position = &tcB->worldPosition;
 			bodyB.prevPos = &tcB->prevPos;
 			bodyB.transformMatrix = &tcB->WorldMatrix;
 			bodyB.rotation = &tcB->rotation;
-		}
-		if (pcB) {
-			bodyB.velocity = &pcB->velocity;
-			bodyB.angularVelocity = &pcB->angularVelocity;
-			bodyB.invInertia = &pcB->inverseInertia;
-			bodyB.invMass = &pcB->inverseMass;
-		}
+			if (pcB) {
+				bodyB.velocity = &pcB->velocity;
+				bodyB.angularVelocity = &pcB->angularVelocity;
+				bodyB.invInertia = &pcB->inverseInertia;
+				bodyB.invMass = &pcB->inverseMass;
+			}
 
-		// Rigidbody & Rigidbody or Rigidbody & Staticbody
-		bool collisionResult = false;
-		if ((pcA || pcB) && (!sbA && !sbB)) {
-			{
-				TIME_BLOCK("Rigid body collision");
+			if (rA > 0.0f && rB > 0.0f && tcA->size.x == tcA->size.y && tcB->size.x == tcB->size.y) {
+				collisionResult = ResolveCircleCircleContacts(bodyA, bodyB, rA * tcA->size.x, rB * tcB->size.x);
+			}
+			else if ((rA > 0.0f && tcA->size.x == tcA->size.y) || (rB > 0.0f && tcB->size.x == tcB->size.y)) {
+				PhysicsBody circle = (rA > 0.0f) ? bodyA : bodyB;
+				PhysicsBody poly = (rA > 0.0f) ? bodyB : bodyA;
+				float radius = (rA > 0.0f) ? rA * tcA->size.x : rB * tcB->size.x;
+				std::vector<Edge>& polyEdges = (rA > 0.0f) ? entryB->edges : entryA->edges;
+				collisionResult = ResolveCirclePolygonContacts(circle, poly, radius, polyEdges);
+			}
+			else {
+				collisionResult = ResolvePolygonPolygonContacts(bodyA, bodyB, entryA->edges, entryB->edges);
+			}
+		}
+		else if (!pcA && !pcB && !sbA && !sbB) {
+			bool staticA = ccA->isStatic;
+			bool staticB = ccB->isStatic;
+
+			if (!(staticA && staticB)) {
 				if (rA > 0.0f && rB > 0.0f && tcA->size.x == tcA->size.y && tcB->size.x == tcB->size.y) {
-					{
-						TIME_BLOCK("Circle-Circle");
-						collisionResult = ResolveCircleCircleContacts(bodyA, bodyB, rA * tcA->size.x, rB * tcB->size.x);
+					glm::vec3 d = tcA->worldPosition - tcB->worldPosition;
+					if (d == glm::vec3(0.0f)) d = glm::vec3(1.0f, 0.0f, 0.0f);
+					float dist = glm::length(d);
+					float radiusA = rA * tcA->size.x;
+					float radiusB = rB * tcB->size.x;
+
+					if (dist < radiusA + radiusB) {
+						glm::vec3 normal = glm::normalize(d);
+						float penetration = radiusA + radiusB - dist;
+						glm::vec3 cPoint = tcA->worldPosition - normal * ((radiusA - penetration) / 2.0f);
+						BroadcastCollision(objA, entryA->id, objB, entryB->id, CollisionType::StaticVsStatic, cPoint, normal, penetration);
+						ApplyStaticPositionCorrection(tcA, staticA, tcB, staticB, normal, penetration);
+						collisionResult = true;
 					}
 				}
 				else if ((rA > 0.0f && tcA->size.x == tcA->size.y) || (rB > 0.0f && tcB->size.x == tcB->size.y)) {
-					{
-						TIME_BLOCK("Circle-Polygon");
-						PhysicsBody circle;
-						float radius = 0.0f;
-						if (rA > 0.0f) {
-							circle = bodyA;
-							radius = rA * tcA->size.x;
-						}
-						else {
-							circle = bodyB;
-							radius = rB * tcB->size.x;
-						}
-						PhysicsBody poly = (rA > 0.0f) ? bodyB : bodyA;
+					bool aIsCircle = (rA > 0.0f && tcA->size.x == tcA->size.y);
+					TransformComponent* circleTc = aIsCircle ? tcA : tcB;
+					float radius = aIsCircle ? rA * tcA->size.x : rB * tcB->size.x;
+					bool circleStatic = aIsCircle ? staticA : staticB;
+					TransformComponent* polyTc = aIsCircle ? tcB : tcA;
+					std::vector<Edge>& polyEdges = aIsCircle ? entryB->edges : entryA->edges;
+					bool polyStatic = aIsCircle ? staticB : staticA;
 
-						collisionResult = ResolveCirclePolygonContacts(circle, poly, radius, poly.obj->GetComponent<CollisionComponent>()->edges);
-					}
+					collisionResult = ResolveStaticCirclePolygon(circleTc, radius, circleStatic, polyTc, polyEdges, polyStatic);
 				}
 				else {
-					{
-						TIME_BLOCK("Polygon-Polygon");
-						collisionResult = ResolvePolygonPolygonContacts(bodyA, bodyB);
-					}
+					collisionResult = ResolveStaticPolygonPolygon(objA, tcA, staticA, entryA->edges,
+						objB, tcB, staticB, entryB->edges);
 				}
 			}
 		}
-		//Static body & Static body
-		if (!pcA && !pcB && !sbA && !sbB) {
-			{
-				TIME_BLOCK("Static body collision");
-				bool staticA = ccA->isStatic;
-				bool staticB = ccB->isStatic;
-				
-				if (!(staticA && staticB)) {
-					if (rA > 0.0f && rB > 0.0f && tcA->size.x == tcA->size.y && tcB->size.x == tcB->size.y) {
-						glm::vec3 d = tcA->worldPosition - tcB->worldPosition;
-						if (d == glm::vec3(0.0f)) d = glm::vec3(1.0f, 0.0f, 0.0f);
-						float dist = glm::length(d);
-						float radiusA = rA * tcA->size.x;
-						float radiusB = rB * tcB->size.x;
-						
-						if (dist < radiusA + radiusB) {
-							glm::vec3 normal = glm::normalize(d);
-							float penetration = radiusA + radiusB - dist;
-							glm::vec3 cPoint = tcA->worldPosition - normal * ((radiusA - penetration) / 2.0f);
-							BroadcastCollision(objA, objB, CollisionType::StaticVsStatic, cPoint, normal, penetration);
-							ApplyStaticPositionCorrection(tcA, staticA, tcB, staticB, normal, penetration);
-							collisionResult = true;
-						}	
-					}
-					else if ((rA > 0.0f && tcA->size.x == tcA->size.y) || (rB > 0.0f && tcB->size.x == tcB->size.y)) {
-						bool aIsCircle = (rA > 0.0f && tcA->size.x == tcA->size.y);
-						TransformComponent * circleTc = aIsCircle ? tcA : tcB;
-						float radius = aIsCircle ? rA * tcA->size.x : rB * tcB->size.x;
-						bool circleStatic = aIsCircle ? staticA : staticB;
-						TransformComponent * polyTc = aIsCircle ? tcB : tcA;
-						CollisionComponent * polyCc = aIsCircle ? ccB : ccA;
-						bool polyStatic = aIsCircle ? staticB : staticA;
-	
-						collisionResult = ResolveStaticCirclePolygon(circleTc, radius, circleStatic, polyTc, polyCc->edges, polyStatic);
-					}
-					else {
-						collisionResult = ResolveStaticPolygonPolygon(objA, tcA, staticA, objB, tcB, staticB);
-					}
-				}
+		else if (sbA && sbB) {
+			std::vector<SoftEdge> edgesA = sbA->GetEdgesFromMassAggregate();
+			std::vector<SoftEdge> edgesB = sbB->GetEdgesFromMassAggregate();
+
+			bool axisValid = false;
+			glm::vec3 globalAxis = ComputeSoftSoftAxis(sbA, edgesA, sbB, edgesB, &axisValid);
+			glm::vec3 axisForAPoints = -globalAxis;
+
+			for (auto& pm : sbA->MassAggregate) {
+				ResolveSoftPointSoftEdgeContacts(pm->body, pm.get(), sbB, edgesB, pm->pointRadius, axisValid ? &axisForAPoints : nullptr);
 			}
-		}
-		//Soft body & Soft body
-		if (sbA && sbB) {
-			{
-				TIME_BLOCK("Soft body collision");
-				std::vector<SoftEdge> edgesA = sbA->GetEdgesFromMassAggregate();
-				std::vector<SoftEdge> edgesB = sbB->GetEdgesFromMassAggregate();
-
-				bool axisValid = false;
-				glm::vec3 globalAxis = ComputeSoftSoftAxis(sbA, edgesA, sbB, edgesB, &axisValid);
-				glm::vec3 axisForAPoints = -globalAxis;
-
-				bool anyPointContact = false;
-
-				{
-					TIME_BLOCK("First pass");
-					for (auto& pm : sbA->MassAggregate) {
-						if (ResolveSoftPointSoftEdgeContacts(pm->body, pm.get(), sbB, edgesB, pm->pointRadius, axisValid ? &axisForAPoints : nullptr))
-							anyPointContact = true;
-					}
-				}
-
-				{
-					TIME_BLOCK("Second pass");
-					for (auto& pm : sbB->MassAggregate) {
-						if (ResolveSoftPointSoftEdgeContacts(pm->body, pm.get(), sbA, edgesA, pm->pointRadius, axisValid ? &globalAxis : nullptr))
-							anyPointContact = true;
-					}
-				}
+			for (auto& pm : sbB->MassAggregate) {
+				ResolveSoftPointSoftEdgeContacts(pm->body, pm.get(), sbA, edgesA, pm->pointRadius, axisValid ? &globalAxis : nullptr);
 			}
 		}
 
-		if (EngineManager::getInstance().EngineSettings.colorCollisions && collisionResult) {
-			objA->GetComponent<RenderComponent>()->color = glm::vec4(0, 1, 0, 1);
-			objB->GetComponent<RenderComponent>()->color = glm::vec4(0, 1, 0, 1);
-		}
-		else if (EngineManager::getInstance().EngineSettings.colorCollisions) {
-			objA->GetComponent<RenderComponent>()->color = glm::vec4(1, 0, 0, 1);
-			objB->GetComponent<RenderComponent>()->color = glm::vec4(1, 0, 0, 1);
+		if (EngineManager::getInstance().EngineSettings.colorCollisions) {
+			glm::vec4 c = collisionResult ? glm::vec4(0, 1, 0, 1) : glm::vec4(1, 0, 0, 1);
+			if (objA->GetComponent<RenderComponent>()) objA->GetComponent<RenderComponent>()->color = c;
+			if (objB->GetComponent<RenderComponent>()) objB->GetComponent<RenderComponent>()->color = c;
 		}
 	}
 }
@@ -638,8 +596,7 @@ bool PhysicsEngine::ResolveSoftPointSoftEdgeContacts(PhysicsBody pointBody, Poin
 
 	if (!isColliding) return false;
 
-	BroadcastCollision(pointMass->sb->parent, otherSb->parent, CollisionType::SoftVsSoft,
-		bestPoint, contactNormal, penetration);
+	BroadcastCollision(pointMass->sb->parent, -1, otherSb->parent, -1, CollisionType::SoftVsSoft, bestPoint, contactNormal, penetration);
 
 	int i0 = otherEdges[bestEdge].idxA;
 	int i1 = otherEdges[bestEdge].idxB;
@@ -737,8 +694,7 @@ void PhysicsEngine::ResolveSoftRigidContacts(float dtSub) {
 
 		if (best.hit) {
 			Object* rigidObj = rigidBoundaries[best.rigidIndex].obj;
-			BroadcastCollision(pm->sb->parent, rigidObj, CollisionType::RigidVsSoft,
-				best.point, best.normal, best.penetration);
+			BroadcastCollision(pm->sb->parent, -1, rigidObj, ResolutionShapeIdOf(rigidObj), CollisionType::RigidVsSoft, best.point, best.normal, best.penetration);
 		}
 	}
 }
@@ -922,8 +878,7 @@ void PhysicsEngine::ResolveRigidSoftContacts(float dtSub) {
 
 		if (best.hit) {
 			Object* rigidObj = rigidBoundaries[rv.rigidIndex].obj;
-			BroadcastCollision(rigidObj, softBoundaries[best.softIndex].obj, CollisionType::RigidVsSoft,
-				best.point, best.normal, best.penetration);
+			BroadcastCollision(rigidObj, ResolutionShapeIdOf(rigidObj), softBoundaries[best.softIndex].obj, -1, CollisionType::RigidVsSoft, best.point, best.normal, best.penetration);
 		}
 	}
 }
@@ -1061,7 +1016,7 @@ bool PhysicsEngine::ResolveCircleCircleContacts(PhysicsBody bodyA, PhysicsBody b
 		float penetration = rA + rB - dist;
 		glm::vec3 cPoint = *bodyA.position - normal * ((rA - penetration) / 2.0f);
 
-		BroadcastCollision(bodyA.obj, bodyB.obj, ClassifyCollisionType(bodyA.obj, bodyB.obj), cPoint, normal, penetration);
+		BroadcastCollision(bodyA.obj, ResolutionShapeIdOf(bodyA.obj), bodyB.obj, ResolutionShapeIdOf(bodyB.obj), ClassifyCollisionType(bodyA.obj, bodyB.obj), cPoint, normal, penetration);
 
 		ContactPoint cp;
 		cp.point = cPoint;
@@ -1205,8 +1160,7 @@ bool PhysicsEngine::ResolveCirclePolygonContacts(PhysicsBody circle, PhysicsBody
 	}
 
 	if (isColliding) {
-		BroadcastCollision(circle.obj, polygon.obj, ClassifyCollisionType(circle.obj, polygon.obj),
-			contactPoint, contactNormal, penetration);
+		BroadcastCollision(circle.obj, ResolutionShapeIdOf(circle.obj), polygon.obj, ResolutionShapeIdOf(polygon.obj), ClassifyCollisionType(circle.obj, polygon.obj), contactPoint, contactNormal, penetration);
 
 		ContactPoint cp;
 		cp.point = contactPoint;
@@ -1253,8 +1207,11 @@ bool PhysicsEngine::ResolveCirclePolygonContacts(PhysicsBody circle, PhysicsBody
 	return isColliding;
 }
 
-bool PhysicsEngine::ResolvePolygonPolygonContacts(PhysicsBody bodyA, PhysicsBody bodyB) {
-	CollisionData colData = SAT(bodyA.obj, bodyB.obj);
+bool PhysicsEngine::ResolvePolygonPolygonContacts(PhysicsBody bodyA, PhysicsBody bodyB,
+	const std::vector<Edge>& edgesA, const std::vector<Edge>& edgesB) {
+	TransformComponent* tcA = bodyA.obj->GetComponent<TransformComponent>();
+	TransformComponent* tcB = bodyB.obj->GetComponent<TransformComponent>();
+	CollisionData colData = SAT(tcA, edgesA, tcB, edgesB);
 
 	if (colData.isColliding) {
 		std::vector<ContactPoint> points = GenerateContactPoints(colData);
@@ -1263,8 +1220,7 @@ bool PhysicsEngine::ResolvePolygonPolygonContacts(PhysicsBody bodyA, PhysicsBody
 			glm::vec3 avgPoint(0.0f);
 			for (auto& p : points) avgPoint += p.point;
 			avgPoint /= (float)points.size();
-			BroadcastCollision(bodyA.obj, bodyB.obj, ClassifyCollisionType(bodyA.obj, bodyB.obj),
-				avgPoint, colData.normal, colData.penetration);
+			BroadcastCollision(bodyA.obj, ResolutionShapeIdOf(bodyA.obj), bodyB.obj, ResolutionShapeIdOf(bodyB.obj), ClassifyCollisionType(bodyA.obj, bodyB.obj), avgPoint, colData.normal, colData.penetration);
 		}
 
 		for (int j = 0; j < points.size(); j++)
@@ -1482,18 +1438,18 @@ bool PhysicsEngine::ResolveStaticCirclePolygon(TransformComponent* circleTc, flo
 
 	if (!colliding || penetration <= 0.0f) return false;
 
-	BroadcastCollision(circleTc->parent, polyTc->parent, CollisionType::StaticVsStatic,
+	BroadcastCollision(circleTc->parent, ResolutionShapeIdOf(circleTc->parent), polyTc->parent, ResolutionShapeIdOf(polyTc->parent), CollisionType::StaticVsStatic,
 		circleTc->worldPosition - normal * (penetration * 0.5f), normal, penetration);
 	ApplyStaticPositionCorrection(circleTc, circleStatic, polyTc, polyStatic, normal, penetration);
 	return true;
 }
 
-bool PhysicsEngine::ResolveStaticPolygonPolygon(Object* objA, TransformComponent* tcA, bool staticA,
-	Object* objB, TransformComponent* tcB, bool staticB) {
-	CollisionData colData = SAT(objA, objB);
+bool PhysicsEngine::ResolveStaticPolygonPolygon(Object* objA, TransformComponent* tcA, bool staticA, const std::vector<Edge>& edgesA,
+	Object* objB, TransformComponent* tcB, bool staticB, const std::vector<Edge>& edgesB) {
+	CollisionData colData = SAT(tcA, edgesA, tcB, edgesB);
 	if (!colData.isColliding || colData.penetration <= 0.0f) return false;
 
-	BroadcastCollision(objA, objB, CollisionType::StaticVsStatic,
+	BroadcastCollision(objA, ResolutionShapeIdOf(objA), objB, ResolutionShapeIdOf(objB), CollisionType::StaticVsStatic,
 		(tcA->worldPosition + tcB->worldPosition) * 0.5f, colData.normal, colData.penetration);
 
 	ApplyStaticPositionCorrection(tcA, staticA, tcB, staticB, colData.normal, colData.penetration);
@@ -1507,16 +1463,23 @@ CollisionType PhysicsEngine::ClassifyCollisionType(Object* objA, Object* objB) {
 	return CollisionType::RigidVsStatic;
 }
 
-void PhysicsEngine::BroadcastCollision(Object* objA, Object* objB, CollisionType type,
+int PhysicsEngine::ResolutionShapeIdOf(Object* obj) {
+	if (!obj) return -1;
+	CollisionComponent* cc = obj->GetComponent<CollisionComponent>();
+	return cc ? cc->resolutionShapeID : -1;
+}
+
+void PhysicsEngine::BroadcastCollision(Object* objA, int shapeIdA, Object* objB, int shapeIdB, CollisionType type,
 	const glm::vec3& point, const glm::vec3& normal, float penetration) {
 
-	RecordCollisionPair(objA, objB, type, point, normal, penetration);
+	RecordCollisionPair(objA, shapeIdA, objB, shapeIdB, type, point, normal, penetration);
 
 	if (objA) {
 		CollisionComponent* ccA = objA->GetComponent<CollisionComponent>();
 		if (ccA) {
 			CollisionEventData data;
 			data.type = type; data.self = objA; data.other = objB;
+			data.selfShapeId = shapeIdA; data.otherShapeId = shapeIdB;
 			data.point = point; data.normal = normal; data.penetration = penetration;
 			ccA->NotifyCollision(data);
 		}
@@ -1526,11 +1489,13 @@ void PhysicsEngine::BroadcastCollision(Object* objA, Object* objB, CollisionType
 		if (ccB) {
 			CollisionEventData data;
 			data.type = type; data.self = objB; data.other = objA;
+			data.selfShapeId = shapeIdB; data.otherShapeId = shapeIdA;
 			data.point = point; data.normal = -normal; data.penetration = penetration;
 			ccB->NotifyCollision(data);
 		}
 	}
 }
+
 
 void PhysicsEngine::BroadcastFluidRigidContacts() {
 	std::set<std::pair<Object*, Object*>> notified;
@@ -1543,7 +1508,7 @@ void PhysicsEngine::BroadcastFluidRigidContacts() {
 		if (!fluidObj || !rigidObj) continue;
 		if (!notified.insert({ fluidObj, rigidObj }).second) continue;
 
-		BroadcastCollision(fluidObj, rigidObj, CollisionType::FluidVsRigid, c.point, c.normal, c.penetration);
+		BroadcastCollision(fluidObj, -1, rigidObj, ResolutionShapeIdOf(rigidObj), CollisionType::FluidVsRigid, c.point, c.normal, c.penetration);
 	}
 }
 
@@ -1558,38 +1523,149 @@ void PhysicsEngine::BroadcastFluidSoftContacts() {
 		if (!fluidObj || !softObj) continue;
 		if (!notified.insert({ fluidObj, softObj }).second) continue;
 
-		BroadcastCollision(fluidObj, softObj, CollisionType::FluidVsSoft, c.point, c.normal, c.penetration);
+		BroadcastCollision(fluidObj, -1, softObj, -1, CollisionType::FluidVsSoft, c.point, c.normal, c.penetration);
 	}
 }
 
-void PhysicsEngine::RecordCollisionPair(Object* objA, Object* objB, CollisionType type,
+bool PhysicsEngine::DetectShapeOverlap(Object* objA, TransformComponent* tcA, CollisionShapeEntry& entryA, float rA,
+	Object* objB, TransformComponent* tcB, CollisionShapeEntry& entryB, float rB) {
+	if (!tcA || !tcB) return false;
+
+	bool isColliding = false;
+	glm::vec3 point(0.0f), normal(0.0f);
+	float penetration = 0.0f;
+
+	if (rA > 0.0f && rB > 0.0f && tcA->size.x == tcA->size.y && tcB->size.x == tcB->size.y) {
+		glm::vec3 d = tcA->worldPosition - tcB->worldPosition;
+		if (d == glm::vec3(0.0f)) d = glm::vec3(1.0f, 0.0f, 0.0f);
+		float dist = glm::length(d);
+		float radiusA = rA * tcA->size.x;
+		float radiusB = rB * tcB->size.x;
+		if (dist < radiusA + radiusB) {
+			normal = glm::normalize(d);
+			penetration = radiusA + radiusB - dist;
+			point = tcA->worldPosition - normal * ((radiusA - penetration) / 2.0f);
+			isColliding = true;
+		}
+	}
+	else if ((rA > 0.0f && tcA->size.x == tcA->size.y) || (rB > 0.0f && tcB->size.x == tcB->size.y)) {
+		bool aIsCircle = (rA > 0.0f && tcA->size.x == tcA->size.y);
+		TransformComponent* circleTc = aIsCircle ? tcA : tcB;
+		float radius = aIsCircle ? rA * tcA->size.x : rB * tcB->size.x;
+		TransformComponent* polyTc = aIsCircle ? tcB : tcA;
+		std::vector<Edge>& polyEdges = aIsCircle ? entryB.edges : entryA.edges;
+
+		std::vector<Edge> worldEdges;
+		worldEdges.reserve(polyEdges.size());
+		for (auto& e : polyEdges) {
+			Edge we;
+			we.start = polyTc->ProjectToWorld(e.start);
+			we.end = polyTc->ProjectToWorld(e.end);
+			worldEdges.push_back(we);
+		}
+
+		glm::vec3 center = circleTc->worldPosition;
+		glm::vec3 polyCenter = polyTc->worldPosition;
+		bool centerInside = true;
+		float minFaceDist = -INFINITY;
+		glm::vec3 minFaceNormal(0.0f);
+
+		for (auto& edge : worldEdges) {
+			glm::vec3 ab = edge.end - edge.start;
+			float len = glm::length(ab);
+			if (len < 1e-8f) continue;
+			glm::vec3 abNorm = ab / len;
+			glm::vec3 edgeNormal = glm::normalize(glm::vec3(abNorm.y, -abNorm.x, 0.0f));
+			glm::vec3 toPolyCenter = polyCenter - edge.start;
+			if (glm::dot(edgeNormal, toPolyCenter) > 0.0f) edgeNormal = -edgeNormal;
+			float signedDist = glm::dot(edgeNormal, center - edge.start);
+			if (signedDist > 0.0f) centerInside = false;
+			if (signedDist > minFaceDist) { minFaceDist = signedDist; minFaceNormal = edgeNormal; }
+		}
+
+		float bestDist = INFINITY;
+		glm::vec3 bestPoint(0.0f), bestNormal(0.0f);
+		if (!centerInside) {
+			for (auto& edge : worldEdges) {
+				glm::vec3 ab = edge.end - edge.start;
+				float len = glm::length(ab);
+				if (len < 1e-8f) continue;
+				glm::vec3 ac = center - edge.start;
+				glm::vec3 abNorm = ab / len;
+				float t = glm::clamp(glm::dot(ac, abNorm), 0.0f, len);
+				glm::vec3 closest = edge.start + abNorm * t;
+				glm::vec3 edgeNormal = glm::normalize(glm::vec3(ab.y, -ab.x, 0.0f));
+				glm::vec3 toPolyCenter = polyCenter - edge.start;
+				if (glm::dot(edgeNormal, toPolyCenter) > 0.0f) edgeNormal = -edgeNormal;
+				float dist = glm::length(center - closest);
+				if (dist < bestDist) { bestDist = dist; bestPoint = closest; bestNormal = edgeNormal; }
+			}
+		}
+
+		if (centerInside) {
+			normal = minFaceNormal;
+			penetration = radius - minFaceDist;
+			point = center - normal * minFaceDist;
+			isColliding = true;
+		}
+		else if (bestDist < radius) {
+			glm::vec3 dir = center - bestPoint;
+			normal = (glm::length(dir) > 1e-6f && glm::dot(glm::normalize(dir), bestNormal) > 0.5f)
+				? glm::normalize(dir) : bestNormal;
+			point = bestPoint;
+			penetration = radius - bestDist;
+			isColliding = true;
+		}
+	}
+	else {
+		CollisionData colData = SAT(tcA, entryA.edges, tcB, entryB.edges);
+		isColliding = colData.isColliding && colData.penetration > 0.0f;
+		if (isColliding) {
+			normal = colData.normal;
+			point = (tcA->worldPosition + tcB->worldPosition) * 0.5f;
+			penetration = colData.penetration;
+		}
+	}
+
+	if (isColliding) {
+		BroadcastCollision(objA, entryA.id, objB, entryB.id, ClassifyCollisionType(objA, objB), point, normal, penetration);
+	}
+	return isColliding;
+}
+
+void PhysicsEngine::RecordCollisionPair(Object* objA, int shapeIdA, Object* objB, int shapeIdB, CollisionType type,
 	const glm::vec3& point, const glm::vec3& normal, float penetration) {
 	if (!objA || !objB) return;
 
 	bool aFirst = objA < objB;
-	std::pair<Object*, Object*> key = aFirst ? std::make_pair(objA, objB) : std::make_pair(objB, objA);
+	ShapeContactKey key = aFirst
+		? ShapeContactKey{ objA, shapeIdA, objB, shapeIdB }
+	: ShapeContactKey{ objB, shapeIdB, objA, shapeIdA };
 
 	CollisionEventData data;
 	data.type = type;
-	data.self = key.first;
-	data.other = key.second;
+	data.self = key.objA;
+	data.other = key.objB;
+	data.selfShapeId = key.shapeIdA;
+	data.otherShapeId = key.shapeIdB;
 	data.point = point;
-	data.normal = aFirst ? normal : -normal; 
+	data.normal = aFirst ? normal : -normal;
 	data.penetration = penetration;
 
 	currentFrameCollisions[key] = data;
 }
 
 void PhysicsEngine::ResolveCollisionEnterExit() {
-	auto fireBothSides = [](const std::pair<Object*, Object*>& key, const CollisionEventData& data, bool isEnter) {
-		Object* a = key.first;
-		Object* b = key.second;
+	auto fireBothSides = [](const ShapeContactKey& key, const CollisionEventData& data, bool isEnter) {
+		Object* a = key.objA; int shapeA = key.shapeIdA;
+		Object* b = key.objB; int shapeB = key.shapeIdB;
 
 		if (a) {
 			CollisionComponent* cc = a->GetComponent<CollisionComponent>();
 			if (cc) {
 				CollisionEventData d = data;
 				d.self = a; d.other = b;
+				d.selfShapeId = shapeA; d.otherShapeId = shapeB;
 				isEnter ? cc->NotifyCollisionEnter(d) : cc->NotifyCollisionExit(d);
 			}
 		}
@@ -1598,6 +1674,7 @@ void PhysicsEngine::ResolveCollisionEnterExit() {
 			if (cc) {
 				CollisionEventData d = data;
 				d.self = b; d.other = a; d.normal = -data.normal;
+				d.selfShapeId = shapeB; d.otherShapeId = shapeA;
 				isEnter ? cc->NotifyCollisionEnter(d) : cc->NotifyCollisionExit(d);
 			}
 		}
@@ -1622,7 +1699,7 @@ void PhysicsEngine::PurgeObjectFromCollisionTracking(Object* obj) {
 	if (!obj) return;
 	auto purge = [obj](auto& map) {
 		for (auto it = map.begin(); it != map.end(); ) {
-			if (it->first.first == obj || it->first.second == obj) it = map.erase(it);
+			if (it->first.objA == obj || it->first.objB == obj) it = map.erase(it);
 			else ++it;
 		}
 		};
@@ -1630,14 +1707,8 @@ void PhysicsEngine::PurgeObjectFromCollisionTracking(Object* obj) {
 	purge(previousFrameCollisions);
 }
 
-CollisionData PhysicsEngine::SAT(Object* objA, Object* objB) {
-	CollisionComponent* ccA = objA->GetComponent<CollisionComponent>();
-	TransformComponent* tcA = objA->GetComponent<TransformComponent>();
-	CollisionComponent* ccB = objB->GetComponent<CollisionComponent>();
-	TransformComponent* tcB = objB->GetComponent<TransformComponent>();
-
-	std::vector<Edge> edgesA = ccA->edges;
-	std::vector<Edge> edgesB = ccB->edges;
+CollisionData PhysicsEngine::SAT(TransformComponent* tcA, const std::vector<Edge>& edgesA,
+	TransformComponent* tcB, const std::vector<Edge>& edgesB) {
 
 	std::vector<Edge> globalEdgesA;
 	std::vector<Edge> globalEdgesB;
@@ -2187,36 +2258,53 @@ Projection PhysicsEngine::ProjectOntoAxis(std::vector<glm::vec3>& vertices, Sepa
 	return projection;
 }
 
-BAHNode<BoundingCircle>* PhysicsEngine::RegisterBoundingAreaNode(Object* obj, BoundingCircle boundingCircle) {
-	if (root.obj == nullptr && root.children[0] == nullptr) {
+BAHNode<BoundingCircle>* PhysicsEngine::RegisterBoundingAreaNode(Object* obj, int shapeId, BoundingCircle boundingCircle) {
+	if (root.obj == nullptr && root.children[0] == nullptr && root.children[1] == nullptr) {
 		root.obj = obj;
+		root.shapeId = shapeId;
 		root.area = boundingCircle;
-		for (int i = 0; i < allObjects->size(); i++)
-		{
-			if ((*allObjects)[i]->HasComponent<CollisionComponent>()) {
-				(*allObjects)[i]->GetComponent<CollisionComponent>()->BAHnode = root.searchFor((*allObjects)[i].get());
-			}
-		}
 		return &root;
 	}
-	else {
-		BAHNode<BoundingCircle>* node = root.insert(obj, boundingCircle);
 
-		for (int i = 0; i < allObjects->size(); i++)
-		{
-			if ((*allObjects)[i]->HasComponent<CollisionComponent>()) {
-				(*allObjects)[i]->GetComponent<CollisionComponent>()->BAHnode = root.searchFor((*allObjects)[i].get());
+	BAHNode<BoundingCircle>* newNode = root.insert(obj, shapeId, boundingCircle);
+
+	BAHNode<BoundingCircle>* parentNode = newNode->parent;
+	if (parentNode) {
+		BAHNode<BoundingCircle>* sibling = (parentNode->children[0] == newNode) ? parentNode->children[1] : parentNode->children[0];
+		if (sibling && sibling->isLeaf() && sibling->obj) {
+			CollisionComponent* siblingCC = sibling->obj->GetComponent<CollisionComponent>();
+			if (siblingCC) {
+				CollisionShapeEntry* siblingEntry = siblingCC->GetShape(sibling->shapeId);
+				if (siblingEntry) siblingEntry->BAHnode = sibling;
 			}
 		}
-
-		return node;
 	}
+
+	return newNode;
 }
 
-void PhysicsEngine::UnRegisterBoundingAreaNode(Object* obj) {
-	BAHNode<BoundingCircle>* node = root.searchFor(obj);
-	if (node) {
-		node->removeLeaf();
+void PhysicsEngine::UnRegisterBoundingAreaNode(Object* obj, int shapeId) {
+	BAHNode<BoundingCircle>* node = root.searchFor(obj, shapeId);
+	if (!node) return;
+
+	BAHNode<BoundingCircle>* parentNode = node->parent;
+	BAHNode<BoundingCircle>* sibling = nullptr;
+	if (parentNode) {
+		sibling = (parentNode->children[0] == node) ? parentNode->children[1] : parentNode->children[0];
+	}
+
+	bool siblingWasLeaf = sibling && sibling->isLeaf();
+	Object* promotedObj = siblingWasLeaf ? sibling->obj : nullptr;
+	int promotedShapeId = siblingWasLeaf ? sibling->shapeId : -1;
+
+	node->removeLeaf();
+
+	if (siblingWasLeaf && promotedObj) {
+		CollisionComponent* promotedCC = promotedObj->GetComponent<CollisionComponent>();
+		if (promotedCC) {
+			CollisionShapeEntry* promotedEntry = promotedCC->GetShape(promotedShapeId);
+			if (promotedEntry) promotedEntry->BAHnode = parentNode;
+		}
 	}
 }
 
@@ -3353,7 +3441,7 @@ void PhysicsEngine::RayCastObject(const glm::vec3& origin, const glm::vec3& dir,
 			if constexpr (std::is_same_v<T, CircleShape>) {
 				radius = s.radius;
 			}
-			}, cc->currentShape);
+			}, cc->resolutionShape);
 
 		if (radius > 0.0f && tc->size.x == tc->size.y) {
 			float worldRadius = radius * tc->size.x;

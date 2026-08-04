@@ -23,10 +23,23 @@
 #include <numbers>
 #include <execution>
 
-// Collision registration
-struct ObjectPairHash {
-	size_t operator()(const std::pair<Object*, Object*>& p) const {
-		return std::hash<Object*>()(p.first) ^ (std::hash<Object*>()(p.second) << 1);
+//Collision registration
+
+struct ShapeContactKey {
+	Object* objA; int shapeIdA;
+	Object* objB; int shapeIdB;
+	bool operator==(const ShapeContactKey& o) const {
+		return objA == o.objA && shapeIdA == o.shapeIdA && objB == o.objB && shapeIdB == o.shapeIdB;
+	}
+};
+struct ShapeContactKeyHash {
+	size_t operator()(const ShapeContactKey& k) const {
+		size_t seed = std::hash<Object*>()(k.objA);
+		auto mix = [&seed](size_t v) { seed ^= v + 0x9e3779b9 + (seed << 6) + (seed >> 2); };
+		mix(std::hash<int>()(k.shapeIdA));
+		mix(std::hash<Object*>()(k.objB));
+		mix(std::hash<int>()(k.shapeIdB));
+		return seed;
 	}
 };
 
@@ -232,8 +245,8 @@ public:
 	std::vector<FluidSoftContact> fluidSoftContacts;
 
 	//Broad phase
-	BAHNode<BoundingCircle>* RegisterBoundingAreaNode(Object* obj, BoundingCircle boundingCircle);
-	void UnRegisterBoundingAreaNode(Object* obj);
+	BAHNode<BoundingCircle>* RegisterBoundingAreaNode(Object* obj, int shapeId, BoundingCircle boundingCircle);
+	void UnRegisterBoundingAreaNode(Object* obj, int shapeId);
 
 	void ResolveContacts(PotentialContact* contacts, unsigned numContacts);
 	
@@ -265,34 +278,41 @@ public:
 	std::vector<RigidContactRecord> rigidContactRecords;
 	bool ResolveCircleCircleContacts(PhysicsBody bodyA, PhysicsBody bodyB, float rA, float rB);
 	bool ResolveCirclePolygonContacts(PhysicsBody circle, PhysicsBody polygon, float radius, std::vector<Edge> edges, const glm::vec3* forcedAxis = nullptr);
-	bool ResolvePolygonPolygonContacts(PhysicsBody bodyA, PhysicsBody bodyB);
+	bool ResolvePolygonPolygonContacts(PhysicsBody bodyA, PhysicsBody bodyB,
+		const std::vector<Edge>& edgesA, const std::vector<Edge>& edgesB);
 	void ApplyRigidPositionCorrection();
 
 	//Static body collision
 	bool ResolveStaticCirclePolygon(TransformComponent* circleTc, float radius, bool circleStatic,
 		TransformComponent * polyTc, const std::vector<Edge>& polyLocalEdges, bool polyStatic);
-	bool ResolveStaticPolygonPolygon(Object * objA, TransformComponent * tcA, bool staticA,
-		Object * objB, TransformComponent * tcB, bool staticB);
+	bool ResolveStaticPolygonPolygon(Object* objA, TransformComponent* tcA, bool staticA, const std::vector<Edge>& edgesA,
+		Object* objB, TransformComponent* tcB, bool staticB, const std::vector<Edge>& edgesB);
 	void ApplyStaticPositionCorrection(TransformComponent * tcA, bool staticA,
 		TransformComponent * tcB, bool staticB, const glm::vec3 & normal, float penetration);
 
 	//Notify collision
-	std::unordered_map<std::pair<Object*, Object*>, CollisionEventData, ObjectPairHash> currentFrameCollisions;
-	std::unordered_map<std::pair<Object*, Object*>, CollisionEventData, ObjectPairHash> previousFrameCollisions;
+	std::unordered_map<ShapeContactKey, CollisionEventData, ShapeContactKeyHash> currentFrameCollisions;
+	std::unordered_map<ShapeContactKey, CollisionEventData, ShapeContactKeyHash> previousFrameCollisions;
 
 	CollisionType ClassifyCollisionType(Object* objA, Object* objB);
-	void BroadcastCollision(Object* objA, Object* objB, CollisionType type,
+	void BroadcastCollision(Object* objA, int shapeIdA, Object* objB, int shapeIdB, CollisionType type,
 		const glm::vec3& point, const glm::vec3& normal, float penetration);
 	void BroadcastFluidRigidContacts();
 	void BroadcastFluidSoftContacts();
 
-	void RecordCollisionPair(Object* objA, Object* objB, CollisionType type,
+	bool DetectShapeOverlap(Object* objA, TransformComponent* tcA, CollisionShapeEntry& entryA, float rA,
+		Object* objB, TransformComponent* tcB, CollisionShapeEntry& entryB, float rB);
+
+	void RecordCollisionPair(Object* objA, int shapeIdA, Object* objB, int shapeIdB, CollisionType type,
 		const glm::vec3& point, const glm::vec3& normal, float penetration);
 	void ResolveCollisionEnterExit();
 	void PurgeObjectFromCollisionTracking(Object* obj);
 
+	int ResolutionShapeIdOf(Object* obj);
+
 	//Helper functions
-	CollisionData SAT(Object* objA, Object* objB);
+	CollisionData SAT(TransformComponent* tcA, const std::vector<Edge>& edgesA,
+		TransformComponent* tcB, const std::vector<Edge>& edgesB);
 	std::vector<ContactPoint> GenerateContactPoints(CollisionData collisionData);
 	void GenerateRigidVertices();
 	void GenerateRigidBoundaries();

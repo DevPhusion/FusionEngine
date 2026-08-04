@@ -303,6 +303,9 @@ Object* ObjectManager::CopyObject(Object* obj) {
 
 void ObjectManager::RemoveObject(Object* obj) {
 	EngineManager::getInstance().EngineChangeEvent();
+	if (EditorManager::getInstance().selectedObject == obj) {
+		EditorManager::getInstance().SetSelectedObject(nullptr);
+	}
 	for (int i = 0; i < allObjects.size(); i++)
 	{
 		if (allObjects[i].get() == obj) {

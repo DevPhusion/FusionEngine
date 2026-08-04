@@ -217,7 +217,9 @@ bool FileManager::CreateScript(const std::string& parentVirtualPath, const std::
 		<< "\t\tpass\n";
 	out.close();
 
-	ScriptManager::getInstance().RegisterScript(AbsoluteToVirtual(target));
+	std::string virtualPath = AbsoluteToVirtual(target);
+	ScriptManager::getInstance().RegisterScript(virtualPath);
+	ScriptManager::getInstance().TryRegisterScriptAsComponent(virtualPath);
 	return true;
 }
 
@@ -255,8 +257,11 @@ bool FileManager::ImportFile(const std::string& sourceAbsolutePath, const std::s
 
 	std::string ext = dest.extension().string();
 	std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return (char)std::tolower(c); });
-	if (ClassifyExtension(ext) == ResourceIconType::Script)
-		ScriptManager::getInstance().RegisterScript(AbsoluteToVirtual(dest));
+	if (ClassifyExtension(ext) == ResourceIconType::Script) {
+		std::string virtualPath = AbsoluteToVirtual(dest);
+		ScriptManager::getInstance().RegisterScript(virtualPath);
+		ScriptManager::getInstance().TryRegisterScriptAsComponent(virtualPath); 
+	}
 
 	return true;
 }

@@ -46,6 +46,7 @@ public:
 	void RunAllScriptsStop();
 
 	std::vector<std::string> registeredScripts;
+	bool TryRegisterScriptAsComponent(const std::string& virtualScriptPath);
 	void RegisterScript(const std::string& scriptVirtualPath);
 	void UnregisterScript(const std::string& scriptVirtualPath);
 	void RenameRegisteredScript(const std::string& oldVirtualPath, const std::string& newVirtualPath);
@@ -65,6 +66,8 @@ public:
 private:
 	ScriptManager() = default;
 	~ScriptManager();
+
+	void ReloadAllRegisteredScripts();
 
 	void RunBackgroundSetup();
 	void SetStatus(SetupStage newStage, const std::string& message);

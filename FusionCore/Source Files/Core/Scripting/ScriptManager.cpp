@@ -1,6 +1,7 @@
 #include "../../../Header Files/Core/Scripting/ScriptManager.h"
 #include "../../../Header Files/Core/ObjectManager.h"
 #include "../../../Header Files/Components/ScriptComponent.h"
+#include "../../../Header Files/Core/Scripting/PyBindings.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -152,6 +153,7 @@ void ScriptManager::Update() {
 	if (backgroundSucceeded) {
 		if (!interpreter) StartEmbeddedInterpreter();
 		LinkInterpreterToVenv(venvRoot);
+		ReloadAllRegisteredScripts();          
 		SetStatus(SetupStage::Done, "Python backend ready.");
 	}
 	else {
@@ -168,11 +170,10 @@ bool ScriptManager::CreateVirtualEnvironment(const fs::path& venvPath) {
 
 	fs::path venvPython = GetVenvPythonExecutable(venvPath);
 	if (fs::exists(venvPath / "pyvenv.cfg", ec) && fs::exists(venvPython, ec))
-		return true; // genuinely already set up, reuse it
+		return true; 
 
 	std::string pyCmd = FindSystemPythonCommand();
 	if (pyCmd.empty()) {
-		// FindSystemPythonCommand already logs the specific reason.
 		return false;
 	}
 
@@ -203,7 +204,7 @@ std::filesystem::path ScriptManager::GetVenvPythonExecutable(const fs::path& ven
 	fs::path winStyle = venvPath / "Scripts" / "python.exe";
 	if (fs::exists(winStyle, ec)) return winStyle;
 
-	fs::path posixStyleExe = venvPath / "bin" / "python.exe"; // MSYS2/MinGW-style venv layout
+	fs::path posixStyleExe = venvPath / "bin" / "python.exe";
 	if (fs::exists(posixStyleExe, ec)) return posixStyleExe;
 
 	fs::path posixStyle3 = venvPath / "bin" / "python3";
@@ -425,6 +426,27 @@ void ScriptManager::RegisterScript(const std::string& scriptVirtualPath) {
 	registeredScripts.push_back(scriptVirtualPath);
 }
 
+bool ScriptManager::TryRegisterScriptAsComponent(const std::string& virtualScriptPath) {
+	if (!Py_IsInitialized()) return false;
+
+	py::gil_scoped_acquire gil;
+	try {
+		ImportScriptClass(virtualScriptPath);
+		return true;
+	}
+	catch (const py::error_already_set& e) {
+		Console::PrintError(
+			"ScriptManager: could not auto-register new script '{}': {}"
+		).Format(virtualScriptPath, e.what());
+	}
+	catch (const std::exception& e) {
+		Console::PrintError(
+			"ScriptManager: could not auto-register new script '{}': {}"
+		).Format(virtualScriptPath, e.what());
+	}
+	return false;
+}
+
 void ScriptManager::UnregisterScript(const std::string& scriptVirtualPath) {
 	registeredScripts.erase(
 		std::remove(registeredScripts.begin(), registeredScripts.end(), scriptVirtualPath),
@@ -435,6 +457,12 @@ void ScriptManager::RenameRegisteredScript(const std::string& oldVirtualPath, co
 	auto it = std::find(registeredScripts.begin(), registeredScripts.end(), oldVirtualPath);
 	if (it != registeredScripts.end())
 		*it = newVirtualPath;
+}
+
+void ScriptManager::ReloadAllRegisteredScripts() {
+	for (const std::string& scriptPath : registeredScripts) {
+		TryRegisterScriptAsComponent(scriptPath); 
+	}
 }
 
 void ScriptManager::ClearRegisteredScripts() {
