@@ -23,6 +23,7 @@ public:
 
 	std::string GetDisplayName();
 	void SetSourcePath(std::string path);
+	const std::string& GetSourcePath() const { return sourcePath; }
 
 	bool IsLoaded() const { return loaded; }
 	bool HasInstance() const { return loaded && static_cast<bool>(scriptInstance); }
@@ -31,6 +32,7 @@ public:
 	void RunOnLoad();
 	void RunOnStart();
 	void RunProcess(float delta);
+	void Reload();
 	void Unload();
 
 	virtual void OnDelete();
@@ -41,7 +43,6 @@ public:
 	virtual void Deserialize(BinaryReader& r);
 private:
 	void CheckForFileChanges();  
-	void Reload();
 
 	void ScanExportedProperties();
 	void ApplyPendingExportedValues();

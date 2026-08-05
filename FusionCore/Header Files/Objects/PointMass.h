@@ -10,6 +10,11 @@ public:
 	PointMass(Shader shader, SoftBodyComponent* sb, glm::vec3 point, int index, bool isCenter);
 	PointMass() = default;
 
+	PointMass(const PointMass&) = delete;
+	PointMass& operator=(const PointMass&) = delete;
+	PointMass(PointMass&&) = default;
+	PointMass& operator=(PointMass&&) = default;
+
 	SoftBodyComponent* sb;
 	Shader shader;
 

@@ -51,6 +51,10 @@ void MouseInteractComponent::OnDelete() {
 	InputManager::getInstance().RemoveMouseButtonCallback(mouseButtonCallbackID);
 	InputManager::getInstance().RemoveCursorPositionCallback(cursorPosCallbackID);
 	EngineManager::getInstance().RemovePhysicsModeChangedEvent(physicsModeChangedCallbackID);
+
+	if (parent && parent->HasComponent<RigidBodyComponent>()) {
+		parent->GetComponent<RigidBodyComponent>()->isDragging = false;
+	}
 }
 
 void MouseInteractComponent::SetSelectedPolygon(Object* obj, bool enable) {
@@ -102,11 +106,7 @@ void MouseInteractComponent::FindSelectedPolygon(int button, int action, int mod
 
 			if (physicsInteract && EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) {
 				if (parent->HasComponent<RigidBodyComponent>()) {
-					if (mouseDragForce != nullptr) {
-						PhysicsEngine::getInstance().UnRegisterForce(parent, mouseDragForce);
-					}
-					mouseDragForce = new MouseDrag(150.0f, 24.5f);
-					PhysicsEngine::getInstance().RegisterForce(parent, mouseDragForce);
+					parent->GetComponent<RigidBodyComponent>()->isDragging = true;
 				}
 				if (parent->HasComponent<SoftBodyComponent>()) {
 					parent->GetComponent<SoftBodyComponent>()->isDragging = true;
@@ -122,12 +122,7 @@ void MouseInteractComponent::FindSelectedPolygon(int button, int action, int mod
 	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS) {
 		if (!Selected && physicsInteract && EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) {
 			if (parent->HasComponent<RigidBodyComponent>()) {
-				if (mouseDragForce != nullptr) {
-					PhysicsEngine::getInstance().UnRegisterForce(parent, mouseDragForce);
-				}
-
-				mouseDragForce = new MouseDrag(150.0f, 24.5f);
-				PhysicsEngine::getInstance().RegisterForce(parent, mouseDragForce);
+				parent->GetComponent<RigidBodyComponent>()->isDragging = true;
 			}
 
 			if (parent->HasComponent<SoftBodyComponent>()) {
@@ -143,7 +138,7 @@ void MouseInteractComponent::DragPolygon(double xpos, double ypos) {
 	if (parent == nullptr || !Enabled)
 		return;
 
-	if (InputManager::mouseLeftHold || InputManager::mouseRightHold) 
+	if (InputManager::mouseLeftHold || InputManager::mouseRightHold)
 	{
 		if (EngineManager::getInstance().EngineInteractMode == EngineManager::InteractMode::AddVertex) {
 			return;
@@ -155,7 +150,7 @@ void MouseInteractComponent::DragPolygon(double xpos, double ypos) {
 			if (gizmoMode == GizmosMode::Rotate || gizmoMode == GizmosMode::Scale) {
 				return;
 			}
-			
+
 			TransformComponent* trans = parent->GetComponent<TransformComponent>();
 			// project to model space
 			glm::vec3 modelPos = trans->GetTransformedPoint(glm::vec3(InputManager::glX, InputManager::glY, 0), true);
@@ -168,11 +163,11 @@ void MouseInteractComponent::DragPolygon(double xpos, double ypos) {
 	else {
 		Selected = false;
 		ObjectSelected = false;
-		if (mouseDragForce != nullptr && physicsInteract) {
-			PhysicsEngine::getInstance().UnRegisterForce(parent, mouseDragForce);
-			mouseDragForce = nullptr;
+
+		if (physicsInteract && parent->HasComponent<RigidBodyComponent>()) {
+			parent->GetComponent<RigidBodyComponent>()->isDragging = false;
 		}
-		
+
 		if (parent->HasComponent<SoftBodyComponent>()) {
 			SoftBodyComponent* sb = parent->GetComponent<SoftBodyComponent>();
 			sb->isDragging = false;

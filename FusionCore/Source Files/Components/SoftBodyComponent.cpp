@@ -18,6 +18,87 @@ void SoftBodyComponent::ProcessSoftBody(float delta) {
 	SyncMeshFromMassAggregate();
 }
 
+void SoftBodyComponent::AddForce(glm::vec3 force) {
+	if (MassAggregate.empty()) return;
+
+	glm::vec3 accel = force * inverseMass;
+	for (auto& pm : MassAggregate) {
+		pm->acceleration += accel;
+	}
+}
+
+void SoftBodyComponent::AddForceAtWorldPoint(glm::vec3 force, glm::vec3 worldPoint) {
+	if (MassAggregate.empty()) return;
+
+	int totalPoints = (int)MassAggregate.size();
+	int pointsToApply = (int)(totalPoints * virtualPointPercentClosest);
+	pointsToApply = std::max(1, std::min(pointsToApply, totalPoints));
+
+	std::vector<std::pair<float, PointMass*>> distancePairs;
+	distancePairs.reserve(totalPoints);
+	for (auto& pm : MassAggregate) {
+		float dist = glm::length(pm->worldPos - worldPoint);
+		distancePairs.push_back({ dist, pm.get() });
+	}
+
+	std::partial_sort(distancePairs.begin(), distancePairs.begin() + pointsToApply, distancePairs.end(),
+		[](const std::pair<float, PointMass*>& a, const std::pair<float, PointMass*>& b) {
+			return a.first < b.first;
+		});
+
+	float totalMass = 0.0f;
+	for (int i = 0; i < pointsToApply; i++) {
+		PointMass* pm = distancePairs[i].second;
+		if (pm->inverseMass > 0.0f) totalMass += 1.0f / pm->inverseMass;
+	}
+	if (totalMass <= 0.0f) return;
+
+	glm::vec3 accel = force / totalMass;
+	for (int i = 0; i < pointsToApply; i++) {
+		distancePairs[i].second->acceleration += accel;
+	}
+}
+
+void SoftBodyComponent::AddForceAtLocalPoint(glm::vec3 force, glm::vec3 localPoint) {
+	glm::vec3 worldPoint = parent->GetComponent<TransformComponent>()->ProjectToWorld(localPoint);
+	AddForceAtWorldPoint(force, worldPoint);
+}
+
+void SoftBodyComponent::AddForceAtCenter(glm::vec3 force) {
+	if (!CenterPM) return;
+
+	CenterPM->acceleration += force * CenterPM->inverseMass;
+}
+
+PointMass* SoftBodyComponent::AddPointMass(glm::vec3 localPos) {
+	TransformComponent* tc = parent->GetComponent<TransformComponent>();
+	glm::vec3 worldPos = tc->ProjectToWorld(localPos);
+
+	std::unique_ptr<PointMass> newPM = std::make_unique<PointMass>(
+		Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"),
+		this, worldPos, (int)(MassAggregate.size() + AdditionalPointMasses.size()), false);
+	newPM->localPos = localPos;
+	PointMass* raw = newPM.get();
+
+	raw->inverseMass = inverseMass * (float)MassAggregate.size();
+
+	float compliance = (stiffness > 0.0f) ? (1.0f / stiffness) : 0.0f;
+	for (auto& pm : MassAggregate) {
+		float restLength = glm::length(pm->worldPos - raw->worldPos);
+		XPBDDistanceConstraint* constraint = new XPBDDistanceConstraint(
+			raw->body, pm->body, restLength, compliance, damping);
+		PhysicsEngine::getInstance().RegisterXPBDConstraint(constraint);
+		springs.push_back(constraint);
+	}
+
+	PhysicsEngine::getInstance().allSoftBodyPointMasses.push_back(raw);
+	AdditionalPointMasses.push_back(std::move(newPM));
+
+	EngineManager::getInstance().EngineChangeEvent();
+
+	return raw;
+}
+
 void SoftBodyComponent::ApplyGasPressure() {
 	int edgeCount = (int)MassAggregate.size() - 1;
 	if (edgeCount < 3) return;
@@ -263,6 +344,12 @@ void SoftBodyComponent::SetEnabled(bool Enabled) {
 		}
 
 		MassAggregate.clear();
+
+		for (int i = 0; i < AdditionalPointMasses.size(); i++) {
+			PointMass* target = AdditionalPointMasses[i].get();
+			allPms.erase(std::remove(allPms.begin(), allPms.end(), target), allPms.end());
+		}
+		AdditionalPointMasses.clear();
 	}
 	else {
 		RebuildMassAggregate();
@@ -303,6 +390,12 @@ void SoftBodyComponent::OnDelete() {
 	}
 
 	MassAggregate.clear();
+
+	for (int i = 0; i < AdditionalPointMasses.size(); i++) {
+		PointMass* target = AdditionalPointMasses[i].get();
+		allPms.erase(std::remove(allPms.begin(), allPms.end(), target), allPms.end());
+	}
+	AdditionalPointMasses.clear();
 
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
 	if (tc) tc->RemoveTransformCallback(transformCallbackID);
@@ -388,6 +481,15 @@ void SoftBodyComponent::SyncMeshFromMassAggregate() {
 	}
 	else {
 		rc->UpdateShape(verts, rc->Triangulate(verts));
+	}
+
+	CollisionComponent* cc = parent->GetComponent<CollisionComponent>();
+	if (cc) {
+		for (auto& entry : cc->shapes)
+		{
+			if (entry.syncWithRenderComponent)
+				cc->SyncFromRenderComponent(entry);
+		}
 	}
 
 	updatingFromPoints = false;

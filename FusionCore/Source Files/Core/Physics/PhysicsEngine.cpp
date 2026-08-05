@@ -38,14 +38,6 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 	UnRegisterTemporaryXPBDConstraint();
 	UnRegisterTemporaryConstraint();
 
-	{
-		TIME_BLOCK("Update Forces");
-		for (int i = 0; i < ForceRegistrations.size(); i++)
-		{
-			ForceRegistrations[i].fg->updateForce(ForceRegistrations[i].object, delta);
-		}
-	}
-
 	for (int i = 0; i < allObjects->size(); i++)
 	{
 		{
@@ -126,43 +118,6 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 		TIME_BLOCK("Collision enter/exit");
 		ResolveCollisionEnterExit();
 	}
-}
-
-void PhysicsEngine::RegisterForce(Object* object, ForceGenerator* fg) {
-	ForceRegistrations.push_back(ForceRegistration(object, fg));
-	std::function<void(int)> Wrapper = [fg](int index) {fg->processDisplay(index);};
-	std::shared_ptr<std::function<void(int)>> sharedFunc = std::make_shared<std::function<void(int)>>(Wrapper);
-	fg->setDisplayFunc(sharedFunc);
-	object->GetComponent<RigidBodyComponent>()->AddDisplayFunc(sharedFunc);
-}
-
-void PhysicsEngine::UnRegisterForce(Object* object, ForceGenerator* fg) {
-	for (int i = 0; i < ForceRegistrations.size(); i++)
-	{
-		if (ForceRegistrations[i].fg == fg && ForceRegistrations[i].object == object) {
-			ForceRegistrations.erase(ForceRegistrations.begin() + i);
-			object->GetComponent<RigidBodyComponent>()->RemoveDisplayFunc(fg->displayFunc);
-			fg->displayFunc = nullptr;
-		}
-	}
-}
-
-void PhysicsEngine::UnRegisterAllForce(Object* object) {
-	for (auto it = ForceRegistrations.begin(); it != ForceRegistrations.end(); )
-	{
-		if (it->object == object) {
-			object->GetComponent<RigidBodyComponent>()->RemoveDisplayFunc(it->fg->displayFunc);
-			it->fg->displayFunc = nullptr;
-			it = ForceRegistrations.erase(it);
-		}
-		else {
-			++it;
-		}
-	}
-}
-
-void PhysicsEngine::ClearRegistry() {
-	ForceRegistrations.clear();
 }
 
 // Collision

@@ -22,8 +22,14 @@ public:
 	SoftBodyComponent(Object* parent);
 	SoftBodyComponent() = default;
 
+	SoftBodyComponent(const SoftBodyComponent&) = delete;
+	SoftBodyComponent& operator=(const SoftBodyComponent&) = delete;
+	SoftBodyComponent(SoftBodyComponent&&) = default;
+	SoftBodyComponent& operator=(SoftBodyComponent&&) = default;
+
 	std::vector<std::unique_ptr<PointMass>> VirtualProxies = {};
 	std::vector<std::unique_ptr<PointMass>> MassAggregate = {};
+	std::vector<std::unique_ptr<PointMass>> AdditionalPointMasses = {};
 	std::vector<XPBDProxyPointConstraint*> proxyLinks = {};
 	std::vector<XPBDDistanceConstraint*> springs = {};
 	std::vector<XPBDTriAreaConstraint*> triAreaConstraints = {};
@@ -46,6 +52,14 @@ public:
 	glm::vec3 prevScale = glm::vec3(1);
 
 	void ProcessSoftBody(float delta);
+
+	void AddForce(glm::vec3 force);
+	void AddForceAtCenter(glm::vec3 force);
+	void AddForceAtWorldPoint(glm::vec3 force, glm::vec3 worldPoint);
+	void AddForceAtLocalPoint(glm::vec3 force, glm::vec3 localPoint);
+
+	PointMass* AddPointMass(glm::vec3 localPos);
+
 	void ApplyGasPressure();
 	void BuildMassAggregate();
 	void RebuildMassAggregate();

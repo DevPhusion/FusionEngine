@@ -145,19 +145,18 @@ void ScriptManager::RunBackgroundSetup() {
 }
 
 void ScriptManager::Update() {
-	if (stage.load() != SetupStage::LinkingInterpreter) return;
-	if (!workerThread.joinable()) return;
+	if (stage.load() == SetupStage::LinkingInterpreter && workerThread.joinable()) {
+		workerThread.join();
 
-	workerThread.join();
-
-	if (backgroundSucceeded) {
-		if (!interpreter) StartEmbeddedInterpreter();
-		LinkInterpreterToVenv(venvRoot);
-		ReloadAllRegisteredScripts();          
-		SetStatus(SetupStage::Done, "Python backend ready.");
-	}
-	else {
-		SetStatus(SetupStage::Failed, "Python backend setup failed.");
+		if (backgroundSucceeded) {
+			if (!interpreter) StartEmbeddedInterpreter();
+			LinkInterpreterToVenv(venvRoot);
+			ReloadAllRegisteredScripts();
+			SetStatus(SetupStage::Done, "Python backend ready.");
+		}
+		else {
+			SetStatus(SetupStage::Failed, "Python backend setup failed.");
+		}
 	}
 }
 
@@ -451,12 +450,66 @@ void ScriptManager::UnregisterScript(const std::string& scriptVirtualPath) {
 	registeredScripts.erase(
 		std::remove(registeredScripts.begin(), registeredScripts.end(), scriptVirtualPath),
 		registeredScripts.end());
+	scriptWriteTimes.erase(scriptVirtualPath);
 }
 
 void ScriptManager::RenameRegisteredScript(const std::string& oldVirtualPath, const std::string& newVirtualPath) {
 	auto it = std::find(registeredScripts.begin(), registeredScripts.end(), oldVirtualPath);
 	if (it != registeredScripts.end())
 		*it = newVirtualPath;
+
+	auto wt = scriptWriteTimes.find(oldVirtualPath);
+	if (wt != scriptWriteTimes.end()) {
+		scriptWriteTimes[newVirtualPath] = wt->second;
+		scriptWriteTimes.erase(wt);
+	}
+}
+
+void ScriptManager::NotifyScriptAttached(const std::string& scriptVirtualPath) {
+	if (scriptVirtualPath.empty()) return;
+
+	if (IsScriptLoadedElsewhere(scriptVirtualPath)) {
+		return;
+	}
+
+	std::filesystem::path absPath = FileManager::getInstance().VirtualToAbsolute(scriptVirtualPath);
+	std::error_code ec;
+	auto currentWriteTime = std::filesystem::last_write_time(absPath, ec);
+	if (ec) return;
+
+	auto it = scriptWriteTimes.find(scriptVirtualPath);
+	if (it != scriptWriteTimes.end() && it->second == currentWriteTime) {
+		return;
+	}
+
+	InvalidateCachedModule(scriptVirtualPath);
+	scriptWriteTimes[scriptVirtualPath] = currentWriteTime;
+}
+
+bool ScriptManager::IsScriptLoadedElsewhere(const std::string& scriptVirtualPath) const {
+	for (auto& obj : ObjectManager::getInstance().allObjects) {
+		for (auto& comp : obj->components) {
+			if (auto* script = dynamic_cast<ScriptComponent*>(comp.get())) {
+				if (script->IsLoaded() && script->GetSourcePath() == scriptVirtualPath) {
+					return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+
+void ScriptManager::InvalidateCachedModule(const std::string& scriptVirtualPath) {
+	if (!Py_IsInitialized()) return;
+
+	py::gil_scoped_acquire gil;
+	std::string moduleName = VirtualPathToModuleName(scriptVirtualPath);
+
+	py::object sysModule = py::module_::import("sys");
+	py::dict sysModules = sysModule.attr("modules");
+	if (sysModules.contains(moduleName)) {
+		sysModules.attr("pop")(moduleName, py::none());
+	}
 }
 
 void ScriptManager::ReloadAllRegisteredScripts() {
@@ -467,6 +520,7 @@ void ScriptManager::ReloadAllRegisteredScripts() {
 
 void ScriptManager::ClearRegisteredScripts() {
 	registeredScripts.clear();
+	scriptWriteTimes.clear();
 }
 
 void ScriptManager::RunAllScriptsLoad() {

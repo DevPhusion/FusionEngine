@@ -62,6 +62,9 @@ std::string ScriptComponent::GetDisplayName() {
 
 void ScriptComponent::SetSourcePath(std::string path) {
 	sourcePath = path;
+	if (!sourcePath.empty()) {
+		ScriptManager::getInstance().NotifyScriptAttached(sourcePath);
+	}
 	Unload(); 
 }
 

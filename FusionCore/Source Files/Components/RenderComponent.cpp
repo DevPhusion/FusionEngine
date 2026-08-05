@@ -487,6 +487,8 @@ void RenderComponent::UpdateShape(std::vector<float> vertices, std::vector<unsig
 		}
 	}
 
+
+
 	glBindVertexArray(this->VAO);
 	glBindBuffer(GL_ARRAY_BUFFER, this->VBO);
 	glBufferData(GL_ARRAY_BUFFER, Vertices.size() * sizeof(float), Vertices.data(), GL_STATIC_DRAW);

@@ -52,6 +52,8 @@ public:
 	void RenameRegisteredScript(const std::string& oldVirtualPath, const std::string& newVirtualPath);
 	void ClearRegisteredScripts();
 
+	void NotifyScriptAttached(const std::string& scriptVirtualPath);
+
 	bool SetupPythonEnvironment(const std::string& projectDirectory);
 
 	void Update();
@@ -67,6 +69,12 @@ private:
 	ScriptManager() = default;
 	~ScriptManager();
 
+	std::unordered_map<std::string, std::filesystem::file_time_type> scriptWriteTimes;
+	std::chrono::steady_clock::time_point nextGlobalFileCheckTime{};
+	static constexpr std::chrono::milliseconds kGlobalFileWatchInterval{ 500 };
+
+	bool IsScriptLoadedElsewhere(const std::string& scriptVirtualPath) const;
+	void InvalidateCachedModule(const std::string& scriptVirtualPath);
 	void ReloadAllRegisteredScripts();
 
 	void RunBackgroundSetup();

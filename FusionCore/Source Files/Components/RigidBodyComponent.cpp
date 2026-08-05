@@ -117,25 +117,9 @@ void RigidBodyComponent::ProcessInspectorUI() {
 	if (ImGui::InputFloat2("##Net Force", force, "%.3f N")) {
 		this->netForce = glm::vec3(force[0], force[1], 0);
 	}
-
-	ImGuiTreeNodeFlags root_flags = ImGuiTreeNodeFlags_OpenOnArrow |
-		ImGuiTreeNodeFlags_OpenOnDoubleClick |
-		ImGuiTreeNodeFlags_SpanAvailWidth |
-		ImGuiTreeNodeFlags_DefaultOpen;
-
-	if (ImGui::TreeNodeEx("Forces", root_flags)) {
-		for (int i = 0; i < forceDisplayFunc.size(); i++)
-		{
-			(*forceDisplayFunc[i])(i);
-		}
-
-		ImGui::TreePop();
-	}
 }
 
 void RigidBodyComponent::OnDelete() {
-	PhysicsEngine::getInstance().UnRegisterAllForce(parent);
-	forceDisplayFunc.clear();
 	MouseInteractComponent* mc = parent->GetComponent<MouseInteractComponent>();
 	if (mc) mc->physicsInteract = false;
 }
@@ -143,6 +127,10 @@ void RigidBodyComponent::OnDelete() {
 void RigidBodyComponent::IntegrateVelocities(float delta) {
 	if (!Enabled) {
 		return;
+	}
+
+	if (isDragging) {
+		ProcessDragForce();
 	}
 
 	glm::vec3 resultingAcc = acceleration;
@@ -187,6 +175,25 @@ void RigidBodyComponent::IntegratePositions(float delta) {
 void RigidBodyComponent::ClearAccumulators() {
 	netForce = glm::vec3(0);
 	Torque = 0.0f;
+}
+
+void RigidBodyComponent::ProcessDragForce() {
+	TransformComponent* trans = parent->GetComponent<TransformComponent>();
+
+	float scaledK = 150.0f * (1.0f / inverseMass);
+	float scaledC = 24.7f * (1.0f / inverseMass);
+
+	// project to model space
+	glm::vec3 modelPos = trans->GetTransformedPoint(glm::vec3(InputManager::glX, InputManager::glY, 0), true);
+
+	// project to world space
+	glm::vec3 mouseWorldPos = trans->ProjectToWorld(modelPos);
+	glm::vec3 objWorldPos = trans->GetWorldPosition();
+
+	glm::vec3 displacement = mouseWorldPos - objWorldPos;
+	glm::vec3 dragForce = (scaledK * displacement) - (scaledC * velocity);
+
+	AddForce(dragForce);
 }
 
 void RigidBodyComponent::AddForce(glm::vec3 force) {
@@ -242,18 +249,5 @@ void RigidBodyComponent::CalculateInertia() {
 	this->Inertia = sum;
 	if (Inertia > 0) {
 		this->inverseInertia = 1.0f / Inertia;
-	}
-}
-
-void RigidBodyComponent::AddDisplayFunc(std::shared_ptr<std::function<void(int)>> func) {
-	forceDisplayFunc.push_back(func);
-}
-
-void RigidBodyComponent::RemoveDisplayFunc(std::shared_ptr<std::function<void(int)>> func) {
-	for (int i = 0; i < forceDisplayFunc.size(); i++)
-	{
-		if (forceDisplayFunc[i] == func) {
-			forceDisplayFunc.erase(forceDisplayFunc.begin() + i);
-		}
 	}
 }

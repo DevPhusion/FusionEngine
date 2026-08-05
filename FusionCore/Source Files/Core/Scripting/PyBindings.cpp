@@ -1202,34 +1202,201 @@ namespace {
 						std::string("collision enter callback error: ") + e.what());
 				}
 				});
-	}, py::arg("callback"), "Fires once on the frame a collision first begins.")
-	.def("remove_collision_enter_callback", &CollisionComponent::RemoveCollisionEnterCallback, py::arg("id"))
+		}, py::arg("callback"), "Fires once on the frame a collision first begins.")
+		.def("remove_collision_enter_callback", &CollisionComponent::RemoveCollisionEnterCallback, py::arg("id"))
 
-	.def("add_collision_exit_callback", [](CollisionComponent& self, py::function func) {
-		return self.AddCollisionExitCallback([func](const CollisionEventData& data) {
-			py::gil_scoped_acquire gil;
-			try { func(data); }
-			catch (const py::error_already_set& e) {
-				Console::AddMessage(Console::MessageType::Error,
-					std::string("collision exit callback error: ") + e.what());
-			}
-			});
-	}, py::arg("callback"), "Fires once on the frame a collision stops.")
-	.def("remove_collision_exit_callback", &CollisionComponent::RemoveCollisionExitCallback, py::arg("id"));
-			EnableGetComponent<CollisionComponent>(collisionClass);
-			EnableHasComponent<CollisionComponent>(collisionClass);
-			RegisterComponentGetter<CollisionComponent>(collisionClass);
-			EnableGetOwner<CollisionComponent>(collisionClass);
-			RegisterComponentRemover<CollisionComponent>(collisionClass);
-			RegisterComponentAdder<CollisionComponent>(collisionClass,
-				[](Object& obj) {
-					return std::make_unique<CollisionComponent>(&obj);
+		.def("add_collision_exit_callback", [](CollisionComponent& self, py::function func) {
+			return self.AddCollisionExitCallback([func](const CollisionEventData& data) {
+				py::gil_scoped_acquire gil;
+				try { func(data); }
+				catch (const py::error_already_set& e) {
+					Console::AddMessage(Console::MessageType::Error,
+						std::string("collision exit callback error: ") + e.what());
+				}
 				});
-			EnableAddComponent<CollisionComponent>(collisionClass);
-			EnableRemoveComponent<CollisionComponent>(collisionClass);
-			EnableAddObject<CollisionComponent>(collisionClass);
-			EnableAddChild<CollisionComponent>(collisionClass);
-			EnableRemoveObject<CollisionComponent>(collisionClass);
+		}, py::arg("callback"), "Fires once on the frame a collision stops.")
+		.def("remove_collision_exit_callback", &CollisionComponent::RemoveCollisionExitCallback, py::arg("id"));
+		EnableGetComponent<CollisionComponent>(collisionClass);
+		EnableHasComponent<CollisionComponent>(collisionClass);
+		RegisterComponentGetter<CollisionComponent>(collisionClass);
+		EnableGetOwner<CollisionComponent>(collisionClass);
+		RegisterComponentRemover<CollisionComponent>(collisionClass);
+		RegisterComponentAdder<CollisionComponent>(collisionClass,
+			[](Object& obj) {
+				return std::make_unique<CollisionComponent>(&obj);
+			});
+		EnableAddComponent<CollisionComponent>(collisionClass);
+		EnableRemoveComponent<CollisionComponent>(collisionClass);
+		EnableAddObject<CollisionComponent>(collisionClass);
+		EnableAddChild<CollisionComponent>(collisionClass);
+		EnableRemoveObject<CollisionComponent>(collisionClass);
+
+		auto softBodyClass = py::class_<SoftBodyComponent>(m, "SoftBodyComponent")
+			.def_property("enable",
+				[](SoftBodyComponent& self) { return self.Enabled; },
+				[](SoftBodyComponent& self, bool enable) { self.SetEnabled(enable); })
+			.def("set_enable", &SoftBodyComponent::SetEnabled)
+
+			.def_property("mass",
+				[](SoftBodyComponent& self) { return 1.0f / self.inverseMass; },
+				[](SoftBodyComponent& self, float mass) {
+					if (mass <= 0.0f) return;
+					self.inverseMass = 1.0f / mass;
+					float unitInvMass = (float)self.MassAggregate.size() / mass;
+					for (int i = 0; i < self.MassAggregate.size(); i++)
+						self.MassAggregate[i]->inverseMass = unitInvMass;
+					EngineManager::getInstance().EngineChangeEvent();
+				})
+			.def("set_mass", [](SoftBodyComponent& self, float mass) {
+			if (mass <= 0.0f) return;
+			self.inverseMass = 1.0f / mass;
+			float unitInvMass = (float)self.MassAggregate.size() / mass;
+			for (int i = 0; i < self.MassAggregate.size(); i++)
+				self.MassAggregate[i]->inverseMass = unitInvMass;
+			EngineManager::getInstance().EngineChangeEvent();
+				}, py::arg("mass"))
+
+			.def_property("inverse_mass",
+				[](SoftBodyComponent& self) { return self.inverseMass; },
+				[](SoftBodyComponent& self, float invMass) {
+					self.inverseMass = invMass;
+					float unitInvMass = invMass * (float)self.MassAggregate.size();
+					for (int i = 0; i < self.MassAggregate.size(); i++)
+						self.MassAggregate[i]->inverseMass = unitInvMass;
+					EngineManager::getInstance().EngineChangeEvent();
+				})
+			.def("set_inverse_mass", [](SoftBodyComponent& self, float invMass) {
+			self.inverseMass = invMass;
+			float unitInvMass = invMass * (float)self.MassAggregate.size();
+			for (int i = 0; i < self.MassAggregate.size(); i++)
+				self.MassAggregate[i]->inverseMass = unitInvMass;
+			EngineManager::getInstance().EngineChangeEvent();
+				}, py::arg("inverse_mass"))
+
+			.def_property("velocity",
+				[](SoftBodyComponent& self) { return self.velocity; },
+				[](SoftBodyComponent& self, glm::vec3 v) {
+					self.velocity = v;
+					if (self.CenterPM) self.CenterPM->velocity = v;
+					EngineManager::getInstance().EngineChangeEvent();
+				})
+			.def("set_velocity", [](SoftBodyComponent& self, glm::vec3 v) {
+			self.velocity = v;
+			if (self.CenterPM) self.CenterPM->velocity = v;
+			EngineManager::getInstance().EngineChangeEvent();
+				}, py::arg("velocity"))
+
+			.def_property_readonly("acceleration", [](SoftBodyComponent& self) {
+			if (!self.CenterPM) return glm::vec3(0.0f);
+			return self.CenterPM->baseAcceleration + self.CenterPM->acceleration;
+				},
+				"Current acceleration of the center point mass (gravity + accumulated forces)")
+
+			.def_property("stiffness",
+				[](SoftBodyComponent& self) { return self.stiffness; },
+				[](SoftBodyComponent& self, float s) {
+					self.stiffness = s;
+					float compliance = (s > 0.0f) ? (1.0f / s) : 0.0f;
+					for (auto* spring : self.springs) spring->compliance = compliance;
+					EngineManager::getInstance().EngineChangeEvent();
+				})
+			.def("set_stiffness", [](SoftBodyComponent& self, float s) {
+			self.stiffness = s;
+			float compliance = (s > 0.0f) ? (1.0f / s) : 0.0f;
+			for (auto* spring : self.springs) spring->compliance = compliance;
+			EngineManager::getInstance().EngineChangeEvent();
+				}, py::arg("stiffness"))
+
+			.def_property("damping",
+				[](SoftBodyComponent& self) { return self.damping; },
+				[](SoftBodyComponent& self, float d) {
+					self.damping = d;
+					for (auto* spring : self.springs) spring->damping = d;
+					EngineManager::getInstance().EngineChangeEvent();
+				})
+			.def("set_damping", [](SoftBodyComponent& self, float d) {
+			self.damping = d;
+			for (auto* spring : self.springs) spring->damping = d;
+			EngineManager::getInstance().EngineChangeEvent();
+				}, py::arg("damping"))
+
+			.def_property("gas_pressure_enabled",
+				[](SoftBodyComponent& self) { return self.useGasPressure; },
+				[](SoftBodyComponent& self, bool enabled) {
+					self.useGasPressure = enabled;
+					EngineManager::getInstance().EngineChangeEvent();
+					self.RebuildMassAggregate();
+				})
+			.def("set_gas_pressure_enabled", [](SoftBodyComponent& self, bool enabled) {
+			self.useGasPressure = enabled;
+			EngineManager::getInstance().EngineChangeEvent();
+			self.RebuildMassAggregate();
+				}, py::arg("enabled"),
+					"Toggling this rebuilds the mass aggregate, same as the inspector checkbox")
+
+			.def_property("gas_amount",
+				[](SoftBodyComponent& self) { return self.gasAmount; },
+				[](SoftBodyComponent& self, float amount) {
+					self.gasAmount = amount;
+					EngineManager::getInstance().EngineChangeEvent();
+				})
+			.def("set_gas_amount", [](SoftBodyComponent& self, float amount) {
+			self.gasAmount = amount;
+			EngineManager::getInstance().EngineChangeEvent();
+				}, py::arg("gas_amount"))
+				.def_property_readonly("point_mass_count", [](SoftBodyComponent& self) {
+					return self.MassAggregate.size();
+			})
+
+			.def("get_point_mass", [](SoftBodyComponent& self, int index) -> PointMass* {
+				if (index < 0 || index >= (int)self.MassAggregate.size())
+					throw py::index_error("get_point_mass: index out of range");
+				return self.MassAggregate[index].get();
+			}, py::arg("index"), py::return_value_policy::reference,
+				"Get a point mass by index. Index (size - 1) is always the center point mass.")
+
+				.def_property_readonly("mass_aggregate", [](SoftBodyComponent& self) {
+					std::vector<PointMass*> result;
+					result.reserve(self.MassAggregate.size());
+					for (auto& pm : self.MassAggregate) result.push_back(pm.get());
+					return result;
+			}, py::return_value_policy::reference,
+			"All point masses in this soft body, in order (the last one is always the center)")
+
+			.def_property_readonly("center_point_mass", [](SoftBodyComponent& self) -> PointMass* {
+				return self.CenterPM;
+			}, py::return_value_policy::reference)
+
+			.def("add_force", &SoftBodyComponent::AddForce, py::arg("force"),
+				"Apply a uniform force across every point mass in the soft body")
+			.def("add_force_at_center", &SoftBodyComponent::AddForceAtCenter, py::arg("force"),
+				"Apply a force to the center point mass only")
+			.def("add_force_at_world_point", &SoftBodyComponent::AddForceAtWorldPoint,
+				py::arg("force"), py::arg("point"),
+				"Apply a force distributed across the point masses nearest the given world-space point")
+			.def("add_force_at_local_point", &SoftBodyComponent::AddForceAtLocalPoint,
+				py::arg("force"), py::arg("point"),
+				"Apply a force distributed across the point masses nearest the given local/model-space point")
+
+			.def("add_point_mass", [](SoftBodyComponent& self, glm::vec3 localPoint) {
+			self.AddPointMass(localPoint);
+				}, py::arg("local_point"),
+					"Add a new point mass at the given local/model position");
+
+		EnableGetComponent<SoftBodyComponent>(softBodyClass);
+		EnableHasComponent<SoftBodyComponent>(softBodyClass);
+		RegisterComponentGetter<SoftBodyComponent>(softBodyClass);
+		EnableGetOwner<SoftBodyComponent>(softBodyClass);
+		RegisterComponentRemover<SoftBodyComponent>(softBodyClass);
+		RegisterComponentAdder<SoftBodyComponent>(softBodyClass,
+			[](Object& obj) {
+				return std::make_unique<SoftBodyComponent>(&obj);
+			});
+		EnableAddComponent<SoftBodyComponent>(softBodyClass);
+		EnableRemoveComponent<SoftBodyComponent>(softBodyClass);
+		EnableAddObject<SoftBodyComponent>(softBodyClass);
+		EnableAddChild<SoftBodyComponent>(softBodyClass);
+		EnableRemoveObject<SoftBodyComponent>(softBodyClass);
 	}
 
 	Object* CreateDefaultObject() {
@@ -1277,6 +1444,8 @@ namespace {
 					"Look up a component on this Object")
 			.def("add_component", &AddComponentToObject, py::arg("component"),
 				"Attach a component instance to this Object, e.g. obj.add_component(RenderComponent)")
+			.def("has_component", &HasComponentOnObject, py::arg("component"),
+				"Check if this Object has a component of the given type, e.g. obj.has_component(RenderComponent)")
 			.def("remove_component", &RemoveComponentFromObject, py::arg("component_class"),
 				"Remove a component of the given type from this Object, e.g. obj.remove_component(RenderComponent)")
 			.def("add_object", [](Object&, Object* obj, Object* parent) {
@@ -1294,6 +1463,72 @@ namespace {
 				}, py::arg("obj"),
 					"Remove an object from the scene");
 
+		py::class_<PointMass>(m, "PointMass")
+			.def_property_readonly("index", [](PointMass& self) { return self.index; })
+			.def_property_readonly("is_center", [](PointMass& self) { return self.isCenter; })
+
+			.def_property_readonly("soft_body", [](PointMass& self) -> SoftBodyComponent* {
+			return self.sb;
+				}, py::return_value_policy::reference,
+				"The SoftBodyComponent this point mass belongs to")
+
+			.def_property("point_radius",
+				[](PointMass& self) { return self.pointRadius; },
+				[](PointMass& self, float r) { self.pointRadius = r; })
+			.def("set_point_radius", [](PointMass& self, float r) { self.pointRadius = r; },
+				py::arg("point_radius"))
+
+			.def_property_readonly("local_pos", [](PointMass& self) { return self.localPos; },
+				"Rest position in the parent object's local/model space")
+
+			.def_property("world_pos",
+				[](PointMass& self) { return self.worldPos; },
+				[](PointMass& self, glm::vec3 pos) { self.UpdateWorldPosition(pos); })
+			.def("get_world_position", &PointMass::GetWorldPosition)
+			.def("update_world_position", &PointMass::UpdateWorldPosition, py::arg("position"),
+				"Move this point mass to a new world position immediately (bypasses springs)")
+
+			.def_property("velocity",
+				[](PointMass& self) { return self.velocity; },
+				[](PointMass& self, glm::vec3 v) { self.velocity = v; })
+			.def("set_velocity", [](PointMass& self, glm::vec3 v) { self.velocity = v; },
+				py::arg("velocity"))
+
+			.def_property_readonly("acceleration", [](PointMass& self) {
+			return self.baseAcceleration + self.acceleration;
+				},
+				"Total acceleration this frame (gravity/base + accumulated forces)")
+
+			.def_property("base_acceleration",
+				[](PointMass& self) { return self.baseAcceleration; },
+				[](PointMass& self, glm::vec3 a) { self.baseAcceleration = a; },
+				"Persistent acceleration such as gravity, e.g. Vector3(0, -9.8, 0)")
+			.def("set_base_acceleration", [](PointMass& self, glm::vec3 a) { self.baseAcceleration = a; },
+				py::arg("base_acceleration"))
+
+			.def_property("mass",
+				[](PointMass& self) { return 1.0f / self.inverseMass; },
+				[](PointMass& self, float mass) { if (mass > 0.0f) self.inverseMass = 1.0f / mass; })
+			.def("set_mass", [](PointMass& self, float mass) {
+			if (mass > 0.0f) self.inverseMass = 1.0f / mass;
+				}, py::arg("mass"))
+
+			.def_property("inverse_mass",
+				[](PointMass& self) { return self.inverseMass; },
+				[](PointMass& self, float invMass) { self.inverseMass = invMass; })
+			.def("set_inverse_mass", [](PointMass& self, float invMass) { self.inverseMass = invMass; },
+				py::arg("inverse_mass"))
+
+			.def("add_force", [](PointMass& self, glm::vec3 force) {
+			self.acceleration += force * self.inverseMass;
+				}, py::arg("force"),
+					"Apply a force directly to this point mass for the current frame")
+
+			.def("__repr__", [](PointMass& self) {
+			std::ostringstream ss;
+			ss << "PointMass(index=" << self.index << ", is_center=" << (self.isCenter ? "True" : "False") << ")";
+			return ss.str();
+				});
 	}
 
 	void ResetDynamicComponentRegistriesImpl() {

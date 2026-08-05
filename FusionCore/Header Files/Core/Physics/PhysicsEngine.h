@@ -3,7 +3,6 @@
 #include "../../Components/RigidBodyComponent.h"
 #include "../../Components/FractureComponent.h"
 #include "../../Components/CollisionComponent.h"
-#include "Forces/ForceGenerator.h"
 #include "Collision/BAHNode.h"
 #include "Collision/DebugPoint.h"
 #include "Constraint/PGSConstraint/Constraint.h"
@@ -206,14 +205,6 @@ struct RayCastHit {
 
 class PhysicsEngine
 {
-protected:
-	struct ForceRegistration {
-		Object* object;
-		ForceGenerator* fg;
-	};
-
-	typedef std::vector<ForceRegistration> Registry;
-	Registry ForceRegistrations;
 public:
 	PhysicsEngine(const PhysicsEngine&) = delete;
 	void operator=(const PhysicsEngine&) = delete;
@@ -225,11 +216,6 @@ public:
 
 	void Setup(std::vector<std::unique_ptr<Object>>* objects);
 	void ProcessPhysics(float delta);
-	//Force
-	void RegisterForce(Object* object, ForceGenerator* fg);
-	void UnRegisterForce(Object* object, ForceGenerator* fg);
-	void UnRegisterAllForce(Object* object);
-	void ClearRegistry();
 
 	//Collision detection and resolution
 	std::vector<ContactPoint> allContactPoints;

@@ -10,12 +10,14 @@ public:
 	RigidBodyComponent(Object* parent);
 	RigidBodyComponent() = default;
 
+	//Dragging
+	bool isDragging = false;
+
 	//For UI display
 	glm::vec2 netForceDisplay = glm::vec3(0);
 	glm::vec2 netAcceleration = glm::vec3(0);
 	float torqueDisplay = 0;
 	float angularAcceleration = 0;
-	std::vector<std::shared_ptr<std::function<void(int)>>> forceDisplayFunc;
 
 	//Physics process
 	glm::vec3 velocity = glm::vec3(0);
@@ -41,11 +43,10 @@ public:
 	void IntegrateVelocities(float delta);
 	void IntegratePositions(float delta);
 	void ClearAccumulators();
+	void ProcessDragForce();
 	void AddForce(glm::vec3 force);
 	void AddForceAtBodyPoint(glm::vec3 force, glm::vec3 point); // point is in model space
 	void AddForceAtPoint(glm::vec3 force, glm::vec3 point); // point is in world space
 	void CalculateInertia();
-	void AddDisplayFunc(std::shared_ptr<std::function<void(int)>> func);
-	void RemoveDisplayFunc(std::shared_ptr<std::function<void(int)>> func);
 };
 
