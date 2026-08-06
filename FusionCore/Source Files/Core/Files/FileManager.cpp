@@ -499,7 +499,6 @@ void FileManager::LoadProjectFromFile(const std::string& path) {
 		constraint->SetObjectB(PhysicsEngine::getInstance().GetBodyFromObject(b));
 		constraint->Deserialize(r);
 		a->GetComponent<ConstraintComponent>()->AddConstraint(constraint);
-		constraint->ProcessConstraintDisplay();
 	}
 
 	for (auto& obj : ObjectManager::getInstance().allObjects) {

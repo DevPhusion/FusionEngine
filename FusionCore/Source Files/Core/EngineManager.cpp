@@ -59,6 +59,7 @@ void EngineManager::LoadEngineState() {
 		toRemove.push_back(obj.get());
 	for (Object* obj : toRemove)
 		ObjectManager::getInstance().RemoveObject(obj);
+	Renderer::getInstance().constraintEditGizmos->registeredConstraints.clear();
 	ObjectManager::getInstance().allObjects.clear();
 
 	for (int i = 0; i < SavedState.Objects.size(); i++)
@@ -91,13 +92,18 @@ void EngineManager::LoadEngineState() {
 
 		if (!a->HasComponent<ConstraintComponent>())
 			a->AddComponent(std::make_unique<ConstraintComponent>(a));
+		glm::vec3 attachPointA = constraint->attachPointA;
+		bool useACenter = constraint->UseCenterA();
+		glm::vec3 attachPointB = constraint->attachPointB;
+		bool useBCenter = constraint->UseCenterB();
 		constraint->SetObjectA(PhysicsEngine::getInstance().GetBodyFromObject(a));
 		constraint->SetObjectB(PhysicsEngine::getInstance().GetBodyFromObject(b));
-		constraint->constraintDisplay = constraint->CreateConstraintDisplay();
+		Renderer::getInstance().constraintEditGizmos->RegisterConstraint(constraint.get());
 		a->GetComponent<ConstraintComponent>()->AddConstraint(constraint);
-		constraint->ProcessConstraintDisplay();
-
-
+		constraint->attachPointA = attachPointA;
+		constraint->attachPointB = attachPointB;
+		constraint->useCenterA = useACenter;
+		constraint->useCenterB = useBCenter;
 	}
 	SavedState.Constraints.clear();
 
@@ -139,7 +145,7 @@ void EngineManager::SerializeEngineSettings(BinaryWriter& w) {
 	w.Write(s.drawBackgroundGrid);
 	w.Write(s.drawObjectWireframe);
 	w.Write(s.drawBroadPhaseBounds);
-	w.Write(s.colorCollisions);
+	w.Write(s.drawCollisionShapes);
 	w.Write(s.drawCollisionNormals);
 	w.Write(s.drawContactPoints);
 	w.Write(s.drawSoftBodyPointMasses);
@@ -161,7 +167,7 @@ void EngineManager::DeserializeEngineSettings(BinaryReader& r) {
 	s.drawBackgroundGrid = r.Read<bool>();
 	s.drawObjectWireframe = r.Read<bool>();
 	s.drawBroadPhaseBounds = r.Read<bool>();
-	s.colorCollisions = r.Read<bool>();
+	s.drawCollisionShapes = r.Read<bool>();
 	s.drawCollisionNormals = r.Read<bool>();
 	s.drawContactPoints = r.Read<bool>();
 	s.drawSoftBodyPointMasses = r.Read<bool>();

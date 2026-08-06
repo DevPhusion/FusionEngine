@@ -1,4 +1,5 @@
 #include "../../../../../Header Files/Core/Physics/Constraint/PGSConstraint/SpringConstraint.h"
+#include "../../../../../Header Files/Core/Rendering/Renderer.h"
 
 SpringConstraint::SpringConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB,
 	float length, float stiffness, float damping) :
@@ -130,75 +131,41 @@ void GenerateSegment(glm::vec2 start, glm::vec2 end, float thickness,
 	indices.push_back(vertexOffset + 3);
 }
 
-void SpringConstraint::ProcessConstraintDisplay() {
-	Object* topObject = objectA.obj;
-	Object* bottomObject = objectB.obj;
+void SpringConstraint::DrawConstraintGizmo() {
+	if (objectA.obj == nullptr || objectB.obj == nullptr) return;
 
-	RenderComponent* rc = constraintDisplay->GetComponent<RenderComponent>();
-	TransformComponent* tc = constraintDisplay->GetComponent<TransformComponent>();
+	glm::vec3 top = GetAttachWorldA();
+	glm::vec3 bot = GetAttachWorldB();
 
-	if (topObject == nullptr || bottomObject == nullptr || !canDrawConstraint) {
-		rc->SetEnabled(false);
-		return;
-	}
-
-	glm::vec2 topVert = glm::vec2(0);
-	glm::vec2 botVert = glm::vec2(0);
-
-	// Project world -> screen
-	glm::vec3 top = objectA.obj->GetComponent<TransformComponent>()->GetTransformedPoint(attachPointA);
-	topVert = tc->GetTransformedPoint(top, true);
-	//Project world -> screen
-	glm::vec3 bot = objectB.obj->GetComponent<TransformComponent>()->GetTransformedPoint(attachPointB);
-	botVert = tc->GetTransformedPoint(bot, true);
-	std::vector<float> vertices = {};
-
-	std::vector<unsigned int> indices = {};
-
-	int segmentsCount = 10;
-	float thickness = 0.01f;
-	float amplitude = 0.05f;
-
-
-	glm::vec2 axis = botVert - topVert;
+	glm::vec3 axis = bot - top;
 	float totalLength = glm::length(axis);
+	if (totalLength < 0.0001f) return;
 
-	if (totalLength > 0.0001f) {
-		glm::vec2 dir = axis / totalLength;
+	const int segmentsCount = 10;
+	const float amplitude = 0.5f;
+	const float thickness = 6.0f;
+	const glm::vec4 color = glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
 
-		glm::vec2 perp = glm::vec2(-dir.y, dir.x);
+	glm::vec3 dir = axis / totalLength;
+	glm::vec3 perp = glm::vec3(-dir.y, dir.x, 0.0f);
 
-		std::vector<glm::vec2> springPoints;
-		springPoints.push_back(topVert);
+	std::vector<glm::vec3> springPoints;
+	springPoints.push_back(top);
 
-		for (int i = 1; i < segmentsCount; i++) {
-			float t = (float)i / (float)segmentsCount;
-
-			glm::vec2 basePoint = topVert + dir * (totalLength * t);
-
-			float sideSign = (i % 2 == 1) ? 1.0f : -1.0f;
-
-			glm::vec2 zigZagPoint = basePoint + perp * (amplitude * sideSign);
-			springPoints.push_back(zigZagPoint);
-		}
-
-		springPoints.push_back(botVert);
-
-		for (size_t i = 0; i < springPoints.size() - 1; i++) {
-			GenerateSegment(springPoints[i], springPoints[i + 1], thickness, vertices, indices);
-		}
+	for (int i = 1; i < segmentsCount; i++) {
+		float t = (float)i / (float)segmentsCount;
+		glm::vec3 basePoint = top + dir * (totalLength * t);
+		float sideSign = (i % 2 == 1) ? 1.0f : -1.0f;
+		springPoints.push_back(basePoint + perp * (amplitude * sideSign));
 	}
 
+	springPoints.push_back(bot);
 
-	rc->UpdateShape(vertices, indices);
-
-	if (objectA.obj != nullptr && objectB.obj != nullptr) {
-		rc->SetEnabled(true);
-	}
-	else {
-		rc->SetEnabled(false);
+	for (size_t i = 0; i < springPoints.size() - 1; i++) {
+		Renderer::getInstance().DrawLine(springPoints[i], springPoints[i + 1], color, thickness);
 	}
 }
+
 
 std::shared_ptr<Constraint> SpringConstraint::Clone() {
 	std::shared_ptr<SpringConstraint> constraint = std::make_shared<SpringConstraint>(PhysicsBody(), PhysicsBody(), attachPointA, attachPointB, length, stiffness, damping);

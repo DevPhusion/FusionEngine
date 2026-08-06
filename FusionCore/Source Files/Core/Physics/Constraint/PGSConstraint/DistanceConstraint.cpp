@@ -1,4 +1,5 @@
 #include "../../../../../Header Files/Core/Physics/Constraint/PGSConstraint/DistanceConstraint.h"
+#include "../../../../../Header Files/Core/Rendering/Renderer.h"
 
 DistanceConstraint::DistanceConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB, 
 	float distance, bool extendable, bool retractable) :
@@ -77,69 +78,15 @@ void DistanceConstraint::ProcessInspectorUI(Object* parent) {
 	ImGui::Checkbox("##Extendable ", &extendable);
 }
 
-void DistanceConstraint::ProcessConstraintDisplay() {
-	if (!constraintDisplay) return;
-	RenderComponent* rc = constraintDisplay->GetComponent<RenderComponent>();
-	TransformComponent* tc = constraintDisplay->GetComponent<TransformComponent>();
-	if (objectA.obj == nullptr || objectB.obj == nullptr || !canDrawConstraint) {
-		rc->SetEnabled(false);
-		return;
-	}
-
-	glm::vec2 topVert = glm::vec2(0);
-	glm::vec2 botVert = glm::vec2(0);
-
-	glm::vec3 top = objectA.obj->GetComponent<TransformComponent>()->GetTransformedPoint(attachPointA);
-	topVert = tc->GetTransformedPoint(top, true);
-	//Project world -> screen
-	glm::vec3 bot = objectB.obj->GetComponent<TransformComponent>()->GetTransformedPoint(attachPointB);
-	botVert = tc->GetTransformedPoint(bot, true);
-	std::vector<float> vertices = {};
-
-	std::vector<unsigned int> indices = {};
-
-	float thickness = 0.01f;
-
-	glm::vec2 dir = botVert - topVert;
-
-	float length = glm::length(dir);
-	if (length < 0.0001f) return;
-
-	float nx = -dir.y / length;
-	float ny = dir.x / length;
-
-	float halfThickness = thickness * 0.5f;
-	float offsetX = nx * halfThickness;
-	float offsetY = ny * halfThickness;
-
-	unsigned int vertexOffset = vertices.size() / 5;
-
-	vertices.insert(vertices.end(), { topVert.x + offsetX, topVert.y + offsetY, 0.0f, 0.0f, 0.0f });
-	vertices.insert(vertices.end(), { botVert.x + offsetX, botVert.y + offsetY,   0.0f, 1.0f, 0.0f });
-	vertices.insert(vertices.end(), { topVert.x - offsetX, topVert.y - offsetY, 0.0f, 0.0f, 1.0f });
-	vertices.insert(vertices.end(), { botVert.x - offsetX, botVert.y - offsetY,   0.0f, 1.0f, 1.0f });
-
-	indices.push_back(vertexOffset + 0);
-	indices.push_back(vertexOffset + 2);
-	indices.push_back(vertexOffset + 1);
-
-	indices.push_back(vertexOffset + 1);
-	indices.push_back(vertexOffset + 2);
-	indices.push_back(vertexOffset + 3);
-
-	rc->UpdateShape(vertices, indices);
-
-	if (objectA.obj != nullptr && objectB.obj != nullptr) {
-		rc->SetEnabled(true);
-	}
-	else {
-		rc->SetEnabled(false);
-	}
+void DistanceConstraint::DrawConstraintGizmo() {
+	if (objectA.obj == nullptr || objectB.obj == nullptr) return;
+	DrawConstraintLine(glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), 6.0f);
 }
 
 std::shared_ptr<Constraint> DistanceConstraint::Clone() {
 	std::shared_ptr<DistanceConstraint> constraint = std::make_shared<DistanceConstraint>(PhysicsBody(), PhysicsBody(), attachPointA, attachPointB, distance, retractable, extendable);
 	constraint->CopyBaseFieldsFrom(this);
+	Renderer::getInstance().constraintEditGizmos->UnregisterConstraint(constraint.get());
 	return constraint;
 }
 

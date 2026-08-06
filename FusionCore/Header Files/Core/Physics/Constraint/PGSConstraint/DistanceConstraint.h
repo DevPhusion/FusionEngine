@@ -11,7 +11,7 @@ public:
 	bool extendable;
 	bool retractable;
 
-	virtual void ProcessConstraintDisplay();
+	virtual void DrawConstraintGizmo();
 	virtual void Prepare(std::vector<SolverRow>& rows, float delta);
 	virtual void ProcessInspectorUI(Object* parent);
 	virtual std::shared_ptr<Constraint> Clone();

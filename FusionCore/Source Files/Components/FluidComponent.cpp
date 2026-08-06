@@ -33,6 +33,85 @@ void FluidComponent::ClearParticles() {
 	particles.clear();
 }
 
+FluidParticle* FluidComponent::AddParticle(glm::vec3 worldPosition) {
+	FluidParticle* p = new FluidParticle();
+	p->parent = parent;
+	p->position = worldPosition;
+	p->predictedPosition = worldPosition;
+	p->velocity = glm::vec3(0.0f);
+	p->collisionRadius = collisionRadius;
+	p->mass = particleMass;
+	p->invMass = particleMass > 0.0f ? 1.0f / particleMass : 0.0f;
+	p->restDensity = restDensity;
+	p->viscosity = viscosity;
+	p->lambda = 0.0f;
+	p->vorticityEps = vorticityStrength;
+	p->epsilon = epsilon;
+	p->smoothingRadius = smoothingRadius;
+	p->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(smoothingRadius);
+	p->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(smoothingRadius);
+	p->density = 0.0f;
+
+	CollisionComponent* cc = parent->GetComponent<CollisionComponent>();
+	if (cc) {
+		p->collisionLayer = cc->collisionLayer;
+		p->collisionMask = cc->collisionMask;
+	}
+
+	PhysicsEngine::getInstance().allFluidParticles.push_back(p);
+	particles.push_back(p);
+
+	ResizeInstanceBuffer();
+	return p;
+}
+
+std::vector<FluidParticle*> FluidComponent::AddParticles(Shape shape, int particleCount) {
+	std::vector<FluidParticle*> added;
+	particleCount = std::max(1, particleCount);
+
+	glm::vec3 boundsMin, boundsMax;
+	GetShapeBounds(shape, boundsMin, boundsMax);
+
+	float width = boundsMax.x - boundsMin.x;
+	float height = boundsMax.y - boundsMin.y;
+	float area = width * height;
+	if (area <= 0.0f) return added;
+
+	float spacing = std::sqrt(area / (float)particleCount);
+	spacing = std::max(spacing, 0.001f);
+
+	for (float y = boundsMin.y + spacing * 0.5f; y <= boundsMax.y; y += spacing) {
+		for (float x = boundsMin.x + spacing * 0.5f; x <= boundsMax.x; x += spacing) {
+			glm::vec3 point(x, y, boundsMin.z);
+			if (IsPointInsideShape(shape, point)) {
+				added.push_back(AddParticle(point));
+			}
+		}
+	}
+
+	return added;
+}
+
+void FluidComponent::RemoveParticle(FluidParticle* particle) {
+	if (!particle) return;
+
+	auto it = std::find(particles.begin(), particles.end(), particle);
+	if (it == particles.end()) return;
+
+	size_t index = std::distance(particles.begin(), it);
+
+	auto& allParticles = PhysicsEngine::getInstance().allFluidParticles;
+	allParticles.erase(std::remove(allParticles.begin(), allParticles.end(), particle), allParticles.end());
+
+	delete particle;
+	particles.erase(it);
+	if (index < localParticlePositions.size()) {
+		localParticlePositions.erase(localParticlePositions.begin() + index);
+	}
+
+	ResizeInstanceBuffer();
+}
+
 void FluidComponent::SeedParticles() {
 	if (!Enabled) return;
 
@@ -976,4 +1055,55 @@ float FluidComponent::GetWaterLine(const SoftBoundary& soft) {
 	}
 
 	return anyCovered ? highestY : -INFINITY;
+}
+
+void FluidComponent::GetShapeBounds(const Shape& shape, glm::vec3& outMin, glm::vec3& outMax) {
+	std::visit([&](auto&& s) {
+		using T = std::decay_t<decltype(s)>;
+		if constexpr (std::is_same_v<T, RectangleShape>) {
+			outMin = s.center - glm::vec3(s.width * 0.5f, s.height * 0.5f, 0.0f);
+			outMax = s.center + glm::vec3(s.width * 0.5f, s.height * 0.5f, 0.0f);
+		}
+		else if constexpr (std::is_same_v<T, CircleShape>) {
+			outMin = s.center - glm::vec3(s.radius, s.radius, 0.0f);
+			outMax = s.center + glm::vec3(s.radius, s.radius, 0.0f);
+		}
+		else if constexpr (std::is_same_v<T, PolygonShape>) {
+			if (s.vertices.size() < 5) { outMin = outMax = glm::vec3(0.0f); return; }
+			outMin = glm::vec3(s.vertices[0], s.vertices[1], s.vertices[2]);
+			outMax = outMin;
+			for (size_t i = 0; i + 4 < s.vertices.size(); i += 5) {
+				glm::vec3 v(s.vertices[i], s.vertices[i + 1], s.vertices[i + 2]);
+				outMin = glm::min(outMin, v);
+				outMax = glm::max(outMax, v);
+			}
+		}
+		}, shape);
+}
+
+bool FluidComponent::IsPointInsideShape(const Shape& shape, const glm::vec3& point) {
+	return std::visit([&](auto&& s) -> bool {
+		using T = std::decay_t<decltype(s)>;
+		if constexpr (std::is_same_v<T, RectangleShape>) {
+			return std::abs(point.x - s.center.x) <= s.width * 0.5f &&
+				std::abs(point.y - s.center.y) <= s.height * 0.5f;
+		}
+		else if constexpr (std::is_same_v<T, CircleShape>) {
+			glm::vec2 d(point.x - s.center.x, point.y - s.center.y);
+			return glm::dot(d, d) <= s.radius * s.radius;
+		}
+		else if constexpr (std::is_same_v<T, PolygonShape>) {
+			bool inside = false;
+			size_t vertCount = s.vertices.size() / 5;
+			for (size_t i = 0, j = vertCount - 1; i < vertCount; j = i++) {
+				float xi = s.vertices[i * 5 + 0], yi = s.vertices[i * 5 + 1];
+				float xj = s.vertices[j * 5 + 0], yj = s.vertices[j * 5 + 1];
+				bool intersect = ((yi > point.y) != (yj > point.y)) &&
+					(point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
+				if (intersect) inside = !inside;
+			}
+			return inside;
+		}
+		return false;
+		}, shape);
 }

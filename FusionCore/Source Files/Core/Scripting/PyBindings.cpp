@@ -1090,12 +1090,6 @@ namespace {
 				}, py::arg("shape"),
 					"Accepts a RectangleShape, CircleShape, or PolygonShape. Applies to the "
 					"resolution shape (or the first shape if none is set as resolution).")
-
-			.def("get_center", [](CollisionComponent& self) { return self.GetCenter(); },
-				"Center of the resolution shape (or first shape)")
-			.def("get_area", [](CollisionComponent& self) { return self.GetArea(); },
-				"Area of the resolution shape (or first shape)")
-
 			.def("add_shape", &CollisionComponent::AddShape,
 				py::arg("shape"), py::arg("name") = "",
 				"Add a new collision shape to this component. Returns its shape_id, e.g.\n"
@@ -1188,9 +1182,8 @@ namespace {
 						}
 						});
 	}, py::arg("callback"),
-		"Fires every physics substep while two shapes are overlapping (stay-style). "
-		"Check data.shape_id against resolution_shape_id or get_shape_id(name) to "
-		"filter by shape. Returns an id usable with remove_collision_callback().")
+		"Fires every physics substep while two shapes are overlapping"
+		". Returns an id usable with remove_collision_callback().")
 		.def("remove_collision_callback", &CollisionComponent::RemoveCollisionCallback, py::arg("id"))
 
 		.def("add_collision_enter_callback", [](CollisionComponent& self, py::function func) {
@@ -1332,7 +1325,7 @@ namespace {
 			EngineManager::getInstance().EngineChangeEvent();
 			self.RebuildMassAggregate();
 				}, py::arg("enabled"),
-					"Toggling this rebuilds the mass aggregate, same as the inspector checkbox")
+					"Enable gas pressue mode")
 
 			.def_property("gas_amount",
 				[](SoftBodyComponent& self) { return self.gasAmount; },
@@ -1397,6 +1390,243 @@ namespace {
 		EnableAddObject<SoftBodyComponent>(softBodyClass);
 		EnableAddChild<SoftBodyComponent>(softBodyClass);
 		EnableRemoveObject<SoftBodyComponent>(softBodyClass);
+
+
+		auto fluidClass = py::class_<FluidComponent>(m, "FluidComponent")
+			.def_property("enable",
+				[](FluidComponent& self) { return self.Enabled; },
+				[](FluidComponent& self, bool enable) { self.SetEnabled(enable); })
+			.def("set_enable", &FluidComponent::SetEnabled)
+
+			.def_property("color",
+				[](FluidComponent& self) { return self.color; },
+				[](FluidComponent& self, glm::vec4 c) {
+					self.color = c;
+					EngineManager::getInstance().EngineChangeEvent();
+				})
+			.def("set_color", [](FluidComponent& self, glm::vec4 c) {
+			self.color = c;
+			EngineManager::getInstance().EngineChangeEvent();
+				}, py::arg("color"))
+
+			.def_property("outline_color",
+				[](FluidComponent& self) { return self.outlineColor; },
+				[](FluidComponent& self, glm::vec4 c) {
+					self.outlineColor = c;
+					EngineManager::getInstance().EngineChangeEvent();
+				})
+			.def("set_outline_color", [](FluidComponent& self, glm::vec4 c) {
+			self.outlineColor = c;
+			EngineManager::getInstance().EngineChangeEvent();
+				}, py::arg("outline_color"))
+
+			.def_property("particle_radius",
+				[](FluidComponent& self) { return self.particleRadius; },
+				[](FluidComponent& self, float r) {
+					self.particleRadius = std::max(0.0001f, r);
+					self.RebuildDensityQuadGeometry();
+					EngineManager::getInstance().EngineChangeEvent();
+				})
+			.def("set_particle_radius", [](FluidComponent& self, float r) {
+			self.particleRadius = std::max(0.0001f, r);
+			self.RebuildDensityQuadGeometry();
+			EngineManager::getInstance().EngineChangeEvent();
+				}, py::arg("particle_radius"))
+
+			.def_property("metaball_threshold",
+				[](FluidComponent& self) { return self.metaballThreshold; },
+				[](FluidComponent& self, float t) { self.metaballThreshold = t; })
+			.def("set_metaball_threshold", [](FluidComponent& self, float t) { self.metaballThreshold = t; },
+				py::arg("metaball_threshold"))
+
+			.def_property("metaball_edge_soft",
+				[](FluidComponent& self) { return self.metaballEdgeSoft; },
+				[](FluidComponent& self, float s) { self.metaballEdgeSoft = s; })
+			.def("set_metaball_edge_soft", [](FluidComponent& self, float s) { self.metaballEdgeSoft = s; },
+				py::arg("metaball_edge_soft"))
+
+			.def_property("outline_width_texels",
+				[](FluidComponent& self) { return self.outlineWidthTexels; },
+				[](FluidComponent& self, float w) { self.outlineWidthTexels = w; })
+			.def("set_outline_width_texels", [](FluidComponent& self, float w) { self.outlineWidthTexels = w; },
+				py::arg("outline_width_texels"))
+
+			.def_property("desired_particle_count",
+				[](FluidComponent& self) { return self.desiredParticleCount; },
+				[](FluidComponent& self, int count) {
+					self.desiredParticleCount = std::max(1, count);
+					self.SeedParticles();
+					self.ResizeInstanceBuffer();
+					EngineManager::getInstance().EngineChangeEvent();
+				})
+			.def("set_desired_particle_count", [](FluidComponent& self, int count) {
+			self.desiredParticleCount = std::max(1, count);
+			self.SeedParticles();
+			self.ResizeInstanceBuffer();
+			EngineManager::getInstance().EngineChangeEvent();
+				}, py::arg("desired_particle_count"),
+					"Changing this re-seeds the whole fluid on its source shape, discarding "
+					"any particles added individually via add_particle()")
+
+			.def_property("collision_radius",
+				[](FluidComponent& self) { return self.collisionRadius; },
+				[](FluidComponent& self, float r) {
+					self.collisionRadius = std::max(0.0001f, r);
+					for (auto* p : self.particles) p->collisionRadius = self.collisionRadius;
+					EngineManager::getInstance().EngineChangeEvent();
+				})
+			.def("set_collision_radius", [](FluidComponent& self, float r) {
+			self.collisionRadius = std::max(0.0001f, r);
+			for (auto* p : self.particles) p->collisionRadius = self.collisionRadius;
+			EngineManager::getInstance().EngineChangeEvent();
+				}, py::arg("collision_radius"))
+
+			.def_property("smoothing_radius",
+				[](FluidComponent& self) { return self.smoothingRadius; },
+				[](FluidComponent& self, float r) {
+					self.smoothingRadius = std::max(0.0001f, r);
+					for (auto* p : self.particles) {
+						p->smoothingRadius = self.smoothingRadius;
+						p->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(self.smoothingRadius);
+						p->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(self.smoothingRadius);
+					}
+					EngineManager::getInstance().EngineChangeEvent();
+				})
+			.def("set_smoothing_radius", [](FluidComponent& self, float r) {
+			self.smoothingRadius = std::max(0.0001f, r);
+			for (auto* p : self.particles) {
+				p->smoothingRadius = self.smoothingRadius;
+				p->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(self.smoothingRadius);
+				p->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(self.smoothingRadius);
+			}
+			EngineManager::getInstance().EngineChangeEvent();
+				}, py::arg("smoothing_radius"))
+
+			.def_property("epsilon",
+				[](FluidComponent& self) { return self.epsilon; },
+				[](FluidComponent& self, float e) {
+					self.epsilon = std::max(0.0001f, e);
+					for (auto* p : self.particles) p->epsilon = self.epsilon;
+					EngineManager::getInstance().EngineChangeEvent();
+				})
+			.def("set_epsilon", [](FluidComponent& self, float e) {
+			self.epsilon = std::max(0.0001f, e);
+			for (auto* p : self.particles) p->epsilon = self.epsilon;
+			EngineManager::getInstance().EngineChangeEvent();
+				}, py::arg("epsilon"))
+
+			.def_property("particle_mass",
+				[](FluidComponent& self) { return self.particleMass; },
+				[](FluidComponent& self, float mass) {
+					if (mass <= 0.0f) mass = 0.01f;
+					self.particleMass = mass;
+					for (auto* p : self.particles) {
+						p->mass = mass;
+						p->invMass = 1.0f / mass;
+					}
+				})
+			.def("set_particle_mass", [](FluidComponent& self, float mass) {
+			if (mass <= 0.0f) mass = 0.01f;
+			self.particleMass = mass;
+			for (auto* p : self.particles) {
+				p->mass = mass;
+				p->invMass = 1.0f / mass;
+			}
+				}, py::arg("particle_mass"))
+
+			.def_property("rest_density",
+				[](FluidComponent& self) { return self.restDensity; },
+				[](FluidComponent& self, float d) {
+					if (d <= 0.0f) d = 0.01f;
+					self.restDensity = d;
+					for (auto* p : self.particles) p->restDensity = d;
+				})
+			.def("set_rest_density", [](FluidComponent& self, float d) {
+			if (d <= 0.0f) d = 0.01f;
+			self.restDensity = d;
+			for (auto* p : self.particles) p->restDensity = d;
+				}, py::arg("rest_density"))
+
+			.def_property("viscosity",
+				[](FluidComponent& self) { return self.viscosity; },
+				[](FluidComponent& self, float v) {
+					if (v <= 0.0f) v = 0.01f;
+					self.viscosity = v;
+					for (auto* p : self.particles) p->viscosity = v;
+				})
+			.def("set_viscosity", [](FluidComponent& self, float v) {
+			if (v <= 0.0f) v = 0.01f;
+			self.viscosity = v;
+			for (auto* p : self.particles) p->viscosity = v;
+				}, py::arg("viscosity"))
+
+			.def_property("vorticity_strength",
+				[](FluidComponent& self) { return self.vorticityStrength; },
+				[](FluidComponent& self, float v) {
+					v = std::max(0.0f, v);
+					self.vorticityStrength = v;
+					for (auto* p : self.particles) p->vorticityEps = v;
+				})
+			.def("set_vorticity_strength", [](FluidComponent& self, float v) {
+			v = std::max(0.0f, v);
+			self.vorticityStrength = v;
+			for (auto* p : self.particles) p->vorticityEps = v;
+				}, py::arg("vorticity_strength"))
+
+			.def_property_readonly("particle_count", [](FluidComponent& self) { return self.particles.size(); })
+
+			.def_property_readonly("particles", [](FluidComponent& self) {
+			return self.particles;
+				}, py::return_value_policy::reference,
+				"All FluidParticle instances currently owned by this component")
+
+			.def("get_particle", [](FluidComponent& self, int index) -> FluidParticle* {
+			if (index < 0 || index >= (int)self.particles.size())
+				throw py::index_error("get_particle: index out of range");
+			return self.particles[index];
+				}, py::arg("index"), py::return_value_policy::reference)
+
+			.def("add_particle", [](FluidComponent& self, glm::vec3 worldPosition) {
+				return self.AddParticle(worldPosition);
+			}, py::arg("world_position"), py::return_value_policy::reference,
+				"Add a single fluid particle at the given world position, e.g.\n"
+				"  p = fluid.add_particle(Vector3(0, 2, 0))")
+
+				.def("add_particle", [](FluidComponent& self, Shape shape, int particleCount) {
+					return self.AddParticles(shape, particleCount);
+			}, py::arg("shape"), py::arg("particle_count"), py::return_value_policy::reference,
+				"Seed roughly particle_count particles filling the given shape"
+				"and add "
+				"them to the fluid, e.g.\n"
+				"  fluid.add_particle(CircleShape(Vector3(0, 3, 0), 1.5), 200)")
+
+			.def("remove_particle", &FluidComponent::RemoveParticle, py::arg("particle"),
+				"Remove and delete a specific FluidParticle previously returned by "
+				"add_particle(), particles, or get_particle()")
+
+			.def("reseed", [](FluidComponent& self) {
+			self.SeedParticles();
+			self.ResizeInstanceBuffer();
+				}, "Discard all particles (including manually added ones) and re-fill the "
+				"shape according to desired_particle_count")
+
+			.def("update_collision_layer_mask", &FluidComponent::UpdateCollisionLayerMask,
+				"Sync every particle's collision_layer/collision_mask with this Object's CollisionComponent");
+
+		EnableGetComponent<FluidComponent>(fluidClass);
+		EnableHasComponent<FluidComponent>(fluidClass);
+		RegisterComponentGetter<FluidComponent>(fluidClass);
+		EnableGetOwner<FluidComponent>(fluidClass);
+		RegisterComponentRemover<FluidComponent>(fluidClass);
+		RegisterComponentAdder<FluidComponent>(fluidClass,
+			[](Object& obj) {
+				return std::make_unique<FluidComponent>(&obj);
+			});
+		EnableAddComponent<FluidComponent>(fluidClass);
+		EnableRemoveComponent<FluidComponent>(fluidClass);
+		EnableAddObject<FluidComponent>(fluidClass);
+		EnableAddChild<FluidComponent>(fluidClass);
+		EnableRemoveObject<FluidComponent>(fluidClass);
 	}
 
 	Object* CreateDefaultObject() {
@@ -1519,14 +1749,114 @@ namespace {
 			.def("set_inverse_mass", [](PointMass& self, float invMass) { self.inverseMass = invMass; },
 				py::arg("inverse_mass"))
 
-			.def("add_force", [](PointMass& self, glm::vec3 force) {
-			self.acceleration += force * self.inverseMass;
-				}, py::arg("force"),
-					"Apply a force directly to this point mass for the current frame")
-
 			.def("__repr__", [](PointMass& self) {
 			std::ostringstream ss;
 			ss << "PointMass(index=" << self.index << ", is_center=" << (self.isCenter ? "True" : "False") << ")";
+			return ss.str();
+				});
+
+		py::class_<FluidParticle>(m, "FluidParticle")
+			.def_property_readonly("owner", [](FluidParticle& self) -> Object* {
+			return self.parent;
+				}, py::return_value_policy::reference)
+
+			.def_property("position",
+				[](FluidParticle& self) { return self.position; },
+				[](FluidParticle& self, glm::vec3 pos) {
+					self.position = pos;
+					self.predictedPosition = pos;
+				})
+			.def("set_position", [](FluidParticle& self, glm::vec3 pos) {
+			self.position = pos;
+			self.predictedPosition = pos;
+				}, py::arg("position"))
+
+			.def_property_readonly("predicted_position",
+				[](FluidParticle& self) { return self.predictedPosition; },
+				"Position predicted by the solver this substep (read-only)")
+
+			.def_property("velocity",
+				[](FluidParticle& self) { return self.velocity; },
+				[](FluidParticle& self, glm::vec3 v) { self.velocity = v; })
+			.def("set_velocity", [](FluidParticle& self, glm::vec3 v) { self.velocity = v; },
+				py::arg("velocity"))
+
+			.def_property("collision_radius",
+				[](FluidParticle& self) { return self.collisionRadius; },
+				[](FluidParticle& self, float r) { self.collisionRadius = r; })
+			.def("set_collision_radius", [](FluidParticle& self, float r) { self.collisionRadius = r; },
+				py::arg("collision_radius"))
+
+			.def_property("mass",
+				[](FluidParticle& self) { return self.mass; },
+				[](FluidParticle& self, float mass) {
+					if (mass <= 0.0f) mass = 0.001f;
+					self.mass = mass;
+					self.invMass = 1.0f / mass;
+				})
+			.def("set_mass", [](FluidParticle& self, float mass) {
+			if (mass <= 0.0f) mass = 0.001f;
+			self.mass = mass;
+			self.invMass = 1.0f / mass;
+				}, py::arg("mass"))
+
+			.def_property("inverse_mass",
+				[](FluidParticle& self) { return self.invMass; },
+				[](FluidParticle& self, float invMass) {
+					self.invMass = invMass;
+					self.mass = invMass > 0.0f ? 1.0f / invMass : 0.0f;
+				})
+			.def("set_inverse_mass", [](FluidParticle& self, float invMass) {
+			self.invMass = invMass;
+			self.mass = invMass > 0.0f ? 1.0f / invMass : 0.0f;
+				}, py::arg("inverse_mass"))
+
+			.def_property("rest_density",
+				[](FluidParticle& self) { return self.restDensity; },
+				[](FluidParticle& self, float d) { self.restDensity = d; })
+			.def("set_rest_density", [](FluidParticle& self, float d) { self.restDensity = d; },
+				py::arg("rest_density"))
+
+			.def_property_readonly("density", [](FluidParticle& self) { return self.density; },
+				"Density computed by the solver this substep (read-only)")
+
+			.def_property("viscosity",
+				[](FluidParticle& self) { return self.viscosity; },
+				[](FluidParticle& self, float v) { self.viscosity = v; })
+			.def("set_viscosity", [](FluidParticle& self, float v) { self.viscosity = v; },
+				py::arg("viscosity"))
+
+			.def_property("smoothing_radius",
+				[](FluidParticle& self) { return self.smoothingRadius; },
+				[](FluidParticle& self, float r) {
+					self.smoothingRadius = r;
+					self.poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(r);
+					self.spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(r);
+				})
+			.def("set_smoothing_radius", [](FluidParticle& self, float r) {
+			self.smoothingRadius = r;
+			self.poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(r);
+			self.spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(r);
+				}, py::arg("smoothing_radius"))
+
+			.def_property("epsilon",
+				[](FluidParticle& self) { return self.epsilon; },
+				[](FluidParticle& self, float e) { self.epsilon = e; })
+			.def("set_epsilon", [](FluidParticle& self, float e) { self.epsilon = e; }, py::arg("epsilon"))
+
+			.def_property("vorticity_strength",
+				[](FluidParticle& self) { return self.vorticityEps; },
+				[](FluidParticle& self, float v) { self.vorticityEps = v; })
+			.def("set_vorticity_strength", [](FluidParticle& self, float v) { self.vorticityEps = v; },
+				py::arg("vorticity_strength"))
+
+			.def_property_readonly("lambda", [](FluidParticle& self) { return self.lambda; },
+				"Constraint multiplier from the solver's last substep (read-only)")
+
+			.def("__repr__", [](FluidParticle& self) {
+			std::ostringstream ss;
+			ss << "FluidParticle(position=(" << self.position.x << ", "
+				<< self.position.y << ", " << self.position.z << "))";
 			return ss.str();
 				});
 	}

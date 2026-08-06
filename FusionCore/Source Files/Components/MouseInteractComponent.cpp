@@ -119,17 +119,18 @@ void MouseInteractComponent::FindSelectedPolygon(int button, int action, int mod
 		}
 	}
 
-	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS) {
-		if (!Selected && physicsInteract && EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) {
-			if (parent->HasComponent<RigidBodyComponent>()) {
-				parent->GetComponent<RigidBodyComponent>()->isDragging = true;
-			}
-
-			if (parent->HasComponent<SoftBodyComponent>()) {
-				SoftBodyComponent* sb = parent->GetComponent<SoftBodyComponent>();
-				sb->isDragging = true;
-			}
+	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS 
+		&& EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate
+		&& !Selected && physicsInteract) {
+		if (parent->HasComponent<RigidBodyComponent>()) {
+			parent->GetComponent<RigidBodyComponent>()->isDragging = true;
 		}
+
+		if (parent->HasComponent<SoftBodyComponent>()) {
+			SoftBodyComponent* sb = parent->GetComponent<SoftBodyComponent>();
+			sb->isDragging = true;
+		}
+
 		Selected = true;
 	}
 }

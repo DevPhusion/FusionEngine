@@ -52,9 +52,6 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 				(*allObjects)[i]->GetComponent<SoftBodyComponent>()->ProcessSoftBody(delta);
 			}
 		}
-		if ((*allObjects)[i]->HasComponent<CollisionComponent>() && EngineManager::getInstance().EngineSettings.colorCollisions) {
-			(*allObjects)[i]->GetComponent<RenderComponent>()->color = glm::vec4(1);
-		}
 	}
 
 	{
@@ -258,12 +255,6 @@ void PhysicsEngine::ResolveContacts(PotentialContact* contacts, unsigned numCont
 			for (auto& pm : sbB->MassAggregate) {
 				ResolveSoftPointSoftEdgeContacts(pm->body, pm.get(), sbA, edgesA, pm->pointRadius, axisValid ? &globalAxis : nullptr);
 			}
-		}
-
-		if (EngineManager::getInstance().EngineSettings.colorCollisions) {
-			glm::vec4 c = collisionResult ? glm::vec4(0, 1, 0, 1) : glm::vec4(1, 0, 0, 1);
-			if (objA->GetComponent<RenderComponent>()) objA->GetComponent<RenderComponent>()->color = c;
-			if (objB->GetComponent<RenderComponent>()) objB->GetComponent<RenderComponent>()->color = c;
 		}
 	}
 }

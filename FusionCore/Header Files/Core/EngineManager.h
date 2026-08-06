@@ -18,9 +18,11 @@ struct Settings {
 	glm::vec4 backgroundColor = glm::vec4(0.235f, 0.239f, 0.216f, 1.0f);
 	glm::vec2 gameResolution = glm::vec2(1920, 1080);
 	bool drawBackgroundGrid = true;
+
+	// Debug
 	bool drawObjectWireframe = false;
 	bool drawBroadPhaseBounds = false;
-	bool colorCollisions = false;
+	bool drawCollisionShapes = false;
 	bool drawCollisionNormals = false;
 	bool drawContactPoints = false;
 	bool drawSoftBodyPointMasses = false;
@@ -31,7 +33,7 @@ struct Settings {
 	FluidHeatmapMode fluidHeatmapMode = FluidHeatmapMode::None;
 
 	bool AnyDebugGizmoEnabled() const {
-		return drawObjectWireframe || drawBroadPhaseBounds || drawCollisionNormals || drawContactPoints ||
+		return drawObjectWireframe || drawBroadPhaseBounds || drawCollisionShapes || drawCollisionNormals || drawContactPoints ||
 			drawSoftBodyPointMasses || drawSoftBodySprings || drawVirtualSoftBodyProxies
 			|| drawFluidsAsParticles || drawFluidsVelocityField || fluidHeatmapMode != FluidHeatmapMode::None;
 	}
@@ -56,6 +58,7 @@ public:
 	enum InteractMode {
 		AddVertex,
 		EditorSelect,
+		ConstraintEdit,
 	};
 
 	enum PhysicsMode {

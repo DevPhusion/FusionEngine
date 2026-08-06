@@ -287,9 +287,9 @@ void EngineStatus::ProcessSettingsPopup() {
 		ImGui::SameLine();
 		ImGui::Checkbox("##Draw broad phase bounding area", &settings.drawBroadPhaseBounds);
 
-		ImGui::Text("Color collisions: ");
+		ImGui::Text("Draw collision shapes: ");
 		ImGui::SameLine();
-		ImGui::Checkbox("##Color collisions", &settings.colorCollisions);
+		ImGui::Checkbox("##Draw collision shapes", &settings.drawCollisionShapes);
 
 		ImGui::Text("Draw collision normals: ");
 		ImGui::SameLine();

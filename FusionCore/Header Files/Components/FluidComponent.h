@@ -77,12 +77,16 @@ public:
     void ResizeRenderTargets(int width, int height);
     std::vector<const RigidBoundary*> GetOverlappingRigidBodies();
     std::vector<const SoftBoundary*> GetOverlappingSoftBodies();
+    void RebuildDensityQuadGeometry();
+
+    FluidParticle* AddParticle(glm::vec3 worldPosition);
+    std::vector<FluidParticle*> AddParticles(Shape shape, int particleCount);
+    void RemoveParticle(FluidParticle* particle);
 
 private:
     void RebuildQuadGeometry();
 
     void InitDensityFBO(int width, int height);
-    void RebuildDensityQuadGeometry();
     void InitFullscreenQuad();
     void InitVectorFieldResources();
     void UpdateHeatBuffer();
@@ -96,6 +100,9 @@ private:
 
     float GetWaterLine(const SoftBoundary& soft);
     float GetWaterLine(const RigidBoundary& rb);
+
+    void GetShapeBounds(const Shape& shape, glm::vec3& outMin, glm::vec3& outMax);
+    bool IsPointInsideShape(const Shape& shape, const glm::vec3& point);
 
     int transformCallbackID = -1;
     int setShapeCallbackID = -1;

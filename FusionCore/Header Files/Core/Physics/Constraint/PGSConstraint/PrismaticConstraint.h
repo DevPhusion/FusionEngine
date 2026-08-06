@@ -18,7 +18,7 @@ public:
 	virtual void Prepare(std::vector<SolverRow>& rows, float delta);
 	virtual void PostSolve(std::vector<SolverRow>& allRows);
 	virtual void ProcessInspectorUI(Object* parent);
-	virtual void ProcessConstraintDisplay();
+	virtual void DrawConstraintGizmo();
 	virtual std::shared_ptr<Constraint> Clone();
 	virtual void Serialize(BinaryWriter& w);
 	virtual void Deserialize(BinaryReader& r);

@@ -11,6 +11,7 @@
 #include "../Editor/InfiniteGrid.h"
 #include "../Editor/Gizmos.h"
 #include "../Editor/PolygonEditGizmos.h"
+#include "../Editor/ConstraintEditGizmos.h"
 #include "../DebugTimer.h"
 #include<glad/glad.h>
 #include<GLFW/glfw3.h>
@@ -30,6 +31,7 @@ public:
 	InfiniteGrid backgroundGrid = InfiniteGrid();
 	Gizmos* gizmos;
 	PolygonEditGizmos* polygonEditGizmos;
+	ConstraintEditGizmos* constraintEditGizmos;
 	void Setup(std::vector<std::unique_ptr<Object>>* objects);
 	void SetupGrid() { backgroundGrid.Setup(); }
 	void Draw();

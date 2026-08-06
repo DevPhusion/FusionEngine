@@ -79,7 +79,8 @@ TransformComponent* Gizmos::GetSelectedTransform() {
 }
 
 void Gizmos::UpdateGizmos() {
-    if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate)
+    if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate ||
+		EngineManager::getInstance().EngineInteractMode != EngineManager::InteractMode::EditorSelect)
         return;
 
     switch (currentGizmosMode) {
@@ -173,7 +174,8 @@ bool Gizmos::HitTestCircle(glm::vec3 origin) {
 
 void Gizmos::OnMouseButton(int button, int action, int mods) {
 	if (button != GLFW_MOUSE_BUTTON_LEFT) return;
-	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) return;
+	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate ||
+		EngineManager::getInstance().EngineInteractMode != EngineManager::InteractMode::EditorSelect) return;
 
 	if (action == GLFW_PRESS) {
 		TransformComponent* transform = GetSelectedTransform();

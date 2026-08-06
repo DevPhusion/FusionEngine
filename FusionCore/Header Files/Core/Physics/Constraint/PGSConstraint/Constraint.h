@@ -36,9 +36,10 @@ class PointMass;
 class Constraint
 {
 public:
+    Constraint() = default;
     Constraint(PhysicsBody objectA, PhysicsBody objectB,
         glm::vec3 attachPointA, glm::vec3 attachPointB);
-    Constraint() = default;
+    virtual ~Constraint();
 
     uint64_t objectIdA = 0;
     uint64_t objectIdB = 0;
@@ -48,20 +49,16 @@ public:
     glm::vec3 attachPointA = glm::vec3(0.0f);
     glm::vec3 attachPointB = glm::vec3(0.0f);
 
-    Object* constraintDisplay = nullptr;
-
     std::string Name;
     bool  isTemporary = false;
     float cacheLambda = 0.0f;
-    float beta = 0.2f; // Baumgarte bias tuning
+    float beta = 0.2f; 
 
     bool canDrawConstraint = true;
 
     void SetInitialImpulse(float lambda) { cacheLambda = lambda; }
 
     void Unregister();
-
-    Object* CreateConstraintDisplay();
 
     virtual void Prepare(std::vector<SolverRow>& rows, float delta) = 0;
 
@@ -81,41 +78,39 @@ public:
     virtual void SetObjectB(PhysicsBody obj);
 
     virtual void PostSolve(std::vector<SolverRow>& allRows) {}
-    virtual void ProcessConstraintDisplay();
+
+    virtual void DrawConstraintGizmo();
+
     virtual void ProcessMirroredUI();
     virtual void ProcessInspectorUI(Object* parent);
+
+    glm::vec3 GetAttachWorldA() const;
+    glm::vec3 GetAttachWorldB() const;
+
+    bool IsAttachAEditing() const { return attachAEditing; }
+    bool IsAttachBEditing() const { return attachBEditing; }
+    bool useCenterA = true;
+    bool useCenterB = true;
+    bool UseCenterA() const { return useCenterA; }
+    bool UseCenterB() const { return useCenterB; }
+
+    void OnAttachAMoved(glm::vec3 worldPos);
+    void OnAttachBMoved(glm::vec3 worldPos);
 
 protected:
     PointMass* virtualPMA = nullptr;
     PointMass* virtualPMB = nullptr;
-    Object* attachDisplayA = nullptr;
-    Object* attachDisplayB = nullptr;
 
-    void OnPhysicsModeChanged();
-
-    void DestroyDisplayA();
-    void DestroyDisplayB();
     void RemoveMirrorFromObjectB();
 
-    void EnsureDisplayA();
-    void EnsureDisplayB();
-
-    void OnObjectATransformChanged();
-    void OnObjectBTransformChanged();
-    void OnDisplayAMoved();
-    void OnDisplayBMoved();
+    void DrawConstraintLine(const glm::vec4& color, float thickness = 2.0f) const;
 
     void CopyBaseFieldsFrom(const Constraint* src);
 
 private:
-    bool useCenterA = true;
-    bool useCenterB = true;
-    bool posSetA = false;
-    bool posSetB = false;
+    bool attachAEditing = false;
+    bool attachBEditing = false;
 
-    int onPhysicsModeChangedCallbackID = -1;
     int onDeleteCallbackIdA = -1;
     int onDeleteCallbackIdB = -1;
-    int onTransformCallbackIdA = -1;
-    int onTransformCallbackIdB = -1;
 };

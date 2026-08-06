@@ -5,6 +5,7 @@ void Renderer::Setup(std::vector<std::unique_ptr<Object>>* objects) {
     gizmos = new Gizmos();
     gizmos->Initialize();
 	polygonEditGizmos = new PolygonEditGizmos();
+    constraintEditGizmos = new ConstraintEditGizmos();
 }
 
 void Renderer::Draw() {
@@ -31,8 +32,12 @@ void Renderer::Draw() {
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     }
 
+    {
+        TIME_BLOCK("Draw constraint display");
+        constraintEditGizmos->DrawConstraintDisplays();
+    }
+
     std::vector<Object*> renderQueue;
-    
 
     {
         TIME_BLOCK("Construct draw queue");
@@ -100,7 +105,6 @@ void Renderer::Draw() {
         }
     }
 
-
     if (EngineManager::getInstance().EnginePhysicsMode != EngineManager::PhysicsMode::Simulate) {
         {
             TIME_BLOCK("Draw camera bounds");
@@ -111,11 +115,14 @@ void Renderer::Draw() {
                 }
             }
         }
+    }
 
+    if (EngineManager::getInstance().EnginePhysicsMode != EngineManager::PhysicsMode::Simulate ||
+        debug.drawCollisionShapes) {
         {
             TIME_BLOCK("Draw collision shapes");
             for (size_t i = 0; i < (*allObjects).size(); i++) {
-                CollisionComponent * cc = (*allObjects)[i]->GetComponent<CollisionComponent>();
+                CollisionComponent* cc = (*allObjects)[i]->GetComponent<CollisionComponent>();
                 if (cc) {
                     cc->Draw();
                 }
@@ -200,6 +207,7 @@ void Renderer::Draw() {
         TIME_BLOCK("Draw gizmos");
         gizmos->UpdateGizmos();
         polygonEditGizmos->UpdateGizmos();
+        constraintEditGizmos->DrawPivotHandles();
     }
 }
 
