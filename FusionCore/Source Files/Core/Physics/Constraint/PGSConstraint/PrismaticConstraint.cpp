@@ -119,6 +119,7 @@ void PrismaticConstraint::ProcessInspectorUI(Object* parent) {
             glm::vec3 pA = objectA.obj->GetComponent<TransformComponent>()->GetWorldPosition();
             glm::vec3 pB = objectB.obj->GetComponent<TransformComponent>()->GetWorldPosition();
             this->dir = pB - pA;
+            EngineManager::getInstance().EngineChangeEvent();
         }
     }
 }

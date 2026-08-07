@@ -143,6 +143,7 @@ void WeldConstraint::ProcessInspectorUI(Object* parent) {
 		    float thetaA = objectA.obj->GetComponent<TransformComponent>()->rotation;
 		    float thetaB = objectB.obj->GetComponent<TransformComponent>()->rotation;
             angularOffset = thetaB - thetaA;
+            EngineManager::getInstance().EngineChangeEvent();
         }
 	}
 }

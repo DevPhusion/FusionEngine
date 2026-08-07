@@ -61,19 +61,19 @@ void AddObjectWindow::ProcessWindow() {
 	if (ImGui::Button("Add", ImVec2(button_width, 0.0f))) {
 		if (EngineManager::getInstance().EngineInteractMode == EngineManager::InteractMode::EditorSelect) {
 			if (SelectedType == "Object") {
-				ObjectManager::getInstance().AddObject();
+				ObjectManager::getInstance().AddObject(parent);
 				Hide();
 			}
 			else if (SelectedType == "Camera") {
-				ObjectManager::getInstance().AddCamera();
+				ObjectManager::getInstance().AddCamera(parent);
 				Hide();
 			}
 			else if (SelectedType == "Rigid Box") {
-				ObjectManager::getInstance().AddBox();
+				ObjectManager::getInstance().AddBox(parent);
 				Hide();
 			}
 			else if (SelectedType == "Rigid Circle") {
-				ObjectManager::getInstance().AddCircle();
+				ObjectManager::getInstance().AddCircle(parent);
 				Hide();
 			}
 			else if (SelectedType == "Rigid Polygon") {
@@ -81,11 +81,11 @@ void AddObjectWindow::ProcessWindow() {
 				Renderer::getInstance().polygonEditGizmos->BeginEdit(nullptr);
 			}
 			else if (SelectedType == "Soft Box") {
-				ObjectManager::getInstance().AddSoftBox();
+				ObjectManager::getInstance().AddSoftBox(parent);
 				Hide();
 			}
 			else if (SelectedType == "Soft Circle") {
-				ObjectManager::getInstance().AddSoftCircle();
+				ObjectManager::getInstance().AddSoftCircle(parent);
 				Hide();
 			}
 			else if (SelectedType == "Soft Polygon") {
@@ -93,16 +93,16 @@ void AddObjectWindow::ProcessWindow() {
 				Renderer::getInstance().polygonEditGizmos->BeginEdit(nullptr);
 			}
 			else if (SelectedType == "Fluid") {
-				ObjectManager::getInstance().AddFluid();
+				ObjectManager::getInstance().AddFluid(parent);
 				Hide();
 			}
 		}
 		else {
 			if (SelectedType == "Rigid Polygon") {
-				ObjectManager::getInstance().AddPolygon();
+				ObjectManager::getInstance().AddPolygon(parent);
 			}
 			else if (SelectedType == "Soft Polygon") {
-				ObjectManager::getInstance().AddSoftPolygon();
+				ObjectManager::getInstance().AddSoftPolygon(parent);
 			}
 			EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
 			Hide();

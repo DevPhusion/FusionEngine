@@ -3,6 +3,9 @@
 #include <variant>
 #include <glm/glm.hpp>
 #include <pybind11/pybind11.h>
+#include <cstdint>
+
+class Object; 
 
 enum class ExportType {
     Default,
@@ -13,8 +16,12 @@ enum class ExportType {
     Drag,
 };
 
+struct ObjectRef {
+    Object* ptr = nullptr;
+    uint64_t id = 0;
+};
 
-using ExportedValue = std::variant<std::string, int, float, bool, glm::vec2, glm::vec3, glm::vec4>;
+using ExportedValue = std::variant<std::string, int, float, bool, glm::vec2, glm::vec3, glm::vec4, ObjectRef>;
 
 struct ExportedProperty {
     std::string name;
@@ -24,6 +31,7 @@ struct ExportedProperty {
     std::string suffix;
     float min = 0.0f;
     float max = 1.0f;
+    uint64_t objectRefDeleteCallbackId = -1;
 };
 
 struct ExportMarker {

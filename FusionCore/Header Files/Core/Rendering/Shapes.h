@@ -22,7 +22,6 @@ struct CircleShape {
 	glm::vec3 center;
 	float radius;
 	int segments = 30;
-	int physicsSegments = 30;
 };
 
 using Shape = std::variant<PolygonShape, RectangleShape, CircleShape>;

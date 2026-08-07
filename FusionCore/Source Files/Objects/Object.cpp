@@ -48,6 +48,7 @@ void Object::Serialize(BinaryWriter& w) {
 
 void Object::Deserialize(BinaryReader& r) {
 	this->id = r.Read<uint64_t>();
+	Object::ReserveID(id);
 	this->name = r.ReadString();
 	this->hideInHierarchy = r.Read<bool>();
 	this->hidden = r.Read<bool>();

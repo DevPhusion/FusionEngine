@@ -88,16 +88,22 @@ void SpringConstraint::ProcessInspectorUI(Object* parent) {
 
 	ImGui::Text("Rest length ");
 	ImGui::SameLine();
-	ImGui::InputFloat("##Distance", &length, 0.0f, 0.0f, "%.3f m");
+	if (ImGui::InputFloat("##Distance", &length, 0.0f, 0.0f, "%.3f m")) {
+		EngineManager::getInstance().EngineChangeEvent();
+	}
 
 	ImGui::Text("Stiffness ");
 	ImGui::SameLine();
-	ImGui::InputFloat("##Stiffness", &stiffness, 0.0f, 0.0f, "%.3f N/m");
+	if (ImGui::InputFloat("##Stiffness", &stiffness, 0.0f, 0.0f, "%.3f N/m")) {
+		EngineManager::getInstance().EngineChangeEvent();
+	}
 
 
 	ImGui::Text("Damping ");
 	ImGui::SameLine();
-	ImGui::InputFloat("##Damping", &damping, 0.0f, 0.0f, "%.3f Ns/m");
+	if (ImGui::InputFloat("##Damping", &damping, 0.0f, 0.0f, "%.3f Ns/m")) {
+		EngineManager::getInstance().EngineChangeEvent();
+	}
 }
 
 void GenerateSegment(glm::vec2 start, glm::vec2 end, float thickness,

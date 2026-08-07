@@ -1,6 +1,7 @@
 #include "../../Header Files/Components/ScriptComponent.h"
 #include "../../Header Files/Core/Scripting/PyBindings.h"
 #include "../../Header Files/Core/EngineManager.h"
+#include "../../Header Files/Core/ObjectManager.h"
 
 namespace py = pybind11;
 
@@ -17,6 +18,9 @@ namespace {
 			}
 			else if constexpr (std::is_same_v<T, glm::vec4>) {
 				w.Write(v.x); w.Write(v.y); w.Write(v.z); w.Write(v.w);
+			}
+			else if constexpr (std::is_same_v<T, ObjectRef>) {
+				w.Write(v.id);
 			}
 			else {
 				w.Write(v);
@@ -44,10 +48,15 @@ namespace {
 			float w = r.Read<float>();
 			return glm::vec4(x, y, z, w);
 		}
+		case 7: {
+			ObjectRef ref;
+			ref.id = r.Read<uint64_t>();
+			ref.ptr = nullptr; 
+			return ref;
+		}
 		default: return std::string();
 		}
 	}
-		
 }
 
 ScriptComponent::ScriptComponent(Object* parent, std::string sourcePath) : ComponentBase<ScriptComponent>(parent) {
@@ -87,6 +96,12 @@ std::unique_ptr<Component> ScriptComponent::Clone(Object* parent) {
 	std::unique_ptr<ScriptComponent> comp = std::make_unique<ScriptComponent>(parent, "");
 	comp->SetSourcePath(sourcePath);
 	comp->pendingExportedValues = loaded ? exportedProperties : pendingExportedValues;
+
+	for (auto& prop : comp->pendingExportedValues) {
+		if (std::holds_alternative<ObjectRef>(prop.value)) {
+			std::get<ObjectRef>(prop.value).ptr = nullptr; 
+		}
+	}
 	return comp;
 }
 
@@ -117,10 +132,73 @@ void ScriptComponent::Deserialize(BinaryReader& r) {
 	}
 }
 
+void ScriptComponent::PostLoad() {
+	ResolveObjectReferences(pendingExportedValues);
+
+	if (loaded) {
+		ResolveObjectReferences(exportedProperties);
+		for (auto& prop : exportedProperties) {
+			if (std::holds_alternative<ObjectRef>(prop.value)) {
+				UnregisterObjectDeleteCallback(prop);
+				RegisterObjectDeleteCallback(prop);
+				SetInstanceAttrFromVariant(prop.name, prop.value);
+			}
+		}
+	}
+}
+
+void ScriptComponent::ResolveObjectReferences(std::vector<ExportedProperty>& props) {
+	for (auto& prop : props) {
+		if (!std::holds_alternative<ObjectRef>(prop.value)) continue;
+		ObjectRef& ref = std::get<ObjectRef>(prop.value);
+		ref.ptr = ref.id != 0 ? ObjectManager::getInstance().FindObjectById(ref.id) : nullptr;
+	}
+}
+
+void ScriptComponent::RegisterObjectDeleteCallback(ExportedProperty& prop) {
+	if (!std::holds_alternative<ObjectRef>(prop.value)) return;
+	ObjectRef& ref = std::get<ObjectRef>(prop.value);
+	if (ref.ptr == nullptr) return;
+
+	std::string name = prop.name;
+	uint64_t expectedId = ref.id;
+	prop.objectRefDeleteCallbackId = ref.ptr->AddOnDeleteCallback([this, name, expectedId]() {
+		OnExportedObjectDeleted(name, expectedId);
+		});
+}
+
+void ScriptComponent::UnregisterObjectDeleteCallback(ExportedProperty& prop) {
+	if (!std::holds_alternative<ObjectRef>(prop.value)) return;
+	ObjectRef& ref = std::get<ObjectRef>(prop.value);
+	if (ref.ptr == nullptr || prop.objectRefDeleteCallbackId == -1) return;
+
+	ref.ptr->RemoveOnDeleteCallback(prop.objectRefDeleteCallbackId);
+	prop.objectRefDeleteCallbackId = -1;
+}
+
+void ScriptComponent::OnExportedObjectDeleted(const std::string& name, uint64_t expectedId) {
+	auto it = std::find_if(exportedProperties.begin(), exportedProperties.end(),
+		[&](ExportedProperty& p) { return p.name == name; });
+	if (it == exportedProperties.end()) return;
+	if (!std::holds_alternative<ObjectRef>(it->value)) return;
+
+	ObjectRef& ref = std::get<ObjectRef>(it->value);
+	if (ref.id != expectedId) return; 
+
+	ref.ptr = nullptr;
+	ref.id = 0;
+	it->objectRefDeleteCallbackId = -1;
+
+	SetInstanceAttrFromVariant(it->name, it->value);
+}
+
 void ScriptComponent::Unload() {
 	if (scriptInstance) {
 		py::gil_scoped_acquire gil;
 		scriptInstance = py::object();
+	}
+	for (auto& prop : exportedProperties) {
+		UnregisterObjectDeleteCallback(prop);
 	}
 	exportedProperties.clear();
 	onLoadRan = false;
@@ -178,7 +256,9 @@ void ScriptComponent::Reload() {
 			[&](const ExportedProperty& p) { return p.name == prop.name; });
 
 		if (it != previousValues.end() && it->value.index() == prop.value.index()) {
+			UnregisterObjectDeleteCallback(prop);
 			prop.value = it->value;
+			RegisterObjectDeleteCallback(prop);
 			SetInstanceAttrFromVariant(prop.name, prop.value);
 		}
 	}
@@ -282,6 +362,14 @@ void ScriptComponent::ScanExportedProperties() {
 		else if (py::isinstance<glm::vec2>(defaultValue)) {
 			prop.value = defaultValue.cast<glm::vec2>();
 		}
+		else if (py::isinstance<Object>(defaultValue)) {
+			Object* obj = defaultValue.cast<Object*>();
+			prop.value = ObjectRef{ obj, obj ? obj->id : 0 };
+			RegisterObjectDeleteCallback(prop);
+		}
+		else if (PyType_Check(defaultValue.ptr()) && defaultValue.is(py::type::of<Object>())) {
+			prop.value = ObjectRef{}; 
+		}
 		else {
 			Console::PrintWarning("ScriptComponent: exported property '{}' has an unsupported type; skipping").Format(attrName);
 			continue;
@@ -302,7 +390,9 @@ void ScriptComponent::ApplyPendingExportedValues() {
 			[&](const ExportedProperty& p) { return p.name == prop.name; });
 
 		if (it != pendingExportedValues.end() && it->value.index() == prop.value.index()) {
+			UnregisterObjectDeleteCallback(prop);
 			prop.value = it->value;
+			RegisterObjectDeleteCallback(prop);
 			SetInstanceAttrFromVariant(prop.name, prop.value);
 		}
 	}
@@ -321,10 +411,17 @@ void ScriptComponent::RefreshExportedPropertiesFromInstance() {
 		std::visit([&](auto&& stored) {
 			using T = std::decay_t<decltype(stored)>;
 			try {
-				stored = current.cast<T>();
+				if constexpr (std::is_same_v<T, ObjectRef>) {
+					Object* obj = current.cast<Object*>();
+					stored.ptr = obj;
+					stored.id = obj ? obj->id : 0;
+				}
+				else {
+					stored = current.cast<T>();
+				}
 			}
 			catch (const py::cast_error&) {
-				
+
 			}
 			}, prop.value);
 	}
@@ -335,7 +432,13 @@ void ScriptComponent::SetInstanceAttrFromVariant(const std::string& name, const 
 	py::gil_scoped_acquire gil;
 
 	std::visit([&](auto&& v) {
-		scriptInstance.attr(name.c_str()) = py::cast(v);
+		using T = std::decay_t<decltype(v)>;
+		if constexpr (std::is_same_v<T, ObjectRef>) {
+			scriptInstance.attr(name.c_str()) = py::cast(v.ptr, py::return_value_policy::reference);
+		}
+		else {
+			scriptInstance.attr(name.c_str()) = py::cast(v);
+		}
 		}, value);
 }
 
@@ -428,6 +531,47 @@ void ScriptComponent::ProcessInspectorUI() {
 				default:                      changed = ImGui::InputFloat4("##val", &value.x); break;
 				}
 				if (changed) SetInstanceAttrFromVariant(prop.name, prop.value);
+			}
+			else if constexpr (std::is_same_v<T, ObjectRef>) {
+				char nameBuf[128];
+				std::string label = value.ptr ? value.ptr->name : std::string("None (Click to choose...)");
+				std::snprintf(nameBuf, sizeof(nameBuf), "%s", label.c_str());
+
+				ImGui::InputText("##val", nameBuf, sizeof(nameBuf), ImGuiInputTextFlags_ReadOnly);
+				if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+				if (ImGui::IsItemClicked()) ImGui::OpenPopup("##ExportObjectPicker");
+
+				if (ImGui::BeginPopup("##ExportObjectPicker")) {
+					ImGui::TextDisabled("Select Object");
+					ImGui::Separator();
+
+					bool changed = false;
+
+					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.65f, 0.65f, 0.65f, 1.0f));
+					if (ImGui::Selectable("None")) {
+						UnregisterObjectDeleteCallback(prop);
+						value.ptr = nullptr;
+						value.id = 0;
+						changed = true;
+					}
+					ImGui::PopStyleColor();
+					ImGui::Separator();
+
+					for (auto& objPtr : ObjectManager::getInstance().allObjects) {
+						Object* candidate = objPtr.get();
+						if (candidate->hideInHierarchy) continue;
+						if (ImGui::Selectable(candidate->name.c_str(), candidate == value.ptr)) {
+							UnregisterObjectDeleteCallback(prop);
+							value.ptr = candidate;
+							value.id = candidate->id;
+							RegisterObjectDeleteCallback(prop);
+							changed = true;
+						}
+					}
+					ImGui::EndPopup();
+
+					if (changed) SetInstanceAttrFromVariant(prop.name, prop.value);
+				}
 			}
 			}, prop.value);
 

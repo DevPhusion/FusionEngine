@@ -13,6 +13,11 @@ concept AllowedTypes = std::is_base_of_v<Component, T>;
 class Object
 {
 public:
+	static void ReserveID(uint64_t usedId) {
+		uint64_t& counter = Counter();
+		if (usedId >= counter) counter = usedId + 1;
+	}
+
 	Object(Shader shader);
 	Object() = default;
 
@@ -136,9 +141,13 @@ public:
 private:
 	int CurrentOnRemoveID = -1;
 
-	static uint64_t NextID() {
+	static uint64_t& Counter() {
 		static uint64_t counter = 1;
-		return counter++;
+		return counter;
+	}
+
+	static uint64_t NextID() {
+		return Counter()++;
 	}
 };
 

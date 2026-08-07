@@ -18,6 +18,9 @@ class ScriptComponent : public ComponentBase<ScriptComponent>
 public:
 	ScriptComponent(Object* parent, std::string sourcePath);
 	ScriptComponent() = default;
+	~ScriptComponent() {
+		Unload();
+	}
 
 	std::string sourcePath = "";
 
@@ -41,7 +44,13 @@ public:
 	virtual std::unique_ptr<Component> Clone(Object* parent);
 	virtual void Serialize(BinaryWriter& w);
 	virtual void Deserialize(BinaryReader& r);
+	virtual void PostLoad();
 private:
+	void ResolveObjectReferences(std::vector<ExportedProperty>& props);
+	void RegisterObjectDeleteCallback(ExportedProperty& prop);
+	void UnregisterObjectDeleteCallback(ExportedProperty& prop);
+	void OnExportedObjectDeleted(const std::string& name, uint64_t expectedId);
+
 	void CheckForFileChanges();  
 
 	void ScanExportedProperties();

@@ -96,7 +96,7 @@ void RenderComponent::SetShape(Shape shape) {
 		TransformComponent* tc = parent->HasComponent<TransformComponent>()
 			? parent->GetComponent<TransformComponent>() : nullptr;
 
-		int ps = circle.physicsSegments;
+		int ps = circle.segments;
 		for (int i = 0; i < ps; i++) {
 			float theta1 = 2.0f * glm::pi<float>() * float(i) / float(ps);
 			float theta2 = 2.0f * glm::pi<float>() * float(i + 1) / float(ps);
@@ -557,7 +557,6 @@ void RenderComponent::Serialize(BinaryWriter& w) {
 		w.Write(s.center);
 		w.Write(s.radius);
 		w.Write(s.segments);
-		w.Write(s.physicsSegments);
 	}
 	else {
 		w.Write(static_cast<uint8_t>(0));
@@ -586,7 +585,6 @@ void RenderComponent::Deserialize(BinaryReader& r) {
 		s.center = r.Read<glm::vec3>();
 		s.radius = r.Read<float>();
 		s.segments = r.Read<int>();
-		s.physicsSegments = r.Read<int>();
 		pendingShape = s;
 	}
 	else {
@@ -752,14 +750,6 @@ void RenderComponent::ProcessInspectorUI() {
 			{
 				s.segments = std::max(3, seg); updateCenter(); SetShape(s);
 			}
-
-			int pseg = s.physicsSegments;
-			ImGui::Text("  Sim Seg");
-			ImGui::SameLine();
-			if (ImGui::InputInt("##CirclePhysSeg", &pseg))
-			{
-				s.physicsSegments = std::max(3, pseg); updateCenter(); SetShape(s);
-			}
 		}
 		else if constexpr (std::is_same_v<T, PolygonShape>) {
 			if (!isAddVertex) {
@@ -883,7 +873,6 @@ void RenderComponent::ProcessInspectorUI() {
 			const float r = previewSize.x * 0.38f;
 			draw->AddCircleFilled({ cx, cy }, r, fillCol, s.segments);
 			draw->AddCircle({ cx, cy }, r, outlineCol, s.segments, 1.5f);
-			draw->AddCircle({ cx, cy }, r, IM_COL32(80, 140, 255, 140), s.physicsSegments, 1.0f);
 		}
 		else if constexpr (std::is_same_v<T, PolygonShape>) {
 			std::vector<std::pair<float, float>> displayVerts;

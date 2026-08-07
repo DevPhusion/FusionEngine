@@ -38,6 +38,7 @@ void ConstraintComponent::RemoveConstraint(std::size_t index)
 {
     if (index >= appliedConstraints.size()) return;
 
+    EngineManager::getInstance().EngineChangeEvent();
     auto& c = appliedConstraints[static_cast<int>(index)];
     PhysicsEngine::getInstance().UnRegisterPGSConstraint(c.get());
     c->Unregister(); 

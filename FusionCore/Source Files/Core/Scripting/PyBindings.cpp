@@ -1,11 +1,9 @@
 #include "../../../Header Files/Core/Scripting/PyBindings.h"
 #include "../../../Header Files/Core/Editor/Windows/Console.h"
-#include "../../../Header Files/Components/TransformComponent.h"
-#include "../../../Header Files/Components/EditorRenderComponent.h"
-#include "../../../Header Files/Components/MouseInteractComponent.h"
-#include "../../../Header Files/Components/ScriptComponent.h"
+#include "../../../Header Files/Components/Components.h"
 #include "../../../Header Files/Core/Files/FileManager.h"
 #include "../../../Header Files/Core/ObjectManager.h"
+#include "../../../Header Files/Core/Physics/Constraint/PGSConstraint/Constraints.h"
 #include <pybind11/stl.h>
 #include <pybind11/operators.h>  
 #include <glm/glm.hpp>
@@ -672,14 +670,12 @@ namespace {
 			s.center = center;
 			s.radius = radius;
 			s.segments = segments;
-			s.physicsSegments = physicsSegments;
 			return s;
 				}), py::arg("center"), py::arg("radius"),
 					py::arg("segments") = 30, py::arg("physics_segments") = 30)
 			.def_readwrite("center", &CircleShape::center)
 			.def_readwrite("radius", &CircleShape::radius)
-			.def_readwrite("segments", &CircleShape::segments)
-			.def_readwrite("physics_segments", &CircleShape::physicsSegments);
+			.def_readwrite("segments", &CircleShape::segments);
 	}
 	
 	void RegisterPhysicsBindings(py::module_& m) {
@@ -802,6 +798,358 @@ namespace {
 			py::arg("origin"), py::arg("direction"), py::arg("length"),
 			py::arg("collision_layer") = py::none(), py::arg("ignore_objects") = std::vector<Object*>{},
 			"Cast a ray and return every hit, sorted nearest-first.");
+	}
+
+	void RegisterConstraintBindings(py::module_& m) {
+		auto constraintClass = py::class_<Constraint, std::shared_ptr<Constraint>>(m, "Constraint")
+			.def_property_readonly("name", [](Constraint& self) { return self.Name; })
+
+			.def_property("beta",
+				[](Constraint& self) { return self.beta; },
+				[](Constraint& self, float b) { self.beta = b; })
+			.def("set_beta", [](Constraint& self, float b) { self.beta = b; }, py::arg("beta"))
+
+			.def_property("draw_constraint",
+				[](Constraint& self) { return self.canDrawConstraint; },
+				[](Constraint& self, bool draw) { self.canDrawConstraint = draw; })
+			.def("set_draw_constraint", [](Constraint& self, bool draw) { self.canDrawConstraint = draw; },
+				py::arg("draw_constraint"))
+
+			.def_property_readonly("object_a", [](Constraint& self) -> Object* { return self.objectA.obj; },
+				py::return_value_policy::reference)
+			.def_property_readonly("object_b", [](Constraint& self) -> Object* { return self.objectB.obj; },
+				py::return_value_policy::reference)
+
+			.def("set_object_a", [](Constraint& self, Object* obj) {
+			self.SetObjectA(PhysicsEngine::getInstance().GetBodyFromObject(obj));
+				}, py::arg("object"),
+					"Change the owning object (Object A). Attach point resets to that object's center.")
+			.def("set_object_b", [](Constraint& self, Object* obj) {
+			self.SetObjectB(PhysicsEngine::getInstance().GetBodyFromObject(obj));
+				}, py::arg("object"),
+					"Change the other object (Object B), or None to detach it. Attach point resets "
+					"to that object's center.")
+
+			.def_property("use_center_a",
+				[](Constraint& self) { return self.UseCenterA(); },
+				[](Constraint& self, bool useCenter) {
+					self.useCenterA = useCenter;
+					if (useCenter && self.objectA.obj) {
+						if (RenderComponent* rc = self.objectA.obj->GetComponent<RenderComponent>())
+							self.attachPointA = rc->GetCenter();
+					}
+				})
+			.def_property("use_center_b",
+				[](Constraint& self) { return self.UseCenterB(); },
+				[](Constraint& self, bool useCenter) {
+					self.useCenterB = useCenter;
+					if (useCenter && self.objectB.obj) {
+						if (RenderComponent* rc = self.objectB.obj->GetComponent<RenderComponent>())
+							self.attachPointB = rc->GetCenter();
+					}
+				})
+
+			.def_property("attach_point_a",
+				[](Constraint& self) { return self.attachPointA; },
+				[](Constraint& self, glm::vec3 p) { self.attachPointA = p; self.useCenterA = false; },
+				"Local-space attach point on Object A. Setting this disables use_center_a.")
+			.def_property("attach_point_b",
+				[](Constraint& self) { return self.attachPointB; },
+				[](Constraint& self, glm::vec3 p) { self.attachPointB = p; self.useCenterB = false; },
+				"Local-space attach point on Object B. Setting this disables use_center_b.")
+
+			.def("get_attach_world_a", &Constraint::GetAttachWorldA)
+			.def("get_attach_world_b", &Constraint::GetAttachWorldB)
+
+			.def("__repr__", [](Constraint& self) {
+			std::ostringstream ss;
+			ss << self.Name << "(object_a=" << (self.objectA.obj ? self.objectA.obj->name : "None")
+				<< ", object_b=" << (self.objectB.obj ? self.objectB.obj->name : "None") << ")";
+			return ss.str();
+				});
+
+		py::class_<DistanceConstraint, Constraint, std::shared_ptr<DistanceConstraint>>(m, "DistanceConstraint")
+			.def(py::init([](Object* objectA, Object* objectB, float distance, bool extendable, bool retractable) {
+			if (!objectA) {
+				throw py::value_error("DistanceConstraint: object_a cannot be None");
+			}
+
+			RenderComponent* rcA = objectA->GetComponent<RenderComponent>();
+			if (!rcA) {
+				throw py::value_error("DistanceConstraint: object_a has no RenderComponent");
+			}
+
+			PhysicsBody bodyA = PhysicsEngine::getInstance().GetBodyFromObject(objectA);
+			PhysicsBody bodyB = objectB ? PhysicsEngine::getInstance().GetBodyFromObject(objectB) : PhysicsBody();
+
+			glm::vec3 attachA = rcA->GetCenter();
+			glm::vec3 attachB(0.0f);
+			if (objectB) {
+				if (RenderComponent* rcB = objectB->GetComponent<RenderComponent>())
+					attachB = rcB->GetCenter();
+				else if (EditorRenderComponent* ercB = objectB->GetComponent<EditorRenderComponent>())
+					attachB = ercB->GetCenter();
+			}
+
+			return std::make_shared<DistanceConstraint>(bodyA, bodyB, attachA, attachB,
+				distance, extendable, retractable);
+				}), py::arg("object_a"), py::arg("object_b") = nullptr, py::arg("distance"),
+					py::arg("extendable") = false, py::arg("retractable") = false,
+					"Create a distance constraint attached at object_a's and object_b's centers "
+					"by default. Not part of the scene until passed to "
+					"ConstraintComponent.add_constraint(), e.g.\n"
+					"  dc = DistanceConstraint(self.owner, target, 5.0)\n"
+					"  cc = self.add_component(ConstraintComponent)\n"
+					"  cc.add_constraint(dc)")
+
+			.def(py::init([](Object* objectA, Object* objectB, glm::vec3 attachPointA, glm::vec3 attachPointB,
+				float distance, bool extendable, bool retractable) {
+					if (!objectA) {
+						throw py::value_error("DistanceConstraint: object_a cannot be None");
+					}
+
+					PhysicsBody bodyA = PhysicsEngine::getInstance().GetBodyFromObject(objectA);
+					PhysicsBody bodyB = objectB ? PhysicsEngine::getInstance().GetBodyFromObject(objectB) : PhysicsBody();
+
+					return std::make_shared<DistanceConstraint>(bodyA, bodyB, attachPointA, attachPointB,
+						distance, extendable, retractable);
+				}), py::arg("object_a"), py::arg("object_b"), py::arg("attach_point_a"), py::arg("attach_point_b"),
+					py::arg("distance"), py::arg("extendable") = false, py::arg("retractable") = false,
+					"Create a distance constraint at explicit local-space attach points on each object "
+					"(pass Vector3(0,0,0) for object_b's attach point if object_b is None), e.g.\n"
+					"  dc = DistanceConstraint(self.owner, target, Vector3(0.5, 0, 0), Vector3(0, 0, 0), 5.0)\n"
+					"  cc = self.add_component(ConstraintComponent)\n"
+					"  cc.add_constraint(dc)")
+
+			.def_property("distance",
+				[](DistanceConstraint& self) { return self.distance; },
+				[](DistanceConstraint& self, float d) { self.distance = d; })
+			.def("set_distance", [](DistanceConstraint& self, float d) { self.distance = d; }, py::arg("distance"))
+
+			.def_property("extendable",
+				[](DistanceConstraint& self) { return self.extendable; },
+				[](DistanceConstraint& self, bool e) { self.extendable = e; })
+			.def("set_extendable", [](DistanceConstraint& self, bool e) { self.extendable = e; }, py::arg("extendable"))
+
+			.def_property("retractable",
+				[](DistanceConstraint& self) { return self.retractable; },
+				[](DistanceConstraint& self, bool r) { self.retractable = r; })
+			.def("set_retractable", [](DistanceConstraint& self, bool r) { self.retractable = r; }, py::arg("retractable"));
+
+		py::class_<SpringConstraint, Constraint, std::shared_ptr<SpringConstraint>>(m, "SpringConstraint")
+			.def(py::init([](Object* objectA, Object* objectB, float length, float stiffness, float damping) {
+			if (!objectA) {
+				throw py::value_error("SpringConstraint: object_a cannot be None");
+			}
+			RenderComponent* rcA = objectA->GetComponent<RenderComponent>();
+			if (!rcA) {
+				throw py::value_error("SpringConstraint: object_a has no RenderComponent");
+			}
+
+			PhysicsBody bodyA = PhysicsEngine::getInstance().GetBodyFromObject(objectA);
+			PhysicsBody bodyB = objectB ? PhysicsEngine::getInstance().GetBodyFromObject(objectB) : PhysicsBody();
+
+			glm::vec3 attachA = rcA->GetCenter();
+			glm::vec3 attachB(0.0f);
+			if (objectB) {
+				if (RenderComponent* rcB = objectB->GetComponent<RenderComponent>())
+					attachB = rcB->GetCenter();
+				else if (EditorRenderComponent* ercB = objectB->GetComponent<EditorRenderComponent>())
+					attachB = ercB->GetCenter();
+			}
+
+			return std::make_shared<SpringConstraint>(bodyA, bodyB, attachA, attachB, length, stiffness, damping);
+				}), py::arg("object_a"), py::arg("object_b") = nullptr, py::arg("length"),
+					py::arg("stiffness") = 15.0f, py::arg("damping") = 7.0f,
+					"Create a spring constraint attached at object_a's and object_b's centers "
+					"by default, e.g.\n"
+					"  sc = SpringConstraint(self.owner, target, 5.0)\n"
+					"  cc.add_constraint(sc)")
+
+			.def(py::init([](Object* objectA, Object* objectB, glm::vec3 attachPointA, glm::vec3 attachPointB,
+				float length, float stiffness, float damping) {
+					if (!objectA) {
+						throw py::value_error("SpringConstraint: object_a cannot be None");
+					}
+					PhysicsBody bodyA = PhysicsEngine::getInstance().GetBodyFromObject(objectA);
+					PhysicsBody bodyB = objectB ? PhysicsEngine::getInstance().GetBodyFromObject(objectB) : PhysicsBody();
+
+					auto constraint = std::make_shared<SpringConstraint>(bodyA, bodyB, attachPointA, attachPointB,
+						length, stiffness, damping);
+					constraint->useCenterA = false;
+					constraint->useCenterB = false;
+					return constraint;
+				}), py::arg("object_a"), py::arg("object_b"), py::arg("attach_point_a"), py::arg("attach_point_b"),
+					py::arg("length"), py::arg("stiffness") = 15.0f, py::arg("damping") = 7.0f,
+					"Create a spring constraint at explicit local-space attach points on each object.")
+
+			.def_property("length",
+				[](SpringConstraint& self) { return self.length; },
+				[](SpringConstraint& self, float l) { self.length = l; })
+			.def("set_length", [](SpringConstraint& self, float l) { self.length = l; }, py::arg("length"))
+
+			.def_property("stiffness",
+				[](SpringConstraint& self) { return self.stiffness; },
+				[](SpringConstraint& self, float s) { self.stiffness = s; })
+			.def("set_stiffness", [](SpringConstraint& self, float s) { self.stiffness = s; }, py::arg("stiffness"))
+
+			.def_property("damping",
+				[](SpringConstraint& self) { return self.damping; },
+				[](SpringConstraint& self, float d) { self.damping = d; })
+			.def("set_damping", [](SpringConstraint& self, float d) { self.damping = d; }, py::arg("damping"));
+
+		py::class_<RevoluteConstraint, Constraint, std::shared_ptr<RevoluteConstraint>>(m, "RevoluteConstraint")
+			.def(py::init([](Object* objectA, Object* objectB) {
+			if (!objectA) {
+				throw py::value_error("RevoluteConstraint: object_a cannot be None");
+			}
+			RenderComponent* rcA = objectA->GetComponent<RenderComponent>();
+			if (!rcA) {
+				throw py::value_error("RevoluteConstraint: object_a has no RenderComponent");
+			}
+
+			PhysicsBody bodyA = PhysicsEngine::getInstance().GetBodyFromObject(objectA);
+			PhysicsBody bodyB = objectB ? PhysicsEngine::getInstance().GetBodyFromObject(objectB) : PhysicsBody();
+
+			glm::vec3 attachA = rcA->GetCenter();
+			glm::vec3 attachB(0.0f);
+			if (objectB) {
+				if (RenderComponent* rcB = objectB->GetComponent<RenderComponent>())
+					attachB = rcB->GetCenter();
+				else if (EditorRenderComponent* ercB = objectB->GetComponent<EditorRenderComponent>())
+					attachB = ercB->GetCenter();
+			}
+
+			return std::make_shared<RevoluteConstraint>(bodyA, bodyB, attachA, attachB);
+				}), py::arg("object_a"), py::arg("object_b") = nullptr,
+					"Create a revolute (hinge) constraint pinned at object_a's and object_b's "
+					"centers by default, e.g.\n"
+					"  rc = RevoluteConstraint(self.owner, target)\n"
+					"  cc.add_constraint(rc)")
+
+			.def(py::init([](Object* objectA, Object* objectB, glm::vec3 attachPointA, glm::vec3 attachPointB) {
+			if (!objectA) {
+				throw py::value_error("RevoluteConstraint: object_a cannot be None");
+			}
+			PhysicsBody bodyA = PhysicsEngine::getInstance().GetBodyFromObject(objectA);
+			PhysicsBody bodyB = objectB ? PhysicsEngine::getInstance().GetBodyFromObject(objectB) : PhysicsBody();
+
+			auto constraint = std::make_shared<RevoluteConstraint>(bodyA, bodyB, attachPointA, attachPointB);
+			constraint->useCenterA = false;
+			constraint->useCenterB = false;
+			return constraint;
+				}), py::arg("object_a"), py::arg("object_b"), py::arg("attach_point_a"), py::arg("attach_point_b"),
+					"Create a revolute constraint pinned at explicit local-space attach points "
+					"on each object.");
+
+		py::class_<WeldConstraint, Constraint, std::shared_ptr<WeldConstraint>>(m, "WeldConstraint")
+			.def(py::init([](Object* objectA, Object* objectB, float angularOffset) {
+			if (!objectA) {
+				throw py::value_error("WeldConstraint: object_a cannot be None");
+			}
+			RenderComponent* rcA = objectA->GetComponent<RenderComponent>();
+			if (!rcA) {
+				throw py::value_error("WeldConstraint: object_a has no RenderComponent");
+			}
+
+			PhysicsBody bodyA = PhysicsEngine::getInstance().GetBodyFromObject(objectA);
+			PhysicsBody bodyB = objectB ? PhysicsEngine::getInstance().GetBodyFromObject(objectB) : PhysicsBody();
+
+			glm::vec3 attachA = rcA->GetCenter();
+			glm::vec3 attachB(0.0f);
+			if (objectB) {
+				if (RenderComponent* rcB = objectB->GetComponent<RenderComponent>())
+					attachB = rcB->GetCenter();
+				else if (EditorRenderComponent* ercB = objectB->GetComponent<EditorRenderComponent>())
+					attachB = ercB->GetCenter();
+			}
+
+			return std::make_shared<WeldConstraint>(bodyA, bodyB, attachA, attachB, angularOffset);
+				}), py::arg("object_a"), py::arg("object_b") = nullptr, py::arg("angular_offset") = 0.0f,
+					"Create a weld constraint at object_a's and object_b's centers by default, "
+					"locking their relative position and rotation, e.g.\n"
+					"  wc = WeldConstraint(self.owner, target)\n"
+					"  cc.add_constraint(wc)")
+
+			.def(py::init([](Object* objectA, Object* objectB, glm::vec3 attachPointA, glm::vec3 attachPointB,
+				float angularOffset) {
+					if (!objectA) {
+						throw py::value_error("WeldConstraint: object_a cannot be None");
+					}
+					PhysicsBody bodyA = PhysicsEngine::getInstance().GetBodyFromObject(objectA);
+					PhysicsBody bodyB = objectB ? PhysicsEngine::getInstance().GetBodyFromObject(objectB) : PhysicsBody();
+
+					auto constraint = std::make_shared<WeldConstraint>(bodyA, bodyB, attachPointA, attachPointB, angularOffset);
+					constraint->useCenterA = false;
+					constraint->useCenterB = false;
+					return constraint;
+				}), py::arg("object_a"), py::arg("object_b"), py::arg("attach_point_a"), py::arg("attach_point_b"),
+					py::arg("angular_offset") = 0.0f,
+					"Create a weld constraint at explicit local-space attach points on each object.")
+
+			.def_property("angular_offset",
+				[](WeldConstraint& self) { return self.angularOffset; },
+				[](WeldConstraint& self, float a) { self.angularOffset = a; })
+			.def("set_angular_offset", [](WeldConstraint& self, float a) { self.angularOffset = a; },
+				py::arg("angular_offset"));
+
+		py::class_<PrismaticConstraint, Constraint, std::shared_ptr<PrismaticConstraint>>(m, "PrismaticConstraint")
+			.def(py::init([](Object* objectA, Object* objectB, glm::vec3 dir) {
+			if (!objectA) {
+				throw py::value_error("PrismaticConstraint: object_a cannot be None");
+			}
+			RenderComponent* rcA = objectA->GetComponent<RenderComponent>();
+			if (!rcA) {
+				throw py::value_error("PrismaticConstraint: object_a has no RenderComponent");
+			}
+
+			PhysicsBody bodyA = PhysicsEngine::getInstance().GetBodyFromObject(objectA);
+			PhysicsBody bodyB = objectB ? PhysicsEngine::getInstance().GetBodyFromObject(objectB) : PhysicsBody();
+
+			glm::vec3 attachA = rcA->GetCenter();
+			glm::vec3 attachB(0.0f);
+			if (objectB) {
+				if (RenderComponent* rcB = objectB->GetComponent<RenderComponent>())
+					attachB = rcB->GetCenter();
+				else if (EditorRenderComponent* ercB = objectB->GetComponent<EditorRenderComponent>())
+					attachB = ercB->GetCenter();
+			}
+
+			return std::make_shared<PrismaticConstraint>(bodyA, bodyB, attachA, attachB, dir);
+				}), py::arg("object_a"), py::arg("object_b") = nullptr, py::arg("dir") = glm::vec3(1.0f, 0.0f, 0.0f),
+					"Create a prismatic (slider) constraint at object_a's and object_b's centers "
+					"by default, constraining relative motion to the line between them, e.g.\n"
+					"  pc = PrismaticConstraint(self.owner, target)\n"
+					"  cc.add_constraint(pc)")
+
+			.def(py::init([](Object* objectA, Object* objectB, glm::vec3 attachPointA, glm::vec3 attachPointB,
+				glm::vec3 dir) {
+					if (!objectA) {
+						throw py::value_error("PrismaticConstraint: object_a cannot be None");
+					}
+					PhysicsBody bodyA = PhysicsEngine::getInstance().GetBodyFromObject(objectA);
+					PhysicsBody bodyB = objectB ? PhysicsEngine::getInstance().GetBodyFromObject(objectB) : PhysicsBody();
+
+					auto constraint = std::make_shared<PrismaticConstraint>(bodyA, bodyB, attachPointA, attachPointB, dir);
+					constraint->useCenterA = false;
+					constraint->useCenterB = false;
+					return constraint;
+				}), py::arg("object_a"), py::arg("object_b"), py::arg("attach_point_a"), py::arg("attach_point_b"),
+					py::arg("dir") = glm::vec3(1.0f, 0.0f, 0.0f),
+					"Create a prismatic constraint at explicit local-space attach points on each object.")
+
+			.def_property_readonly("dir", [](PrismaticConstraint& self) { return self.dir; },
+				"The locked slide direction. Read-only from script — use relock_direction() to update it.")
+			.def("relock_direction", [](PrismaticConstraint& self) {
+			if (!self.objectA.obj || !self.objectB.obj) {
+				throw py::value_error("relock_direction: both object_a and object_b must be set");
+			}
+			glm::vec3 pA = self.objectA.obj->GetComponent<TransformComponent>()->GetWorldPosition();
+			glm::vec3 pB = self.objectB.obj->GetComponent<TransformComponent>()->GetWorldPosition();
+			self.dir = pB - pA;
+			EngineManager::getInstance().EngineChangeEvent();
+				}, "Recompute the locked slide direction from the objects' current world positions "
+				"(mirrors the inspector's 'Re-lock direction' button)");
 	}
 
 	void RegisterComponentBindings(py::module_& m) {
@@ -1627,6 +1975,43 @@ namespace {
 		EnableAddObject<FluidComponent>(fluidClass);
 		EnableAddChild<FluidComponent>(fluidClass);
 		EnableRemoveObject<FluidComponent>(fluidClass);
+
+		auto constraintComponentClass = py::class_<ConstraintComponent>(m, "ConstraintComponent")
+			.def_property_readonly("constraints", [](ConstraintComponent& self) {
+			return self.appliedConstraints;
+				}, "Constraints this object owns (as Object A)")
+			.def_property_readonly("mirrored_constraints", [](ConstraintComponent& self) {
+			return self.mirroredConstraints;
+				}, py::return_value_policy::reference,
+				"Constraints another object owns where this object is Object B. Read-only from here — "
+					"modify them via their owner's ConstraintComponent instead.")
+
+			.def("add_constraint", &ConstraintComponent::AddConstraint, py::arg("constraint"),
+				"Register a constraint (e.g. a DistanceConstraint) with this object and the physics "
+				"engine, e.g.\n"
+				"  cc.add_constraint(DistanceConstraint(self.owner, target, 5.0))")
+
+			.def("remove_constraint", py::overload_cast<Constraint*>(&ConstraintComponent::RemoveConstraint),
+				py::arg("constraint"))
+			.def("remove_constraint", py::overload_cast<std::size_t>(&ConstraintComponent::RemoveConstraint),
+				py::arg("index"))
+
+			.def("get_constraint_count", [](ConstraintComponent& self) { return self.appliedConstraints.size(); });
+
+		EnableGetComponent<ConstraintComponent>(constraintComponentClass);
+		EnableHasComponent<ConstraintComponent>(constraintComponentClass);
+		RegisterComponentGetter<ConstraintComponent>(constraintComponentClass);
+		EnableGetOwner<ConstraintComponent>(constraintComponentClass);
+		RegisterComponentRemover<ConstraintComponent>(constraintComponentClass);
+		RegisterComponentAdder<ConstraintComponent>(constraintComponentClass,
+			[](Object& obj) {
+				return std::make_unique<ConstraintComponent>(&obj);
+			});
+		EnableAddComponent<ConstraintComponent>(constraintComponentClass);
+		EnableRemoveComponent<ConstraintComponent>(constraintComponentClass);
+		EnableAddObject<ConstraintComponent>(constraintComponentClass);
+		EnableAddChild<ConstraintComponent>(constraintComponentClass);
+		EnableRemoveObject<ConstraintComponent>(constraintComponentClass);
 	}
 
 	Object* CreateDefaultObject() {
@@ -1953,6 +2338,7 @@ void RegisterEngineBindings(py::module_& m) {
 	RegisterMathBindings(m);
 	RegisterPhysicsBindings(m);
 	RegisterShapeBindings(m);
+	RegisterConstraintBindings(m);
 	RegisterScriptBindings(m);
 	RegisterInputBindings(m);
 	RegisterConsoleBindings(m);

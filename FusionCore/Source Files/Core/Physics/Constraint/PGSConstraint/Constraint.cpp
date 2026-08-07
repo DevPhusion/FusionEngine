@@ -18,6 +18,12 @@ Constraint::Constraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attac
     this->attachPointB = attachPointB;
 
 	Renderer::getInstance().constraintEditGizmos->RegisterConstraint(this);
+	EngineManager::getInstance().AddPhysicsModeChangedEvent([this]() {
+		if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::Simulate &&
+            EngineManager::getInstance().EngineInteractMode == EngineManager::ConstraintEdit) {
+			EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
+		}
+	});
 }
 
 Constraint::~Constraint() {
@@ -120,6 +126,7 @@ void Constraint::OnAttachAMoved(glm::vec3 worldPos)
 {
     if (objectA.obj == nullptr) return;
     attachPointA = objectA.obj->GetComponent<TransformComponent>()->ProjectToWorld(worldPos, true);
+    EngineManager::getInstance().EngineChangeEvent();
 
     SoftBodyComponent* sb = objectA.obj->GetComponent<SoftBodyComponent>();
     if (sb) {
@@ -143,6 +150,7 @@ void Constraint::OnAttachBMoved(glm::vec3 worldPos)
 {
     if (objectB.obj == nullptr) return;
     attachPointB = objectB.obj->GetComponent<TransformComponent>()->ProjectToWorld(worldPos, true);
+    EngineManager::getInstance().EngineChangeEvent();
 
     SoftBodyComponent* sb = objectB.obj->GetComponent<SoftBodyComponent>();
     if (sb) {
@@ -216,6 +224,7 @@ void Constraint::ProcessInspectorUI(Object* parent)
 
             if (ImGui::Checkbox((std::string("Use Object Center##") + popupId).c_str(), &useCenter))
             {
+                EngineManager::getInstance().EngineChangeEvent();
                 if (useCenter)
                 {
                     attachPoint = currentObj->GetComponent<RenderComponent>()->GetCenter();
@@ -321,6 +330,7 @@ void Constraint::ProcessInspectorUI(Object* parent)
                     body.invMass = &pc->inverseMass;
                 }
                 SetObjectB(body);
+                EngineManager::getInstance().EngineChangeEvent();
             }
         }
     }
@@ -330,11 +340,15 @@ void Constraint::ProcessInspectorUI(Object* parent)
 
     ImGui::Text("Beta ");
     ImGui::SameLine();
-    ImGui::DragFloat("##beta", &beta, 0.001f, 0.0f, 1.0f);
+    if (ImGui::DragFloat("##beta", &beta, 0.001f, 0.0f, 1.0f)) {
+        EngineManager::getInstance().EngineChangeEvent();
+    }
 
     ImGui::Text("Draw constraint ");
     ImGui::SameLine();
-    ImGui::Checkbox("##Draw constraint", &canDrawConstraint);
+    if (ImGui::Checkbox("##Draw constraint", &canDrawConstraint)) {
+        EngineManager::getInstance().EngineChangeEvent();
+    }
 }
 
 void Constraint::CopyBaseFieldsFrom(const Constraint* src) {

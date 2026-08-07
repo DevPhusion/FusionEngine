@@ -67,15 +67,21 @@ void DistanceConstraint::ProcessInspectorUI(Object* parent) {
 
 	ImGui::Text("Distance ");
 	ImGui::SameLine();
-	ImGui::InputFloat("##Distance", &distance, 0.0f, 0.0f, "%.3f m");
+	if (ImGui::InputFloat("##Distance", &distance, 0.0f, 0.0f, "%.3f m")) {
+		EngineManager::getInstance().EngineChangeEvent();
+	}
 
 	ImGui::Text("Retractable ");
 	ImGui::SameLine();
-	ImGui::Checkbox("##Retractable ", &retractable);
+	if (ImGui::Checkbox("##Retractable ", &retractable)) {
+		EngineManager::getInstance().EngineChangeEvent();
+	}
 
 	ImGui::Text("Extendable ");
 	ImGui::SameLine();
-	ImGui::Checkbox("##Extendable ", &extendable);
+	if (ImGui::Checkbox("##Extendable ", &extendable)) {
+		EngineManager::getInstance().EngineChangeEvent();
+	}
 }
 
 void DistanceConstraint::DrawConstraintGizmo() {

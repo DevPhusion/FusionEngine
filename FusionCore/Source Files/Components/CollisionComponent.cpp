@@ -148,7 +148,7 @@ std::vector<glm::vec3> CollisionComponent::VerticesFromShape(Shape& shape) {
 		}
 		else {
 			std::vector<glm::vec3> verts;
-			int ps = s.physicsSegments;
+			int ps = s.segments;
 			for (int i = 0; i < ps; i++) {
 				float theta = 2.0f * glm::pi<float>() * float(i) / float(ps);
 				glm::vec3 worldPoint = s.center + glm::vec3(s.radius * std::cos(theta), s.radius * std::sin(theta), 0.0f);
@@ -379,6 +379,7 @@ bool CollisionComponent::isGrounded(float probeLength) {
 
 	const float skin = 0.05f;
 	glm::vec3 origin = worldLowest + glm::vec3(0.0f, skin, 0.0f);
+	origin.x = tc->worldPosition.x;
 
 	RayCastHit hit = PhysicsEngine::getInstance().RayCast(
 		origin, glm::vec3(0.0f, -1.0f, 0.0f), probeLength + skin,
@@ -635,11 +636,11 @@ void CollisionComponent::ProcessShapeEntryUI(CollisionShapeEntry& entry) {
 				s.radius = std::max(0.01f, r); updateCenter(); SetShape(entry, s);
 			}
 
-			int pseg = s.physicsSegments;
-			ImGui::Text("  Sim Seg");
+			int seg = s.segments;
+			ImGui::Text("  Segments");
 			ImGui::SameLine();
-			if (ImGui::InputInt("##CollisionCirclePhysSeg", &pseg)) {
-				s.physicsSegments = std::max(3, pseg); updateCenter(); SetShape(entry, s);
+			if (ImGui::InputInt("##CollisionCircleSeg", &seg)) {
+				s.segments = std::max(3, seg); updateCenter(); SetShape(entry, s);
 			}
 		}
 		else if constexpr (std::is_same_v<T, PolygonShape>) {
@@ -930,7 +931,6 @@ void CollisionComponent::Serialize(BinaryWriter& w) {
 				w.Write(s.center);
 				w.Write(s.radius);
 				w.Write(s.segments);
-				w.Write(s.physicsSegments);
 			}
 			else {
 				w.Write(static_cast<uint8_t>(0));
@@ -992,7 +992,6 @@ void CollisionComponent::Deserialize(BinaryReader& r) {
 				s.center = r.Read<glm::vec3>();
 				s.radius = r.Read<float>();
 				s.segments = r.Read<int>();
-				s.physicsSegments = r.Read<int>();
 				entry.pendingShape = s;
 			}
 			else {

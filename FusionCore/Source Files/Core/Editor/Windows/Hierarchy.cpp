@@ -112,6 +112,50 @@ void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* re
 #endif
 	}
 
+	std::string ctxId = "##ctx_" + std::to_string(currentObj->id);
+	bool nodeDeleted = false;
+	if (ImGui::BeginPopupContextItem(ctxId.c_str())) {
+		currentObj->GetComponent<MouseInteractComponent>()->SetSelectedPolygon(currentObj, true);
+
+		if (ImGui::MenuItem("Add Child")) {
+			if (addObjectWindow == nullptr) {
+				addObjectWindow = new AddObjectWindow("Add Object");
+				EditorManager::getInstance().AddWindow(addObjectWindow);
+				addObjectWindow->parent = currentObj;
+			}
+			else {
+				addObjectWindow->Show();
+				addObjectWindow->parent = currentObj;
+			}
+		}
+		if (ImGui::MenuItem("Rename")) {
+			IsRenaming = true;
+			currentObj->GetComponent<MouseInteractComponent>()->SetSelectedPolygon(currentObj, true);
+#if defined(_MSC_VER)
+			strcpy_s(renameBuffer, 256, currentObj->name.c_str());
+#else
+			strncpy(renameBuffer, currentObj->name.c_str(), 255);
+			renameBuffer[255] = '\0';
+#endif
+		}
+		if (ImGui::MenuItem("Delete")) {
+			if (EditorManager::getInstance().selectedObject == currentObj) {
+				EditorManager::getInstance().SetSelectedObject(nullptr);
+			}
+			ObjectManager::getInstance().RemoveObject(currentObj);
+			EngineManager::getInstance().EngineChangeEvent();
+			nodeDeleted = true;
+		}
+		ImGui::EndPopup();
+	}
+
+	if (nodeDeleted) {
+		if (nodeOpen && !children.empty()) {
+			ImGui::TreePop();
+		}
+		return;
+	}
+
 	if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
 		ImGui::SetDragDropPayload("HIERARCHY_OBJECT", &currentObj, sizeof(Object*));
 		ImGui::Text("%s", currentObj->name.c_str());
@@ -229,6 +273,7 @@ void Hierarchy::ProcessWindow() {
 		}
 		else {
 			addObjectWindow->Show();
+			addObjectWindow->parent = nullptr;
 		}
 	}
 
