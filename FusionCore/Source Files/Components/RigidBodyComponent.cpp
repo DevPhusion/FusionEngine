@@ -33,6 +33,7 @@ void RigidBodyComponent::CopyTo(Object* other) {
 	target->Inertia = Inertia;
 	target->inverseInertia = inverseInertia;
 	target->inverseMass = inverseMass;
+	target->SetEnabled(Enabled);
 }
 
 std::unique_ptr<Component> RigidBodyComponent::Clone(Object* parent) {
@@ -42,6 +43,7 @@ std::unique_ptr<Component> RigidBodyComponent::Clone(Object* parent) {
 	comp->Inertia = Inertia;
 	comp->inverseInertia = inverseInertia;
 	comp->inverseMass = inverseMass;
+	comp->pendingEnabled = Enabled;
 	comp->SetEnabled(false);
 	return comp;
 }

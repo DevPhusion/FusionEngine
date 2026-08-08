@@ -244,6 +244,7 @@ void SoftBodyComponent::CopyTo(Object* other) {
 
 	target->useGasPressure = useGasPressure;
 	target->gasAmount = gasAmount;
+	target->SetEnabled(Enabled);
 }
 
 std::unique_ptr<Component> SoftBodyComponent::Clone(Object* parent) {
@@ -268,6 +269,7 @@ std::unique_ptr<Component> SoftBodyComponent::Clone(Object* parent) {
 	comp->useGasPressure = useGasPressure;
 	comp->gasAmount = gasAmount;
 
+	comp->pendingEnabled = Enabled;
 	comp->SetEnabled(false);
 	return comp;
 }

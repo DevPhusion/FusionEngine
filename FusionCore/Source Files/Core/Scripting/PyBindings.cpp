@@ -800,6 +800,41 @@ namespace {
 			"Cast a ray and return every hit, sorted nearest-first.");
 	}
 
+	void RegisterRendererBindings(py::module_& m) {
+		py::module_ renderMod = m.def_submodule("Render", "Immediate-mode debug drawing");
+
+		renderMod.def("draw_line", [](glm::vec3 p1, glm::vec3 p2, glm::vec4 color, float thickness, bool screenSpace) {
+			Renderer::getInstance().DrawLine(p1, p2, color, thickness, screenSpace);
+			}, py::arg("p1"), py::arg("p2"), py::arg("color"), py::arg("thickness") = 1.0f, py::arg("screen_space") = false,
+				"Draw a line between two world-space points for one frame, e.g.\n"
+				"  Render.draw_line(Vector3(0,0,0), Vector3(1,1,0), Vector4(1,0,0,1))");
+
+		renderMod.def("draw_arrow", [](glm::vec3 origin, glm::vec3 direction, float length, glm::vec4 color,
+			float thickness, float headLength, float headAngleDeg, bool screenSpace) {
+				Renderer::getInstance().DrawArrow(origin, direction, length, color, thickness, headLength, headAngleDeg, screenSpace);
+			}, py::arg("origin"), py::arg("direction"), py::arg("length"), py::arg("color"),
+				py::arg("thickness") = 1.0f, py::arg("head_length") = 0.15f, py::arg("head_angle_deg") = 25.0f,
+				py::arg("screen_space") = false,
+				"Draw an arrow from origin along direction (auto-normalized) for one frame, e.g.\n"
+				"  Render.draw_arrow(pos, Vector3(0,1,0), 1.5, Vector4(0,1,0,1))");
+
+		renderMod.def("draw_circle", [](glm::vec3 center, float radius, glm::vec4 color, int segments,
+			float thickness, bool screenSpace) {
+				Renderer::getInstance().DrawCircle(center, radius, color, segments, thickness, screenSpace);
+			}, py::arg("center"), py::arg("radius"), py::arg("color"), py::arg("segments") = 32,
+				py::arg("thickness") = 1.0f, py::arg("screen_space") = false,
+				"Draw a circle outline for one frame, e.g.\n"
+				"  Render.draw_circle(pos, 1.0, Vector4(1,1,0,1))");
+
+		renderMod.def("draw_filled_polygon", [](std::vector<glm::vec3> worldPoints, glm::vec4 fillColor,
+			glm::vec4 outlineColor, float outlineThickness) {
+				Renderer::getInstance().DrawFilledPolygon(worldPoints, fillColor, outlineColor, outlineThickness);
+			}, py::arg("world_points"), py::arg("fill_color"), py::arg("outline_color"), py::arg("outline_thickness") = 1.0f,
+				"Draw a filled, outlined polygon from world-space points (min 3) for one frame, e.g.\n"
+				"  Render.draw_filled_polygon([Vector3(0,0,0), Vector3(1,0,0), Vector3(0,1,0)], "
+				"Vector4(1,0,0,0.5), Vector4(1,0,0,1))");
+	}
+
 	void RegisterConstraintBindings(py::module_& m) {
 		auto constraintClass = py::class_<Constraint, std::shared_ptr<Constraint>>(m, "Constraint")
 			.def_property_readonly("name", [](Constraint& self) { return self.Name; })
@@ -2012,6 +2047,151 @@ namespace {
 		EnableAddObject<ConstraintComponent>(constraintComponentClass);
 		EnableAddChild<ConstraintComponent>(constraintComponentClass);
 		EnableRemoveObject<ConstraintComponent>(constraintComponentClass);
+
+		auto fractureClass = py::class_<FractureComponent>(m, "FractureComponent")
+			.def_property("fracturable",
+				[](FractureComponent& self) { return self.fracturable; },
+				[](FractureComponent& self, bool f) {
+					self.fracturable = f;
+					EngineManager::getInstance().EngineChangeEvent();
+				})
+			.def("set_fracturable", [](FractureComponent& self, bool f) {
+			self.fracturable = f;
+			EngineManager::getInstance().EngineChangeEvent();
+				}, py::arg("fracturable"))
+
+			.def_property("impulse_threshold",
+				[](FractureComponent& self) { return self.impulseThreshold; },
+				[](FractureComponent& self, float t) {
+					self.impulseThreshold = t;
+					EngineManager::getInstance().EngineChangeEvent();
+				})
+			.def("set_impulse_threshold", [](FractureComponent& self, float t) {
+			self.impulseThreshold = t;
+			EngineManager::getInstance().EngineChangeEvent();
+				}, py::arg("impulse_threshold"))
+
+			.def_property("shard_count",
+				[](FractureComponent& self) { return self.shardCount; },
+				[](FractureComponent& self, int c) {
+					self.shardCount = c;
+					EngineManager::getInstance().EngineChangeEvent();
+				})
+			.def("set_shard_count", [](FractureComponent& self, int c) {
+			self.shardCount = c;
+			EngineManager::getInstance().EngineChangeEvent();
+				}, py::arg("shard_count"))
+
+			.def_property("min_fragment_area",
+				[](FractureComponent& self) { return self.minFragmentArea; },
+				[](FractureComponent& self, float a) {
+					self.minFragmentArea = a;
+					EngineManager::getInstance().EngineChangeEvent();
+				})
+			.def("set_min_fragment_area", [](FractureComponent& self, float a) {
+			self.minFragmentArea = a;
+			EngineManager::getInstance().EngineChangeEvent();
+				}, py::arg("min_fragment_area"))
+
+			.def_property("max_fracture_generations",
+				[](FractureComponent& self) { return self.maxFractureGenerations; },
+				[](FractureComponent& self, int g) {
+					self.maxFractureGenerations = g;
+					EngineManager::getInstance().EngineChangeEvent();
+				})
+			.def("set_max_fracture_generations", [](FractureComponent& self, int g) {
+			self.maxFractureGenerations = g;
+			EngineManager::getInstance().EngineChangeEvent();
+				}, py::arg("max_fracture_generations"))
+
+			.def_property_readonly("generation", [](FractureComponent& self) { return self.generation; },
+				"How many times this object (or its source ancestor) has already fractured")
+
+			.def_property("rest_density",
+				[](FractureComponent& self) { return self.restDensity; },
+				[](FractureComponent& self, float d) {
+					self.restDensity = d;
+					EngineManager::getInstance().EngineChangeEvent();
+				})
+			.def("set_rest_density", [](FractureComponent& self, float d) {
+			self.restDensity = d;
+			EngineManager::getInstance().EngineChangeEvent();
+				}, py::arg("rest_density"))
+
+			.def("fracture", [](FractureComponent& self) {
+			glm::vec3 worldPoint = self.parent->GetComponent<TransformComponent>()->GetWorldPosition();
+			PhysicsEngine::getInstance().FractureObject(self.parent, worldPoint);
+				}, "Immediately fracture this object into shards at its own center, e.g.\n" 
+					"  self.get_component(FractureComponent).fracture()")
+
+			.def("fracture_at_world_point", [](FractureComponent& self, glm::vec3 worldPoint) {
+			PhysicsEngine::getInstance().FractureObject(self.parent, worldPoint);
+				}, py::arg("world_point"),
+					"Immediately fracture this object into shards, using worldPoint (world-space) "
+					"as the impact point that seeds the fracture pattern, e.g.\n"
+					"  fc.fracture_at_world_point(hit.point)")
+
+			.def("fracture_at_local_point", [](FractureComponent& self, glm::vec3 localPoint) {
+			glm::vec3 worldPoint = self.parent->GetComponent<TransformComponent>()->ProjectToWorld(localPoint);
+			PhysicsEngine::getInstance().FractureObject(self.parent, worldPoint);
+				}, py::arg("local_point"),
+					"Immediately fracture this object into shards, using localPoint (in this "
+					"object's local/model space) as the impact point that seeds the fracture "
+					"pattern, e.g.\n"
+					"  fc.fracture_at_local_point(Vector3(0.5, 0, 0))");
+
+		EnableGetComponent<FractureComponent>(fractureClass);
+		EnableHasComponent<FractureComponent>(fractureClass);
+		RegisterComponentGetter<FractureComponent>(fractureClass);
+		EnableGetOwner<FractureComponent>(fractureClass);
+		RegisterComponentRemover<FractureComponent>(fractureClass);
+		RegisterComponentAdder<FractureComponent>(fractureClass,
+			[](Object& obj) {
+				return std::make_unique<FractureComponent>(&obj);
+			});
+		EnableAddComponent<FractureComponent>(fractureClass);
+		EnableRemoveComponent<FractureComponent>(fractureClass);
+		EnableAddObject<FractureComponent>(fractureClass);
+		EnableAddChild<FractureComponent>(fractureClass);
+		EnableRemoveObject<FractureComponent>(fractureClass);
+
+		auto cameraClass = py::class_<CameraComponent>(m, "CameraComponent")
+			.def_property("enable",
+				[](CameraComponent& self) { return self.Enabled; },
+				[](CameraComponent& self, bool enable) { self.SetEnabled(enable); })
+			.def("set_enable", &CameraComponent::SetEnabled, py::arg("enable"))
+
+			.def_property("range",
+				[](CameraComponent& self) { return self.GetRange(); },
+				[](CameraComponent& self, float r) { self.SetRange(r); })
+			.def("get_range", &CameraComponent::GetRange)
+			.def("set_range", &CameraComponent::SetRange, py::arg("range"))
+
+			.def_property("is_main",
+				[](CameraComponent& self) { return Camera::getInstance().mainCam == &self; },
+				[](CameraComponent& self, bool isMain) {
+					Camera::getInstance().mainCam = isMain ? &self : nullptr;
+				},
+				"Whether this is the active/main camera. Setting this to True on one camera "
+				"does not automatically unset another camera's is_main.")
+			.def("set_is_main", [](CameraComponent& self, bool isMain) {
+			Camera::getInstance().mainCam = isMain ? &self : nullptr;
+				}, py::arg("is_main"));
+
+		EnableGetComponent<CameraComponent>(cameraClass);
+		EnableHasComponent<CameraComponent>(cameraClass);
+		RegisterComponentGetter<CameraComponent>(cameraClass);
+		EnableGetOwner<CameraComponent>(cameraClass);
+		RegisterComponentRemover<CameraComponent>(cameraClass);
+		RegisterComponentAdder<CameraComponent>(cameraClass,
+			[](Object& obj) {
+				return std::make_unique<CameraComponent>(&obj);
+			});
+		EnableAddComponent<CameraComponent>(cameraClass);
+		EnableRemoveComponent<CameraComponent>(cameraClass);
+		EnableAddObject<CameraComponent>(cameraClass);
+		EnableAddChild<CameraComponent>(cameraClass);
+		EnableRemoveObject<CameraComponent>(cameraClass);
 	}
 
 	Object* CreateDefaultObject() {
@@ -2337,6 +2517,7 @@ void RegisterEngineBindings(py::module_& m) {
 	m.doc() = "Fusion engine scripting API";
 	RegisterMathBindings(m);
 	RegisterPhysicsBindings(m);
+	RegisterRendererBindings(m);
 	RegisterShapeBindings(m);
 	RegisterConstraintBindings(m);
 	RegisterScriptBindings(m);

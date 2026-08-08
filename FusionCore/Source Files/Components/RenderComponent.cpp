@@ -526,6 +526,7 @@ void RenderComponent::CopyTo(Object* other) {
 	target->SetTexture(texture_path);
 	target->color = color;
 	target->pendingShape = currentShape;
+	target->SetEnabled(Enabled);
 }
 
 std::unique_ptr<Component> RenderComponent::Clone(Object* parent) {
@@ -533,6 +534,7 @@ std::unique_ptr<Component> RenderComponent::Clone(Object* parent) {
 	comp->z_index = z_index;
 	comp->color = color;
 	comp->pendingShape = currentShape;
+	comp->pendingEnabled = Enabled;
 	comp->SetEnabled(false);
 	return comp;
 }

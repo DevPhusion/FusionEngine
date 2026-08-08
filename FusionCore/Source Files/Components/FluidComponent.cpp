@@ -358,6 +358,7 @@ void FluidComponent::CopyTo(Object* other) {
 	target->ResizeInstanceBuffer();
 	target->RebuildQuadGeometry();
 	target->RebuildDensityQuadGeometry();
+	target->SetEnabled(Enabled);
 }
 
 std::unique_ptr<Component> FluidComponent::Clone(Object* parent) {
@@ -373,6 +374,7 @@ std::unique_ptr<Component> FluidComponent::Clone(Object* parent) {
 	comp->vorticityStrength = vorticityStrength;
 	comp->epsilon = epsilon;
 	comp->smoothingRadius = smoothingRadius;
+	comp->pendingEnabled = Enabled;
 	comp->SetEnabled(false);
 	return comp;
 }

@@ -4,7 +4,6 @@
 CameraComponent::CameraComponent(Object* parent) : ComponentBase<CameraComponent>(parent) {
 	Name = "Camera Component";
 	RegisterCallbacks();
-	Camera::getInstance().mainCam = this;
 	EditorRenderComponent* erc = parent->GetComponent<EditorRenderComponent>();
 	if (erc) {
 		erc->SetTexture("Resources/Images/Camera.png");
@@ -36,7 +35,7 @@ void CameraComponent::UnregisterCallbacks() {
 void CameraComponent::OnPhysicsModeChanged() {
 	Camera& cam = Camera::getInstance();
 
-	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) {
+	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate && isMain) {
 		isActive = true;
 		SyncCamera();
 	}
@@ -67,20 +66,29 @@ void CameraComponent::SetRange(float range) {
 }
 
 void CameraComponent::ProcessInspectorUI() {
-	isMain = Camera::getInstance().mainCam == this;
 	ImGui::Text("Is Main ");
 	ImGui::SameLine();
-	if (ImGui::Checkbox("##IsMain", &isMain)) {
-		if (isMain)
+	bool mainFlag = isMain;
+	if (ImGui::Checkbox("##IsMain", &mainFlag)) {
+		isMain = mainFlag;
+		EngineManager::getInstance().EngineChangeEvent();
+		if (isMain) {
+			if (Camera::getInstance().mainCam && Camera::getInstance().mainCam != this) {
+				Camera::getInstance().mainCam->isMain = false;
+			}
 			Camera::getInstance().mainCam = this;
-		else
+		}
+		else if (Camera::getInstance().mainCam == this) {
 			Camera::getInstance().mainCam = nullptr;
+		}
 	}
+
 	ImGui::Text("Range ");
 	ImGui::SameLine();
 	float r = range;
 	if (ImGui::InputFloat("## Range", &r)) {
-		SetRange(r < 1.0f ? 1.0f : r);
+		SetRange(r < 0.0f ? 0.01f : r);
+		EngineManager::getInstance().EngineChangeEvent();
 	}
 }
 
@@ -94,11 +102,18 @@ void CameraComponent::SetEnabled(bool enabled) {
 	Component::SetEnabled(enabled);
 	if (enabled) {
 		RegisterCallbacks();
-		Camera::getInstance().mainCam = this;
-		isMain = true;
+		if (isMain) {
+			if (Camera::getInstance().mainCam && Camera::getInstance().mainCam != this) {
+				Camera::getInstance().mainCam->isMain = false;
+			}
+			Camera::getInstance().mainCam = this;
+		}
 	}
 	else {
 		UnregisterCallbacks();
+		if (Camera::getInstance().mainCam == this) {
+			Camera::getInstance().mainCam = nullptr;
+		}
 	}
 }
 
@@ -108,6 +123,7 @@ void CameraComponent::CopyTo(Object* other) {
 		other->AddComponent(std::make_unique<CameraComponent>(other));
 		target = other->GetComponent<CameraComponent>();
 	}
+	target->SetEnabled(Enabled);
 	target->isMain = isMain;
 	target->SetRange(range);
 }
@@ -115,9 +131,12 @@ void CameraComponent::CopyTo(Object* other) {
 std::unique_ptr<Component> CameraComponent::Clone(Object* parent) {
 	std::unique_ptr<CameraComponent> comp = std::make_unique<CameraComponent>(parent);
 	comp->SetRange(range);
-	comp->SetEnabled(false);
+	comp->pendingEnabled = Enabled;
 	comp->isMain = isMain;
-	Camera::getInstance().mainCam = this;
+	comp->SetEnabled(false);
+	if (isMain) {
+		Camera::getInstance().mainCam = this;
+	}
 	return comp;
 }
 
@@ -130,10 +149,14 @@ void CameraComponent::Serialize(BinaryWriter& w) {
 void CameraComponent::Deserialize(BinaryReader& r) {
 	Component::Deserialize(r);
 	isMain = r.Read<bool>();
+	if (isMain) {
+		Camera::getInstance().mainCam = this;
+	}
 	SetRange(r.Read<float>());
 }
 
 void CameraComponent::DrawDebug() {
+	isMain = Camera::getInstance().mainCam == this;
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
 	if (!tc) return;
 

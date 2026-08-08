@@ -873,6 +873,8 @@ void CollisionComponent::CopyTo(Object* other) {
 
 	FluidComponent* fc = other->GetComponent<FluidComponent>();
 	if (fc) fc->UpdateCollisionLayerMask();
+
+	target->SetEnabled(Enabled);
 }
 
 std::unique_ptr<Component> CollisionComponent::Clone(Object* parent) {
@@ -898,6 +900,7 @@ std::unique_ptr<Component> CollisionComponent::Clone(Object* parent) {
 	}
 
 	comp->nextShapeID = nextShapeID;
+	comp->pendingEnabled = Enabled;
 	comp->SetEnabled(false);
 	return comp;
 }

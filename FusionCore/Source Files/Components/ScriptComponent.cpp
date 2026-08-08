@@ -90,6 +90,7 @@ void ScriptComponent::CopyTo(Object* other) {
 
 	target->SetSourcePath(sourcePath);
 	target->pendingExportedValues = loaded ? exportedProperties : pendingExportedValues;
+	target->SetEnabled(Enabled);
 }
 
 std::unique_ptr<Component> ScriptComponent::Clone(Object* parent) {
@@ -102,6 +103,10 @@ std::unique_ptr<Component> ScriptComponent::Clone(Object* parent) {
 			std::get<ObjectRef>(prop.value).ptr = nullptr; 
 		}
 	}
+
+	comp->pendingEnabled = Enabled;
+	comp->SetEnabled(false);
+
 	return comp;
 }
 

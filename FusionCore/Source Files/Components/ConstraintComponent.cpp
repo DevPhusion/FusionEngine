@@ -51,10 +51,13 @@ void ConstraintComponent::CopyTo(Object* other) {
         other->AddComponent(std::make_unique<ConstraintComponent>(other));
         target = other->GetComponent<ConstraintComponent>();
     }
+
+    target->SetEnabled(Enabled);
 }
 
 std::unique_ptr<Component> ConstraintComponent::Clone(Object* parent) {
     std::unique_ptr<ConstraintComponent> comp = std::make_unique<ConstraintComponent>(parent);
+    comp->pendingEnabled = Enabled;
     comp->SetEnabled(false);
     return comp;
 }

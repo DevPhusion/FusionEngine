@@ -89,6 +89,18 @@ namespace {
 
 		return baseName;
 	}
+
+	bool IsDirectoryEmpty(const std::string& folder) {
+		std::error_code ec;
+		return std::filesystem::is_empty(folder, ec) && !ec;
+	}
+
+	std::string TrimWhitespace(const std::string& s) {
+		size_t start = s.find_first_not_of(" \t");
+		size_t end = s.find_last_not_of(" \t");
+		if (start == std::string::npos) return "";
+		return s.substr(start, end - start + 1);
+	}
 }
 
 EngineStatus::EngineStatus(std::string name) : EditorWindow(name) {
@@ -99,6 +111,10 @@ EngineStatus::EngineStatus(std::string name) : EditorWindow(name) {
 
 void EngineStatus::ProcessWindow() {
 	ProcessUnsavedChangesPopup();
+
+	ProjectExportManager::getInstance().Update();
+	ProcessExportingPopup();
+
 	if (hidden) return;
 
 	ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
@@ -131,7 +147,8 @@ void EngineStatus::ProcessWindow() {
 
 	const float rightGroupW = ButtonWidth("Settings") + style.ItemSpacing.x
 		+ projectNameWidth + style.ItemSpacing.x
-		+ ButtonWidth("Save");
+		+ ButtonWidth("Save") + style.ItemSpacing.x
+		+ ButtonWidth("Export");
 	const float rightStartX = rowStartX + fullWidth - rightGroupW;
 
 	std::string fpsText = std::to_string(EngineManager::getInstance().fps) + " FPS";
@@ -193,6 +210,11 @@ void EngineStatus::ProcessWindow() {
 	}
 
 	ImGui::EndDisabled();
+
+	ImGui::SameLine();
+	if (ImGui::Button("Export"))
+		ImGui::OpenPopup("Export Project");
+	ProcessExportPopup();
 
 	ImGui::SameLine();
 	{
@@ -342,6 +364,153 @@ void EngineStatus::ProcessSettingsPopup() {
 		if (ImGui::Button("Close", ImVec2(120, 0)))
 		{
 			ImGui::CloseCurrentPopup();
+		}
+
+		ImGui::EndPopup();
+	}
+}
+
+void EngineStatus::ProcessExportPopup() {
+	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+	if (ImGui::BeginPopupModal("Export Project", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
+
+		ImGui::Text("Export Folder");
+		ImGui::TextWrapped("%s", exportFolder.empty() ? "(no folder selected)" : exportFolder.c_str());
+		if (ImGui::Button("Browse...")) {
+			if (auto folder = FileDialog::ShowFolderDialog("Choose Export Folder"))
+				exportFolder = *folder;
+		}
+
+		bool folderNotEmpty = !exportFolder.empty() && !IsDirectoryEmpty(exportFolder);
+		if (folderNotEmpty) {
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.35f, 0.35f, 1.0f));
+			ImGui::TextWrapped("Folder must be empty.");
+			ImGui::PopStyleColor();
+		}
+
+		ImGui::Dummy(ImVec2(0, 6));
+		ImGui::Text("Name");
+		ImGui::SetNextItemWidth(320.0f);
+		ImGui::InputText("##ExportName", exportNameBuf, IM_ARRAYSIZE(exportNameBuf));
+
+		ImGui::Text("Version");
+		ImGui::SetNextItemWidth(160.0f);
+		ImGui::InputText("##ExportVersion", exportVersionBuf, IM_ARRAYSIZE(exportVersionBuf));
+
+		ImGui::Text("Icon");
+		ImGui::SetNextItemWidth(280.0f);
+		ImGui::InputText("##ExportIcon", exportIconBuf, IM_ARRAYSIZE(exportIconBuf));
+		ImGui::SameLine();
+		if (ImGui::Button("Browse##Icon")) {
+			auto opts = FileDialogOptions::ForExtension("Image", "png", "Choose Icon");
+			if (auto path = FileDialog::ShowOpenDialog(opts))
+				strncpy_s(exportIconBuf, sizeof(exportIconBuf), (*path).c_str(), _TRUNCATE);
+		}
+
+		ImGui::Text("Author");
+		ImGui::SetNextItemWidth(280.0f);
+		ImGui::InputText("##ExportAuthor", exportAuthorBuf, IM_ARRAYSIZE(exportAuthorBuf));
+
+		ImGui::Dummy(ImVec2(0, 6));
+		ImGui::Checkbox("Auto zip export", &exportAutoZip);
+
+		if (!exportErrorMessage.empty()) {
+			ImGui::Dummy(ImVec2(0, 6));
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.35f, 0.35f, 1.0f));
+			ImGui::TextWrapped("%s", exportErrorMessage.c_str());
+			ImGui::PopStyleColor();
+		}
+
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::Separator();
+		ImGui::Dummy(ImVec2(0, 6));
+
+		bool nameEmpty = TrimWhitespace(exportNameBuf).empty();
+		bool canExport = !nameEmpty && !exportFolder.empty() && !folderNotEmpty;
+
+		ImGui::BeginDisabled(!canExport);
+		if (ImGui::Button("Export", ImVec2(120, 0))) {
+			ExportConfiguration config;
+			config.exportFolder = exportFolder;
+			config.name = TrimWhitespace(exportNameBuf);
+			config.version = std::string(exportVersionBuf).empty() ? "1.0" : exportVersionBuf;
+			config.iconPath = std::string(exportIconBuf).empty() ? "Resources/Images/engineIcon.png" : exportIconBuf;
+			config.author = std::string(exportAuthorBuf).empty() ? "Unknown" : exportAuthorBuf;
+			config.autoZipExport = exportAutoZip;
+
+			if (ProjectExportManager::getInstance().StartExport(config)) {
+				exportErrorMessage.clear();
+				ImGui::CloseCurrentPopup();
+			}
+		}
+		ImGui::EndDisabled();
+
+		ImGui::SameLine();
+		if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+			exportErrorMessage.clear();
+			ImGui::CloseCurrentPopup();
+		}
+
+		ImGui::EndPopup();
+	}
+}
+
+void EngineStatus::ProcessExportingPopup() {
+	using Stage = ProjectExportManager::ExportStage;
+
+	bool busy = ProjectExportManager::getInstance().IsBusy();
+	Stage stage = ProjectExportManager::getInstance().GetStage();
+
+	if (busy && !ImGui::IsPopupOpen("Exporting Project"))
+		ImGui::OpenPopup("Exporting Project");
+
+	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowSize(ImVec2(340, 0), ImGuiCond_Appearing);
+
+	ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings
+		| ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+
+	if (ImGui::BeginPopupModal("Exporting Project", nullptr, flags)) {
+		if (!busy) {
+			bool failed = (stage == Stage::Failed);
+			ImGui::PushStyleColor(ImGuiCol_Text, failed
+				? ImVec4(0.9f, 0.35f, 0.35f, 1.0f)
+				: ImVec4(0.35f, 0.85f, 0.4f, 1.0f));
+			ImGui::TextWrapped("%s", failed
+				? ProjectExportManager::getInstance().GetLastError().c_str()
+				: "Export complete.");
+			ImGui::PopStyleColor();
+
+			ImGui::Dummy(ImVec2(0, 8));
+			if (ImGui::Button("Close", ImVec2(-1, 0))) {
+				ImGui::CloseCurrentPopup();
+			}
+		}
+		else {
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+			ImVec2 pos = ImGui::GetCursorScreenPos();
+			float radius = 12.0f;
+			ImVec2 spinnerCenter(pos.x + radius + 4.0f, pos.y + radius);
+			float t = (float)ImGui::GetTime();
+
+			for (int i = 0; i < 8; i++) {
+				float angle = t * 6.0f + (float)i * (2.0f * 3.14159265f / 8.0f);
+				float alpha = 0.2f + 0.8f * (float)i / 8.0f;
+				ImVec2 p(spinnerCenter.x + cosf(angle) * radius, spinnerCenter.y + sinf(angle) * radius);
+				drawList->AddCircleFilled(p, 2.5f, ImGui::GetColorU32(ImVec4(1, 1, 1, alpha)));
+			}
+
+			ImGui::Dummy(ImVec2(radius * 2.0f + 8.0f, radius * 2.0f));
+			ImGui::SameLine();
+			ImGui::AlignTextToFramePadding();
+			ImGui::TextUnformatted("Exporting project...");
+
+			std::string status = ProjectExportManager::getInstance().GetStatusMessage();
+			ImGui::Dummy(ImVec2(0, 4));
+			ImGui::TextWrapped("%s", status.c_str());
 		}
 
 		ImGui::EndPopup();

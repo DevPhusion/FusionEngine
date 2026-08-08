@@ -4,8 +4,10 @@
     <Platform Name="x86" />
   </Configurations>
   <Project Path="FusionApp/FusionApp.vcxproj" Id="5f68b75c-69de-4326-8147-db4c1c276732">
+    <BuildDependency Project="FusionPlayer/FusionPlayer.vcxproj" />
     <BuildDependency Project="FusionPyStub/FusionPyStub.vcxproj" />
   </Project>
   <Project Path="FusionCore/FusionCore.vcxproj" Id="a87a57a3-56de-451c-9fdc-87ddc8e0d61c" />
+  <Project Path="FusionPlayer/FusionPlayer.vcxproj" Id="84c4c1e2-46ec-4960-b1c3-216552f8d407" />
   <Project Path="FusionPyStub/FusionPyStub.vcxproj" Id="46bc93b0-3a79-474b-8613-c2b6246b1477" />
 </Solution>

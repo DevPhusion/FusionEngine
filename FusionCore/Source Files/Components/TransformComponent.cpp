@@ -27,6 +27,7 @@ void TransformComponent::CopyTo(Object* other) {
 
 	target->pendingRotation = this->rotation;
 	target->pendingScale = this->size;
+	target->SetEnabled(Enabled);
 }
 
 std::unique_ptr<Component> TransformComponent::Clone(Object* parent) {
@@ -40,6 +41,7 @@ std::unique_ptr<Component> TransformComponent::Clone(Object* parent) {
 	comp->pendingScale = size;
 	comp->pendingRotation = rotation;
 
+	comp->pendingEnabled = Enabled;
 	comp->SetEnabled(false);
 	return comp;
 }

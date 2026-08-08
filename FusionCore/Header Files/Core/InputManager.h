@@ -107,4 +107,5 @@ private:
 	static void OnMouseButton(GLFWwindow* window, int button, int action, int mods);
 	static void OnKeyButton(GLFWwindow* window, int key, int scancode, int action, int mods);
 	static void OnMouseScroll(GLFWwindow* window, double xoffset, double yoffset);
+	static void OnCharInput(GLFWwindow* window, unsigned int c);
 };

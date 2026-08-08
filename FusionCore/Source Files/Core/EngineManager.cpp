@@ -65,7 +65,7 @@ void EngineManager::LoadEngineState() {
 	for (int i = 0; i < SavedState.Objects.size(); i++)
 	{
 		for (int j = 0; j < SavedState.Objects[i]->components.size(); j++)
-			SavedState.Objects[i]->components[j]->SetEnabled(true);
+			SavedState.Objects[i]->components[j]->SetEnabled(SavedState.Objects[i]->components[j]->pendingEnabled);
 		ObjectManager::getInstance().allObjects.push_back(std::move(SavedState.Objects[i]));
 	}
 	SavedState.Objects.clear();

@@ -62,6 +62,7 @@ void FractureComponent::CopyTo(Object* other) {
 	target->maxFractureGenerations = maxFractureGenerations;
 	target->generation = generation;
 	target->restDensity = restDensity;
+	target->SetEnabled(Enabled);
 }
 
 std::unique_ptr<Component> FractureComponent::Clone(Object* parent) {
@@ -73,6 +74,8 @@ std::unique_ptr<Component> FractureComponent::Clone(Object* parent) {
 	comp->maxFractureGenerations = maxFractureGenerations;
 	comp->generation = generation;
 	comp->restDensity = restDensity;
+	comp->pendingEnabled = Enabled;
+	comp->SetEnabled(false);
 	return comp;
 }
 

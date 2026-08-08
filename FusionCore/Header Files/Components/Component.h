@@ -18,6 +18,7 @@ public:
  
 	Object* parent;
 	bool Enabled = true;
+	bool pendingEnabled = true;
 
 	bool CanDisable = true;
 	bool CanRemove = true;
