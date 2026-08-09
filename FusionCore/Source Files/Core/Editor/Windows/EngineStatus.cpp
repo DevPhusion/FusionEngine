@@ -371,50 +371,84 @@ void EngineStatus::ProcessSettingsPopup() {
 }
 
 void EngineStatus::ProcessExportPopup() {
+	ExportConfiguration& config = ProjectExportManager::getInstance().exportConfig;
+
 	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 
 	if (ImGui::BeginPopupModal("Export Project", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
 
 		ImGui::Text("Export Folder");
-		ImGui::TextWrapped("%s", exportFolder.empty() ? "(no folder selected)" : exportFolder.c_str());
+		ImGui::TextWrapped("%s", config.exportFolder.empty() ? "(no folder selected)" : config.exportFolder.c_str());
 		if (ImGui::Button("Browse...")) {
-			if (auto folder = FileDialog::ShowFolderDialog("Choose Export Folder"))
-				exportFolder = *folder;
+			if (auto folder = FileDialog::ShowFolderDialog("Choose Export Folder")) {
+				config.exportFolder = *folder;
+				EngineManager::getInstance().EngineChangeEvent();
+			}
 		}
 
-		bool folderNotEmpty = !exportFolder.empty() && !IsDirectoryEmpty(exportFolder);
-		if (folderNotEmpty) {
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.35f, 0.35f, 1.0f));
-			ImGui::TextWrapped("Folder must be empty.");
+		bool isPreviousExportFolder = false;
+		{
+			std::error_code ec;
+			isPreviousExportFolder = std::filesystem::exists(std::filesystem::path(config.exportFolder) / "export_info.json", ec);
+		}
+		bool folderHasForeignContent = !config.exportFolder.empty() && !IsDirectoryEmpty(config.exportFolder) && !isPreviousExportFolder;
+		if (folderHasForeignContent) {
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.65f, 0.25f, 1.0f));
+			ImGui::TextWrapped("This folder isn't empty and wasn't previously exported to. Existing files may be overwritten.");
 			ImGui::PopStyleColor();
 		}
 
 		ImGui::Dummy(ImVec2(0, 6));
+
+		char nameBuf[128];
+		strncpy_s(nameBuf, sizeof(nameBuf), config.name.c_str(), _TRUNCATE);
 		ImGui::Text("Name");
 		ImGui::SetNextItemWidth(320.0f);
-		ImGui::InputText("##ExportName", exportNameBuf, IM_ARRAYSIZE(exportNameBuf));
+		if (ImGui::InputText("##ExportName", nameBuf, IM_ARRAYSIZE(nameBuf))) {
+			config.name = nameBuf;
+			EngineManager::getInstance().EngineChangeEvent();
+		}
 
+		char versionBuf[32];
+		strncpy_s(versionBuf, sizeof(versionBuf), config.version.c_str(), _TRUNCATE);
 		ImGui::Text("Version");
 		ImGui::SetNextItemWidth(160.0f);
-		ImGui::InputText("##ExportVersion", exportVersionBuf, IM_ARRAYSIZE(exportVersionBuf));
+		if (ImGui::InputText("##ExportVersion", versionBuf, IM_ARRAYSIZE(versionBuf))) {
+			config.version = versionBuf;
+			EngineManager::getInstance().EngineChangeEvent();
+		}
 
+		char iconBuf[256];
+		strncpy_s(iconBuf, sizeof(iconBuf), config.iconPath.c_str(), _TRUNCATE);
 		ImGui::Text("Icon");
 		ImGui::SetNextItemWidth(280.0f);
-		ImGui::InputText("##ExportIcon", exportIconBuf, IM_ARRAYSIZE(exportIconBuf));
+		if (ImGui::InputText("##ExportIcon", iconBuf, IM_ARRAYSIZE(iconBuf))) {
+			config.iconPath = iconBuf;
+			EngineManager::getInstance().EngineChangeEvent();
+		}
 		ImGui::SameLine();
 		if (ImGui::Button("Browse##Icon")) {
 			auto opts = FileDialogOptions::ForExtension("Image", "png", "Choose Icon");
-			if (auto path = FileDialog::ShowOpenDialog(opts))
-				strncpy_s(exportIconBuf, sizeof(exportIconBuf), (*path).c_str(), _TRUNCATE);
+			if (auto path = FileDialog::ShowOpenDialog(opts)) {
+				config.iconPath = *path;
+				EngineManager::getInstance().EngineChangeEvent();
+			}
 		}
 
+		char authorBuf[128];
+		strncpy_s(authorBuf, sizeof(authorBuf), config.author.c_str(), _TRUNCATE);
 		ImGui::Text("Author");
 		ImGui::SetNextItemWidth(280.0f);
-		ImGui::InputText("##ExportAuthor", exportAuthorBuf, IM_ARRAYSIZE(exportAuthorBuf));
+		if (ImGui::InputText("##ExportAuthor", authorBuf, IM_ARRAYSIZE(authorBuf))) {
+			config.author = authorBuf;
+			EngineManager::getInstance().EngineChangeEvent();
+		}
 
 		ImGui::Dummy(ImVec2(0, 6));
-		ImGui::Checkbox("Auto zip export", &exportAutoZip);
+		if (ImGui::Checkbox("Auto zip export", &config.autoZipExport)) {
+			EngineManager::getInstance().EngineChangeEvent();
+		}
 
 		if (!exportErrorMessage.empty()) {
 			ImGui::Dummy(ImVec2(0, 6));
@@ -427,19 +461,11 @@ void EngineStatus::ProcessExportPopup() {
 		ImGui::Separator();
 		ImGui::Dummy(ImVec2(0, 6));
 
-		bool nameEmpty = TrimWhitespace(exportNameBuf).empty();
-		bool canExport = !nameEmpty && !exportFolder.empty() && !folderNotEmpty;
+		bool nameEmpty = TrimWhitespace(config.name).empty();
+		bool canExport = !nameEmpty && !config.exportFolder.empty();
 
 		ImGui::BeginDisabled(!canExport);
 		if (ImGui::Button("Export", ImVec2(120, 0))) {
-			ExportConfiguration config;
-			config.exportFolder = exportFolder;
-			config.name = TrimWhitespace(exportNameBuf);
-			config.version = std::string(exportVersionBuf).empty() ? "1.0" : exportVersionBuf;
-			config.iconPath = std::string(exportIconBuf).empty() ? "Resources/Images/engineIcon.png" : exportIconBuf;
-			config.author = std::string(exportAuthorBuf).empty() ? "Unknown" : exportAuthorBuf;
-			config.autoZipExport = exportAutoZip;
-
 			if (ProjectExportManager::getInstance().StartExport(config)) {
 				exportErrorMessage.clear();
 				ImGui::CloseCurrentPopup();

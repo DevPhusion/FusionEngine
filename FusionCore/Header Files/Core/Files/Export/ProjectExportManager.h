@@ -3,6 +3,9 @@
 #include <atomic>
 #include <mutex>
 #include <thread>
+#include "../BinaryReader.h"
+#include "../BinaryWriter.h"
+#include "PackageCrypto.h"
 
 struct ExportConfiguration {
 	std::string exportFolder;
@@ -11,6 +14,11 @@ struct ExportConfiguration {
 	std::string iconPath = "Resources/Images/engineIcon.png";
 	std::string author = "Unknown";
 	bool autoZipExport = true;
+};
+
+struct PackEntry {
+	std::string virtualPath;
+	std::vector<uint8_t> data;
 };
 
 class ProjectExportManager
@@ -33,6 +41,8 @@ public:
 
 	ProjectExportManager(const ProjectExportManager&) = delete;
 	void operator=(const ProjectExportManager&) = delete;
+	
+	ExportConfiguration exportConfig;
 
 	bool StartExport(const ExportConfiguration& config);
 
@@ -42,6 +52,9 @@ public:
 	ExportStage GetStage() const { return stage.load(); }
 	std::string GetStatusMessage() const;
 	const std::string& GetLastError() const { return lastError; }
+
+	void SerializeExportConfiguration(BinaryWriter& w);
+	void DeserializeExportConfiguration(BinaryReader& r);
 
 private:
 	ProjectExportManager() = default;

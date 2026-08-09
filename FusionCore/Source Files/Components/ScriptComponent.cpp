@@ -283,13 +283,18 @@ void ScriptComponent::EnsureLoaded() {
 
 	std::filesystem::path absPath = FileManager::getInstance().VirtualToAbsolute(sourcePath);
 	std::error_code ec;
-	if (!std::filesystem::exists(absPath, ec)) {
-		Console::PrintError("ScriptComponent: script file not found: {}").Format(absPath.string());
+	bool existsOnDisk = std::filesystem::exists(absPath, ec);
+	bool existsInPackage = PackageReader::getInstance().Get(sourcePath) != nullptr;
+
+	if (!existsOnDisk && !existsInPackage) {
+		Console::PrintError("ScriptComponent: script file not found: {}").Format(sourcePath);
 		return;
 	}
 
 	std::error_code ecStat;
-	lastWriteTime = std::filesystem::last_write_time(absPath, ecStat);
+	lastWriteTime = existsOnDisk
+		? std::filesystem::last_write_time(absPath, ecStat)
+		: std::filesystem::file_time_type{};
 
 	py::gil_scoped_acquire gil;
 

@@ -39,6 +39,9 @@ public:
 
 	static constexpr const char* kResourceDragDropPayloadType = "RESOURCE_VPATH";
 
+	static constexpr uint32_t magicByte = 0x4E535546;
+	static constexpr uint32_t version = 1;
+
 	bool isSaved = false;
 	std::string currentProjectFile = "";
 	std::string currentProjectDirectory = "";
@@ -73,6 +76,8 @@ public:
 
 	void SaveProjectToFile(const std::string& path);
 	void LoadProjectFromFile(const std::string& path);
+	void LoadProjectFromStream(std::istream& in);
+	void LoadProjectFromMemory(const std::vector<uint8_t>& data);
 	void NewProject();
 
 private:
@@ -80,9 +85,6 @@ private:
 	~FileManager();
 
 	static ResourceIconType ClassifyExtension(const std::string& extensionLower);
-
-	static constexpr uint32_t magicByte = 0x4E535546;
-	static constexpr uint32_t version = 1;
 
 	std::filesystem::path resourcesRoot;
 	std::unordered_map<std::string, unsigned int> thumbnailCache;

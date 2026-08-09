@@ -395,6 +395,7 @@ void FileManager::SaveProjectToFile(const std::string& path) {
 	w.Write(version);
 
 	EngineManager::getInstance().SerializeEngineSettings(w);
+	ProjectExportManager::getInstance().SerializeExportConfiguration(w);
 
 	auto& objects = ObjectManager::getInstance().allObjects;
 
@@ -431,18 +432,28 @@ void FileManager::LoadProjectFromFile(const std::string& path) {
 	std::ifstream in(path, std::ios::binary);
 	if (!in.is_open())
 		Console::PrintError("LoadProject: failed to open file for reading {}").Format(path);
+	LoadProjectFromStream(in);
+}
 
+void FileManager::LoadProjectFromMemory(const std::vector<uint8_t>& data) {
+	std::string buffer(reinterpret_cast<const char*>(data.data()), data.size());
+	std::istringstream in(buffer, std::ios::binary);
+	LoadProjectFromStream(in);
+}
+
+void FileManager::LoadProjectFromStream(std::istream& in) {
 	BinaryReader r(in);
 
 	uint32_t magic = r.Read<uint32_t>();
 	if (magic != magicByte)
-		Console::PrintError("LoadProject: file is not a valid .fusion file: {}").Format(path);
+		Console::PrintError("LoadProject: file is not a valid .fusion file");
 
 	uint32_t ver = r.Read<uint32_t>();
 	if (ver != version)
 		Console::PrintError("LoadProject: unsupported .fusion file version {}").Format((int)ver);
 
 	EngineManager::getInstance().DeserializeEngineSettings(r);
+	ProjectExportManager::getInstance().DeserializeExportConfiguration(r);
 
 	uint32_t objectCount = r.Read<uint32_t>();
 
@@ -474,7 +485,7 @@ void FileManager::LoadProjectFromFile(const std::string& path) {
 		}
 		else {
 			obj->parent = nullptr;
-			obj->parentID = -1; 
+			obj->parentID = -1;
 		}
 	}
 
@@ -507,7 +518,7 @@ void FileManager::LoadProjectFromFile(const std::string& path) {
 		}
 	}
 
-	Console::Print("LoadProject: successfully load project from {} with {} objects loaded").Format(path, objectCount);
+	Console::Print("LoadProject: successfully load project with {} objects loaded").Format(objectCount);
 
 	isSaved = true;
 }

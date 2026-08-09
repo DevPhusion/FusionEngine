@@ -1,5 +1,5 @@
-#include "../../../Header Files/Core/Files/ProjectExportManager.h"
-#include "../../../Header Files/Core/Files/FileManager.h"
+#include "../../../../Header Files/Core/Files/Export/ProjectExportManager.h"
+#include "../../../../Header Files/Core/Files/FileManager.h"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -38,8 +38,6 @@ namespace {
 		return fs::path(exePathBuf).parent_path();
 	}
 
-	// Recursively copies a directory. Missing source directories are treated
-	// as "nothing to do" rather than an error (e.g. a project with no .venv yet).
 	bool CopyDirectoryRecursive(const fs::path& src, const fs::path& dst, std::string& error) {
 		std::error_code ec;
 		if (!fs::exists(src, ec)) return true;
@@ -53,7 +51,6 @@ namespace {
 		return true;
 	}
 
-	// Dev-only build artifacts that shouldn't ship with the player.
 	bool IsDevOnlyFile(const fs::path& filename) {
 		static const std::vector<std::string> skipExact = {
 			"FusionApp.exe", "FusionApp.pdb", "FusionPlayer.pdb", "FusionApp.ilk", "FusionPlayer.ilk"
@@ -76,11 +73,43 @@ namespace {
 		return dirName == ".vs" || dirName == "obj" || dirName == "x64" || dirName == "Debug";
 	}
 
-}
+	bool WritePackageFile(const fs::path& packPath, const std::vector<PackEntry>& entries, std::string& outError) {
+		std::ofstream out(packPath, std::ios::binary);
+		if (!out.is_open()) {
+			outError = "Failed to open package file for writing: " + packPath.string();
+			return false;
+		}
 
-// ---------------------------------------------------------------------------
-// Public entry points (called from the main/UI thread)
-// ---------------------------------------------------------------------------
+		uint32_t magic = 0x4B415046, version = 2, entryCount = static_cast<uint32_t>(entries.size());
+		out.write(reinterpret_cast<const char*>(&magic), sizeof(magic));
+		out.write(reinterpret_cast<const char*>(&version), sizeof(version));
+		out.write(reinterpret_cast<const char*>(&entryCount), sizeof(entryCount));
+
+		PackageCrypto::Salt salt = PackageCrypto::GenerateRandomSalt();
+		out.write(reinterpret_cast<const char*>(salt.data()), salt.size());
+		std::array<uint8_t, 16> key = PackageCrypto::DeriveKey(salt);
+
+		uint64_t runningOffset = 0;
+		std::vector<uint64_t> offsets;
+		for (auto& e : entries) { offsets.push_back(runningOffset); runningOffset += e.data.size(); }
+
+		for (size_t i = 0; i < entries.size(); i++) {
+			uint32_t pathLen = static_cast<uint32_t>(entries[i].virtualPath.size());
+			uint64_t size = entries[i].data.size();
+			out.write(reinterpret_cast<const char*>(&pathLen), sizeof(pathLen));
+			out.write(entries[i].virtualPath.data(), pathLen);
+			out.write(reinterpret_cast<const char*>(&offsets[i]), sizeof(uint64_t));
+			out.write(reinterpret_cast<const char*>(&size), sizeof(uint64_t));
+		}
+
+		for (auto& e : entries) {
+			std::vector<uint8_t> encrypted = e.data;
+			PackageCrypto::XorBuffer(encrypted, key);
+			out.write(reinterpret_cast<const char*>(encrypted.data()), encrypted.size());
+		}
+		return out.good();
+	}
+}
 
 bool ProjectExportManager::StartExport(const ExportConfiguration& config) {
 	if (IsBusy()) return false;
@@ -122,10 +151,6 @@ void ProjectExportManager::SetStatus(ExportStage newStage, const std::string& me
 	stage.store(newStage);
 }
 
-// ---------------------------------------------------------------------------
-// Worker thread
-// ---------------------------------------------------------------------------
-
 void ProjectExportManager::RunExport(ExportConfiguration config) {
 	std::string error;
 	bool ok = DoExport(config, error);
@@ -143,7 +168,6 @@ void ProjectExportManager::RunExport(ExportConfiguration config) {
 bool ProjectExportManager::DoExport(const ExportConfiguration& config, std::string& outError) {
 	std::error_code ec;
 
-	// ---- 1. Validate / prepare the export folder ----
 	if (config.exportFolder.empty()) {
 		outError = "No export folder specified.";
 		Console::PrintError("ProjectExportManager: {}").Format(outError);
@@ -158,15 +182,19 @@ bool ProjectExportManager::DoExport(const ExportConfiguration& config, std::stri
 		return false;
 	}
 
-	if (!fs::is_empty(exportRoot, ec) || ec) {
-		outError = "Export folder must be empty.";
-		Console::PrintError("ProjectExportManager: {}").Format(outError);
-		return false;
+	if (fs::exists(exportRoot / "export_info.json", ec)) {
+		fs::remove_all(exportRoot / "resources", ec);
+		fs::remove(exportRoot / "data.pack", ec);
+		for (auto& entry : fs::directory_iterator(exportRoot, ec)) {
+			if (ec) break;
+			if (entry.path().extension() == ".fusion") {
+				fs::remove(entry.path(), ec);
+			}
+		}
 	}
 
 	std::string exeName = config.name.empty() ? "FusionPlayer" : config.name;
 
-	// ---- 2. Locate the player runtime (built alongside the running editor exe) ----
 	fs::path exeDir = GetCurrentExeDirectory();
 	fs::path playerExeSource = exeDir / "FusionPlayer.exe";
 
@@ -176,7 +204,6 @@ bool ProjectExportManager::DoExport(const ExportConfiguration& config, std::stri
 		return false;
 	}
 
-	// ---- 3. Copy runtime files sitting next to the editor exe (DLLs, engine Resources, PythonStubs, etc.) ----
 	SetStatus(ExportStage::CopyingRuntime, "Copying player runtime...");
 
 	for (auto& entry : fs::directory_iterator(exeDir, ec)) {
@@ -186,7 +213,7 @@ bool ProjectExportManager::DoExport(const ExportConfiguration& config, std::stri
 		fs::path name = srcPath.filename();
 
 		if (entry.is_regular_file()) {
-			if (name == "FusionPlayer.exe") continue; // handled separately below, gets renamed
+			if (name == "FusionPlayer.exe") continue; 
 			if (IsDevOnlyFile(name)) continue;
 
 			fs::copy_file(srcPath, exportRoot / name, fs::copy_options::overwrite_existing, ec);
@@ -209,7 +236,6 @@ bool ProjectExportManager::DoExport(const ExportConfiguration& config, std::stri
 		}
 	}
 
-	// Copy + rename the player exe to the export name
 	fs::path targetExePath = exportRoot / (exeName + ".exe");
 	fs::copy_file(playerExeSource, targetExePath, fs::copy_options::overwrite_existing, ec);
 	if (ec) {
@@ -218,31 +244,56 @@ bool ProjectExportManager::DoExport(const ExportConfiguration& config, std::stri
 		return false;
 	}
 
-	// ---- 4. Copy project-specific data (resources + optional venv) ----
 	SetStatus(ExportStage::CopyingProjectData, "Copying project resources...");
 
 	fs::path projectDir = FileManager::getInstance().currentProjectDirectory;
 	if (projectDir.empty() && !FileManager::getInstance().currentProjectFile.empty()) {
 		projectDir = fs::path(FileManager::getInstance().currentProjectFile).parent_path();
 	}
-
 	if (projectDir.empty()) {
 		outError = "No project is currently open — nothing to export.";
 		Console::PrintError("ProjectExportManager: {}").Format(outError);
 		return false;
 	}
 
+	std::vector<PackEntry> packEntries;
+
 	{
-		std::string err;
-		if (!CopyDirectoryRecursive(projectDir / "resources", exportRoot / "resources", err)) {
-			outError = err;
-			Console::PrintError("ProjectExportManager: {}").Format(outError);
-			return false;
+		fs::path resourcesSrc = projectDir / "resources";
+		fs::path resourcesDst = exportRoot / "resources";
+		fs::create_directories(resourcesDst, ec);
+
+		if (fs::exists(resourcesSrc, ec)) {
+			for (auto& entry : fs::recursive_directory_iterator(resourcesSrc, ec)) {
+				if (ec) break;
+
+				bool inPycache = false;
+				for (auto& part : entry.path()) {
+					if (part == "__pycache__") { inPycache = true; break; }
+				}
+				if (inPycache) continue;
+
+				if (!entry.is_regular_file()) continue;
+
+				fs::path relative = fs::relative(entry.path(), resourcesSrc, ec);
+				if (ec) continue;
+
+				if (entry.path().extension() == ".py") {
+					std::ifstream scriptIn(entry.path(), std::ios::binary);
+					std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(scriptIn)), std::istreambuf_iterator<char>());
+					packEntries.push_back({ "res://" + relative.generic_string(), std::move(bytes) });
+				}
+				else {
+					fs::path dst = resourcesDst / relative;
+					fs::create_directories(dst.parent_path(), ec);
+					fs::copy_file(entry.path(), dst, fs::copy_options::overwrite_existing, ec);
+				}
+			}
 		}
 
-		// Only bundle the venv if this project actually uses scripting
 		if (fs::exists(projectDir / ".venv", ec)) {
 			SetStatus(ExportStage::CopyingProjectData, "Copying Python environment...");
+			std::string err;
 			if (!CopyDirectoryRecursive(projectDir / ".venv", exportRoot / ".venv", err)) {
 				outError = err;
 				Console::PrintError("ProjectExportManager: {}").Format(outError);
@@ -251,44 +302,32 @@ bool ProjectExportManager::DoExport(const ExportConfiguration& config, std::stri
 		}
 	}
 
-	// ---- 5. Save the current project state as the shipped .fusion file ----
-	SetStatus(ExportStage::SavingProject, "Saving project file...");
-
-	fs::path projectFilePath = exportRoot / (exeName + ".fusion");
-	FileManager::getInstance().SaveProjectToFile(projectFilePath.string());
-
-	// ---- 6. Optional custom window icon ----
-	if (!config.iconPath.empty() && config.iconPath != "Resources/Images/engineIcon.png") {
-		fs::path iconDest = exportRoot / "Resources" / "Images" / "engineIcon.png";
-		fs::create_directories(iconDest.parent_path(), ec);
-		fs::copy_file(config.iconPath, iconDest, fs::copy_options::overwrite_existing, ec);
-		if (ec) {
-			// Non-fatal: player just falls back to the default icon
-			Console::PrintError("ProjectExportManager: failed to copy custom icon, using default: {}").Format(ec.message());
-		}
-	}
-
-	// ---- 7. Write export metadata alongside the build ----
+	SetStatus(ExportStage::SavingProject, "Packaging project file...");
 	{
-		fs::path metaPath = exportRoot / "export_info.json";
-		std::ofstream out(metaPath);
-		if (out.is_open()) {
-			out << "{\n"
-				<< "\t\"name\": \"" << exeName << "\",\n"
-				<< "\t\"version\": \"" << config.version << "\",\n"
-				<< "\t\"author\": \"" << config.author << "\"\n"
-				<< "}\n";
+		fs::path tempFusionPath = fs::temp_directory_path(ec) / (exeName + "_export_tmp.fusion");
+		FileManager::getInstance().SaveProjectToFile(tempFusionPath.string());
+
+		std::ifstream fusionIn(tempFusionPath, std::ios::binary);
+		std::vector<uint8_t> fusionBytes((std::istreambuf_iterator<char>(fusionIn)), std::istreambuf_iterator<char>());
+		fusionIn.close();
+		fs::remove(tempFusionPath, ec);
+
+		packEntries.push_back({ "__project__", std::move(fusionBytes) });
+	}
+
+	{
+		std::string err;
+		if (!WritePackageFile(exportRoot / "data.pack", packEntries, err)) {
+			outError = err;
+			Console::PrintError("ProjectExportManager: {}").Format(outError);
+			return false;
 		}
 	}
 
-	// ---- 8. Optionally zip the export folder, with the zip placed INSIDE it ----
 	if (config.autoZipExport) {
 		SetStatus(ExportStage::Zipping, "Compressing export...");
 
 		fs::path finalZipPath = exportRoot / (exeName + ".zip");
-
-		// Zip to a temp location first, then move it in. This avoids any risk of
-		// the archive tool trying to read/include the zip file it's still writing.
 		fs::path tempZipPath = fs::temp_directory_path(ec) / (exeName + "_export_tmp.zip");
 		std::error_code zipEc;
 		fs::remove(tempZipPath, zipEc);
@@ -300,13 +339,11 @@ bool ProjectExportManager::DoExport(const ExportConfiguration& config, std::stri
 
 		int result = RunHiddenCommand(cmd.str());
 		if (result != 0) {
-			// Non-fatal: the unzipped export folder is still valid and usable
 			Console::PrintError("ProjectExportManager: zip step failed (exit code {}); export folder is still available unzipped.").Format(result);
 		}
 		else {
 			fs::rename(tempZipPath, finalZipPath, zipEc);
 			if (zipEc) {
-				// rename() can fail across drives/volumes — fall back to copy+delete
 				fs::copy_file(tempZipPath, finalZipPath, fs::copy_options::overwrite_existing, zipEc);
 				fs::remove(tempZipPath, zipEc);
 			}
@@ -322,4 +359,22 @@ bool ProjectExportManager::DoExport(const ExportConfiguration& config, std::stri
 
 	Console::Print("ProjectExportManager: successfully exported '{}' to {}").Format(exeName, exportRoot.string());
 	return true;
+}
+
+void ProjectExportManager::SerializeExportConfiguration(BinaryWriter& w) {
+	w.WriteString(exportConfig.exportFolder);
+	w.WriteString(exportConfig.name);
+	w.WriteString(exportConfig.version);
+	w.WriteString(exportConfig.iconPath);
+	w.WriteString(exportConfig.author);
+	w.Write(exportConfig.autoZipExport);
+}
+
+void ProjectExportManager::DeserializeExportConfiguration(BinaryReader& r) {
+	exportConfig.exportFolder = r.ReadString();
+	exportConfig.name = r.ReadString();
+	exportConfig.version = r.ReadString();
+	exportConfig.iconPath = r.ReadString();
+	exportConfig.author = r.ReadString();
+	exportConfig.autoZipExport = r.Read<bool>();
 }

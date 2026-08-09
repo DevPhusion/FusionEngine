@@ -1,4 +1,5 @@
 #include "../../../Header Files/Core/Scripting/PyBindings.h"
+#include "../../../Header Files/Core/Files/Export/PackageReader.h"
 #include "../../../Header Files/Core/Editor/Windows/Console.h"
 #include "../../../Header Files/Components/Components.h"
 #include "../../../Header Files/Core/Files/FileManager.h"
@@ -361,8 +362,15 @@ namespace {
 			return false;
 		}
 
-		std::string virtualPath = FileManager::getInstance().AbsoluteToVirtual(absPathStr);
-		if (virtualPath.empty() || virtualPath == "res://") return false; 
+		std::string virtualPath;
+		if (absPathStr.rfind("res://", 0) == 0) {
+			virtualPath = absPathStr; 
+		}
+		else {
+			virtualPath = FileManager::getInstance().AbsoluteToVirtual(absPathStr);
+		}
+
+		if (virtualPath.empty() || virtualPath == "res://") return false;
 
 		RegisterScriptClassAsComponentType(componentClass, virtualPath);
 		return true;
@@ -2431,7 +2439,64 @@ namespace {
 		ComponentRemoverRegistry().clear();
 		ComponentAdderRegistry().clear();
 	}
+
+	void InstallPackageImportHook(py::module_& m) {
+		static bool installed = false;
+		if (installed) return;
+		installed = true;
+
+		m.def("_pack_has_module", [](const std::string& name) {
+			return PackageReader::getInstance().HasModule(name);
+			});
+		m.def("_pack_is_package", [](const std::string& name) {
+			return PackageReader::getInstance().IsPackage(name);
+			});
+		m.def("_pack_get_source", [](const std::string& name) -> py::object {
+			if (!PackageReader::getInstance().HasModule(name)) return py::none();
+			return py::cast(PackageReader::getInstance().GetSource(name));
+			});
+
+		py::dict ns;
+		ns["fusion"] = m;
+
+		py::exec(R"(
+import sys
+import importlib.abc
+import importlib.util
+
+class _FusionPackLoader(importlib.abc.Loader):
+    def __init__(self, name, is_pkg):
+        self._name = name
+        self._is_pkg = is_pkg
+
+    def create_module(self, spec):
+        return None
+
+    def exec_module(self, module):
+        if self._is_pkg and not fusion._pack_has_module(self._name):
+            return  # namespace package with no __init__ code — nothing to run
+        source = fusion._pack_get_source(self._name)
+        if source is None:
+            raise ImportError("No packaged source for " + self._name)
+        filename = "res://" + self._name.replace(".", "/") + ".py"
+        module.__file__ = filename
+        code = compile(source, filename, "exec")
+        exec(code, module.__dict__)
+
+class _FusionPackFinder(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path, target=None):
+        has_module = fusion._pack_has_module(fullname)
+        is_pkg = fusion._pack_is_package(fullname)
+        if not has_module and not is_pkg:
+            return None
+        return importlib.util.spec_from_loader(fullname, _FusionPackLoader(fullname, is_pkg), is_package=is_pkg)
+
+if not any(type(f).__name__ == "_FusionPackFinder" for f in sys.meta_path):
+    sys.meta_path.insert(0, _FusionPackFinder())
+)", ns);
+	}
 }
+
 
 std::string VirtualPathToModuleName(const std::string& virtualPath) {
 	std::string path = virtualPath;
@@ -2458,6 +2523,25 @@ py::object ImportScriptClass(const std::string& virtualSourcePath) {
 
 	if (sysModules.contains(moduleName)) {
 		moduleObj = sysModules[moduleName.c_str()];
+	}
+	else if (const std::vector<uint8_t>* packedSource = PackageReader::getInstance().Get(virtualSourcePath)) {
+		std::string sourceCode(reinterpret_cast<const char*>(packedSource->data()), packedSource->size());
+
+		py::object typesModule = py::module_::import("types");
+		moduleObj = typesModule.attr("ModuleType")(moduleName);
+		moduleObj.attr("__file__") = virtualSourcePath;
+
+		py::object builtins = py::module_::import("builtins");
+		py::object codeObj = builtins.attr("compile")(sourceCode, virtualSourcePath, "exec");
+
+		sysModules[moduleName.c_str()] = moduleObj;
+		try {
+			builtins.attr("exec")(codeObj, moduleObj.attr("__dict__"));
+		}
+		catch (const py::error_already_set&) {
+			sysModules.attr("pop")(moduleName, py::none());
+			throw;
+		}
 	}
 	else {
 		py::object importlibUtil = py::module_::import("importlib.util");
@@ -2525,4 +2609,5 @@ void RegisterEngineBindings(py::module_& m) {
 	RegisterConsoleBindings(m);
 	RegisterComponentBindings(m);
 	RegisterObjectBindings(m);
+	InstallPackageImportHook(m);
 }

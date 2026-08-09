@@ -137,8 +137,10 @@ void ScriptManager::RunBackgroundSetup() {
 		return;
 	}
 
-	SetStatus(SetupStage::GeneratingStubs, "Generating editor stub files...");
-	GenerateStubFiles(projectRoot, venvRoot);
+	if (!EngineManager::getInstance().isPlayer) {
+		SetStatus(SetupStage::GeneratingStubs, "Generating editor stub files...");
+		GenerateStubFiles(projectRoot, venvRoot);
+	}
 
 	backgroundSucceeded = true;
 	SetStatus(SetupStage::LinkingInterpreter, "Finalizing Python backend...");

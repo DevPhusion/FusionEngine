@@ -1,4 +1,5 @@
 #include "../../../../Header Files/Core/Editor/Windows/Console.h"
+#include "../../../../Header Files/Core/EngineManager.h"
 
 std::deque<Console::Message> Console::messages;
 std::mutex Console::mutex;
@@ -21,9 +22,19 @@ void Console::AddMessage(MessageType type, const std::string& text) {
 
 	messages.push_back({ type, text });
 
-	// Ring buffer: evict oldest when over cap
 	if (messages.size() > MAX_MESSAGES) {
 		messages.pop_front();
+	}
+
+	if (EngineManager::getInstance().isPlayer) {
+		const char* prefix = "[Info] ";
+		if (type == MessageType::Warning) prefix = "[Warning] ";
+		else if (type == MessageType::Error) prefix = "[Error] ";
+
+		if (type == MessageType::Error)
+			std::cerr << prefix << text << std::endl;
+		else
+			std::cout << prefix << text << std::endl;
 	}
 }
 

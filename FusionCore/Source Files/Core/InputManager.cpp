@@ -86,18 +86,30 @@ void InputManager::OnCursorPosition(GLFWwindow* window, double xpos, double ypos
 		ImGui_ImplGlfw_CursorPosCallback(window, xpos, ypos);
 	}
 
-	Viewport* gameViewport = EditorManager::getInstance().gameViewport;
-	if (gameViewport) {
-		ImVec2 panelPos = gameViewport->panelPos;
-		ImVec2 panelSize = gameViewport->panelSize;
+	if (EngineManager::getInstance().isPlayer) {
+		float winWidth = EngineManager::getInstance().windowWidth;
+		float winHeight = EngineManager::getInstance().windowHeight;
 
-		if (panelSize.x > 0 && panelSize.y > 0) {
-			float localX = (float)xpos - panelPos.x;
-			float localY = (float)ypos - panelPos.y;
-
-			glX = (2.0f * localX / panelSize.x) - 1.0f;
-			glY = 1.0f - (2.0f * localY / panelSize.y);
+		if (winWidth > 0 && winHeight > 0) {
+			glX = (2.0f * (float)xpos / winWidth) - 1.0f;
+			glY = 1.0f - (2.0f * (float)ypos / winHeight);
 			glX = glX * EngineManager::getInstance().gameAspectRatio;
+		}
+	}
+	else {
+		Viewport* gameViewport = EditorManager::getInstance().gameViewport;
+		if (gameViewport) {
+			ImVec2 panelPos = gameViewport->panelPos;
+			ImVec2 panelSize = gameViewport->panelSize;
+
+			if (panelSize.x > 0 && panelSize.y > 0) {
+				float localX = (float)xpos - panelPos.x;
+				float localY = (float)ypos - panelPos.y;
+
+				glX = (2.0f * localX / panelSize.x) - 1.0f;
+				glY = 1.0f - (2.0f * localY / panelSize.y);
+				glX = glX * EngineManager::getInstance().gameAspectRatio;
+			}
 		}
 	}
 
@@ -146,7 +158,7 @@ void InputManager::OnMouseButton(GLFWwindow* window, int button, int action, int
 		mouseRightHold = false;
 	}
 
-	if (EditorManager::getInstance().WindowHovered) {
+	if (!EngineManager::getInstance().isPlayer && EditorManager::getInstance().WindowHovered) {
 		return;
 	}
 

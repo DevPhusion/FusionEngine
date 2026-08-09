@@ -124,7 +124,7 @@
       <AdditionalIncludeDirectories>D:\Programming\GameEngine\FusionCore\imgui;D:\Programming\GameEngine\Libraries\include;D:\Programming\GameEngine\Libraries\include\glad;C:\Users\User\AppData\Local\Programs\Python\Python311\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>D:\Programming\GameEngine\Libraries\lib;C:\Users\User\AppData\Local\Programs\Python\Python311\libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>opengl32.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
@@ -162,7 +162,7 @@
       <AdditionalIncludeDirectories>D:\Programming\GameEngine\FusionCore\imgui;D:\Programming\GameEngine\Libraries\include;D:\Programming\GameEngine\Libraries\include\glad;C:\Users\User\AppData\Local\Programs\Python\Python311\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalLibraryDirectories>D:\Programming\GameEngine\Libraries\lib;C:\Users\User\AppData\Local\Programs\Python\Python311\libs;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>opengl32.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>

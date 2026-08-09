@@ -60,6 +60,7 @@ void MouseInteractComponent::OnDelete() {
 }
 
 void MouseInteractComponent::SetSelectedPolygon(Object* obj, bool enable) {
+	if (EngineManager::getInstance().isPlayer) return;
 	if (Renderer::getInstance().gizmos->isDragging) return;
 
 	if (!enable) {

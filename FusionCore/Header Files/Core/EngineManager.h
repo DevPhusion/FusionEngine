@@ -67,6 +67,8 @@ public:
 		Simulate
 	};
 
+	bool isPlayer = false;
+
 	InteractMode EngineInteractMode = EditorSelect;
 	PhysicsMode EnginePhysicsMode = Stop;
 	PhysicsMode EnginePrevPhysicsMode = Stop;

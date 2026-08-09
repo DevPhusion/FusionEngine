@@ -61,6 +61,8 @@ int main(int argc, char* argv[]) {
 		stbi_image_free(images[0].pixels); 
 	}
 
+	EngineManager::getInstance().isPlayer = false;
+
 	Renderer::getInstance().Setup(&ObjectManager::getInstance().allObjects);
 	EditorManager::getInstance().Setup(window); 
 

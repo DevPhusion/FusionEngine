@@ -1,5 +1,5 @@
 #pragma once
-#include <fstream>
+#include <istream>  
 #include <string>
 #include <vector>
 #include <type_traits>
@@ -9,7 +9,7 @@
 class BinaryReader
 {
 public:
-	explicit BinaryReader(std::ifstream& in) : in(in) {}
+	explicit BinaryReader(std::istream& in) : in(in) {}
 
 	template <typename T>
 	T Read()
@@ -135,5 +135,5 @@ public:
 	bool Eof() const { return in.eof(); }
 
 private:
-	std::ifstream& in;
+	std::istream& in;
 };
