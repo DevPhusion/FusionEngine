@@ -70,11 +70,24 @@ void TransformComponent::ProcessInspectorUI() {
 	if (ImGui::InputFloat2("## Position", position)) {
 		UpdateWorldPosition(glm::vec3(position[0], position[1], 0));
 	}
+	if (ImGui::IsItemActivated()) {
+		EditorManager::getInstance().BeginEdit({ parent });
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		EditorManager::getInstance().EndEdit({ parent });
+	}
+
 	ImGui::Text("Rotation ");
 	ImGui::SameLine();
 	float rotation = this->rotation;
 	if (ImGui::SliderAngle("## Rotation", &rotation, -180.0f, 180.0f)) {
 		Rotate(rotation);
+	}
+	if (ImGui::IsItemActivated()) {
+		EditorManager::getInstance().BeginEdit({ parent });
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		EditorManager::getInstance().EndEdit({ parent });
 	}
 
 	ImGui::Text("Scale ");
@@ -83,7 +96,12 @@ void TransformComponent::ProcessInspectorUI() {
 	if (ImGui::InputFloat2("## Scale", size)) {
 		Scale(glm::vec3(size[0], size[1], 1));
 	}
-
+	if (ImGui::IsItemActivated()) {
+		EditorManager::getInstance().BeginEdit({ parent });
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		EditorManager::getInstance().EndEdit({ parent });
+	}
 }
 
 void TransformComponent::OnDelete() {
@@ -244,7 +262,7 @@ void TransformComponent::ProcessTransform() {
 	this->transform = glm::rotate(this->transform, rotation, glm::vec3(0, 0, 1));
 	this->transform = glm::scale(this->transform, size);
 
-	this->transform = glm::translate(this->transform, -rotation_center); // Translate back to original pos
+	this->transform = glm::translate(this->transform, -rotation_center); 
 	glm::mat4 projection = glm::ortho(-EngineManager::getInstance().gameAspectRatio,
 		EngineManager::getInstance().gameAspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
 	this->shader.setMat4D("projection", projection);

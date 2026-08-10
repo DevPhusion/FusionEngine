@@ -9,7 +9,7 @@
 class BinaryWriter
 {
 public:
-	explicit BinaryWriter(std::ofstream& out) : out(out) {}
+	explicit BinaryWriter(std::ostream& out) : out(out) {}
 
 	template <typename T>
 	void Write(const T& value)
@@ -82,5 +82,5 @@ public:
 	bool Good() const { return out.good(); }
 
 private:
-	std::ofstream& out;
+	std::ostream& out;
 };

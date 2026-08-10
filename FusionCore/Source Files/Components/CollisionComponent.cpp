@@ -462,6 +462,7 @@ void CollisionComponent::DrawLayerMaskUI(const char* label, uint16_t* layer) {
 		ImGui::PushID(i);
 
 		if (ImGui::Button(std::to_string(i + 1).c_str(), ImVec2(btnSize, btnSize))) {
+			EditorManager::getInstance().BeginEdit({ parent });
 			*layer ^= (1 << i);
 			if (layer == &collisionLayer) {
 				SetCollisionLayer(collisionLayer);
@@ -469,6 +470,7 @@ void CollisionComponent::DrawLayerMaskUI(const char* label, uint16_t* layer) {
 			else {
 				SetCollisionMask(collisionMask);
 			}
+			EditorManager::getInstance().EndEdit({ parent });
 		}
 
 		ImGui::PopID();
@@ -541,12 +543,20 @@ void CollisionComponent::ProcessShapeEntryUI(CollisionShapeEntry& entry) {
 	if (ImGui::InputText("##ShapeName", nameBuf, IM_ARRAYSIZE(nameBuf))) {
 		entry.name = nameBuf;
 	}
+	if (ImGui::IsItemActivated()) {
+		EditorManager::getInstance().BeginEdit({ parent });
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		EditorManager::getInstance().EndEdit({ parent });
+	}
 
 	RenderComponent* rc = parent->GetComponent<RenderComponent>();
 	if (rc) {
 		bool sync = entry.syncWithRenderComponent;
 		if (ImGui::Checkbox("Sync with Render Component", &sync)) {
+			EditorManager::getInstance().BeginEdit({ parent });
 			SetSyncWithRenderComponent(entry, sync);
+			EditorManager::getInstance().EndEdit({ parent });
 		}
 		ImGui::Separator();
 	}
@@ -567,6 +577,8 @@ void CollisionComponent::ProcessShapeEntryUI(CollisionShapeEntry& entry) {
 
 	if (ImGui::BeginCombo("##CollisionShapeSelect", shapeLabel)) {
 		if (ImGui::Selectable("Rectangle", std::holds_alternative<RectangleShape>(entry.currentShape))) {
+			EditorManager::getInstance().BeginEdit({ parent });
+
 			RectangleShape rect;
 			rect.width = rect.height = 1.0f;
 			TransformComponent* tc = parent->GetComponent<TransformComponent>();
@@ -579,8 +591,12 @@ void CollisionComponent::ProcessShapeEntryUI(CollisionShapeEntry& entry) {
 			}
 			entry.isAddVertex = false;
 			SetShape(entry, rect);
+
+			EditorManager::getInstance().EndEdit({ parent });
 		}
 		if (ImGui::Selectable("Circle", std::holds_alternative<CircleShape>(entry.currentShape))) {
+			EditorManager::getInstance().BeginEdit({ parent });
+
 			CircleShape cir;
 			cir.radius = 1.0f;
 			TransformComponent* tc = parent->GetComponent<TransformComponent>();
@@ -593,8 +609,12 @@ void CollisionComponent::ProcessShapeEntryUI(CollisionShapeEntry& entry) {
 			}
 			entry.isAddVertex = false;
 			SetShape(entry, cir);
+
+			EditorManager::getInstance().EndEdit({ parent });
 		}
 		if (ImGui::Selectable("Polygon", std::holds_alternative<PolygonShape>(entry.currentShape))) {
+			EditorManager::getInstance().BeginEdit({ parent });   // closed by the vertex-edit session below, not here
+
 			PolygonShape poly;
 			poly.vertices = {};
 			SetShape(entry, poly);
@@ -622,6 +642,12 @@ void CollisionComponent::ProcessShapeEntryUI(CollisionShapeEntry& entry) {
 				s.center = tc ? tc->GetWorldPosition() : GetCenter(entry);
 				SetShape(entry, s);
 			}
+			if (ImGui::IsItemActivated()) {
+				EditorManager::getInstance().BeginEdit({ parent });
+			}
+			if (ImGui::IsItemDeactivatedAfterEdit()) {
+				EditorManager::getInstance().EndEdit({ parent });
+			}
 		}
 		else if constexpr (std::is_same_v<T, CircleShape>) {
 			auto updateCenter = [&]() {
@@ -635,6 +661,12 @@ void CollisionComponent::ProcessShapeEntryUI(CollisionShapeEntry& entry) {
 			if (ImGui::InputFloat("##CollisionCircleRadius", &r, 0.0f, 0.0f, "%.3f m")) {
 				s.radius = std::max(0.01f, r); updateCenter(); SetShape(entry, s);
 			}
+			if (ImGui::IsItemActivated()) {
+				EditorManager::getInstance().BeginEdit({ parent });
+			}
+			if (ImGui::IsItemDeactivatedAfterEdit()) {
+				EditorManager::getInstance().EndEdit({ parent });
+			}
 
 			int seg = s.segments;
 			ImGui::Text("  Segments");
@@ -642,10 +674,18 @@ void CollisionComponent::ProcessShapeEntryUI(CollisionShapeEntry& entry) {
 			if (ImGui::InputInt("##CollisionCircleSeg", &seg)) {
 				s.segments = std::max(3, seg); updateCenter(); SetShape(entry, s);
 			}
+			if (ImGui::IsItemActivated()) {
+				EditorManager::getInstance().BeginEdit({ parent });
+			}
+			if (ImGui::IsItemDeactivatedAfterEdit()) {
+				EditorManager::getInstance().EndEdit({ parent });
+			}
 		}
 		else if constexpr (std::is_same_v<T, PolygonShape>) {
 			if (!entry.isAddVertex) {
 				if (ImGui::Button("Reset vertices##CollisionPolyReset")) {
+					EditorManager::getInstance().BeginEdit({ parent });
+
 					s.vertices = {};
 					SetShape(entry, s);
 
@@ -664,6 +704,8 @@ void CollisionComponent::ProcessShapeEntryUI(CollisionShapeEntry& entry) {
 
 				ImGui::SameLine();
 				if (ImGui::Button("Edit vertices##CollisionPolyEditVerts")) {
+					EditorManager::getInstance().BeginEdit({ parent });
+
 					std::vector<glm::vec3> localVerts;
 					localVerts.reserve(entry.points.size());
 					for (auto& p : entry.points) {
@@ -710,6 +752,8 @@ void CollisionComponent::ProcessShapeEntryUI(CollisionShapeEntry& entry) {
 					entry.polygonEditCallbackID = -1;
 					EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
 					entry.isAddVertex = false;
+
+					EditorManager::getInstance().EndEdit({ parent });
 				}
 				ImGui::EndDisabled();
 
@@ -720,6 +764,8 @@ void CollisionComponent::ProcessShapeEntryUI(CollisionShapeEntry& entry) {
 					entry.polygonEditCallbackID = -1;
 					EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
 					entry.isAddVertex = false;
+
+					EditorManager::getInstance().EndEdit({ parent });
 				}
 			}
 		}
@@ -744,16 +790,23 @@ void CollisionComponent::ProcessShapeEntryUI(CollisionShapeEntry& entry) {
 void CollisionComponent::ProcessInspectorUI() {
 	if (!(parent->HasComponent<RigidBodyComponent>() || parent->HasComponent<SoftBodyComponent>()
 		|| parent->HasComponent<FluidComponent>())) {
-		ImGui::Checkbox("Static", &isStatic);
+		bool staticVal = isStatic;
+		if (ImGui::Checkbox("Static", &staticVal)) {
+			EditorManager::getInstance().BeginEdit({ parent });
+			isStatic = staticVal;
+			EditorManager::getInstance().EndEdit({ parent });
+		}
 		ImGui::Separator();
 	}
 
 	ImGui::Text("Collision Shapes (%d)", (int)shapes.size());
 	ImGui::SameLine();
 	if (ImGui::SmallButton("+ Add Shape")) {
+		EditorManager::getInstance().BeginEdit({ parent });
 		PolygonShape poly;
 		poly.vertices = {};
 		AddShape(poly);
+		EditorManager::getInstance().EndEdit({ parent });
 	}
 
 	ImGui::Separator();
@@ -791,7 +844,9 @@ void CollisionComponent::ProcessInspectorUI() {
 	}
 
 	if (shapeToRemove != -1) {
+		EditorManager::getInstance().BeginEdit({ parent });
 		RemoveShape(shapeToRemove);
+		EditorManager::getInstance().EndEdit({ parent });
 	}
 
 	ImGui::Separator();
@@ -818,15 +873,19 @@ void CollisionComponent::ProcessInspectorUI() {
 
 	if (ImGui::BeginCombo("##ResolutionShapeSelect", currentLabel.c_str())) {
 		if (ImGui::Selectable("None", resolutionShapeID == -1)) {
+			EditorManager::getInstance().BeginEdit({ parent });
 			SetResolutionShapeID(-1);
+			EditorManager::getInstance().EndEdit({ parent });
 		}
 		for (auto& entry : shapes) {
-			if (entry.points.size() < 3) continue; 
+			if (entry.points.size() < 3) continue;
 
 			ImGui::PushID(entry.id);
 			bool isSelected = (entry.id == resolutionShapeID);
 			if (ImGui::Selectable(entry.name.c_str(), isSelected)) {
+				EditorManager::getInstance().BeginEdit({ parent });
 				SetResolutionShapeID(entry.id);
+				EditorManager::getInstance().EndEdit({ parent });
 			}
 			ImGui::PopID();
 		}

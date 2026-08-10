@@ -216,12 +216,22 @@ int main(int argc, char* argv[]) {
 
 		glm::vec4& bg = EngineManager::getInstance().EngineSettings.backgroundColor;
 
+		ViewportRect vp = EngineManager::getInstance().GetPlayerViewportRect();
+
 		glBindFramebuffer(GL_FRAMEBUFFER, 0);
 		glViewport(0, 0, (int)EngineManager::getInstance().windowWidth, (int)EngineManager::getInstance().windowHeight);
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+
+		glEnable(GL_SCISSOR_TEST);
+		glViewport(vp.x, vp.y, vp.width, vp.height);
+		glScissor(vp.x, vp.y, vp.width, vp.height);
 		glClearColor(bg.r, bg.g, bg.b, bg.a);
 		glClear(GL_COLOR_BUFFER_BIT);
 
 		Renderer::getInstance().Draw();
+
+		glDisable(GL_SCISSOR_TEST);
 
 		InputManager::getInstance().ClearFrameState();
 

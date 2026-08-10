@@ -174,6 +174,21 @@ bool ProjectExportManager::DoExport(const ExportConfiguration& config, std::stri
 		return false;
 	}
 
+	std::vector<uint8_t> iconBytes;
+	bool hasCustomIcon = false;
+	if (!config.iconPath.empty() && config.iconPath != "Resources/Images/engineIcon.png") {
+		if (fs::exists(config.iconPath, ec)) {
+			std::ifstream iconIn(config.iconPath, std::ios::binary);
+			if (iconIn.is_open()) {
+				iconBytes.assign((std::istreambuf_iterator<char>(iconIn)), std::istreambuf_iterator<char>());
+				hasCustomIcon = !iconBytes.empty();
+			}
+		}
+		else {
+			Console::PrintError("ProjectExportManager: custom icon path does not exist: {} — using default.").Format(config.iconPath);
+		}
+	}
+
 	fs::path exportRoot(config.exportFolder);
 	fs::create_directories(exportRoot, ec);
 	if (ec) {
@@ -233,6 +248,18 @@ bool ProjectExportManager::DoExport(const ExportConfiguration& config, std::stri
 				Console::PrintError("ProjectExportManager: {}").Format(outError);
 				return false;
 			}
+		}
+	}
+	
+	if (hasCustomIcon) {
+		fs::path iconDest = exportRoot / "Resources" / "Images" / "engineIcon.png";
+		fs::create_directories(iconDest.parent_path(), ec);
+		std::ofstream iconOut(iconDest, std::ios::binary);
+		if (iconOut.is_open()) {
+			iconOut.write(reinterpret_cast<const char*>(iconBytes.data()), iconBytes.size());
+		}
+		else {
+			Console::PrintError("ProjectExportManager: failed to write custom icon to export folder.");
 		}
 	}
 

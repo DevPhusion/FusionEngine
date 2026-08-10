@@ -222,8 +222,11 @@ void Constraint::ProcessInspectorUI(Object* parent)
         {
             if (currentObj == nullptr) return;
 
-            if (ImGui::Checkbox((std::string("Use Object Center##") + popupId).c_str(), &useCenter))
+            bool centerFlag = useCenter;
+            if (ImGui::Checkbox((std::string("Use Object Center##") + popupId).c_str(), &centerFlag))
             {
+                EditorManager::getInstance().BeginEdit({ parent }, true);
+                useCenter = centerFlag;
                 EngineManager::getInstance().EngineChangeEvent();
                 if (useCenter)
                 {
@@ -233,6 +236,7 @@ void Constraint::ProcessInspectorUI(Object* parent)
                         EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
                     }
                 }
+                EditorManager::getInstance().EndEdit({ parent });
             }
 
             if (!useCenter)
@@ -240,6 +244,7 @@ void Constraint::ProcessInspectorUI(Object* parent)
                 if (!editing)
                 {
                     if (ImGui::Button((std::string("Change Attach Point##") + popupId).c_str())) {
+                        EditorManager::getInstance().BeginEdit({ parent }, true);   // closed by "Confirm" below, not here
                         editing = true;
                         EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::ConstraintEdit);
                     }
@@ -249,6 +254,7 @@ void Constraint::ProcessInspectorUI(Object* parent)
                     if (ImGui::Button((std::string("Confirm##") + popupId).c_str())) {
                         editing = false;
                         EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
+                        EditorManager::getInstance().EndEdit({ parent });
                     }
                 }
             }
@@ -313,6 +319,13 @@ void Constraint::ProcessInspectorUI(Object* parent)
             ImGui::EndPopup();
 
             if (pendingSelection != nullptr) {
+                Object* previousObjectB = objectB.obj;
+
+                std::vector<Object*> editRoots = { parent, pendingSelection };
+                if (previousObjectB) editRoots.push_back(previousObjectB);
+
+                EditorManager::getInstance().BeginEdit(editRoots, true);
+
                 PhysicsBody body = PhysicsBody();
                 TransformComponent* tc = pendingSelection->GetComponent<TransformComponent>();
                 RigidBodyComponent* pc = pendingSelection->GetComponent<RigidBodyComponent>();
@@ -331,6 +344,8 @@ void Constraint::ProcessInspectorUI(Object* parent)
                 }
                 SetObjectB(body);
                 EngineManager::getInstance().EngineChangeEvent();
+
+                EditorManager::getInstance().EndEdit(editRoots);
             }
         }
     }
@@ -343,11 +358,21 @@ void Constraint::ProcessInspectorUI(Object* parent)
     if (ImGui::DragFloat("##beta", &beta, 0.001f, 0.0f, 1.0f)) {
         EngineManager::getInstance().EngineChangeEvent();
     }
+    if (ImGui::IsItemActivated()) {
+        EditorManager::getInstance().BeginEdit({ parent }, true);
+    }
+    if (ImGui::IsItemDeactivatedAfterEdit()) {
+        EditorManager::getInstance().EndEdit({ parent });
+    }
 
     ImGui::Text("Draw constraint ");
     ImGui::SameLine();
-    if (ImGui::Checkbox("##Draw constraint", &canDrawConstraint)) {
+    bool drawFlag = canDrawConstraint;
+    if (ImGui::Checkbox("##Draw constraint", &drawFlag)) {
+        EditorManager::getInstance().BeginEdit({ parent }, true);
+        canDrawConstraint = drawFlag;
         EngineManager::getInstance().EngineChangeEvent();
+        EditorManager::getInstance().EndEdit({ parent });
     }
 }
 

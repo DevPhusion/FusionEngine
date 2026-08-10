@@ -198,8 +198,14 @@ void Gizmos::OnMouseButton(int button, int action, int mods) {
 		dragStartObjectScale = transform->size;
 		dragStartObjectRotation = transform->rotation;
 		dragStartAngleOffset = GetAngle(origin, currentMouseWorld);
+
+		EditorManager::getInstance().BeginEdit({ transform->parent });   
 	}
 	else if (action == GLFW_RELEASE) {
+		if (isDragging) {
+			TransformComponent* transform = GetSelectedTransform();
+			if (transform) EditorManager::getInstance().EndEdit({ transform->parent });   // NEW
+		}
 		isDragging = false;
 		selectedAxis = GizmosAxis::None;
 	}

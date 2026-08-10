@@ -10,11 +10,23 @@ void FractureComponent::ProcessInspectorUI() {
 	if (ImGui::Checkbox("##Fracturable", &fracturable)) {
 		EngineManager::getInstance().EngineChangeEvent();
 	}
+	if (ImGui::IsItemActivated()) {
+		EditorManager::getInstance().BeginEdit({ parent });
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		EditorManager::getInstance().EndEdit({ parent });
+	}
 
 	ImGui::Text("Threshold");
 	ImGui::SameLine();
 	if (ImGui::InputFloat("##Threshold", &impulseThreshold, 0.0f, 0.0f, "%.3f Ns")) {
 		EngineManager::getInstance().EngineChangeEvent();
+	}
+	if (ImGui::IsItemActivated()) {
+		EditorManager::getInstance().BeginEdit({ parent });
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		EditorManager::getInstance().EndEdit({ parent });
 	}
 
 	ImGui::Text("Shard Count");
@@ -22,11 +34,23 @@ void FractureComponent::ProcessInspectorUI() {
 	if (ImGui::InputInt("##ShardCount", &shardCount)) {
 		EngineManager::getInstance().EngineChangeEvent();
 	}
+	if (ImGui::IsItemActivated()) {
+		EditorManager::getInstance().BeginEdit({ parent });
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		EditorManager::getInstance().EndEdit({ parent });
+	}
 
 	ImGui::Text("Min Area");
 	ImGui::SameLine();
 	if (ImGui::InputFloat("##MinArea", &minFragmentArea)) {
 		EngineManager::getInstance().EngineChangeEvent();
+	}
+	if (ImGui::IsItemActivated()) {
+		EditorManager::getInstance().BeginEdit({ parent });
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		EditorManager::getInstance().EndEdit({ parent });
 	}
 
 	ImGui::Text("Max Generation");
@@ -34,12 +58,24 @@ void FractureComponent::ProcessInspectorUI() {
 	if (ImGui::InputInt("##MaxGen", &maxFractureGenerations)) {
 		EngineManager::getInstance().EngineChangeEvent();
 	}
+	if (ImGui::IsItemActivated()) {
+		EditorManager::getInstance().BeginEdit({ parent });
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		EditorManager::getInstance().EndEdit({ parent });
+	}
 
 	if (!parent->HasComponent<RigidBodyComponent>()) {
 		ImGui::Text("Density");
 		ImGui::SameLine();
 		if (ImGui::InputFloat("##Density", &restDensity)) {
 			EngineManager::getInstance().EngineChangeEvent();
+		}
+		if (ImGui::IsItemActivated()) {
+			EditorManager::getInstance().BeginEdit({ parent });
+		}
+		if (ImGui::IsItemDeactivatedAfterEdit()) {
+			EditorManager::getInstance().EndEdit({ parent });
 		}
 	}
 }

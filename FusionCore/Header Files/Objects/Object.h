@@ -120,6 +120,8 @@ public:
 	void Serialize(BinaryWriter& w);
 
 	void Deserialize(BinaryReader& r);
+	void DeserializeBody(BinaryReader& r);  
+	void ApplyState(BinaryReader& r);
 
 	void AddComponent(std::unique_ptr<Component> component) {
 		size_t id = component->GetTypeID(); 

@@ -26,6 +26,8 @@ struct FileSystemEntry {
 	unsigned int thumbnailTexture = 0;
 };
 
+class Object;
+
 class FileManager
 {
 public:
@@ -80,6 +82,13 @@ public:
 	void LoadProjectFromMemory(const std::vector<uint8_t>& data);
 	void NewProject();
 
+	bool IsRestoring() const { return isRestoring; }
+	std::vector<uint8_t> SnapshotObjects(const std::vector<Object*>& roots) const;
+	void RestoreObjects(const std::vector<uint8_t>& data);
+
+	std::vector<uint8_t> SnapshotConstraints() const;
+	void RestoreConstraints(const std::vector<uint8_t>& data);
+
 private:
 	FileManager() = default;
 	~FileManager();
@@ -89,4 +98,6 @@ private:
 	std::filesystem::path resourcesRoot;
 	std::unordered_map<std::string, unsigned int> thumbnailCache;
 	int resourceGeneration = 0;
+
+	bool isRestoring = false;
 };

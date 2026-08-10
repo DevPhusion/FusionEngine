@@ -537,3 +537,134 @@ void FileManager::NewProject() {
 	currentProjectFile = "";
 	isSaved = false;
 }
+
+static void CollectSubtree(Object* obj, std::vector<Object*>& out) {
+	out.push_back(obj);
+	for (auto* child : obj->children) CollectSubtree(child, out);
+}
+
+std::vector<uint8_t> FileManager::SnapshotObjects(const std::vector<Object*>& roots) const {
+	std::vector<Object*> all;
+	for (auto* root : roots) CollectSubtree(root, all);
+
+	std::ostringstream out(std::ios::binary);
+	BinaryWriter w(out);
+	w.Write(static_cast<uint32_t>(all.size()));
+	for (auto* obj : all) obj->Serialize(w);
+
+	std::string s = out.str();
+	return std::vector<uint8_t>(s.begin(), s.end());
+}
+
+void FileManager::RestoreObjects(const std::vector<uint8_t>& data) {
+	isRestoring = true;
+
+	std::istringstream in(std::string(data.begin(), data.end()), std::ios::binary);
+	BinaryReader r(in);
+
+	std::vector<Object*> touched;   
+
+	uint32_t count = r.Read<uint32_t>();
+	touched.reserve(count);
+	for (uint32_t i = 0; i < count; i++) {
+		uint64_t id = r.Read<uint64_t>();
+		Object* existing = ObjectManager::getInstance().FindObjectById(id);
+
+		if (existing) {
+			existing->ApplyState(r);
+			touched.push_back(existing);
+		}
+		else {
+			auto obj = std::make_unique<Object>();
+			obj->id = id;
+			Object::ReserveID(id);
+			obj->DeserializeBody(r);
+			touched.push_back(obj.get());   
+			ObjectManager::getInstance().allObjects.push_back(std::move(obj));
+		}
+	}
+
+	for (auto& obj : ObjectManager::getInstance().allObjects) {
+		obj->children.clear();
+	}
+
+	std::unordered_map<uint64_t, Object*> byId;
+	for (auto& obj : ObjectManager::getInstance().allObjects) byId[obj->id] = obj.get();
+
+	for (auto& obj : ObjectManager::getInstance().allObjects) {
+		if (obj->parentID != -1 && byId.count(obj->parentID)) {
+			obj->SetParent(byId[obj->parentID]);
+		}
+		else {
+			obj->parent = nullptr;
+			obj->parentID = -1;
+		}
+	}
+
+	for (Object* obj : touched) {          
+		for (auto& c : obj->components) {
+			c->PostLoad();
+		}
+	}
+
+	isRestoring = false;
+}
+
+std::vector<uint8_t> FileManager::SnapshotConstraints() const {
+	std::ostringstream out(std::ios::binary);
+	BinaryWriter w(out);
+
+	std::vector<Constraint*> toSave;
+	for (Constraint* c : PhysicsEngine::getInstance().registeredPGSConstraints) {
+		if (!c->isTemporary) toSave.push_back(c);
+	}
+
+	w.Write(static_cast<uint32_t>(toSave.size()));
+	for (Constraint* c : toSave) {
+		c->Serialize(w);   
+	}
+
+	std::string s = out.str();
+	return std::vector<uint8_t>(s.begin(), s.end());
+}
+
+void FileManager::RestoreConstraints(const std::vector<uint8_t>& data) {
+	std::istringstream in(std::string(data.begin(), data.end()), std::ios::binary);
+	BinaryReader r(in);
+
+	std::vector<Constraint*> current;
+	for (Constraint* c : PhysicsEngine::getInstance().registeredPGSConstraints) {
+		if (!c->isTemporary) current.push_back(c);
+	}
+	for (Constraint* c : current) {
+		if (c->objectA.obj) {
+			if (auto* cc = c->objectA.obj->GetComponent<ConstraintComponent>())
+				cc->RemoveConstraint(c);
+		}
+	}
+
+	uint32_t constraintCount = r.Read<uint32_t>();
+	for (uint32_t i = 0; i < constraintCount; i++) {
+		std::string name = r.ReadString();
+		std::shared_ptr<Constraint> constraint = CreateConstraintFromName(name);
+		uint64_t idA = r.Read<uint64_t>();
+		uint64_t idB = r.Read<uint64_t>();
+
+		Object* a = ObjectManager::getInstance().FindObjectById(idA);
+		Object* b = ObjectManager::getInstance().FindObjectById(idB);
+
+		if (!a) {
+			constraint->Deserialize(r);   
+			continue;
+		}
+
+		if (!a->HasComponent<ConstraintComponent>())
+			a->AddComponent(std::make_unique<ConstraintComponent>(a));
+
+		constraint->SetObjectA(PhysicsEngine::getInstance().GetBodyFromObject(a));
+		constraint->SetObjectB(b ? PhysicsEngine::getInstance().GetBodyFromObject(b) : PhysicsBody());
+		constraint->Deserialize(r);
+
+		a->GetComponent<ConstraintComponent>()->AddConstraint(constraint);
+	}
+}

@@ -44,6 +44,8 @@ struct EngineState {
 	std::vector<std::shared_ptr<Constraint>> Constraints = {};
 };
 
+struct ViewportRect { int x = 0, y = 0, width = 0, height = 0; };
+
 class EngineManager
 {
 public:
@@ -99,6 +101,7 @@ public:
 	void SwitchInteractMode(InteractMode mode);
 	void SwitchPhysicsMode(PhysicsMode mode);
 	void SetGameResolution(float width, float height);
+	ViewportRect GetPlayerViewportRect() const;
 	void SerializeEngineSettings(BinaryWriter& w);
 	void DeserializeEngineSettings(BinaryReader& r);
 	int AddInteractModeChangedEvent(std::function<void()> func);

@@ -81,6 +81,12 @@ void RigidBodyComponent::ProcessInspectorUI() {
 		EngineManager::getInstance().EngineChangeEvent();
 		CalculateInertia();
 	}
+	if (ImGui::IsItemActivated()) {
+		EditorManager::getInstance().BeginEdit({ parent });
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		EditorManager::getInstance().EndEdit({ parent });
+	}
 
 	ImGui::Text("Velocity ");
 	ImGui::SameLine();
@@ -88,6 +94,12 @@ void RigidBodyComponent::ProcessInspectorUI() {
 	if (ImGui::InputFloat2("##Velocity", velocity, "%.3f m/s")) {
 		EngineManager::getInstance().EngineChangeEvent();
 		this->velocity = glm::vec3(velocity[0], velocity[1], 0);
+	}
+	if (ImGui::IsItemActivated()) {
+		EditorManager::getInstance().BeginEdit({ parent });
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		EditorManager::getInstance().EndEdit({ parent });
 	}
 
 	ImGui::Text("Acceleration ");
@@ -99,6 +111,12 @@ void RigidBodyComponent::ProcessInspectorUI() {
 	ImGui::SameLine();
 	if (ImGui::InputFloat("## Angular Velocity", &angularVelocity, 0.0f, 0.0f, "%.3f rad/s")) {
 		EngineManager::getInstance().EngineChangeEvent();
+	}
+	if (ImGui::IsItemActivated()) {
+		EditorManager::getInstance().BeginEdit({ parent });
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		EditorManager::getInstance().EndEdit({ parent });
 	}
 
 	ImGui::Text("Angular Acceleration ");
@@ -118,6 +136,12 @@ void RigidBodyComponent::ProcessInspectorUI() {
 	float force[] = { this->netForceDisplay.x, this->netForceDisplay.y };
 	if (ImGui::InputFloat2("##Net Force", force, "%.3f N")) {
 		this->netForce = glm::vec3(force[0], force[1], 0);
+	}
+	if (ImGui::IsItemActivated()) {
+		EditorManager::getInstance().BeginEdit({ parent });
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		EditorManager::getInstance().EndEdit({ parent });
 	}
 }
 

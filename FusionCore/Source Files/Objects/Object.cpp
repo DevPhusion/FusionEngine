@@ -47,27 +47,45 @@ void Object::Serialize(BinaryWriter& w) {
 }
 
 void Object::Deserialize(BinaryReader& r) {
-	this->id = r.Read<uint64_t>();
-	Object::ReserveID(id);
-	this->name = r.ReadString();
-	this->hideInHierarchy = r.Read<bool>();
-	this->hidden = r.Read<bool>();
-	this->parentID = r.Read<uint64_t>();
-	std::string vertPath = r.ReadString();
-	std::string fragPath = r.ReadString();
-	this->shader = Shader(vertPath.c_str(), fragPath.c_str());
+    this->id = r.Read<uint64_t>();
+    Object::ReserveID(id);
+    DeserializeBody(r);
+}
 
-	uint32_t count = r.Read<uint32_t>();
-	for (uint32_t i = 0; i < count; i++)
-	{
-		std::string typeName = r.ReadString();
+void Object::DeserializeBody(BinaryReader& r) {
+    this->name = r.ReadString();
+    this->hideInHierarchy = r.Read<bool>();
+    this->hidden = r.Read<bool>();
+    this->parentID = r.Read<uint64_t>();
+    std::string vertPath = r.ReadString();
+    std::string fragPath = r.ReadString();
+    this->shader = Shader(vertPath.c_str(), fragPath.c_str());
 
-		auto comp = CreateComponentFromName(this, typeName);
-		if (!comp)
-			throw std::runtime_error("Object::Deserialize: unknown component type '" + typeName + "' in file");
+    uint32_t count = r.Read<uint32_t>();
+    for (uint32_t i = 0; i < count; i++) {
+        std::string typeName = r.ReadString();
+        auto comp = CreateComponentFromName(this, typeName);
+        if (!comp) throw std::runtime_error("Object::Deserialize: unknown component type '" + typeName + "'");
+        RegisterComponentPointer(comp.get());
+        comp->Deserialize(r);
+        AddComponent(std::move(comp));
+    }
+}
 
-		RegisterComponentPointer(comp.get());
-		comp->Deserialize(r);
-		AddComponent(std::move(comp));
-	}
+void Object::ApplyState(BinaryReader& r) {
+    this->name = r.ReadString();
+    this->hideInHierarchy = r.Read<bool>();
+    this->hidden = r.Read<bool>();
+    this->parentID = r.Read<uint64_t>();
+    r.ReadString(); 
+    r.ReadString(); 
+
+    uint32_t count = r.Read<uint32_t>();
+    if (count != components.size())
+        throw std::runtime_error("Object::ApplyState: component set changed, cannot patch in place");
+
+    for (uint32_t i = 0; i < count; i++) {
+        r.ReadString();                
+        components[i]->Deserialize(r);
+    }
 }

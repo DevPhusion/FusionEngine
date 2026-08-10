@@ -70,17 +70,27 @@ void CameraComponent::ProcessInspectorUI() {
 	ImGui::SameLine();
 	bool mainFlag = isMain;
 	if (ImGui::Checkbox("##IsMain", &mainFlag)) {
+		CameraComponent* previousMain = Camera::getInstance().mainCam;
+		Object* previousMainOwner = (previousMain && previousMain != this) ? previousMain->parent : nullptr;
+
+		std::vector<Object*> editRoots = { parent };
+		if (previousMainOwner) editRoots.push_back(previousMainOwner);
+
+		EditorManager::getInstance().BeginEdit(editRoots);
+
 		isMain = mainFlag;
 		EngineManager::getInstance().EngineChangeEvent();
 		if (isMain) {
-			if (Camera::getInstance().mainCam && Camera::getInstance().mainCam != this) {
-				Camera::getInstance().mainCam->isMain = false;
+			if (previousMain && previousMain != this) {
+				previousMain->isMain = false;
 			}
 			Camera::getInstance().mainCam = this;
 		}
 		else if (Camera::getInstance().mainCam == this) {
 			Camera::getInstance().mainCam = nullptr;
 		}
+
+		EditorManager::getInstance().EndEdit(editRoots);
 	}
 
 	ImGui::Text("Range ");
@@ -89,6 +99,12 @@ void CameraComponent::ProcessInspectorUI() {
 	if (ImGui::InputFloat("## Range", &r)) {
 		SetRange(r < 0.0f ? 0.01f : r);
 		EngineManager::getInstance().EngineChangeEvent();
+	}
+	if (ImGui::IsItemActivated()) {
+		EditorManager::getInstance().BeginEdit({ parent });
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		EditorManager::getInstance().EndEdit({ parent });
 	}
 }
 

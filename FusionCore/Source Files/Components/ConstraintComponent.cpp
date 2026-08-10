@@ -116,33 +116,44 @@ void ConstraintComponent::ProcessInspectorUI()
             body.invMass = &pc->inverseMass;
         }
 
-        if (ImGui::MenuItem("Distance Constraint"))
-        {
+        if (ImGui::MenuItem("Distance Constraint")) {
+            EditorManager::getInstance().BeginEdit({ parent }, true);
             AddConstraint(std::make_shared<DistanceConstraint>(body, PhysicsBody(),
                 parent->GetComponent<RenderComponent>()->GetCenter(), glm::vec3(0.0f), 5.0f));
+            EditorManager::getInstance().EndEdit({ parent });
             ImGui::CloseCurrentPopup();
         }
+
         if (ImGui::MenuItem("Spring Constraint"))
         {
+            EditorManager::getInstance().BeginEdit({ parent }, true);
             AddConstraint(std::make_shared<SpringConstraint>(body, PhysicsBody(),
                 parent->GetComponent<RenderComponent>()->GetCenter(), glm::vec3(0.0f), 5.0f, 15.0f, 7.0f));
+            EditorManager::getInstance().EndEdit({ parent });
             ImGui::CloseCurrentPopup();
         }
         if (ImGui::MenuItem("Revolute Constraint"))
         {
+            EditorManager::getInstance().BeginEdit({ parent }, true);
             AddConstraint(std::make_shared<RevoluteConstraint>(body, PhysicsBody(),
                 parent->GetComponent<RenderComponent>()->GetCenter(), glm::vec3(0.0f)));
+            EditorManager::getInstance().EndEdit({ parent });
             ImGui::CloseCurrentPopup();
+
         }
         if (ImGui::MenuItem("Weld Constraint"))
         {
+            EditorManager::getInstance().BeginEdit({ parent }, true);
             AddConstraint(std::make_shared<WeldConstraint>(body, PhysicsBody(),
                 parent->GetComponent<RenderComponent>()->GetCenter(), glm::vec3(0.0f), 0.0f));
+            EditorManager::getInstance().EndEdit({ parent });
             ImGui::CloseCurrentPopup();
         }
         if (ImGui::MenuItem("Prismatic Constraint")) {
+            EditorManager::getInstance().BeginEdit({ parent }, true);
             AddConstraint(std::make_shared<PrismaticConstraint>(body, PhysicsBody(),
                 parent->GetComponent<RenderComponent>()->GetCenter(), glm::vec3(0.0f), glm::vec3(0.0f)));
+            EditorManager::getInstance().EndEdit({ parent });
             ImGui::CloseCurrentPopup();
         }
 
@@ -225,6 +236,9 @@ void ConstraintComponent::ProcessInspectorUI()
         ImGui::PopID();
     }
 
-    if (pendingRemoval != -1)
+    if (pendingRemoval != -1) {
+        EditorManager::getInstance().BeginEdit({ parent }, true);
         RemoveConstraint(static_cast<std::size_t>(pendingRemoval));
+        EditorManager::getInstance().EndEdit({ parent });
+    }
 }

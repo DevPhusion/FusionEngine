@@ -116,6 +116,7 @@ void MouseInteractComponent::FindSelectedPolygon(int button, int action, int mod
 				}
 			}
 			SetSelectedPolygon(parent, true);
+			EditorManager::getInstance().BeginEdit({ parent });
 		}
 		else {
 			SetSelectedPolygon(parent, false);
@@ -165,6 +166,9 @@ void MouseInteractComponent::DragPolygon(double xpos, double ypos) {
 		}
 	}
 	else {
+		if (Selected) {
+			EditorManager::getInstance().EndEdit({ parent });  
+		}
 		Selected = false;
 		ObjectSelected = false;
 

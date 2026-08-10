@@ -87,12 +87,14 @@ void InputManager::OnCursorPosition(GLFWwindow* window, double xpos, double ypos
 	}
 
 	if (EngineManager::getInstance().isPlayer) {
-		float winWidth = EngineManager::getInstance().windowWidth;
-		float winHeight = EngineManager::getInstance().windowHeight;
+		ViewportRect vp = EngineManager::getInstance().GetPlayerViewportRect();
 
-		if (winWidth > 0 && winHeight > 0) {
-			glX = (2.0f * (float)xpos / winWidth) - 1.0f;
-			glY = 1.0f - (2.0f * (float)ypos / winHeight);
+		if (vp.width > 0 && vp.height > 0) {
+			float localX = (float)xpos - vp.x;
+			float localY = (float)ypos - vp.y;
+
+			glX = (2.0f * localX / vp.width) - 1.0f;
+			glY = 1.0f - (2.0f * localY / vp.height);
 			glX = glX * EngineManager::getInstance().gameAspectRatio;
 		}
 	}

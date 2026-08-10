@@ -135,6 +135,30 @@ void EngineManager::SetGameResolution(float width, float height) {
 	}
 }
 
+ViewportRect EngineManager::GetPlayerViewportRect() const {
+	ViewportRect rect;
+	if (windowWidth <= 0 || windowHeight <= 0 || gameAspectRatio <= 0) {
+		rect.width = (int)windowWidth;
+		rect.height = (int)windowHeight;
+		return rect;
+	}
+
+	float windowAspect = windowWidth / windowHeight;
+
+	if (windowAspect > gameAspectRatio) {
+		rect.height = (int)windowHeight;
+		rect.width = (int)(windowHeight * gameAspectRatio);
+	}
+	else {
+		rect.width = (int)windowWidth;
+		rect.height = (int)(windowWidth / gameAspectRatio);
+	}
+
+	rect.x = (int)((windowWidth - rect.width) * 0.5f);
+	rect.y = (int)((windowHeight - rect.height) * 0.5f);
+	return rect;
+}
+
 void EngineManager::SerializeEngineSettings(BinaryWriter& w) {
 	Settings& s = EngineSettings;
 

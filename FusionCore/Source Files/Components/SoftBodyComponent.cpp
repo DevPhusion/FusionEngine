@@ -154,6 +154,12 @@ void SoftBodyComponent::ProcessInspectorUI() {
 			}
 		}
 	}
+	if (ImGui::IsItemActivated()) {
+		EditorManager::getInstance().BeginEdit({ parent });
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		EditorManager::getInstance().EndEdit({ parent });
+	}
 
 	ImGui::Text("Velocity ");
 	ImGui::SameLine();
@@ -163,6 +169,12 @@ void SoftBodyComponent::ProcessInspectorUI() {
 		velocity.x = vel[0];
 		velocity.y = vel[1];
 		CenterPM->velocity = velocity;
+	}
+	if (ImGui::IsItemActivated()) {
+		EditorManager::getInstance().BeginEdit({ parent });
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		EditorManager::getInstance().EndEdit({ parent });
 	}
 
 	ImGui::Text("Acceleration ");
@@ -181,6 +193,12 @@ void SoftBodyComponent::ProcessInspectorUI() {
 			springs[i]->compliance = compliance;
 		}
 	}
+	if (ImGui::IsItemActivated()) {
+		EditorManager::getInstance().BeginEdit({ parent });
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		EditorManager::getInstance().EndEdit({ parent });
+	}
 
 	ImGui::Text("Damping ");
 	ImGui::SameLine();
@@ -191,11 +209,21 @@ void SoftBodyComponent::ProcessInspectorUI() {
 			springs[i]->damping = damping;
 		}
 	}
+	if (ImGui::IsItemActivated()) {
+		EditorManager::getInstance().BeginEdit({ parent });
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		EditorManager::getInstance().EndEdit({ parent });
+	}
 
 	ImGui::Separator();
-	if (ImGui::Checkbox("Gas Pressure Mode", &useGasPressure)) {
+	bool gasMode = useGasPressure;
+	if (ImGui::Checkbox("Gas Pressure Mode", &gasMode)) {
+		EditorManager::getInstance().BeginEdit({ parent });
+		useGasPressure = gasMode;
 		EngineManager::getInstance().EngineChangeEvent();
 		RebuildMassAggregate();
+		EditorManager::getInstance().EndEdit({ parent });
 	}
 	if (useGasPressure) {
 		ImGui::Text("Gas Amount");
@@ -203,12 +231,20 @@ void SoftBodyComponent::ProcessInspectorUI() {
 		if (ImGui::InputFloat("##GasAmount", &gasAmount, 0.0f, 0.0f, "%.3f")) {
 			EngineManager::getInstance().EngineChangeEvent();
 		}
+		if (ImGui::IsItemActivated()) {
+			EditorManager::getInstance().BeginEdit({ parent });
+		}
+		if (ImGui::IsItemDeactivatedAfterEdit()) {
+			EditorManager::getInstance().EndEdit({ parent });
+		}
 	}
 
 	if (ImGui::Button("Reset shape")) {
+		EditorManager::getInstance().BeginEdit({ parent });
 		parent->GetComponent<RenderComponent>()->SetShape(parent->GetComponent<RenderComponent>()->currentShape);
 		parent->GetComponent<TransformComponent>()->SetRotationCenter(parent->GetComponent<RenderComponent>()->GetCenter());
 		RebuildMassAggregate();
+		EditorManager::getInstance().EndEdit({ parent });
 	}
 }
 

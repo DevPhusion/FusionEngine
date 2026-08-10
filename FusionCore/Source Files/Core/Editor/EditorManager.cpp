@@ -19,8 +19,19 @@ void EditorManager::Setup(GLFWwindow* window) {
 	AddWindow(new EngineProfiler("Profiler"));
 	AddWindow(new FileSystem("File System"));
 
-	gameViewport = new Viewport("Viewport");   // NEW
+	gameViewport = new Viewport("Viewport"); 
 	AddWindow(gameViewport);
+
+	InputManager::getInstance().SetKeyButtonCallback([this](int key, int scancode, int action, int mods) {
+		if (action == GLFW_PRESS && EngineManager::getInstance().EnginePhysicsMode != EngineManager::PhysicsMode::Simulate) {
+			if (key == GLFW_KEY_Z && (mods & GLFW_MOD_CONTROL)) {
+				this->Undo();
+			}
+			else if (key == GLFW_KEY_Y && (mods & GLFW_MOD_CONTROL)) {
+				this->Redo();
+			}
+		}
+		}, 1000);
 }
 
 void EditorManager::AddWindow(EditorWindow* window) {

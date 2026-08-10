@@ -634,8 +634,11 @@ void RenderComponent::ProcessInspectorUI() {
 			{ "Images", "*.png;*.jpeg;*.jpg" },
 			{ "All Files", "*.*" }
 		};
-		if (auto path = FileDialog::ShowOpenDialog(opts))
+		if (auto path = FileDialog::ShowOpenDialog(opts)) {
+			EditorManager::getInstance().BeginEdit({ parent });
 			SetTexture(*path);
+			EditorManager::getInstance().EndEdit({ parent });
+		}
 	}
 
 	if (ImGui::BeginDragDropTarget()) {
@@ -643,7 +646,9 @@ void RenderComponent::ProcessInspectorUI() {
 			std::string virtualPath(static_cast<const char*>(payload->Data));
 			FileManager& fm = FileManager::getInstance();
 			if (!fm.IsDirectory(virtualPath)) {
+				EditorManager::getInstance().BeginEdit({ parent });
 				SetTexture(fm.VirtualToAbsolute(virtualPath).string());
+				EditorManager::getInstance().EndEdit({ parent });
 			}
 		}
 		ImGui::EndDragDropTarget();
@@ -657,6 +662,12 @@ void RenderComponent::ProcessInspectorUI() {
 	if (ImGui::ColorEdit4("##Color", displayColor)) {
 		this->color = glm::vec4(displayColor[0], displayColor[1], displayColor[2], displayColor[3]);
 		EngineManager::getInstance().EngineChangeEvent();
+	}
+	if (ImGui::IsItemActivated()) {
+		EditorManager::getInstance().BeginEdit({ parent });
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		EditorManager::getInstance().EndEdit({ parent });
 	}
 
 	ImGui::Separator();
@@ -673,6 +684,8 @@ void RenderComponent::ProcessInspectorUI() {
 
 	if (ImGui::BeginCombo("##ShapeSelect", shapeLabel)) {
 		if (ImGui::Selectable("Rectangle", std::holds_alternative<RectangleShape>(currentShape))) {
+			EditorManager::getInstance().BeginEdit({ parent });
+
 			RectangleShape rect;
 			rect.width = rect.height = 1.0f;
 			TransformComponent* tc = parent->GetComponent<TransformComponent>();
@@ -683,8 +696,12 @@ void RenderComponent::ProcessInspectorUI() {
 			isAddVertex = false;
 
 			SetShape(rect);
+
+			EditorManager::getInstance().EndEdit({ parent });
 		}
 		if (ImGui::Selectable("Circle", std::holds_alternative<CircleShape>(currentShape))) {
+			EditorManager::getInstance().BeginEdit({ parent });
+
 			CircleShape cir;
 			cir.radius = 1.0f;
 			TransformComponent* tc = parent->GetComponent<TransformComponent>();
@@ -695,8 +712,12 @@ void RenderComponent::ProcessInspectorUI() {
 			isAddVertex = false;
 
 			SetShape(cir);
+
+			EditorManager::getInstance().EndEdit({ parent });
 		}
 		if (ImGui::Selectable("Polygon", std::holds_alternative<PolygonShape>(currentShape))) {
+			EditorManager::getInstance().BeginEdit({ parent });   // NOTE: intentionally NOT ended here — see Polygon session below
+
 			PolygonShape poly;
 			poly.vertices = {};
 
@@ -730,6 +751,12 @@ void RenderComponent::ProcessInspectorUI() {
 				s.center = tc ? tc->GetWorldPosition() : GetCenter();
 				SetShape(s);
 			}
+			if (ImGui::IsItemActivated()) {
+				EditorManager::getInstance().BeginEdit({ parent });
+			}
+			if (ImGui::IsItemDeactivatedAfterEdit()) {
+				EditorManager::getInstance().EndEdit({ parent });
+			}
 		}
 		else if constexpr (std::is_same_v<T, CircleShape>) {
 			auto updateCenter = [&]() {
@@ -740,25 +767,37 @@ void RenderComponent::ProcessInspectorUI() {
 			float r = s.radius;
 			ImGui::Text("  Radius");
 			ImGui::SameLine();
-			if (ImGui::InputFloat("##CircleRadius", &r, 0.0f, 0.0f, "%.3f m"))
-			{
+			if (ImGui::InputFloat("##CircleRadius", &r, 0.0f, 0.0f, "%.3f m")) {
 				s.radius = std::max(0.01f, r); updateCenter(); SetShape(s);
+			}
+			if (ImGui::IsItemActivated()) {
+				EditorManager::getInstance().BeginEdit({ parent });
+			}
+			if (ImGui::IsItemDeactivatedAfterEdit()) {
+				EditorManager::getInstance().EndEdit({ parent });
 			}
 
 			int seg = s.segments;
 			ImGui::Text("  Segments");
 			ImGui::SameLine();
-			if (ImGui::InputInt("##CircleSeg", &seg))
-			{
+			if (ImGui::InputInt("##CircleSeg", &seg)) {
 				s.segments = std::max(3, seg); updateCenter(); SetShape(s);
+			}
+			if (ImGui::IsItemActivated()) {
+				EditorManager::getInstance().BeginEdit({ parent });
+			}
+			if (ImGui::IsItemDeactivatedAfterEdit()) {
+				EditorManager::getInstance().EndEdit({ parent });
 			}
 		}
 		else if constexpr (std::is_same_v<T, PolygonShape>) {
 			if (!isAddVertex) {
 				if (ImGui::Button("Reset vertices##PolyReset"))
 				{
+					EditorManager::getInstance().BeginEdit({ parent });
+
 					s.vertices = {};
-					
+
 					FluidComponent* fc = parent->GetComponent<FluidComponent>();
 					if (fc) fc->particles.clear();
 					SetShape(s);
@@ -768,19 +807,20 @@ void RenderComponent::ProcessInspectorUI() {
 					polygonEditCallbackID = Renderer::getInstance().polygonEditGizmos->AddChangeCallback(
 						[this](const std::vector<glm::vec3>& verts) { this->ApplyLiveShapeUpdate(verts); });
 
-
 					EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::AddVertex);
 					isAddVertex = true;
 				}
 				ImGui::SameLine();
 				if (ImGui::Button("Edit vertices##PolyEditVerts")) {
+					EditorManager::getInstance().BeginEdit({ parent });
+
 					std::vector<glm::vec3> localVerts;
 					localVerts.reserve(points.size());
 					for (auto& p : points) {
 						localVerts.push_back(glm::vec3(p[0], p[1], 0.0f));
 					}
-					
-					TransformComponent * tc = parent->GetComponent<TransformComponent>();
+
+					TransformComponent* tc = parent->GetComponent<TransformComponent>();
 					Renderer::getInstance().polygonEditGizmos->BeginEdit(tc, localVerts, PolygonEditGizmos::VertexAddMode::InsertOnEdge);
 					polygonEditCallbackID = Renderer::getInstance().polygonEditGizmos->AddChangeCallback(
 						[this](const std::vector<glm::vec3>& verts) { this->ApplyLiveShapeUpdate(verts); });
@@ -830,6 +870,8 @@ void RenderComponent::ProcessInspectorUI() {
 					polygonEditCallbackID = -1;
 					EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
 					isAddVertex = false;
+
+					EditorManager::getInstance().EndEdit({ parent });
 				}
 				ImGui::EndDisabled();
 				
@@ -840,6 +882,8 @@ void RenderComponent::ProcessInspectorUI() {
 					polygonEditCallbackID = -1;
 					EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
 					isAddVertex = false;
+
+					EditorManager::getInstance().EndEdit({ parent });
 				}
 			}
 		}
@@ -918,6 +962,12 @@ void RenderComponent::ProcessInspectorUI() {
 	ImGui::SameLine();
 	if (ImGui::InputInt("##ZIndex", &z_index)) {
 		EngineManager::getInstance().EngineChangeEvent();
+	}
+	if (ImGui::IsItemActivated()) {
+		EditorManager::getInstance().BeginEdit({ parent });
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		EditorManager::getInstance().EndEdit({ parent });
 	}
 }
 

@@ -183,6 +183,12 @@ void FluidComponent::ProcessInspectorUI() {
 			this->color = glm::vec4(displayColor[0], displayColor[1], displayColor[2], displayColor[3]);
 			EngineManager::getInstance().EngineChangeEvent();
 		}
+		if (ImGui::IsItemActivated()) {
+			EditorManager::getInstance().BeginEdit({ parent });
+		}
+		if (ImGui::IsItemDeactivatedAfterEdit()) {
+			EditorManager::getInstance().EndEdit({ parent });
+		}
 
 		ImGui::Text("Outline Color");
 		ImGui::SameLine();
@@ -190,6 +196,12 @@ void FluidComponent::ProcessInspectorUI() {
 		if (ImGui::ColorEdit4("##OutlineColor", displayOutline)) {
 			this->outlineColor = glm::vec4(displayOutline[0], displayOutline[1], displayOutline[2], displayOutline[3]);
 			EngineManager::getInstance().EngineChangeEvent();
+		}
+		if (ImGui::IsItemActivated()) {
+			EditorManager::getInstance().BeginEdit({ parent });
+		}
+		if (ImGui::IsItemDeactivatedAfterEdit()) {
+			EditorManager::getInstance().EndEdit({ parent });
 		}
 
 		ImGui::Text("Particle Radius");
@@ -199,10 +211,22 @@ void FluidComponent::ProcessInspectorUI() {
 			RebuildDensityQuadGeometry();
 			EngineManager::getInstance().EngineChangeEvent();
 		}
+		if (ImGui::IsItemActivated()) {
+			EditorManager::getInstance().BeginEdit({ parent });
+		}
+		if (ImGui::IsItemDeactivatedAfterEdit()) {
+			EditorManager::getInstance().EndEdit({ parent });
+		}
 
 		ImGui::Text("Metaball Threshold");
 		ImGui::SameLine();
 		ImGui::InputFloat("##MetaballThreshold", &metaballThreshold);
+		if (ImGui::IsItemActivated()) {
+			EditorManager::getInstance().BeginEdit({ parent });
+		}
+		if (ImGui::IsItemDeactivatedAfterEdit()) {
+			EditorManager::getInstance().EndEdit({ parent });
+		}
 
 		ImGui::TreePop();
 	}
@@ -216,6 +240,12 @@ void FluidComponent::ProcessInspectorUI() {
 			ResizeInstanceBuffer();
 			EngineManager::getInstance().EngineChangeEvent();
 		}
+		if (ImGui::IsItemActivated()) {
+			EditorManager::getInstance().BeginEdit({ parent });
+		}
+		if (ImGui::IsItemDeactivatedAfterEdit()) {
+			EditorManager::getInstance().EndEdit({ parent });
+		}
 
 		ImGui::Text("Collision Radius");
 		ImGui::SameLine();
@@ -224,6 +254,12 @@ void FluidComponent::ProcessInspectorUI() {
 			for (int i = 0; i < particles.size(); i++)
 				particles[i]->collisionRadius = collisionRadius;
 			EngineManager::getInstance().EngineChangeEvent();
+		}
+		if (ImGui::IsItemActivated()) {
+			EditorManager::getInstance().BeginEdit({ parent });
+		}
+		if (ImGui::IsItemDeactivatedAfterEdit()) {
+			EditorManager::getInstance().EndEdit({ parent });
 		}
 
 		ImGui::Text("Smoothing Radius");
@@ -238,6 +274,12 @@ void FluidComponent::ProcessInspectorUI() {
 			}
 			EngineManager::getInstance().EngineChangeEvent();
 		}
+		if (ImGui::IsItemActivated()) {
+			EditorManager::getInstance().BeginEdit({ parent });
+		}
+		if (ImGui::IsItemDeactivatedAfterEdit()) {
+			EditorManager::getInstance().EndEdit({ parent });
+		}
 
 		ImGui::Text("Epsilon");
 		ImGui::SameLine();
@@ -248,6 +290,12 @@ void FluidComponent::ProcessInspectorUI() {
 				particles[i]->epsilon = epsilon;
 			}
 			EngineManager::getInstance().EngineChangeEvent();
+		}
+		if (ImGui::IsItemActivated()) {
+			EditorManager::getInstance().BeginEdit({ parent });
+		}
+		if (ImGui::IsItemDeactivatedAfterEdit()) {
+			EditorManager::getInstance().EndEdit({ parent });
 		}
 
 		ImGui::Text("Particle Mass");
@@ -260,6 +308,12 @@ void FluidComponent::ProcessInspectorUI() {
 				particles[i]->invMass = 1.0f / particleMass;
 			}
 		}
+		if (ImGui::IsItemActivated()) {
+			EditorManager::getInstance().BeginEdit({ parent });
+		}
+		if (ImGui::IsItemDeactivatedAfterEdit()) {
+			EditorManager::getInstance().EndEdit({ parent });
+		}
 
 		ImGui::Text("Density");
 		ImGui::SameLine();
@@ -269,6 +323,12 @@ void FluidComponent::ProcessInspectorUI() {
 				if (restDensity <= 0) restDensity = 0.01f;
 				particles[i]->restDensity = restDensity;
 			}
+		}
+		if (ImGui::IsItemActivated()) {
+			EditorManager::getInstance().BeginEdit({ parent });
+		}
+		if (ImGui::IsItemDeactivatedAfterEdit()) {
+			EditorManager::getInstance().EndEdit({ parent });
 		}
 
 		ImGui::Text("Viscosity");
@@ -280,6 +340,12 @@ void FluidComponent::ProcessInspectorUI() {
 				particles[i]->viscosity = viscosity;
 			}
 		}
+		if (ImGui::IsItemActivated()) {
+			EditorManager::getInstance().BeginEdit({ parent });
+		}
+		if (ImGui::IsItemDeactivatedAfterEdit()) {
+			EditorManager::getInstance().EndEdit({ parent });
+		}
 
 		ImGui::Text("Vorticity Strength");
 		ImGui::SameLine();
@@ -289,6 +355,12 @@ void FluidComponent::ProcessInspectorUI() {
 				if (vorticityStrength <= 0) vorticityStrength = 0.0f;
 				particles[i]->vorticityEps = vorticityStrength;
 			}
+		}
+		if (ImGui::IsItemActivated()) {
+			EditorManager::getInstance().BeginEdit({ parent });
+		}
+		if (ImGui::IsItemDeactivatedAfterEdit()) {
+			EditorManager::getInstance().EndEdit({ parent });
 		}
 
 		ImGui::TreePop();
