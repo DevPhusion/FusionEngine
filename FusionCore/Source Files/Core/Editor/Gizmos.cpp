@@ -174,41 +174,45 @@ bool Gizmos::HitTestCircle(glm::vec3 origin) {
 
 void Gizmos::OnMouseButton(int button, int action, int mods) {
 	if (button != GLFW_MOUSE_BUTTON_LEFT) return;
+
+	if (action == GLFW_RELEASE) {
+		if (isDragging) {
+			if (draggedTransform) {
+				EditorManager::getInstance().EndEdit({ draggedTransform->parent });
+			}
+			isDragging = false;
+			selectedAxis = GizmosAxis::None;
+			draggedTransform = nullptr;
+		}
+		return;
+	}
+
 	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate ||
 		EngineManager::getInstance().EngineInteractMode != EngineManager::InteractMode::EditorSelect) return;
 
-	if (action == GLFW_PRESS) {
-		TransformComponent* transform = GetSelectedTransform();
-		if (!transform) return;
+	TransformComponent* transform = GetSelectedTransform();
+	if (!transform) return;
 
-		glm::vec3 origin = transform->GetWorldPosition();
+	glm::vec3 origin = transform->GetWorldPosition();
 
-		if (currentGizmosMode == GizmosMode::Move || currentGizmosMode == GizmosMode::Scale) {
-			selectedAxis = HitTestMoveScale(origin);
-		}
-		else if (currentGizmosMode == GizmosMode::Rotate) {
-			selectedAxis = HitTestCircle(origin) ? GizmosAxis::Rotate : GizmosAxis::None;
-		}
-
-		if (selectedAxis == GizmosAxis::None) return;
-
-		isDragging = true;
-		dragStartMouseWorld = currentMouseWorld;
-		dragStartObjectPosition = origin;
-		dragStartObjectScale = transform->size;
-		dragStartObjectRotation = transform->rotation;
-		dragStartAngleOffset = GetAngle(origin, currentMouseWorld);
-
-		EditorManager::getInstance().BeginEdit({ transform->parent });   
+	if (currentGizmosMode == GizmosMode::Move || currentGizmosMode == GizmosMode::Scale) {
+		selectedAxis = HitTestMoveScale(origin);
 	}
-	else if (action == GLFW_RELEASE) {
-		if (isDragging) {
-			TransformComponent* transform = GetSelectedTransform();
-			if (transform) EditorManager::getInstance().EndEdit({ transform->parent });   // NEW
-		}
-		isDragging = false;
-		selectedAxis = GizmosAxis::None;
+	else if (currentGizmosMode == GizmosMode::Rotate) {
+		selectedAxis = HitTestCircle(origin) ? GizmosAxis::Rotate : GizmosAxis::None;
 	}
+
+	if (selectedAxis == GizmosAxis::None) return;
+
+	isDragging = true;
+	draggedTransform = transform;  
+	dragStartMouseWorld = currentMouseWorld;
+	dragStartObjectPosition = origin;
+	dragStartObjectScale = transform->size;
+	dragStartObjectRotation = transform->rotation;
+	dragStartAngleOffset = GetAngle(origin, currentMouseWorld);
+
+	EditorManager::getInstance().BeginEdit({ transform->parent });
 }
 
 void Gizmos::OnCursorPosition(double xpos, double ypos) {

@@ -1190,7 +1190,7 @@ namespace {
 			glm::vec3 pA = self.objectA.obj->GetComponent<TransformComponent>()->GetWorldPosition();
 			glm::vec3 pB = self.objectB.obj->GetComponent<TransformComponent>()->GetWorldPosition();
 			self.dir = pB - pA;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, "Recompute the locked slide direction from the objects' current world positions "
 				"(mirrors the inspector's 'Re-lock direction' button)");
 	}
@@ -1205,14 +1205,14 @@ namespace {
 				[](RenderComponent& self) { return self.color; },
 				[](RenderComponent& self, glm::vec4 c) {
 					self.color = c;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 
 			.def_property("z_index",
 				[](RenderComponent& self) { return self.z_index; },
 				[](RenderComponent& self, int z) {
 					self.z_index = z;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 
 			.def_property("shape",
@@ -1297,11 +1297,11 @@ namespace {
 				[](RigidBodyComponent& self) { return self.velocity; },
 				[](RigidBodyComponent& self, glm::vec3 v) {
 					self.velocity = v;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 			.def("set_velocity", [](RigidBodyComponent& self, glm::vec3 v) {
 			self.velocity = v;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, py::arg("velocity"))
 
 			.def_property("acceleration",
@@ -1315,11 +1315,11 @@ namespace {
 				[](RigidBodyComponent& self) { return self.angularVelocity; },
 				[](RigidBodyComponent& self, float w) {
 					self.angularVelocity = w;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 			.def("set_angular_velocity", [](RigidBodyComponent& self, float w) {
 			self.angularVelocity = w;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, py::arg("angular_velocity"))
 
 			.def_property("angular_acceleration",
@@ -1348,13 +1348,13 @@ namespace {
 				[](RigidBodyComponent& self, float mass) {
 					if (mass <= 0) mass = 0.001f;
 					self.inverseMass = 1.0f / mass;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 					self.CalculateInertia();
 				})
 			.def("set_mass", [](RigidBodyComponent& self, float mass) {
 			if (mass <= 0) mass = 0.001f;
 			self.inverseMass = 1.0f / mass;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 			self.CalculateInertia();
 				}, py::arg("mass"))
 
@@ -1362,12 +1362,12 @@ namespace {
 				[](RigidBodyComponent& self) { return self.inverseMass; },
 				[](RigidBodyComponent& self, float invMass) {
 					self.inverseMass = invMass;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 					self.CalculateInertia();
 				})
 			.def("set_inverse_mass", [](RigidBodyComponent& self, float invMass) {
 			self.inverseMass = invMass;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 			self.CalculateInertia();
 				}, py::arg("inverse_mass"))
 
@@ -1629,7 +1629,7 @@ namespace {
 					float unitInvMass = (float)self.MassAggregate.size() / mass;
 					for (int i = 0; i < self.MassAggregate.size(); i++)
 						self.MassAggregate[i]->inverseMass = unitInvMass;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 			.def("set_mass", [](SoftBodyComponent& self, float mass) {
 			if (mass <= 0.0f) return;
@@ -1637,7 +1637,7 @@ namespace {
 			float unitInvMass = (float)self.MassAggregate.size() / mass;
 			for (int i = 0; i < self.MassAggregate.size(); i++)
 				self.MassAggregate[i]->inverseMass = unitInvMass;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, py::arg("mass"))
 
 			.def_property("inverse_mass",
@@ -1647,14 +1647,14 @@ namespace {
 					float unitInvMass = invMass * (float)self.MassAggregate.size();
 					for (int i = 0; i < self.MassAggregate.size(); i++)
 						self.MassAggregate[i]->inverseMass = unitInvMass;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 			.def("set_inverse_mass", [](SoftBodyComponent& self, float invMass) {
 			self.inverseMass = invMass;
 			float unitInvMass = invMass * (float)self.MassAggregate.size();
 			for (int i = 0; i < self.MassAggregate.size(); i++)
 				self.MassAggregate[i]->inverseMass = unitInvMass;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, py::arg("inverse_mass"))
 
 			.def_property("velocity",
@@ -1662,12 +1662,12 @@ namespace {
 				[](SoftBodyComponent& self, glm::vec3 v) {
 					self.velocity = v;
 					if (self.CenterPM) self.CenterPM->velocity = v;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 			.def("set_velocity", [](SoftBodyComponent& self, glm::vec3 v) {
 			self.velocity = v;
 			if (self.CenterPM) self.CenterPM->velocity = v;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, py::arg("velocity"))
 
 			.def_property_readonly("acceleration", [](SoftBodyComponent& self) {
@@ -1682,13 +1682,13 @@ namespace {
 					self.stiffness = s;
 					float compliance = (s > 0.0f) ? (1.0f / s) : 0.0f;
 					for (auto* spring : self.springs) spring->compliance = compliance;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 			.def("set_stiffness", [](SoftBodyComponent& self, float s) {
 			self.stiffness = s;
 			float compliance = (s > 0.0f) ? (1.0f / s) : 0.0f;
 			for (auto* spring : self.springs) spring->compliance = compliance;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, py::arg("stiffness"))
 
 			.def_property("damping",
@@ -1696,24 +1696,24 @@ namespace {
 				[](SoftBodyComponent& self, float d) {
 					self.damping = d;
 					for (auto* spring : self.springs) spring->damping = d;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 			.def("set_damping", [](SoftBodyComponent& self, float d) {
 			self.damping = d;
 			for (auto* spring : self.springs) spring->damping = d;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, py::arg("damping"))
 
 			.def_property("gas_pressure_enabled",
 				[](SoftBodyComponent& self) { return self.useGasPressure; },
 				[](SoftBodyComponent& self, bool enabled) {
 					self.useGasPressure = enabled;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 					self.RebuildMassAggregate();
 				})
 			.def("set_gas_pressure_enabled", [](SoftBodyComponent& self, bool enabled) {
 			self.useGasPressure = enabled;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 			self.RebuildMassAggregate();
 				}, py::arg("enabled"),
 					"Enable gas pressue mode")
@@ -1722,11 +1722,11 @@ namespace {
 				[](SoftBodyComponent& self) { return self.gasAmount; },
 				[](SoftBodyComponent& self, float amount) {
 					self.gasAmount = amount;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 			.def("set_gas_amount", [](SoftBodyComponent& self, float amount) {
 			self.gasAmount = amount;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, py::arg("gas_amount"))
 				.def_property_readonly("point_mass_count", [](SoftBodyComponent& self) {
 					return self.MassAggregate.size();
@@ -1793,22 +1793,22 @@ namespace {
 				[](FluidComponent& self) { return self.color; },
 				[](FluidComponent& self, glm::vec4 c) {
 					self.color = c;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 			.def("set_color", [](FluidComponent& self, glm::vec4 c) {
 			self.color = c;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, py::arg("color"))
 
 			.def_property("outline_color",
 				[](FluidComponent& self) { return self.outlineColor; },
 				[](FluidComponent& self, glm::vec4 c) {
 					self.outlineColor = c;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 			.def("set_outline_color", [](FluidComponent& self, glm::vec4 c) {
 			self.outlineColor = c;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, py::arg("outline_color"))
 
 			.def_property("particle_radius",
@@ -1816,12 +1816,12 @@ namespace {
 				[](FluidComponent& self, float r) {
 					self.particleRadius = std::max(0.0001f, r);
 					self.RebuildDensityQuadGeometry();
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 			.def("set_particle_radius", [](FluidComponent& self, float r) {
 			self.particleRadius = std::max(0.0001f, r);
 			self.RebuildDensityQuadGeometry();
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, py::arg("particle_radius"))
 
 			.def_property("metaball_threshold",
@@ -1848,13 +1848,13 @@ namespace {
 					self.desiredParticleCount = std::max(1, count);
 					self.SeedParticles();
 					self.ResizeInstanceBuffer();
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 			.def("set_desired_particle_count", [](FluidComponent& self, int count) {
 			self.desiredParticleCount = std::max(1, count);
 			self.SeedParticles();
 			self.ResizeInstanceBuffer();
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, py::arg("desired_particle_count"),
 					"Changing this re-seeds the whole fluid on its source shape, discarding "
 					"any particles added individually via add_particle()")
@@ -1864,12 +1864,12 @@ namespace {
 				[](FluidComponent& self, float r) {
 					self.collisionRadius = std::max(0.0001f, r);
 					for (auto* p : self.particles) p->collisionRadius = self.collisionRadius;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 			.def("set_collision_radius", [](FluidComponent& self, float r) {
 			self.collisionRadius = std::max(0.0001f, r);
 			for (auto* p : self.particles) p->collisionRadius = self.collisionRadius;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, py::arg("collision_radius"))
 
 			.def_property("smoothing_radius",
@@ -1881,7 +1881,7 @@ namespace {
 						p->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(self.smoothingRadius);
 						p->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(self.smoothingRadius);
 					}
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 			.def("set_smoothing_radius", [](FluidComponent& self, float r) {
 			self.smoothingRadius = std::max(0.0001f, r);
@@ -1890,7 +1890,7 @@ namespace {
 				p->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(self.smoothingRadius);
 				p->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(self.smoothingRadius);
 			}
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, py::arg("smoothing_radius"))
 
 			.def_property("epsilon",
@@ -1898,12 +1898,12 @@ namespace {
 				[](FluidComponent& self, float e) {
 					self.epsilon = std::max(0.0001f, e);
 					for (auto* p : self.particles) p->epsilon = self.epsilon;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 			.def("set_epsilon", [](FluidComponent& self, float e) {
 			self.epsilon = std::max(0.0001f, e);
 			for (auto* p : self.particles) p->epsilon = self.epsilon;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, py::arg("epsilon"))
 
 			.def_property("particle_mass",
@@ -2061,55 +2061,55 @@ namespace {
 				[](FractureComponent& self) { return self.fracturable; },
 				[](FractureComponent& self, bool f) {
 					self.fracturable = f;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 			.def("set_fracturable", [](FractureComponent& self, bool f) {
 			self.fracturable = f;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, py::arg("fracturable"))
 
 			.def_property("impulse_threshold",
 				[](FractureComponent& self) { return self.impulseThreshold; },
 				[](FractureComponent& self, float t) {
 					self.impulseThreshold = t;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 			.def("set_impulse_threshold", [](FractureComponent& self, float t) {
 			self.impulseThreshold = t;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, py::arg("impulse_threshold"))
 
 			.def_property("shard_count",
 				[](FractureComponent& self) { return self.shardCount; },
 				[](FractureComponent& self, int c) {
 					self.shardCount = c;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 			.def("set_shard_count", [](FractureComponent& self, int c) {
 			self.shardCount = c;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, py::arg("shard_count"))
 
 			.def_property("min_fragment_area",
 				[](FractureComponent& self) { return self.minFragmentArea; },
 				[](FractureComponent& self, float a) {
 					self.minFragmentArea = a;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 			.def("set_min_fragment_area", [](FractureComponent& self, float a) {
 			self.minFragmentArea = a;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, py::arg("min_fragment_area"))
 
 			.def_property("max_fracture_generations",
 				[](FractureComponent& self) { return self.maxFractureGenerations; },
 				[](FractureComponent& self, int g) {
 					self.maxFractureGenerations = g;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 			.def("set_max_fracture_generations", [](FractureComponent& self, int g) {
 			self.maxFractureGenerations = g;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, py::arg("max_fracture_generations"))
 
 			.def_property_readonly("generation", [](FractureComponent& self) { return self.generation; },
@@ -2119,11 +2119,11 @@ namespace {
 				[](FractureComponent& self) { return self.restDensity; },
 				[](FractureComponent& self, float d) {
 					self.restDensity = d;
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				})
 			.def("set_rest_density", [](FractureComponent& self, float d) {
 			self.restDensity = d;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 				}, py::arg("rest_density"))
 
 			.def("fracture", [](FractureComponent& self) {

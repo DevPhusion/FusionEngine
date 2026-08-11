@@ -140,10 +140,12 @@ void WeldConstraint::ProcessInspectorUI(Object* parent) {
 	    ImGui::SliderAngle("##Locked angle", &angularOffset);
 	    ImGui::EndDisabled();
         if (ImGui::Button("Re-lock angle")) {
-		    float thetaA = objectA.obj->GetComponent<TransformComponent>()->rotation;
-		    float thetaB = objectB.obj->GetComponent<TransformComponent>()->rotation;
+            EditorManager::getInstance().BeginEdit({ parent }, true);
+            float thetaA = objectA.obj->GetComponent<TransformComponent>()->rotation;
+            float thetaB = objectB.obj->GetComponent<TransformComponent>()->rotation;
             angularOffset = thetaB - thetaA;
-            EngineManager::getInstance().EngineChangeEvent();
+            EngineManager::getInstance().SceneChangeEvent();
+            EditorManager::getInstance().EndEdit({ parent });
         }
 	}
 }

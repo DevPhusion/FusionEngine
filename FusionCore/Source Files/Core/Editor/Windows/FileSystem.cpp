@@ -51,6 +51,24 @@ namespace {
 		dl->AddLine(ImVec2(cx + halfW, cy), ImVec2(cx + halfW * 0.2f, cy + halfH), glyphColor, thickness);
 	}
 
+	void DrawSceneIcon(ImDrawList* dl, ImVec2 pos, float size, ImU32 bodyColor, ImU32 glyphColor) {
+		DrawFileIcon(dl, pos, size, bodyColor);
+
+		float bodyW = size * 0.78f;
+		float baseY = pos.y + size * 0.72f;
+		float leftX = pos.x + bodyW * 0.14f;
+		float rightX = pos.x + bodyW * 0.86f;
+
+		ImVec2 sunCenter(pos.x + bodyW * 0.68f, pos.y + size * 0.32f);
+		dl->AddCircleFilled(sunCenter, size * 0.09f, glyphColor);
+
+		ImVec2 peak1(pos.x + bodyW * 0.30f, pos.y + size * 0.40f);
+		ImVec2 peak2(pos.x + bodyW * 0.55f, pos.y + size * 0.52f);
+
+		dl->AddTriangleFilled(ImVec2(leftX, baseY), peak1, ImVec2(pos.x + bodyW * 0.48f, baseY), glyphColor);
+		dl->AddTriangleFilled(ImVec2(pos.x + bodyW * 0.36f, baseY), peak2, ImVec2(rightX, baseY), glyphColor);
+	}
+
 	void OpenPathInVSCode(const std::filesystem::path& projectDir, const std::filesystem::path& fileAbsPath) {
 		std::string args = "\"" + projectDir.string() + "\" -g \"" + fileAbsPath.string() + "\"";
 
@@ -264,6 +282,9 @@ void FileSystem::DrawNode(const FileSystemEntry& entry, int depth) {
 	if (rowDoubleClicked && !isRenaming && !toggledOpen && entry.iconType == ResourceIconType::Script) {
 		OpenPathInVSCode(FileManager::getInstance().currentProjectDirectory, entry.absolutePath);
 	}
+	if (rowDoubleClicked && !isRenaming && !toggledOpen && entry.iconType == ResourceIconType::Scene) { 
+		FileManager::getInstance().LoadSceneFromFile(entry.absolutePath.string());
+	}
 
 	bool isRoot = entry.virtualPath == FileManager::getInstance().GetRootVirtualPath();
 	if (!isRenaming && !isRoot && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoHoldToOpenOthers)) {
@@ -312,6 +333,9 @@ void FileSystem::DrawNode(const FileSystemEntry& entry, int depth) {
 	}
 	else if (entry.iconType == ResourceIconType::Script) {
 		DrawScriptIcon(dl, iconPos, iconSize, IM_COL32(90, 160, 110, 255), IM_COL32(235, 235, 235, 255));
+	}
+	else if (entry.iconType == ResourceIconType::Scene) {                              // NEW
+		DrawSceneIcon(dl, iconPos, iconSize, IM_COL32(150, 110, 200, 255), IM_COL32(235, 235, 235, 255));
 	}
 	else {
 		DrawFileIcon(dl, iconPos, iconSize, IM_COL32(160, 160, 160, 255));
@@ -378,6 +402,7 @@ void FileSystem::ProcessFilterBar() {
 
 	ProcessCreateFolderPopup();
 	ProcessCreateScriptPopup();
+	ProcessCreateScenePopup();
 }
 
 void FileSystem::ProcessCreateFolderPopup() {
@@ -445,6 +470,39 @@ void FileSystem::ProcessCreateScriptPopup() {
 	}
 }
 
+void FileSystem::ProcessCreateScenePopup() {
+	if (newScenePopupRequested) {
+		ImGui::OpenPopup("New Scene");
+		newScenePopupRequested = false;
+	}
+
+	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+	if (ImGui::BeginPopupModal("New Scene", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+		ImGui::InputTextWithHint("##NewSceneName", "scene_name", newSceneNameBuf, IM_ARRAYSIZE(newSceneNameBuf));
+
+		if (ImGui::Button("Create", ImVec2(100, 0))) {
+			std::string sceneName = newSceneNameBuf;
+			if (!sceneName.empty()) {
+				std::string targetDir = !newSceneTargetPath.empty()
+					? newSceneTargetPath
+					: FileManager::getInstance().GetRootVirtualPath();
+
+				if (FileManager::getInstance().CreateScene(targetDir, sceneName)) {
+					expandedPaths.insert(targetDir);
+					ImGui::CloseCurrentPopup();
+				}
+			}
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Cancel", ImVec2(100, 0)))
+			ImGui::CloseCurrentPopup();
+
+		ImGui::EndPopup();
+	}
+}
+
 void FileSystem::ProcessEntryContextMenu(const FileSystemEntry& entry) {
 	bool isRoot = entry.virtualPath == FileManager::getInstance().GetRootVirtualPath();
 
@@ -461,13 +519,18 @@ void FileSystem::ProcessEntryContextMenu(const FileSystemEntry& entry) {
 				newFolderNameBuf[0] = '\0';
 				newFolderPopupRequested = true;
 			}
-			if (ImGui::MenuItem("File...")) {
-				AddFileToFolder(entry.virtualPath);
+			if (ImGui::MenuItem("Scene...")) {
+				newSceneTargetPath = entry.virtualPath;
+				newSceneNameBuf[0] = '\0';
+				newScenePopupRequested = true;
 			}
 			if (ImGui::MenuItem("Script...")) {
 				newScriptTargetPath = entry.virtualPath;
 				newScriptNameBuf[0] = '\0';
 				newScriptPopupRequested = true;
+			}
+			if (ImGui::MenuItem("File...")) {
+				AddFileToFolder(entry.virtualPath);
 			}
 			ImGui::EndMenu();
 		}

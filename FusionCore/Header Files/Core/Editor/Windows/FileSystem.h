@@ -19,6 +19,7 @@ private:
 	void ProcessEntries();
 	void ProcessCreateFolderPopup();
 	void ProcessCreateScriptPopup();
+	void ProcessCreateScenePopup();
 	void ProcessEntryContextMenu(const FileSystemEntry& entry);
 
 	void DrawNode(const FileSystemEntry& entry, int depth);
@@ -60,6 +61,10 @@ private:
 	bool newScriptPopupRequested = false;
 	std::string newScriptTargetPath;
 	char newScriptNameBuf[128] = "";
+
+	bool newScenePopupRequested = false;
+	char newSceneNameBuf[128] = "";
+	std::string newSceneTargetPath;
 
 	int lastSeenGeneration = -1;
 };

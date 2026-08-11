@@ -53,7 +53,7 @@ int CollisionComponent::AddShape(Shape shape, std::string name) {
 
 	SyncResolutionShapeFields();
 	calculateBoundingCircle(shapes.back());
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 	return shapes.back().id;
 }
 
@@ -83,7 +83,7 @@ void CollisionComponent::RemoveShape(int shapeId) {
 
 	SyncResolutionShapeFields();
 	calculateBoundingCircle();
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 }
 
 CollisionShapeEntry* CollisionComponent::GetShape(int shapeId) {
@@ -99,7 +99,7 @@ void CollisionComponent::SetResolutionShapeID(int shapeId) {
 	resolutionShapeID = shapeId;
 	SyncResolutionShapeFields();
 	calculateBoundingCircle();
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 }
 
 void CollisionComponent::SyncResolutionShapeFields() {
@@ -183,7 +183,7 @@ void CollisionComponent::SetShape(CollisionShapeEntry& entry, Shape shape) {
 	RebuildFromShape(entry, VerticesFromShape(shape));
 	SyncResolutionShapeFields();
 	calculateBoundingCircle();
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 }
 
 void CollisionComponent::SetShape(Shape shape) {
@@ -332,7 +332,7 @@ void CollisionComponent::SyncFromRenderComponent(CollisionShapeEntry& entry) {
 
 	SyncResolutionShapeFields();
 	calculateBoundingCircle();
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 }
 
 void CollisionComponent::SetCollisionLayer(uint16_t layer) {
@@ -346,7 +346,7 @@ void CollisionComponent::SetCollisionLayer(uint16_t layer) {
 	FluidComponent* fc = parent->GetComponent<FluidComponent>();
 	if (fc) fc->UpdateCollisionLayerMask();
 
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 }
 
 void CollisionComponent::SetCollisionMask(uint16_t mask) {
@@ -360,7 +360,7 @@ void CollisionComponent::SetCollisionMask(uint16_t mask) {
 	FluidComponent* fc = parent->GetComponent<FluidComponent>();
 	if (fc) fc->UpdateCollisionLayerMask();
 
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 }
 
 bool CollisionComponent::isGrounded(float probeLength) {
@@ -1160,7 +1160,7 @@ void CollisionComponent::OnDelete() {
 }
 
 void CollisionComponent::calculateBoundingCircle() {
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
 	if (!tc) {
@@ -1179,7 +1179,7 @@ void CollisionComponent::calculateBoundingCircle() {
 }
 
 void CollisionComponent::calculateBoundingCircle(CollisionShapeEntry& entry) {
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
 	if (!tc) return;

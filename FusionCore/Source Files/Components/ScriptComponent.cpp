@@ -252,7 +252,7 @@ void ScriptComponent::Reload() {
 	if (!loaded) {
 		Console::PrintError("ScriptComponent: reload failed for {} — keeping previous instance unloaded").Format(sourcePath);
 		pendingExportedValues = std::move(previousValues);
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 		return;
 	}
 
@@ -268,7 +268,7 @@ void ScriptComponent::Reload() {
 		}
 	}
 
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 }
 
 void ScriptComponent::EnsureLoaded() {
@@ -475,9 +475,11 @@ void ScriptComponent::ProcessInspectorUI() {
 				std::memcpy(buf, value.data(), len);
 
 				if (ImGui::InputText("##val", buf, sizeof(buf))) {
+					if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
 					value = std::string(buf);
 					SetInstanceAttrFromVariant(prop.name, prop.value);
 				}
+				if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
 			}
 			else if constexpr (std::is_same_v<T, int>) {
 				bool changed = false;
@@ -493,7 +495,9 @@ void ScriptComponent::ProcessInspectorUI() {
 					changed = ImGui::InputInt("##val", &value);
 					break;
 				}
+				if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
 				if (changed) SetInstanceAttrFromVariant(prop.name, prop.value);
+				if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
 			}
 			else if constexpr (std::is_same_v<T, float>) {
 				bool changed = false;
@@ -509,20 +513,26 @@ void ScriptComponent::ProcessInspectorUI() {
 					changed = ImGui::DragFloat("##val", &value, 1.0f, prop.min, prop.max, format.c_str());
 					break;
 				default:
-					changed = ImGui::InputFloat("##val", &value, 0.0f, 0.0f, format.c_str());  // FIX: pass format
+					changed = ImGui::InputFloat("##val", &value, 0.0f, 0.0f, format.c_str());
 					break;
 				}
+				if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
 				if (changed) SetInstanceAttrFromVariant(prop.name, prop.value);
+				if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
 			}
 			else if constexpr (std::is_same_v<T, bool>) {
 				if (ImGui::Checkbox("##val", &value)) {
+					EditorManager::getInstance().BeginEdit({ parent });
 					SetInstanceAttrFromVariant(prop.name, prop.value);
+					EditorManager::getInstance().EndEdit({ parent });
 				}
 			}
 			else if constexpr (std::is_same_v<T, glm::vec2>) {
 				if (ImGui::InputFloat2("##val", &value.x)) {
+					if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
 					SetInstanceAttrFromVariant(prop.name, prop.value);
 				}
+				if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
 			}
 			else if constexpr (std::is_same_v<T, glm::vec3>) {
 				bool changed = false;
@@ -531,7 +541,9 @@ void ScriptComponent::ProcessInspectorUI() {
 				case ExportType::ColorPicker: changed = ImGui::ColorPicker3("##val", &value.x); break;
 				default:                      changed = ImGui::InputFloat3("##val", &value.x); break;
 				}
+				if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
 				if (changed) SetInstanceAttrFromVariant(prop.name, prop.value);
+				if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
 			}
 			else if constexpr (std::is_same_v<T, glm::vec4>) {
 				bool changed = false;
@@ -540,7 +552,9 @@ void ScriptComponent::ProcessInspectorUI() {
 				case ExportType::ColorPicker: changed = ImGui::ColorPicker4("##val", &value.x); break;
 				default:                      changed = ImGui::InputFloat4("##val", &value.x); break;
 				}
+				if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
 				if (changed) SetInstanceAttrFromVariant(prop.name, prop.value);
+				if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
 			}
 			else if constexpr (std::is_same_v<T, ObjectRef>) {
 				char nameBuf[128];
@@ -559,6 +573,7 @@ void ScriptComponent::ProcessInspectorUI() {
 
 					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.65f, 0.65f, 0.65f, 1.0f));
 					if (ImGui::Selectable("None")) {
+						EditorManager::getInstance().BeginEdit({ parent });
 						UnregisterObjectDeleteCallback(prop);
 						value.ptr = nullptr;
 						value.id = 0;
@@ -571,6 +586,7 @@ void ScriptComponent::ProcessInspectorUI() {
 						Object* candidate = objPtr.get();
 						if (candidate->hideInHierarchy) continue;
 						if (ImGui::Selectable(candidate->name.c_str(), candidate == value.ptr)) {
+							EditorManager::getInstance().BeginEdit({ parent });
 							UnregisterObjectDeleteCallback(prop);
 							value.ptr = candidate;
 							value.id = candidate->id;
@@ -579,8 +595,10 @@ void ScriptComponent::ProcessInspectorUI() {
 						}
 					}
 					ImGui::EndPopup();
-
-					if (changed) SetInstanceAttrFromVariant(prop.name, prop.value);
+					if (changed) {
+						SetInstanceAttrFromVariant(prop.name, prop.value);
+						EditorManager::getInstance().EndEdit({ parent });
+					}
 				}
 			}
 			}, prop.value);

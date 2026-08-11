@@ -77,7 +77,7 @@ void EditorRenderComponent::SetTexture(std::string texture_path) {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 		return;
 	}
 
@@ -86,7 +86,7 @@ void EditorRenderComponent::SetTexture(std::string texture_path) {
 	if (it != cache.end()) {
 		it->second.second++;
 		this->TextureID = it->second.first;
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 		return;
 	}
 
@@ -115,7 +115,7 @@ void EditorRenderComponent::SetTexture(std::string texture_path) {
 	}
 	stbi_image_free(data);
 
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 }
 
 std::unordered_map<std::string, std::pair<GLuint, int>>& EditorRenderComponent::TextureCache() {

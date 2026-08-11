@@ -47,7 +47,7 @@ void EngineManager::SaveEngineState() {
 	for (int i = 0; i < cachedSaveObjects.size(); i++)
 		SavedState.Objects.push_back(std::move(cachedSaveObjects[i]));
 	cachedSaveObjects.clear();
-	if (FileManager::getInstance().currentProjectFile != "") FileManager::getInstance().isSaved = true;
+	if (FileManager::getInstance().currentProjectFile != "") FileManager::getInstance().isSceneSaved = true;
 }
 
 void EngineManager::LoadEngineState() {
@@ -113,12 +113,18 @@ void EngineManager::LoadEngineState() {
 		}
 	}
 
-	if (FileManager::getInstance().currentProjectFile != "") FileManager::getInstance().isSaved = false;
+	if (FileManager::getInstance().currentProjectFile != "") FileManager::getInstance().isSceneSaved = false;
+}
+
+void EngineManager::SceneChangeEvent() {
+	if (EnginePhysicsMode == PhysicsMode::Stop) {
+		FileManager::getInstance().isSceneSaved = false;
+	}
 }
 
 void EngineManager::EngineChangeEvent() {
 	if (EnginePhysicsMode == PhysicsMode::Stop) {
-		FileManager::getInstance().isSaved = false;
+		FileManager::getInstance().isProjectSaved = false;
 	}
 }
 
@@ -162,6 +168,8 @@ ViewportRect EngineManager::GetPlayerViewportRect() const {
 void EngineManager::SerializeEngineSettings(BinaryWriter& w) {
 	Settings& s = EngineSettings;
 
+	w.WriteString(EngineSettings.mainScenePath);
+
 	w.Write(resolutionWidth);
 	w.Write(resolutionHeight);
 
@@ -182,6 +190,8 @@ void EngineManager::SerializeEngineSettings(BinaryWriter& w) {
 
 void EngineManager::DeserializeEngineSettings(BinaryReader& r) {
 	Settings& s = EngineSettings;
+
+	EngineSettings.mainScenePath = r.ReadString();
 
 	float resWidth = r.Read<float>();
 	float resHeight = r.Read<float>();
@@ -257,7 +267,7 @@ void EngineManager::WindowCloseCallback(GLFWwindow* window) {
 		glfwSetWindowShouldClose(window, GLFW_TRUE);
 		return;
 	}
-	if (!FM.isSaved) {
+	if (!FM.isSceneSaved || !FM.isProjectSaved) {
 		glfwSetWindowShouldClose(window, GLFW_FALSE);
 		eng.pendingClose = true;
 	}

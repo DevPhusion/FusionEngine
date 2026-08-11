@@ -117,6 +117,7 @@ void MouseInteractComponent::FindSelectedPolygon(int button, int action, int mod
 			}
 			SetSelectedPolygon(parent, true);
 			EditorManager::getInstance().BeginEdit({ parent });
+			isEditingViaMouse = true;   
 		}
 		else {
 			SetSelectedPolygon(parent, false);
@@ -140,34 +141,33 @@ void MouseInteractComponent::FindSelectedPolygon(int button, int action, int mod
 }
 
 void MouseInteractComponent::DragPolygon(double xpos, double ypos) {
-	if (parent == nullptr || !Enabled)
-		return;
+	if (parent == nullptr) return;
 
-	if (InputManager::mouseLeftHold || InputManager::mouseRightHold)
-	{
+	bool holding = InputManager::mouseLeftHold || InputManager::mouseRightHold;
+
+	if (holding) {
+		if (!Enabled) return;   
+
 		if (EngineManager::getInstance().EngineInteractMode == EngineManager::InteractMode::AddVertex) {
 			return;
 		}
 
-
-		if (Selected && EngineManager::getInstance().EnginePhysicsMode != EngineManager::PhysicsMode::Simulate) {
+		if (Selected && isEditingViaMouse && EngineManager::getInstance().EnginePhysicsMode != EngineManager::PhysicsMode::Simulate) {
 			GizmosMode gizmoMode = Renderer::getInstance().gizmos->currentGizmosMode;
 			if (gizmoMode == GizmosMode::Rotate || gizmoMode == GizmosMode::Scale) {
 				return;
 			}
 
 			TransformComponent* trans = parent->GetComponent<TransformComponent>();
-			// project to model space
 			glm::vec3 modelPos = trans->GetTransformedPoint(glm::vec3(InputManager::glX, InputManager::glY, 0), true);
-
-			//project to world space
 			glm::vec3 worldPos = trans->ProjectToWorld(modelPos);
 			trans->UpdateWorldPosition(worldPos);
 		}
 	}
 	else {
-		if (Selected) {
-			EditorManager::getInstance().EndEdit({ parent });  
+		if (isEditingViaMouse) {
+			EditorManager::getInstance().EndEdit({ parent });
+			isEditingViaMouse = false;
 		}
 		Selected = false;
 		ObjectSelected = false;

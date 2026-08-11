@@ -14,6 +14,7 @@ enum class ResourceIconType {
 	Folder,
 	Image,
 	Script,
+	Scene,
 	Unknown
 };
 
@@ -44,9 +45,14 @@ public:
 	static constexpr uint32_t magicByte = 0x4E535546;
 	static constexpr uint32_t version = 1;
 
-	bool isSaved = false;
+	static constexpr uint32_t sceneMagicByte = 0x4A52504A;
+	static constexpr uint32_t sceneVersion = 1;
+
+	bool isSceneSaved = false; 
+	bool isProjectSaved = false;
 	std::string currentProjectFile = "";
 	std::string currentProjectDirectory = "";
+	std::string currentSceneFile = "";
 
 	void ProcessScriptInSubtree(const std::string& virtualPath, const std::function<void(const std::string&)>& callback) const;
 
@@ -68,6 +74,7 @@ public:
 
 	bool CreateFolder(const std::string& parentVirtualPath, const std::string& folderName);
 	bool CreateScript(const std::string& parentVirtualPath, const std::string& scriptName);
+	bool CreateScene(const std::string& parentVirtualPath, const std::string& sceneName);
 	bool DeleteResource(const std::string& virtualPath);
 	bool ImportFile(const std::string& sourceAbsolutePath, const std::string& destVirtualDirectory);
 	bool RenameResource(const std::string& virtualPath, const std::string& newName);
@@ -82,9 +89,13 @@ public:
 	void LoadProjectFromMemory(const std::vector<uint8_t>& data);
 	void NewProject();
 
+	void SaveScene(const std::string& path);
+	void LoadSceneFromFile(const std::string& path);
+	void NewScene();
+
 	bool IsRestoring() const { return isRestoring; }
 	std::vector<uint8_t> SnapshotObjects(const std::vector<Object*>& roots) const;
-	void RestoreObjects(const std::vector<uint8_t>& data);
+	void RestoreObjects(const std::vector<uint8_t>& data, const std::vector<uint64_t>& idsToRemove);
 
 	std::vector<uint8_t> SnapshotConstraints() const;
 	void RestoreConstraints(const std::vector<uint8_t>& data);

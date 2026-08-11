@@ -112,7 +112,15 @@ glm::vec3 TransformComponent::GetWorldPosition() {
 	return ProjectToWorld(rotation_center);
 }
 
-glm::mat4 TransformComponent::GetWorldMatrix() {
+glm::mat4 TransformComponent::GetWorldMatrix(bool includeScale) {
+	if (!includeScale) {
+		glm::mat4 m = OriginTransform;
+		m = glm::translate(m, rotation_center);
+		m = glm::rotate(m, rotation, glm::vec3(0, 0, 1));
+		m = glm::translate(m, -rotation_center);
+		return m;
+	}
+
 	if (worldMatrixDirty) {
 		WorldMatrix = OriginTransform;
 		WorldMatrix = glm::translate(WorldMatrix, rotation_center);
@@ -124,8 +132,9 @@ glm::mat4 TransformComponent::GetWorldMatrix() {
 	return WorldMatrix;
 }
 
-glm::vec3 TransformComponent::ProjectToWorld(glm::vec3 point, bool inverseTransform) {
-	glm::mat4 trans = GetWorldMatrix();
+
+glm::vec3 TransformComponent::ProjectToWorld(glm::vec3 point, bool inverseTransform, bool includeScale) {
+	glm::mat4 trans = GetWorldMatrix(includeScale);
 	glm::vec4 p = glm::vec4(point.x, point.y, point.z, 1.0f);
 	if (inverseTransform) {
 		return glm::vec3(glm::inverse(trans) * p);
@@ -206,7 +215,8 @@ void TransformComponent::SetRotationCenter(glm::vec3 rotation_center) {
 void TransformComponent::SetOriginTransform(glm::mat4 transform) {
 	this->OriginTransform = transform;
 	worldMatrixDirty = true;
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
+	if (FileManager::getInstance().IsRestoring()) return;
 	for (const auto& [id, func] : transformCallback) {
 		func();
 	}
@@ -215,7 +225,8 @@ void TransformComponent::SetOriginTransform(glm::mat4 transform) {
 void TransformComponent::Translate(glm::vec3 translation) {
 	position = translation;
 	worldMatrixDirty = true;
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
+	if (FileManager::getInstance().IsRestoring()) return;
 	for (const auto& [id, func] : transformCallback) {
 		func();
 	}
@@ -225,7 +236,8 @@ void TransformComponent::Rotate(float angle)
 {
 	rotation = angle;
 	worldMatrixDirty = true;
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
+	if (FileManager::getInstance().IsRestoring()) return;
 	for (const auto& [id, func] : transformCallback) {
 		func();
 	}
@@ -234,7 +246,8 @@ void TransformComponent::Rotate(float angle)
 void TransformComponent::Scale(glm::vec3 scale) {
 	size = scale;
 	worldMatrixDirty = true;
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
+	if (FileManager::getInstance().IsRestoring()) return;
 	for (const auto& [id, func] : transformCallback) {
 		func();
 	}

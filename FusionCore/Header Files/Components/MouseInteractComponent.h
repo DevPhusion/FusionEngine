@@ -32,6 +32,7 @@ public:
     void SetSelectedPolygon(Object* obj, bool enable);
     void OnPhysicsModeChanged();
 private:
+    bool isEditingViaMouse = false;
     std::vector<int> mouseButtonCallbackID;
     std::vector<int> cursorPosCallbackID;
     int physicsModeChangedCallbackID;

@@ -116,10 +116,12 @@ void PrismaticConstraint::ProcessInspectorUI(Object* parent) {
         ImGui::InputFloat2("##Locked direction", d);
         ImGui::EndDisabled();
         if (ImGui::Button("Re-lock direction")) {
+            EditorManager::getInstance().BeginEdit({ parent }, true);
             glm::vec3 pA = objectA.obj->GetComponent<TransformComponent>()->GetWorldPosition();
             glm::vec3 pB = objectB.obj->GetComponent<TransformComponent>()->GetWorldPosition();
             this->dir = pB - pA;
-            EngineManager::getInstance().EngineChangeEvent();
+            EngineManager::getInstance().SceneChangeEvent();
+            EditorManager::getInstance().EndEdit({ parent });
         }
     }
 }

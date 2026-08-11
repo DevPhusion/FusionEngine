@@ -89,21 +89,26 @@ void SpringConstraint::ProcessInspectorUI(Object* parent) {
 	ImGui::Text("Rest length ");
 	ImGui::SameLine();
 	if (ImGui::InputFloat("##Distance", &length, 0.0f, 0.0f, "%.3f m")) {
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 	}
+	if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent }, true);
+	if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
 
 	ImGui::Text("Stiffness ");
 	ImGui::SameLine();
 	if (ImGui::InputFloat("##Stiffness", &stiffness, 0.0f, 0.0f, "%.3f N/m")) {
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 	}
-
+	if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent }, true);
+	if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
 
 	ImGui::Text("Damping ");
 	ImGui::SameLine();
 	if (ImGui::InputFloat("##Damping", &damping, 0.0f, 0.0f, "%.3f Ns/m")) {
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 	}
+	if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent }, true);
+	if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
 }
 
 void GenerateSegment(glm::vec2 start, glm::vec2 end, float thickness,

@@ -39,7 +39,7 @@ public:
 	glm::vec3 GetTransformedPoint(glm::vec3 point, bool inverseTransform = false); 
 	glm::vec3 GetWorldPosition();
 	//model space -> world space (inverse: world space -> model space)
-	glm::vec3 ProjectToWorld(glm::vec3 point, bool inverseTransform = false);
+	glm::vec3 ProjectToWorld(glm::vec3 point, bool inverseTransform = false, bool includeScale = true);
 	void UpdateWorldPosition(glm::vec3 newPos);
 	void TranslateByDelta(glm::vec3 delta);
 	void SetOriginTransform(glm::mat4 transform);
@@ -51,7 +51,7 @@ public:
 	void RemoveTransformCallback(int ID);
 	void ProcessTransform();
 private:
-	glm::mat4 GetWorldMatrix();
+	glm::mat4 GetWorldMatrix(bool includeScale = true);
 	void PropagateDeltaToChildren(glm::vec3 delta);
 	int CurrentTransformCallbackID = -1;
 	Shader shader;

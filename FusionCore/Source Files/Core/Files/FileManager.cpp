@@ -20,6 +20,9 @@ ResourceIconType FileManager::ClassifyExtension(const std::string& extLower) {
 	if (extLower == ".py") {
 		return ResourceIconType::Script;
 	}
+	if (extLower == ".fscene") {          
+		return ResourceIconType::Scene;
+	}
 
 	return ResourceIconType::Unknown;
 }
@@ -223,6 +226,32 @@ bool FileManager::CreateScript(const std::string& parentVirtualPath, const std::
 	return true;
 }
 
+bool FileManager::CreateScene(const std::string& parentVirtualPath, const std::string& sceneName) {
+	if (sceneName.empty()) return false;
+
+	std::string fileName = sceneName;
+	const std::string ext = ".fscene";
+	if (fileName.size() < ext.size() ||
+		fileName.compare(fileName.size() - ext.size(), ext.size(), ext) != 0) {
+		fileName += ext;
+	}
+
+	fs::path target = VirtualToAbsolute(parentVirtualPath) / fileName;
+	std::error_code ec;
+	if (fs::exists(target, ec)) return false;
+
+	std::ofstream out(target, std::ios::binary);
+	if (!out.is_open()) return false;
+
+	BinaryWriter w(out);
+	w.Write(sceneMagicByte);
+	w.Write(sceneVersion);
+	w.Write(static_cast<uint32_t>(0)); 
+	w.Write(static_cast<uint32_t>(0)); 
+
+	return w.Good();
+}
+
 bool FileManager::DeleteResource(const std::string& virtualPath) {
 	fs::path target = VirtualToAbsolute(virtualPath);
 	std::error_code ec;
@@ -287,7 +316,7 @@ bool FileManager::RenameResource(const std::string& virtualPath, const std::stri
 
 	std::string newVirtualPath = AbsoluteToVirtual(dest);
 	for (auto& oldScriptPath : scriptsBefore) {
-		std::string suffix = oldScriptPath.substr(virtualPath.size()); // "" for a renamed file itself, "/rest/of/path.py" for a folder
+		std::string suffix = oldScriptPath.substr(virtualPath.size()); 
 		ScriptManager::getInstance().RenameRegisteredScript(oldScriptPath, newVirtualPath + suffix);
 	}
 
@@ -386,46 +415,22 @@ void FileManager::ClearThumbnailCache() {
 
 void FileManager::SaveProjectToFile(const std::string& path) {
 	std::ofstream out(path, std::ios::binary);
-	if (!out.is_open())
+	if (!out.is_open()) {
 		Console::PrintError("SaveProject: failed to open file for writing {}").Format(path);
+		return;
+	}
 
 	BinaryWriter w(out);
-
 	w.Write(magicByte);
 	w.Write(version);
 
 	EngineManager::getInstance().SerializeEngineSettings(w);
 	ProjectExportManager::getInstance().SerializeExportConfiguration(w);
 
-	auto& objects = ObjectManager::getInstance().allObjects;
-
-	std::vector<Object*> toSave;
-	toSave.reserve(objects.size());
-	for (auto& obj : objects)
-	{
-		if (obj->hideInHierarchy) continue;
-		toSave.push_back(obj.get());
-	}
-
-	w.Write(static_cast<uint32_t>(toSave.size()));
-	for (Object* obj : toSave)
-		obj->Serialize(w);
-
-	std::vector<Constraint*> constraintToSave;
-	constraintToSave.reserve(PhysicsEngine::getInstance().registeredPGSConstraints.size());
-	for (Constraint* c : PhysicsEngine::getInstance().registeredPGSConstraints) {
-		if (!c->isTemporary) constraintToSave.push_back(c);
-	}
-
-	w.Write(static_cast<uint32_t>(constraintToSave.size()));
-	for (Constraint* c : constraintToSave) {
-		c->Serialize(w);
-	}
-
 	if (!w.Good())
 		Console::Print("SaveProject: write failed, file may be incomplete: {}").Format(path);
 
-	isSaved = true;
+	isProjectSaved = true;
 }
 
 void FileManager::LoadProjectFromFile(const std::string& path) {
@@ -445,17 +450,114 @@ void FileManager::LoadProjectFromStream(std::istream& in) {
 	BinaryReader r(in);
 
 	uint32_t magic = r.Read<uint32_t>();
-	if (magic != magicByte)
+	if (magic != magicByte) {
 		Console::PrintError("LoadProject: file is not a valid .fusion file");
+		return;
+	}
 
 	uint32_t ver = r.Read<uint32_t>();
-	if (ver != version)
+	if (ver != version) {
 		Console::PrintError("LoadProject: unsupported .fusion file version {}").Format((int)ver);
+		return;
+	}
 
 	EngineManager::getInstance().DeserializeEngineSettings(r);
 	ProjectExportManager::getInstance().DeserializeExportConfiguration(r);
 
-	uint32_t objectCount = r.Read<uint32_t>();
+	const std::string& mainScenePath = EngineManager::getInstance().EngineSettings.mainScenePath;
+
+	std::error_code ec;
+	if (!mainScenePath.empty() && fs::exists(mainScenePath, ec) && !ec) {
+		LoadSceneFromFile(mainScenePath);
+	}
+	else {
+		if (!mainScenePath.empty())
+			Console::Print("LoadProject: main scene {} not found, starting with an empty scene").Format(mainScenePath);
+		NewScene();
+	}
+
+	isProjectSaved = true;
+}
+
+void FileManager::NewProject() {
+	EditorManager::getInstance().SetSelectedObject(nullptr);
+
+	std::vector<Object*> toRemove;
+	toRemove.reserve(ObjectManager::getInstance().allObjects.size());
+	for (auto& obj : ObjectManager::getInstance().allObjects)
+		toRemove.push_back(obj.get());
+	for (Object* obj : toRemove)
+		ObjectManager::getInstance().RemoveObject(obj);
+	ObjectManager::getInstance().allObjects.clear();
+
+	currentProjectFile = "";
+	isSceneSaved = false;
+}
+
+
+void FileManager::SaveScene(const std::string& path) {
+	std::ofstream out(path, std::ios::binary);
+	if (!out.is_open()) {
+		Console::PrintError("SaveScene: failed to open file for writing {}").Format(path);
+		return;
+	}
+
+	BinaryWriter w(out);
+	w.Write(sceneMagicByte);
+	w.Write(sceneVersion);
+
+	auto& objects = ObjectManager::getInstance().allObjects;
+
+	std::vector<Object*> toSave;
+	toSave.reserve(objects.size());
+	for (auto& obj : objects) {
+		if (obj->hideInHierarchy) continue;
+		toSave.push_back(obj.get());
+	}
+
+	w.Write(static_cast<uint32_t>(toSave.size()));
+	for (Object* obj : toSave)
+		obj->Serialize(w);
+
+	std::vector<Constraint*> constraintToSave;
+	constraintToSave.reserve(PhysicsEngine::getInstance().registeredPGSConstraints.size());
+	for (Constraint* c : PhysicsEngine::getInstance().registeredPGSConstraints) {
+		if (!c->isTemporary) constraintToSave.push_back(c);
+	}
+
+	w.Write(static_cast<uint32_t>(constraintToSave.size()));
+	for (Constraint* c : constraintToSave)
+		c->Serialize(w);
+
+	if (!w.Good()) {
+		Console::PrintError("SaveScene: write failed, file may be incomplete: {}").Format(path);
+		return;
+	}
+
+	currentSceneFile = path;
+	isSceneSaved = true;
+}
+
+void FileManager::LoadSceneFromFile(const std::string& path) {
+	std::ifstream in(path, std::ios::binary);
+	if (!in.is_open()) {
+		Console::PrintError("LoadScene: failed to open file for reading {}").Format(path);
+		return;
+	}
+
+	BinaryReader r(in);
+
+	uint32_t magic = r.Read<uint32_t>();
+	if (magic != sceneMagicByte) {
+		Console::PrintError("LoadScene: file is not a valid .fscene file");
+		return;
+	}
+
+	uint32_t ver = r.Read<uint32_t>();
+	if (ver != sceneVersion) {
+		Console::PrintError("LoadScene: unsupported .fscene file version {}").Format((int)ver);
+		return;
+	}
 
 	EditorManager::getInstance().SetSelectedObject(nullptr);
 
@@ -468,8 +570,8 @@ void FileManager::LoadProjectFromStream(std::istream& in) {
 	ObjectManager::getInstance().allObjects.clear();
 	PhysicsEngine::getInstance().registeredPGSConstraints.clear();
 
-	for (uint32_t i = 0; i < objectCount; i++)
-	{
+	uint32_t objectCount = r.Read<uint32_t>();
+	for (uint32_t i = 0; i < objectCount; i++) {
 		auto obj = std::make_unique<Object>();
 		obj->Deserialize(r);
 		ObjectManager::getInstance().allObjects.push_back(std::move(obj));
@@ -490,8 +592,7 @@ void FileManager::LoadProjectFromStream(std::istream& in) {
 	}
 
 	uint32_t constraintCount = r.Read<uint32_t>();
-	for (uint32_t i = 0; i < constraintCount; i++)
-	{
+	for (uint32_t i = 0; i < constraintCount; i++) {
 		std::string name = r.ReadString();
 		std::shared_ptr<Constraint> constraint = CreateConstraintFromName(name);
 		uint64_t idA = r.Read<uint64_t>();
@@ -518,12 +619,13 @@ void FileManager::LoadProjectFromStream(std::istream& in) {
 		}
 	}
 
-	Console::Print("LoadProject: successfully load project with {} objects loaded").Format(objectCount);
+	Console::Print("LoadScene: successfully loaded scene with {} objects").Format(objectCount);
 
-	isSaved = true;
+	currentSceneFile = path;
+	isSceneSaved = true;
 }
 
-void FileManager::NewProject() {
+void FileManager::NewScene() {
 	EditorManager::getInstance().SetSelectedObject(nullptr);
 
 	std::vector<Object*> toRemove;
@@ -533,9 +635,10 @@ void FileManager::NewProject() {
 	for (Object* obj : toRemove)
 		ObjectManager::getInstance().RemoveObject(obj);
 	ObjectManager::getInstance().allObjects.clear();
+	PhysicsEngine::getInstance().registeredPGSConstraints.clear();
 
-	currentProjectFile = "";
-	isSaved = false;
+	currentSceneFile = "";
+	isSceneSaved = false;
 }
 
 static void CollectSubtree(Object* obj, std::vector<Object*>& out) {
@@ -556,20 +659,22 @@ std::vector<uint8_t> FileManager::SnapshotObjects(const std::vector<Object*>& ro
 	return std::vector<uint8_t>(s.begin(), s.end());
 }
 
-void FileManager::RestoreObjects(const std::vector<uint8_t>& data) {
+void FileManager::RestoreObjects(const std::vector<uint8_t>& data, const std::vector<uint64_t>& idsToRemove) {
 	isRestoring = true;
+
+	for (uint64_t id : idsToRemove) {
+		ObjectManager::getInstance().RemoveObjectById(id);  
+	}
 
 	std::istringstream in(std::string(data.begin(), data.end()), std::ios::binary);
 	BinaryReader r(in);
-
-	std::vector<Object*> touched;   
+	std::vector<Object*> touched;
 
 	uint32_t count = r.Read<uint32_t>();
 	touched.reserve(count);
 	for (uint32_t i = 0; i < count; i++) {
 		uint64_t id = r.Read<uint64_t>();
 		Object* existing = ObjectManager::getInstance().FindObjectById(id);
-
 		if (existing) {
 			existing->ApplyState(r);
 			touched.push_back(existing);
@@ -579,7 +684,7 @@ void FileManager::RestoreObjects(const std::vector<uint8_t>& data) {
 			obj->id = id;
 			Object::ReserveID(id);
 			obj->DeserializeBody(r);
-			touched.push_back(obj.get());   
+			touched.push_back(obj.get());
 			ObjectManager::getInstance().allObjects.push_back(std::move(obj));
 		}
 	}

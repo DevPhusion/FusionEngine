@@ -1,7 +1,7 @@
 #include "../../Header Files/Core/ObjectManager.h"
 
 void ObjectManager::AddObject(Object* parent) {
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
 
 	obj->AddComponent(std::make_unique<EditorRenderComponent>(obj.get(), obj.get()->shader, "Resources/Images/Object.png", 0.075f));
@@ -9,11 +9,12 @@ void ObjectManager::AddObject(Object* parent) {
 	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), false));
 	obj->addedToScene = true;
 	obj->SetParent(parent);
+	EditorManager::getInstance().RegisterObjectCreated(obj.get());
 	allObjects.push_back(std::move(obj));
 }
 
 void ObjectManager::AddCamera(Object* parent) {
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
 
 	obj->AddComponent(std::make_unique<EditorRenderComponent>(obj.get(), obj.get()->shader, "Resources/Images/Object.png", 0.075f));
@@ -23,11 +24,12 @@ void ObjectManager::AddCamera(Object* parent) {
 
 	obj->addedToScene = true;
 	obj->SetParent(parent);
+	EditorManager::getInstance().RegisterObjectCreated(obj.get());
 	allObjects.push_back(std::move(obj));
 }
 
 void ObjectManager::AddBox(Object* parent) {
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
 	obj->AddComponent(std::make_unique<EditorRenderComponent>(obj.get(), obj->shader, "Resources/Images/Object.png", 0.075f));
 	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj->shader, glm::vec3(0.0f)));
@@ -46,11 +48,12 @@ void ObjectManager::AddBox(Object* parent) {
 
 	obj->addedToScene = true;
 	obj->SetParent(parent);
+	EditorManager::getInstance().RegisterObjectCreated(obj.get());
 	allObjects.push_back(std::move(obj));
 }
 
 void ObjectManager::AddCircle(Object* parent) {
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
 	obj->AddComponent(std::make_unique<EditorRenderComponent>(obj.get(), obj->shader, "Resources/Images/Object.png", 0.075f));
 	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj->shader, glm::vec3(0.0f)));
@@ -68,6 +71,7 @@ void ObjectManager::AddCircle(Object* parent) {
 
 	obj->addedToScene = true;
 	obj->SetParent(parent);
+	EditorManager::getInstance().RegisterObjectCreated(obj.get());
 	allObjects.push_back(std::move(obj));
 }
 
@@ -84,7 +88,7 @@ void ObjectManager::AddPolygon(Object* parent) {
 	for (auto& v : worldVerts) centroid += v;
 	centroid /= (float)worldVerts.size();
 
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
 	obj->AddComponent(std::make_unique<EditorRenderComponent>(obj.get(), obj->shader, "Resources/Images/Object.png", 0.075f));
 	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj->shader, glm::vec3(0.0f)));
@@ -116,13 +120,14 @@ void ObjectManager::AddPolygon(Object* parent) {
 
 	obj->addedToScene = true;
 	obj->SetParent(parent);
+	EditorManager::getInstance().RegisterObjectCreated(obj.get());
 	allObjects.push_back(std::move(obj));
 
 	Renderer::getInstance().polygonEditGizmos->EndEdit();
 }
 
 void ObjectManager::AddSoftBox(Object* parent) {
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
 	obj->AddComponent(std::make_unique<EditorRenderComponent>(obj.get(), obj->shader, "Resources/Images/Object.png", 0.075f));
 	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj->shader, glm::vec3(0.0f)));
@@ -140,11 +145,12 @@ void ObjectManager::AddSoftBox(Object* parent) {
 	obj->AddComponent(std::make_unique<ConstraintComponent>(obj.get()));
 	obj->addedToScene = true;
 	obj->SetParent(parent);
+	EditorManager::getInstance().RegisterObjectCreated(obj.get());
 	allObjects.push_back(std::move(obj));
 }
 
 void ObjectManager::AddSoftCircle(Object* parent) {
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
 	obj->AddComponent(std::make_unique<EditorRenderComponent>(obj.get(), obj->shader, "Resources/Images/Object.png", 0.075f));
 	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj->shader, glm::vec3(0.0f)));
@@ -161,6 +167,7 @@ void ObjectManager::AddSoftCircle(Object* parent) {
 	obj->AddComponent(std::make_unique<ConstraintComponent>(obj.get()));
 	obj->addedToScene = true;
 	obj->SetParent(parent);
+	EditorManager::getInstance().RegisterObjectCreated(obj.get());
 	allObjects.push_back(std::move(obj));
 }
 
@@ -177,7 +184,7 @@ void ObjectManager::AddSoftPolygon(Object* parent) {
 	for (auto& v : worldVerts) centroid += v;
 	centroid /= (float)worldVerts.size();
 
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
 	obj->AddComponent(std::make_unique<EditorRenderComponent>(obj.get(), obj->shader, "Resources/Images/Object.png", 0.075f));
 	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj->shader, glm::vec3(0.0f)));
@@ -209,13 +216,14 @@ void ObjectManager::AddSoftPolygon(Object* parent) {
 
 	obj->addedToScene = true;
 	obj->SetParent(parent);
+	EditorManager::getInstance().RegisterObjectCreated(obj.get());
 	allObjects.push_back(std::move(obj));
 
 	Renderer::getInstance().polygonEditGizmos->EndEdit();
 }
 
 void ObjectManager::AddFluid(Object* parent) {
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
 	obj->AddComponent(std::make_unique<EditorRenderComponent>(obj.get(), obj->shader, "Resources/Images/Object.png", 0.075f));
 	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj->shader, glm::vec3(0.0f)));
@@ -233,13 +241,14 @@ void ObjectManager::AddFluid(Object* parent) {
 	FluidComponent* fc = obj->GetComponent<FluidComponent>();
 	obj->addedToScene = true;
 	obj->SetParent(parent);
+	EditorManager::getInstance().RegisterObjectCreated(obj.get());
 	allObjects.push_back(std::move(obj));
 }
 
 Object* ObjectManager::AddExistingObject(std::unique_ptr<Object> obj, Object* parent) {
 	if (!obj) return nullptr;
 
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 
 	Object* raw = obj.get();
 	raw->name = GenerateUniqueName(raw->name.empty() ? "Object" : raw->name, nullptr);
@@ -318,19 +327,45 @@ Object* ObjectManager::CopyObject(Object* obj) {
 }
 
 void ObjectManager::RemoveObject(Object* obj) {
-	EngineManager::getInstance().EngineChangeEvent();
-	if (EditorManager::getInstance().selectedObject == obj) {
-		EditorManager::getInstance().SetSelectedObject(nullptr);
+	bool tracking = !FileManager::getInstance().IsRestoring();
+	std::vector<uint64_t> subtreeIds;
+	std::vector<uint8_t> before;
+	if (tracking) {
+		before = FileManager::getInstance().SnapshotObjects({ obj });
+		std::function<void(Object*)> collect = [&](Object* o) {
+			subtreeIds.push_back(o->id);
+			for (auto* c : o->children) collect(c);
+			};
+		collect(obj);
 	}
-	for (int i = 0; i < allObjects.size(); i++)
-	{
+
+	EngineManager::getInstance().SceneChangeEvent();
+	if (EditorManager::getInstance().selectedObject == obj) EditorManager::getInstance().SetSelectedObject(nullptr);
+
+	std::vector<Object*> reparentedChildren;
+	for (int i = 0; i < allObjects.size(); i++) {
 		if (allObjects[i].get() == obj) {
 			obj->OnDelete();
-			for (auto* child : allObjects[i]->children)
-			{
+			for (auto* child : allObjects[i]->children) {
 				child->SetParent(allObjects[i]->parent);
+				reparentedChildren.push_back(child);
 			}
 			allObjects.erase(allObjects.begin() + i);
+			break;
+		}
+	}
+
+	if (tracking) EditorManager::getInstance().RegisterObjectDeleted(before, subtreeIds, reparentedChildren);
+}
+
+void ObjectManager::RemoveObjectById(uint64_t id) {
+	for (size_t i = 0; i < allObjects.size(); i++) {
+		if (allObjects[i]->id == id) {
+			if (EditorManager::getInstance().selectedObject == allObjects[i].get())
+				EditorManager::getInstance().SetSelectedObject(nullptr);
+			allObjects[i]->OnDelete();
+			allObjects.erase(allObjects.begin() + i);
+			return;
 		}
 	}
 }

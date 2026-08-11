@@ -8,5 +8,5 @@ Component::Component(Object* parent) {
 
 void Component::SetEnabled(bool enabled) {
 	Enabled = enabled;
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 }

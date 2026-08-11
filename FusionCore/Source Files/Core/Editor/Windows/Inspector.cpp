@@ -88,13 +88,13 @@ void Inspector::ProcessWindow() {
         ImGui::SameLine();
         if (ImGui::InputText("##ObjectName", objectNameBuffer, sizeof(objectNameBuffer))) {
             selected->name = std::string(objectNameBuffer);
-            EngineManager::getInstance().EngineChangeEvent();
+            EngineManager::getInstance().SceneChangeEvent();
         }
 
         if (ImGui::IsItemDeactivatedAfterEdit()) {
             std::string desiredName = selected->name.empty() ? "Object" : selected->name;
             selected->name = ObjectManager::getInstance().GenerateUniqueName(desiredName, selected);
-            EngineManager::getInstance().EngineChangeEvent();
+            EngineManager::getInstance().SceneChangeEvent();
         }
 
         ImGui::SameLine();
@@ -102,7 +102,7 @@ void Inspector::ProcessWindow() {
         if (DrawEyeToggleButton("##InspectorEyeToggle", selected->hidden, eyeIconSize)) {
             if (selected->hidden) selected->Show();
             else selected->Hide();
-            EngineManager::getInstance().EngineChangeEvent();
+            EngineManager::getInstance().SceneChangeEvent();
         }
 
         ImGui::Spacing();
@@ -165,8 +165,11 @@ void Inspector::ProcessWindow() {
         }
 
         if (pendingRemoval != -1) {
-            EngineManager::getInstance().EngineChangeEvent();
+            EngineManager::getInstance().SceneChangeEvent();
+            EditorManager::getInstance().BeginEdit({ selected });
             selected->RemoveComponent(pendingRemoval);
+            EditorManager::getInstance().EndEdit({ selected });
+
         }
 
       
@@ -188,61 +191,77 @@ void Inspector::ProcessWindow() {
 
             if (!selected->HasComponent<RenderComponent>() && std::string("Render Component").find(search) != std::string::npos)
                 if (ImGui::MenuItem("Render Component")) {
+                    EditorManager::getInstance().BeginEdit({ selected });
                     selected->AddComponent(std::make_unique<RenderComponent>(selected, std::vector<float> {}, selected->shader, ""));
-                    EngineManager::getInstance().EngineChangeEvent();
+                    EditorManager::getInstance().EndEdit({ selected });
+                    EngineManager::getInstance().SceneChangeEvent();
                     m_SearchBuffer[0] = '\0';
                     ImGui::CloseCurrentPopup();
                 }
             if (!selected->HasComponent<CameraComponent>() && std::string("Camera Component").find(search) != std::string::npos)
                 if (ImGui::MenuItem("Camera Component")) {
+                    EditorManager::getInstance().BeginEdit({ selected });
                     selected->AddComponent(std::make_unique<CameraComponent>(selected));
-                    EngineManager::getInstance().EngineChangeEvent();
+                    EditorManager::getInstance().EndEdit({ selected });
+                    EngineManager::getInstance().SceneChangeEvent();
                     m_SearchBuffer[0] = '\0';
                     ImGui::CloseCurrentPopup();
                 }
             if (!selected->HasComponent<RigidBodyComponent>() && std::string("Rigid Body Component").find(search) != std::string::npos)
                 if (ImGui::MenuItem("Rigid Body Component")) {
+                    EditorManager::getInstance().BeginEdit({ selected });
                     selected->AddComponent(std::make_unique<RigidBodyComponent>(selected));
-                    EngineManager::getInstance().EngineChangeEvent();
+                    EditorManager::getInstance().EndEdit({ selected });
+                    EngineManager::getInstance().SceneChangeEvent();
                     m_SearchBuffer[0] = '\0';
                     ImGui::CloseCurrentPopup();
                 }
 
             if (!selected->HasComponent<SoftBodyComponent>() && std::string("Soft Body Component").find(search) != std::string::npos)
                 if (ImGui::MenuItem("Soft Body Component")) {
+                    EditorManager::getInstance().BeginEdit({ selected });
                     selected->AddComponent(std::make_unique<SoftBodyComponent>(selected));
-                    EngineManager::getInstance().EngineChangeEvent();
+                    EditorManager::getInstance().EndEdit({ selected });
+                    EngineManager::getInstance().SceneChangeEvent();
                     m_SearchBuffer[0] = '\0';
                     ImGui::CloseCurrentPopup();
                 }
 
             if (!selected->HasComponent<CollisionComponent>() && std::string("Collision Component").find(search) != std::string::npos)
                 if (ImGui::MenuItem("Collision Component")) {
+                    EditorManager::getInstance().BeginEdit({ selected });
                     selected->AddComponent(std::make_unique<CollisionComponent>(selected));
-                    EngineManager::getInstance().EngineChangeEvent();
+                    EditorManager::getInstance().EndEdit({ selected });
+                    EngineManager::getInstance().SceneChangeEvent();
                     m_SearchBuffer[0] = '\0';
                     ImGui::CloseCurrentPopup();
                 }
 
             if (!selected->HasComponent<ConstraintComponent>() && std::string("Constraint Component").find(search) != std::string::npos)
                 if (ImGui::MenuItem("Constraint Component")) {
+                    EditorManager::getInstance().BeginEdit({ selected });
                     selected->AddComponent(std::make_unique<ConstraintComponent>(selected));
-                    EngineManager::getInstance().EngineChangeEvent();
+                    EditorManager::getInstance().EndEdit({ selected });
+                    EngineManager::getInstance().SceneChangeEvent();
                     m_SearchBuffer[0] = '\0';
                     ImGui::CloseCurrentPopup();
                 }
 
             if (!selected->HasComponent<FractureComponent>() && std::string("Fracture Component").find(search) != std::string::npos)
                 if (ImGui::MenuItem("Fracture Component")) {
+                    EditorManager::getInstance().BeginEdit({ selected });
                     selected->AddComponent(std::make_unique<FractureComponent>(selected));
-                    EngineManager::getInstance().EngineChangeEvent();
+                    EditorManager::getInstance().EndEdit({ selected });
+                    EngineManager::getInstance().SceneChangeEvent();
                     m_SearchBuffer[0] = '\0';
                     ImGui::CloseCurrentPopup();
                 }
             if (!selected->HasComponent<FluidComponent>() && std::string("Fluid Component").find(search) != std::string::npos)
                 if (ImGui::MenuItem("Fluid Component")) {
+                    EditorManager::getInstance().BeginEdit({ selected });
                     selected->AddComponent(std::make_unique<FluidComponent>(selected));
-                    EngineManager::getInstance().EngineChangeEvent();
+                    EditorManager::getInstance().EndEdit({ selected });
+                    EngineManager::getInstance().SceneChangeEvent();
                     m_SearchBuffer[0] = '\0';
                     ImGui::CloseCurrentPopup();
                 }
@@ -271,8 +290,10 @@ void Inspector::ProcessWindow() {
 
                     ImGui::PushID(scriptPath.c_str());
                     if (ImGui::MenuItem(scriptDisplayName.c_str())) {
+                        EditorManager::getInstance().BeginEdit({ selected });
                         selected->AddComponent(std::make_unique<ScriptComponent>(selected, scriptPath));
-                        EngineManager::getInstance().EngineChangeEvent();
+                        EditorManager::getInstance().EndEdit({ selected });
+                        EngineManager::getInstance().SceneChangeEvent();
                         m_SearchBuffer[0] = '\0';
                         ImGui::CloseCurrentPopup();
                     }

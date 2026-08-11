@@ -73,19 +73,53 @@ void Object::DeserializeBody(BinaryReader& r) {
 }
 
 void Object::ApplyState(BinaryReader& r) {
-    this->name = r.ReadString();
-    this->hideInHierarchy = r.Read<bool>();
-    this->hidden = r.Read<bool>();
-    this->parentID = r.Read<uint64_t>();
-    r.ReadString(); 
-    r.ReadString(); 
+	this->name = r.ReadString();
+	this->hideInHierarchy = r.Read<bool>();
+	this->hidden = r.Read<bool>();
+	this->parentID = r.Read<uint64_t>();
+	r.ReadString();
+	r.ReadString();
 
-    uint32_t count = r.Read<uint32_t>();
-    if (count != components.size())
-        throw std::runtime_error("Object::ApplyState: component set changed, cannot patch in place");
+	uint32_t count = r.Read<uint32_t>();
 
-    for (uint32_t i = 0; i < count; i++) {
-        r.ReadString();                
-        components[i]->Deserialize(r);
-    }
+	std::vector<std::unique_ptr<Component>> oldComponents = std::move(components);
+	components.clear();
+	componentByType.clear();
+
+	std::vector<std::unique_ptr<Component>> newComponents;
+	newComponents.reserve(count);
+
+	for (uint32_t i = 0; i < count; i++) {
+		std::string typeName = r.ReadString();
+
+		std::unique_ptr<Component> comp;
+
+		if (i < oldComponents.size() && oldComponents[i] && oldComponents[i]->Name == typeName) {
+			comp = std::move(oldComponents[i]);
+		}
+		else {
+			auto it = std::find_if(oldComponents.begin(), oldComponents.end(),
+				[&](const std::unique_ptr<Component>& c) { return c && c->Name == typeName; });
+
+			if (it != oldComponents.end()) {
+				comp = std::move(*it);
+			}
+			else {
+				comp = CreateComponentFromName(this, typeName);
+				if (!comp) throw std::runtime_error("Object::ApplyState: unknown component type '" + typeName + "'");
+			}
+		}
+
+		RegisterComponentPointer(comp.get());
+		comp->Deserialize(r);
+		newComponents.push_back(std::move(comp));
+	}
+
+	for (auto& old : oldComponents) {
+		if (old) old->OnDelete();
+	}
+
+	for (auto& c : newComponents) {
+		AddComponent(std::move(c));
+	}
 }

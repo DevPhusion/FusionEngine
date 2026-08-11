@@ -8,7 +8,7 @@ void FractureComponent::ProcessInspectorUI() {
 	ImGui::Text("Fracturable");
 	ImGui::SameLine();
 	if (ImGui::Checkbox("##Fracturable", &fracturable)) {
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 	}
 	if (ImGui::IsItemActivated()) {
 		EditorManager::getInstance().BeginEdit({ parent });
@@ -20,7 +20,7 @@ void FractureComponent::ProcessInspectorUI() {
 	ImGui::Text("Threshold");
 	ImGui::SameLine();
 	if (ImGui::InputFloat("##Threshold", &impulseThreshold, 0.0f, 0.0f, "%.3f Ns")) {
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 	}
 	if (ImGui::IsItemActivated()) {
 		EditorManager::getInstance().BeginEdit({ parent });
@@ -32,7 +32,7 @@ void FractureComponent::ProcessInspectorUI() {
 	ImGui::Text("Shard Count");
 	ImGui::SameLine();
 	if (ImGui::InputInt("##ShardCount", &shardCount)) {
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 	}
 	if (ImGui::IsItemActivated()) {
 		EditorManager::getInstance().BeginEdit({ parent });
@@ -44,7 +44,7 @@ void FractureComponent::ProcessInspectorUI() {
 	ImGui::Text("Min Area");
 	ImGui::SameLine();
 	if (ImGui::InputFloat("##MinArea", &minFragmentArea)) {
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 	}
 	if (ImGui::IsItemActivated()) {
 		EditorManager::getInstance().BeginEdit({ parent });
@@ -56,7 +56,7 @@ void FractureComponent::ProcessInspectorUI() {
 	ImGui::Text("Max Generation");
 	ImGui::SameLine();
 	if (ImGui::InputInt("##MaxGen", &maxFractureGenerations)) {
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 	}
 	if (ImGui::IsItemActivated()) {
 		EditorManager::getInstance().BeginEdit({ parent });
@@ -69,7 +69,7 @@ void FractureComponent::ProcessInspectorUI() {
 		ImGui::Text("Density");
 		ImGui::SameLine();
 		if (ImGui::InputFloat("##Density", &restDensity)) {
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 		}
 		if (ImGui::IsItemActivated()) {
 			EditorManager::getInstance().BeginEdit({ parent });

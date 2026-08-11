@@ -18,6 +18,7 @@ struct Settings {
 	glm::vec4 backgroundColor = glm::vec4(0.235f, 0.239f, 0.216f, 1.0f);
 	glm::vec2 gameResolution = glm::vec2(1920, 1080);
 	bool drawBackgroundGrid = true;
+	std::string mainScenePath = "";
 
 	// Debug
 	bool drawObjectWireframe = false;
@@ -93,10 +94,13 @@ public:
 	std::unordered_map<int, std::function<void()>> InteractModeChangedEvents;
 	std::unordered_map<int, std::function<void()>> PhysicsModeChangedEvents;
 
+	std::string editingScenePath = ""; 
+
 	void Setup(GLFWwindow* window);
 	void ProcessEngine(float delta);
 	void SaveEngineState();
 	void LoadEngineState();
+	void SceneChangeEvent();
 	void EngineChangeEvent();
 	void SwitchInteractMode(InteractMode mode);
 	void SwitchPhysicsMode(PhysicsMode mode);

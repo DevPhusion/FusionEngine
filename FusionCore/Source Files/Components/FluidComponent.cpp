@@ -181,7 +181,7 @@ void FluidComponent::ProcessInspectorUI() {
 		float displayColor[4] = { color.x, color.y, color.z, color.a };
 		if (ImGui::ColorEdit4("##Color", displayColor)) {
 			this->color = glm::vec4(displayColor[0], displayColor[1], displayColor[2], displayColor[3]);
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 		}
 		if (ImGui::IsItemActivated()) {
 			EditorManager::getInstance().BeginEdit({ parent });
@@ -195,7 +195,7 @@ void FluidComponent::ProcessInspectorUI() {
 		float displayOutline[4] = { outlineColor.x, outlineColor.y, outlineColor.z, outlineColor.a };
 		if (ImGui::ColorEdit4("##OutlineColor", displayOutline)) {
 			this->outlineColor = glm::vec4(displayOutline[0], displayOutline[1], displayOutline[2], displayOutline[3]);
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 		}
 		if (ImGui::IsItemActivated()) {
 			EditorManager::getInstance().BeginEdit({ parent });
@@ -209,7 +209,7 @@ void FluidComponent::ProcessInspectorUI() {
 		if (ImGui::InputFloat("##ParticleRadius", &particleRadius)) {
 			particleRadius = std::max(0.0001f, particleRadius);
 			RebuildDensityQuadGeometry();
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 		}
 		if (ImGui::IsItemActivated()) {
 			EditorManager::getInstance().BeginEdit({ parent });
@@ -238,7 +238,7 @@ void FluidComponent::ProcessInspectorUI() {
 			desiredParticleCount = std::max(1, desiredParticleCount);
 			SeedParticles();
 			ResizeInstanceBuffer();
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 		}
 		if (ImGui::IsItemActivated()) {
 			EditorManager::getInstance().BeginEdit({ parent });
@@ -253,7 +253,7 @@ void FluidComponent::ProcessInspectorUI() {
 			collisionRadius = std::max(0.0001f, collisionRadius);
 			for (int i = 0; i < particles.size(); i++)
 				particles[i]->collisionRadius = collisionRadius;
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 		}
 		if (ImGui::IsItemActivated()) {
 			EditorManager::getInstance().BeginEdit({ parent });
@@ -272,7 +272,7 @@ void FluidComponent::ProcessInspectorUI() {
 				particles[i]->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(smoothingRadius);
 				particles[i]->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(smoothingRadius);
 			}
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 		}
 		if (ImGui::IsItemActivated()) {
 			EditorManager::getInstance().BeginEdit({ parent });
@@ -289,7 +289,7 @@ void FluidComponent::ProcessInspectorUI() {
 			{
 				particles[i]->epsilon = epsilon;
 			}
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 		}
 		if (ImGui::IsItemActivated()) {
 			EditorManager::getInstance().BeginEdit({ parent });

@@ -89,7 +89,6 @@ void RenderComponent::SetShape(Shape shape) {
 
 	if (std::holds_alternative<CircleShape>(shape)) {
 		auto& circle = std::get<CircleShape>(shape);
-
 		UpdateShape(verts, TriangulateCircle(circle.segments));
 
 		edges.clear();
@@ -103,8 +102,8 @@ void RenderComponent::SetShape(Shape shape) {
 			glm::vec3 wp1 = circle.center + glm::vec3(circle.radius * std::cos(theta1), circle.radius * std::sin(theta1), 0.0f);
 			glm::vec3 wp2 = circle.center + glm::vec3(circle.radius * std::cos(theta2), circle.radius * std::sin(theta2), 0.0f);
 			Edge e;
-			e.start = tc ? tc->ProjectToWorld(wp1, true) : wp1;
-			e.end = tc ? tc->ProjectToWorld(wp2, true) : wp2;
+			e.start = tc ? tc->ProjectToWorld(wp1, true, false) : wp1;
+			e.end = tc ? tc->ProjectToWorld(wp2, true, false) : wp2;
 			edges.push_back(e);
 		}
 	}
@@ -116,7 +115,7 @@ void RenderComponent::SetShape(Shape shape) {
 	tc->SetRotationCenter(GetCenter());
 	tc->worldMatrixDirty = true;
 	
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 	for (auto& [id, func] : OnShapeSetCallbacks) {
 		func();
 	}
@@ -166,7 +165,7 @@ void RenderComponent::SetTexture(std::string texture_path) {
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 
 		return; 
 	}
@@ -176,7 +175,7 @@ void RenderComponent::SetTexture(std::string texture_path) {
 	if (it != cache.end()) {
 		it->second.second++;
 		this->TextureID = it->second.first;
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 		return;
 	}
 
@@ -205,7 +204,7 @@ void RenderComponent::SetTexture(std::string texture_path) {
 	}
 	stbi_image_free(data);
 
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 }
 
 std::unordered_map<std::string, std::pair<GLuint, int>>& RenderComponent::TextureCache() {
@@ -356,7 +355,7 @@ std::vector<float> RenderComponent::VerticesFromShape(Shape& shape) {
 
 			std::vector<float> verts;
 			for (int i = 0; i < 4; i++) {
-				glm::vec3 p = tc ? tc->ProjectToWorld(worldCorners[i], true) : worldCorners[i];
+				glm::vec3 p = tc ? tc->ProjectToWorld(worldCorners[i], true, false) : worldCorners[i];
 				verts.insert(verts.end(), { p.x, p.y, 0.0f, uvs[i].x, uvs[i].y });
 			}
 			return verts;
@@ -375,13 +374,13 @@ std::vector<float> RenderComponent::VerticesFromShape(Shape& shape) {
 					0.0f
 				);
 
-				glm::vec3 p = tc ? tc->ProjectToWorld(worldPoint, true) : worldPoint;
+				glm::vec3 p = tc ? tc->ProjectToWorld(worldPoint, true, false) : worldPoint;
 
 				float u = (std::cos(theta) + 1.0f) * 0.5f;
 				float v = (std::sin(theta) + 1.0f) * 0.5f;
 				verts.insert(verts.end(), { p.x, p.y, 0.0f, u, v });
 			}
-			glm::vec3 centerLocal = tc ? tc->ProjectToWorld(s.center, true) : s.center;
+			glm::vec3 centerLocal = tc ? tc->ProjectToWorld(s.center, true, false) : s.center;
 			verts.insert(verts.end(), { centerLocal.x, centerLocal.y, 0.0f, 0.5f, 0.5f });
 
 			return verts;
@@ -598,6 +597,11 @@ void RenderComponent::Deserialize(BinaryReader& r) {
 
 void RenderComponent::PostLoad() {
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
+
+	tc->rotation = tc->pendingRotation;
+	tc->size = tc->pendingScale;
+	tc->worldMatrixDirty = true;
+
 	std::visit([&](auto&& s) {
 		using T = std::decay_t<decltype(s)>;
 		if constexpr (std::is_same_v<T, RectangleShape> || std::is_same_v<T, CircleShape>) {
@@ -606,11 +610,8 @@ void RenderComponent::PostLoad() {
 		}, pendingShape);
 
 	SetShape(pendingShape);
-	
+
 	tc->SetRotationCenter(GetCenter());
-	tc->rotation = tc->pendingRotation;
-	tc->size = tc->pendingScale;
-	tc->worldMatrixDirty = true;
 }
 
 void RenderComponent::ProcessInspectorUI() {
@@ -661,7 +662,7 @@ void RenderComponent::ProcessInspectorUI() {
 	float displayColor[4] = { color.x, color.y, color.z, color.a };
 	if (ImGui::ColorEdit4("##Color", displayColor)) {
 		this->color = glm::vec4(displayColor[0], displayColor[1], displayColor[2], displayColor[3]);
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 	}
 	if (ImGui::IsItemActivated()) {
 		EditorManager::getInstance().BeginEdit({ parent });
@@ -961,7 +962,7 @@ void RenderComponent::ProcessInspectorUI() {
 	ImGui::Text("Z index");
 	ImGui::SameLine();
 	if (ImGui::InputInt("##ZIndex", &z_index)) {
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 	}
 	if (ImGui::IsItemActivated()) {
 		EditorManager::getInstance().BeginEdit({ parent });

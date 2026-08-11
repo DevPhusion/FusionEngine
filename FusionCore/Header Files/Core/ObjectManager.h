@@ -41,6 +41,7 @@ public:
 	Object* FindObjectById(uint64_t id);
 	Object* CopyObject(Object* obj);
 	void RemoveObject(Object* obj);
+	void RemoveObjectById(uint64_t id);
 	void QueueRemoveObject(Object* obj);
 	void FlushPendingRemovals();
 

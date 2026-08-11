@@ -13,6 +13,8 @@
 struct UndoEntry {
 	std::vector<uint8_t> before;
 	std::vector<uint8_t> after;
+	std::vector<uint64_t> removeOnUndo;   
+	std::vector<uint64_t> removeOnRedo;
 	std::vector<uint8_t> constraintsBefore;
 	std::vector<uint8_t> constraintsAfter;
 	bool hasConstraintSnapshot = false;
@@ -41,6 +43,27 @@ public:
 	void SetSelectedObject(Object* object);
 	void ProcessEditor();
 	void ProcessDockSpace();
+
+	void RegisterObjectCreated(Object* obj) {
+		if (FileManager::getInstance().IsRestoring()) return;
+		UndoEntry entry;
+		entry.before = FileManager::getInstance().SnapshotObjects({});
+		entry.after = FileManager::getInstance().SnapshotObjects({ obj });
+		entry.removeOnUndo = { obj->id };   
+		undoStack.push_back(std::move(entry));
+		if (undoStack.size() > maxUndoDepth) undoStack.pop_front();
+		redoStack.clear();
+	}
+
+	void RegisterObjectDeleted(std::vector<uint8_t> before, std::vector<uint64_t> removeOnRedoIds, const std::vector<Object*>& survivingChildren) {
+		UndoEntry entry;
+		entry.before = std::move(before);
+		entry.after = FileManager::getInstance().SnapshotObjects(survivingChildren);
+		entry.removeOnRedo = std::move(removeOnRedoIds);
+		undoStack.push_back(std::move(entry));
+		if (undoStack.size() > maxUndoDepth) undoStack.pop_front();
+		redoStack.clear();
+	}
 
 	void BeginEdit(const std::vector<Object*>& roots, bool includeConstraints = false) {
 		if (FileManager::getInstance().IsRestoring()) return;
@@ -96,7 +119,7 @@ public:
 		if (FileManager::getInstance().IsRestoring()) return;
 		if (undoStack.empty()) return;
 		auto entry = undoStack.back(); undoStack.pop_back();
-		FileManager::getInstance().RestoreObjects(entry.before);
+		FileManager::getInstance().RestoreObjects(entry.before, entry.removeOnUndo);
 		if (entry.hasConstraintSnapshot) FileManager::getInstance().RestoreConstraints(entry.constraintsBefore);
 		redoStack.push_back(entry);
 	}
@@ -105,7 +128,7 @@ public:
 		if (FileManager::getInstance().IsRestoring()) return;
 		if (redoStack.empty()) return;
 		auto entry = redoStack.back(); redoStack.pop_back();
-		FileManager::getInstance().RestoreObjects(entry.after);
+		FileManager::getInstance().RestoreObjects(entry.after, entry.removeOnRedo);
 		if (entry.hasConstraintSnapshot) FileManager::getInstance().RestoreConstraints(entry.constraintsAfter);
 		undoStack.push_back(entry);
 	}

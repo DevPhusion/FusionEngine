@@ -143,7 +143,7 @@ void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* re
 				EditorManager::getInstance().SetSelectedObject(nullptr);
 			}
 			ObjectManager::getInstance().RemoveObject(currentObj);
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 			nodeDeleted = true;
 		}
 		ImGui::EndPopup();
@@ -178,7 +178,7 @@ void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* re
 
 				if (!isDescendant) {
 					dragged->SetParent(currentObj);
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				}
 			}
 		}
@@ -201,7 +201,7 @@ void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* re
 				desiredName = "Object";
 			}
 			currentObj->name = ObjectManager::getInstance().GenerateUniqueName(desiredName, currentObj);
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 			IsRenaming = false;
 		}
 		ImGui::PopItemWidth();
@@ -212,7 +212,7 @@ void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* re
 				desiredName = "Object";
 			}
 			currentObj->name = ObjectManager::getInstance().GenerateUniqueName(desiredName, currentObj);
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 			IsRenaming = false;
 		}
 	}
@@ -236,7 +236,7 @@ void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* re
 	if (DrawEyeToggleButton(eyeId.c_str(), currentObj->hidden, eyeIconSize)) {
 		if (currentObj->hidden) currentObj->Show();
 		else currentObj->Hide();
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 	}
 
 	if (!children.empty() && nodeOpen) {
@@ -297,7 +297,7 @@ void Hierarchy::ProcessWindow() {
 				Object* dragged = *(Object**)payload->Data;
 				if (dragged != nullptr) {
 					dragged->SetParent(nullptr);
-					EngineManager::getInstance().EngineChangeEvent();
+					EngineManager::getInstance().SceneChangeEvent();
 				}
 			}
 			ImGui::EndDragDropTarget();

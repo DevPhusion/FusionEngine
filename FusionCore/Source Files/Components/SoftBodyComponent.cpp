@@ -94,7 +94,7 @@ PointMass* SoftBodyComponent::AddPointMass(glm::vec3 localPos) {
 	PhysicsEngine::getInstance().allSoftBodyPointMasses.push_back(raw);
 	AdditionalPointMasses.push_back(std::move(newPM));
 
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 
 	return raw;
 }
@@ -165,7 +165,7 @@ void SoftBodyComponent::ProcessInspectorUI() {
 	ImGui::SameLine();
 	float vel[2] = { CenterPM->velocity.x, CenterPM->velocity.y };
 	if (ImGui::InputFloat2("##Velocity", vel, "%.3f m/s")) {
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 		velocity.x = vel[0];
 		velocity.y = vel[1];
 		CenterPM->velocity = velocity;
@@ -187,7 +187,7 @@ void SoftBodyComponent::ProcessInspectorUI() {
 	ImGui::SameLine();
 	if (ImGui::InputFloat("##Stiffness ", &stiffness, 0.0f, 0.0f, "%.3f N/m")) {
 		float compliance = (stiffness > 0.0f) ? (1.0f / stiffness) : 0.0f;
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 		for (int i = 0; i < springs.size(); i++)
 		{
 			springs[i]->compliance = compliance;
@@ -203,7 +203,7 @@ void SoftBodyComponent::ProcessInspectorUI() {
 	ImGui::Text("Damping ");
 	ImGui::SameLine();
 	if (ImGui::InputFloat("##Damping ", &damping, 0.0f, 0.0f, "%.3f Ns/m")) {
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 		for (int i = 0; i < springs.size(); i++)
 		{
 			springs[i]->damping = damping;
@@ -221,7 +221,7 @@ void SoftBodyComponent::ProcessInspectorUI() {
 	if (ImGui::Checkbox("Gas Pressure Mode", &gasMode)) {
 		EditorManager::getInstance().BeginEdit({ parent });
 		useGasPressure = gasMode;
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 		RebuildMassAggregate();
 		EditorManager::getInstance().EndEdit({ parent });
 	}
@@ -229,7 +229,7 @@ void SoftBodyComponent::ProcessInspectorUI() {
 		ImGui::Text("Gas Amount");
 		ImGui::SameLine();
 		if (ImGui::InputFloat("##GasAmount", &gasAmount, 0.0f, 0.0f, "%.3f")) {
-			EngineManager::getInstance().EngineChangeEvent();
+			EngineManager::getInstance().SceneChangeEvent();
 		}
 		if (ImGui::IsItemActivated()) {
 			EditorManager::getInstance().BeginEdit({ parent });
@@ -560,7 +560,7 @@ void SoftBodyComponent::BuildMassAggregate() {
 	RenderComponent* rc = parent->GetComponent<RenderComponent>();
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
 
-	EngineManager::getInstance().EngineChangeEvent();
+	EngineManager::getInstance().SceneChangeEvent();
 
 	int physicsPointCount = (int)rc->points.size();
 	if (std::holds_alternative<CircleShape>(rc->currentShape)) {

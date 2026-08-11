@@ -78,13 +78,42 @@ namespace {
 		return ImGui::CalcTextSize(label).x + ImGui::GetStyle().FramePadding.x * 2.0f;
 	}
 
-	std::string GetProjectDisplayName() {
-		const std::string& path = FileManager::getInstance().currentProjectFile;
-		std::string baseName = path.empty()
-			? "NewProject.fusion"
-			: std::filesystem::path(path).filename().string();
+	bool SaveCurrentWork() {
+		FileManager& FM = FileManager::getInstance();
+		bool ok = true;
 
-		if (!FileManager::getInstance().isSaved)
+		if (!FM.isProjectSaved) {
+			if (!FM.currentProjectFile.empty()) {
+				FM.SaveProjectToFile(FM.currentProjectFile);
+			}
+		}
+
+		if (!FM.isSceneSaved) {
+			if (FM.currentSceneFile.empty()) {
+				auto opts = FileDialogOptions::ForExtension("Fusion Scene", "fscene", "Save Scene");
+				opts.defaultFileName = "New Scene.fscene";
+				if (auto path = FileDialog::ShowSaveDialog(opts)) {
+					FM.SaveScene(*path);
+				}
+				else {
+					ok = false; 
+				}
+			}
+			else {
+				FM.SaveScene(FM.currentSceneFile);
+			}
+		}
+
+		return ok;
+	}
+
+	std::string GetStatusDisplayName() {
+		FileManager& FM = FileManager::getInstance();
+		std::string baseName = FM.currentSceneFile.empty()
+			? "New Scene.fscene"
+			: std::filesystem::path(FM.currentSceneFile).filename().string();
+
+		if (!FM.isSceneSaved || !FM.isProjectSaved)
 			baseName += "*";
 
 		return baseName;
@@ -166,10 +195,24 @@ void EngineStatus::ProcessWindow() {
 
 	if (IconButton("play", IconType::Play, isSimulating, iconDim, playGreen)) {
 		if (isStopped) {
-			if (FileManager::getInstance().currentProjectFile != "") {
-				FileManager::getInstance().SaveProjectToFile(FileManager::getInstance().currentProjectFile);
+			FileManager& FM = FileManager::getInstance();
+
+			if (!FM.isSceneSaved) {
+				if (!SaveCurrentWork()) {
+					ImGui::End();
+					return; // user cancelled the save dialog — don't enter play
+				}
 			}
-			EngineManager::getInstance().SaveEngineState();
+
+			EngineManager::getInstance().editingScenePath = FM.currentSceneFile;
+
+			const std::string& mainScene = EngineManager::getInstance().EngineSettings.mainScenePath;
+			if (!mainScene.empty() && FM.currentSceneFile != mainScene) {
+				std::error_code ec;
+				if (std::filesystem::exists(mainScene, ec) && !ec) {
+					FM.LoadSceneFromFile(mainScene);
+				}
+			}
 		}
 		EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Simulate);
 	}
@@ -181,7 +224,16 @@ void EngineStatus::ProcessWindow() {
 	ImGui::SameLine();
 
 	if (IconButton("stop", IconType::Stop, isStopped, iconDim, stopRed)) {
-		EngineManager::getInstance().LoadEngineState();
+		FileManager& FM = FileManager::getInstance();
+		const std::string& editingScene = EngineManager::getInstance().editingScenePath;
+
+		if (!editingScene.empty()) {
+			FM.LoadSceneFromFile(editingScene);
+		}
+		else {
+			FM.NewScene();
+		}
+
 		EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Stop);
 	}
 
@@ -193,20 +245,10 @@ void EngineStatus::ProcessWindow() {
 
 	ImGui::SameLine();
 
-	bool saveDisabled = !isStopped || FileManager::getInstance().isSaved;
+	bool saveDisabled = !isStopped || FileManager::getInstance().isSceneSaved || FileManager::getInstance().isProjectSaved;
 	ImGui::BeginDisabled(saveDisabled);
 	if (ImGui::Button("Save")) {
-		if (FileManager::getInstance().currentProjectFile.empty()) {
-			auto opts = FileDialogOptions::ForExtension("Fusion Project", "fusion", "Save Project");
-			opts.defaultFileName = "New Project.fusion";
-			if (auto path = FileDialog::ShowSaveDialog(opts)) {
-				FileManager::getInstance().currentProjectFile = *path;
-				FileManager::getInstance().SaveProjectToFile(*path);
-			}
-		}
-		else {
-			FileManager::getInstance().SaveProjectToFile(FileManager::getInstance().currentProjectFile);
-		}
+		SaveCurrentWork();
 	}
 
 	ImGui::EndDisabled();
@@ -219,15 +261,15 @@ void EngineStatus::ProcessWindow() {
 	ImGui::SameLine();
 	{
 		char projectNameBuf[128];
-		std::string displayName = GetProjectDisplayName();
+		std::string displayName = GetStatusDisplayName();
 #if defined(_MSC_VER)
 		strcpy_s(projectNameBuf, displayName.c_str());
 #else
 		strncpy(projectNameBuf, displayName.c_str(), sizeof(projectNameBuf) - 1);
 		projectNameBuf[sizeof(projectNameBuf) - 1] = '\0';
 #endif
-		bool dirty = !FileManager::getInstance().isSaved;
-		const ImVec4 unsavedColor(0.95f, 0.65f, 0.25f, 1.0f); // amber
+		bool dirty = !FileManager::getInstance().isSceneSaved || !FileManager::getInstance().isProjectSaved;
+		const ImVec4 unsavedColor(0.95f, 0.65f, 0.25f, 1.0f); 
 		const ImVec4 savedColor = ImGui::GetStyleColorVec4(ImGuiCol_Text);
 
 		ImGui::PushStyleColor(ImGuiCol_Text, dirty ? unsavedColor : savedColor);
@@ -277,11 +319,38 @@ void EngineStatus::ProcessSettingsPopup() {
 
 		ImGui::Text("Draw background grid: ");
 		ImGui::SameLine();
-		ImGui::Checkbox("##Draw background grid", &settings.drawBackgroundGrid);
+		if (ImGui::Checkbox("##Draw background grid", &settings.drawBackgroundGrid)) {
+			EngineManager::getInstance().EngineChangeEvent();
+		}
 
 		ImGui::Text("Background color: ");
 		ImGui::SameLine();
-		ImGui::ColorEdit4("##Background color", &settings.backgroundColor.x);
+		if (ImGui::ColorEdit4("##Background color", &settings.backgroundColor.x)) {
+			EngineManager::getInstance().EngineChangeEvent();
+		}
+
+		ImGui::Text("Main scene: ");
+		ImGui::SameLine();
+		{
+			char sceneBuf[256];
+			std::string current = settings.mainScenePath;
+#if defined(_MSC_VER)
+			strcpy_s(sceneBuf, current.c_str());
+#else
+			strncpy(sceneBuf, current.c_str(), sizeof(sceneBuf) - 1);
+			sceneBuf[sizeof(sceneBuf) - 1] = '\0';
+#endif
+			ImGui::SetNextItemWidth(220.0f);
+			ImGui::InputText("##Main scene", sceneBuf, IM_ARRAYSIZE(sceneBuf), ImGuiInputTextFlags_ReadOnly);
+			ImGui::SameLine();
+			if (ImGui::Button("Browse##MainScene")) {
+				auto opts = FileDialogOptions::ForExtension("Fusion Scene", "fscene", "Choose Main Scene");
+				if (auto path = FileDialog::ShowOpenDialog(opts)) {
+					settings.mainScenePath = *path;
+					EngineManager::getInstance().EngineChangeEvent();
+				}
+			}
+		}
 
 		ImGui::Text("Game resolution: ");                                  
 		ImGui::SameLine();                                                  
@@ -294,7 +363,8 @@ void EngineStatus::ProcessSettingsPopup() {
 			if (ImGui::InputInt2("##Game resolution", res)) {              
 				EngineManager::getInstance().SetGameResolution(            
 					(float)std::max(1, res[0]),                             
-					(float)std::max(1, res[1]));                            
+					(float)std::max(1, res[1]));    
+				EngineManager::getInstance().EngineChangeEvent();
 			}                                                                
 		}
 
@@ -303,39 +373,57 @@ void EngineStatus::ProcessSettingsPopup() {
 
 		ImGui::Text("Draw object wire frame: ");
 		ImGui::SameLine();
-		ImGui::Checkbox("##Draw object wire frame", &settings.drawObjectWireframe);
+		if (ImGui::Checkbox("##Draw object wire frame", &settings.drawObjectWireframe)) {
+			EngineManager::getInstance().EngineChangeEvent();
+		}
 
 		ImGui::Text("Draw broad phase bounding area: ");
 		ImGui::SameLine();
-		ImGui::Checkbox("##Draw broad phase bounding area", &settings.drawBroadPhaseBounds);
+		if (ImGui::Checkbox("##Draw broad phase bounding area", &settings.drawBroadPhaseBounds)) {
+			EngineManager::getInstance().EngineChangeEvent();
+		}
 
 		ImGui::Text("Draw collision shapes: ");
 		ImGui::SameLine();
-		ImGui::Checkbox("##Draw collision shapes", &settings.drawCollisionShapes);
+		if (ImGui::Checkbox("##Draw collision shapes", &settings.drawCollisionShapes)) {
+			EngineManager::getInstance().EngineChangeEvent();
+		}
 
 		ImGui::Text("Draw collision normals: ");
 		ImGui::SameLine();
-		ImGui::Checkbox("##Draw collision normals", &settings.drawCollisionNormals);
+		if (ImGui::Checkbox("##Draw collision normals", &settings.drawCollisionNormals)) {
+			EngineManager::getInstance().EngineChangeEvent();
+		}
 
 		ImGui::Text("Draw contact points: ");
 		ImGui::SameLine();
-		ImGui::Checkbox("##Draw contact points", &settings.drawContactPoints);
+		if (ImGui::Checkbox("##Draw contact points", &settings.drawContactPoints)) {
+			EngineManager::getInstance().EngineChangeEvent();
+		}
 
 		ImGui::Text("Draw soft body point masses: ");
 		ImGui::SameLine();
-		ImGui::Checkbox("##Draw soft body point masses", &settings.drawSoftBodyPointMasses);
+		if (ImGui::Checkbox("##Draw soft body point masses", &settings.drawSoftBodyPointMasses)) {
+			EngineManager::getInstance().EngineChangeEvent();
+		}
 
 		ImGui::Text("Draw soft body springs: ");
 		ImGui::SameLine();
-		ImGui::Checkbox("##Draw soft body springs", &settings.drawSoftBodySprings);
+		if (ImGui::Checkbox("##Draw soft body springs", &settings.drawSoftBodySprings)) {
+			EngineManager::getInstance().EngineChangeEvent();
+		}
 
 		ImGui::Text("Draw virtual soft body proxies: ");
 		ImGui::SameLine();
-		ImGui::Checkbox("##Draw virtual soft body proxies", &settings.drawVirtualSoftBodyProxies);
+		if (ImGui::Checkbox("##Draw virtual soft body proxies", &settings.drawVirtualSoftBodyProxies)) {
+			EngineManager::getInstance().EngineChangeEvent();
+		}
 
 		ImGui::Text("Draw fluids as particles: ");
 		ImGui::SameLine();
-		ImGui::Checkbox("##Draw fluids as particles", &settings.drawFluidsAsParticles);
+		if (ImGui::Checkbox("##Draw fluids as particles", &settings.drawFluidsAsParticles)) {
+			EngineManager::getInstance().EngineChangeEvent();
+		}
 
 		ImGui::BeginDisabled(!settings.drawFluidsAsParticles);
 		ImGui::Indent();
@@ -347,12 +435,15 @@ void EngineStatus::ProcessSettingsPopup() {
 			ImGui::SetNextItemWidth(140.0f);
 			if (ImGui::Combo("##Fluid heatmap", &current, heatmapLabels, IM_ARRAYSIZE(heatmapLabels))) {
 				settings.fluidHeatmapMode = static_cast<FluidHeatmapMode>(current);
+				EngineManager::getInstance().EngineChangeEvent();
 			}
 		}
 
 		ImGui::Text("Draw velocity vector field: ");
 		ImGui::SameLine();
-		ImGui::Checkbox("##Draw velocity vector field", &settings.drawFluidsVelocityField);
+		if (ImGui::Checkbox("##Draw velocity vector field", &settings.drawFluidsVelocityField)) {
+			EngineManager::getInstance().EngineChangeEvent();
+		}
 
 		ImGui::Unindent();
 		ImGui::EndDisabled();
@@ -570,22 +661,7 @@ void EngineStatus::ProcessUnsavedChangesPopup() {
 		bool dontSave = ImGui::Button("Don't Save", ImVec2(120, 0));
 
 		if (saveAndClose) {
-			bool didSave = false;
-			if (FileManager::getInstance().currentProjectFile.empty()) {
-				auto opts = FileDialogOptions::ForExtension("Fusion Project", "fusion", "Save Project");
-				opts.defaultFileName = "New Project.fusion";
-				if (auto path = FileDialog::ShowSaveDialog(opts)) {
-					FileManager::getInstance().currentProjectFile = *path;
-					FileManager::getInstance().SaveProjectToFile(*path);
-					didSave = true;
-				}
-			}
-			else {
-				FileManager::getInstance().SaveProjectToFile(FileManager::getInstance().currentProjectFile);
-				didSave = true;
-			}
-
-			if (didSave) {
+			if (SaveCurrentWork()) {
 				EngineManager::getInstance().pendingClose = false;
 				glfwSetWindowShouldClose(EngineManager::getInstance().Window, GLFW_TRUE);
 				ImGui::CloseCurrentPopup();
@@ -618,16 +694,6 @@ void EngineStatus::OnInteractModeChanged() {
 
 void EngineStatus::OnKeyButtonPressed(int key, int scancode, int action, int mods) {
 	if (InputManager::getInstance().keys[GLFW_KEY_LEFT_CONTROL] && InputManager::getInstance().keys[GLFW_KEY_S]) {
-		if (FileManager::getInstance().currentProjectFile.empty()) {
-			auto opts = FileDialogOptions::ForExtension("Fusion Project", "fusion", "Save Project");
-			opts.defaultFileName = "New Project.fusion";
-			if (auto path = FileDialog::ShowSaveDialog(opts)) {
-				FileManager::getInstance().currentProjectFile = *path;
-				FileManager::getInstance().SaveProjectToFile(*path);
-			}
-		}
-		else {
-			FileManager::getInstance().SaveProjectToFile(FileManager::getInstance().currentProjectFile);
-		}
+		SaveCurrentWork();
 	}
 }

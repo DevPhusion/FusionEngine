@@ -32,6 +32,12 @@ void EditorManager::Setup(GLFWwindow* window) {
 			}
 		}
 		}, 1000);
+
+	EngineManager::getInstance().AddPhysicsModeChangedEvent([this]() {
+		if (EngineManager::getInstance().EnginePhysicsMode != EngineManager::PhysicsMode::Simulate) {
+			undoStack.clear();
+		}
+	});
 }
 
 void EditorManager::AddWindow(EditorWindow* window) {

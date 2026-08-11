@@ -126,7 +126,7 @@ void Constraint::OnAttachAMoved(glm::vec3 worldPos)
 {
     if (objectA.obj == nullptr) return;
     attachPointA = objectA.obj->GetComponent<TransformComponent>()->ProjectToWorld(worldPos, true);
-    EngineManager::getInstance().EngineChangeEvent();
+    EngineManager::getInstance().SceneChangeEvent();
 
     SoftBodyComponent* sb = objectA.obj->GetComponent<SoftBodyComponent>();
     if (sb) {
@@ -150,7 +150,7 @@ void Constraint::OnAttachBMoved(glm::vec3 worldPos)
 {
     if (objectB.obj == nullptr) return;
     attachPointB = objectB.obj->GetComponent<TransformComponent>()->ProjectToWorld(worldPos, true);
-    EngineManager::getInstance().EngineChangeEvent();
+    EngineManager::getInstance().SceneChangeEvent();
 
     SoftBodyComponent* sb = objectB.obj->GetComponent<SoftBodyComponent>();
     if (sb) {
@@ -227,7 +227,7 @@ void Constraint::ProcessInspectorUI(Object* parent)
             {
                 EditorManager::getInstance().BeginEdit({ parent }, true);
                 useCenter = centerFlag;
-                EngineManager::getInstance().EngineChangeEvent();
+                EngineManager::getInstance().SceneChangeEvent();
                 if (useCenter)
                 {
                     attachPoint = currentObj->GetComponent<RenderComponent>()->GetCenter();
@@ -343,7 +343,7 @@ void Constraint::ProcessInspectorUI(Object* parent)
                     body.invMass = &pc->inverseMass;
                 }
                 SetObjectB(body);
-                EngineManager::getInstance().EngineChangeEvent();
+                EngineManager::getInstance().SceneChangeEvent();
 
                 EditorManager::getInstance().EndEdit(editRoots);
             }
@@ -356,7 +356,7 @@ void Constraint::ProcessInspectorUI(Object* parent)
     ImGui::Text("Beta ");
     ImGui::SameLine();
     if (ImGui::DragFloat("##beta", &beta, 0.001f, 0.0f, 1.0f)) {
-        EngineManager::getInstance().EngineChangeEvent();
+        EngineManager::getInstance().SceneChangeEvent();
     }
     if (ImGui::IsItemActivated()) {
         EditorManager::getInstance().BeginEdit({ parent }, true);
@@ -371,7 +371,7 @@ void Constraint::ProcessInspectorUI(Object* parent)
     if (ImGui::Checkbox("##Draw constraint", &drawFlag)) {
         EditorManager::getInstance().BeginEdit({ parent }, true);
         canDrawConstraint = drawFlag;
-        EngineManager::getInstance().EngineChangeEvent();
+        EngineManager::getInstance().SceneChangeEvent();
         EditorManager::getInstance().EndEdit({ parent });
     }
 }

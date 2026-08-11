@@ -79,7 +79,7 @@ void CameraComponent::ProcessInspectorUI() {
 		EditorManager::getInstance().BeginEdit(editRoots);
 
 		isMain = mainFlag;
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 		if (isMain) {
 			if (previousMain && previousMain != this) {
 				previousMain->isMain = false;
@@ -98,7 +98,7 @@ void CameraComponent::ProcessInspectorUI() {
 	float r = range;
 	if (ImGui::InputFloat("## Range", &r)) {
 		SetRange(r < 0.0f ? 0.01f : r);
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
 	}
 	if (ImGui::IsItemActivated()) {
 		EditorManager::getInstance().BeginEdit({ parent });

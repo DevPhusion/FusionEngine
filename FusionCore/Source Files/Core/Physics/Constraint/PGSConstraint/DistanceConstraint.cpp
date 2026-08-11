@@ -68,19 +68,33 @@ void DistanceConstraint::ProcessInspectorUI(Object* parent) {
 	ImGui::Text("Distance ");
 	ImGui::SameLine();
 	if (ImGui::InputFloat("##Distance", &distance, 0.0f, 0.0f, "%.3f m")) {
-		EngineManager::getInstance().EngineChangeEvent();
+		EngineManager::getInstance().SceneChangeEvent();
+	}
+	if (ImGui::IsItemActivated()) {
+		EditorManager::getInstance().BeginEdit({ parent }, true);
+	}
+	if (ImGui::IsItemDeactivatedAfterEdit()) {
+		EditorManager::getInstance().EndEdit({ parent });
 	}
 
 	ImGui::Text("Retractable ");
 	ImGui::SameLine();
-	if (ImGui::Checkbox("##Retractable ", &retractable)) {
-		EngineManager::getInstance().EngineChangeEvent();
+	bool retractFlag = retractable;
+	if (ImGui::Checkbox("##Retractable ", &retractFlag)) {
+		EditorManager::getInstance().BeginEdit({ parent }, true);
+		retractable = retractFlag;
+		EngineManager::getInstance().SceneChangeEvent();
+		EditorManager::getInstance().EndEdit({ parent });
 	}
 
 	ImGui::Text("Extendable ");
 	ImGui::SameLine();
-	if (ImGui::Checkbox("##Extendable ", &extendable)) {
-		EngineManager::getInstance().EngineChangeEvent();
+	bool extendFlag = extendable;
+	if (ImGui::Checkbox("##Extendable ", &extendFlag)) {
+		EditorManager::getInstance().BeginEdit({ parent }, true);
+		extendable = extendFlag;
+		EngineManager::getInstance().SceneChangeEvent();
+		EditorManager::getInstance().EndEdit({ parent });
 	}
 }
 
