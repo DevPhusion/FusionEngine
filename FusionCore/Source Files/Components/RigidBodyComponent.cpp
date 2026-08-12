@@ -36,18 +36,6 @@ void RigidBodyComponent::CopyTo(Object* other) {
 	target->SetEnabled(Enabled);
 }
 
-std::unique_ptr<Component> RigidBodyComponent::Clone(Object* parent) {
-	std::unique_ptr<RigidBodyComponent> comp = std::make_unique<RigidBodyComponent>(parent);
-	comp->velocity = velocity;
-	comp->angularVelocity = angularVelocity;
-	comp->Inertia = Inertia;
-	comp->inverseInertia = inverseInertia;
-	comp->inverseMass = inverseMass;
-	comp->pendingEnabled = Enabled;
-	comp->SetEnabled(false);
-	return comp;
-}
-
 void RigidBodyComponent::Serialize(BinaryWriter& w) {
 	Component::Serialize(w);
 	w.Write(velocity);

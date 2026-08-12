@@ -528,16 +528,6 @@ void RenderComponent::CopyTo(Object* other) {
 	target->SetEnabled(Enabled);
 }
 
-std::unique_ptr<Component> RenderComponent::Clone(Object* parent) {
-	std::unique_ptr<RenderComponent> comp = std::make_unique<RenderComponent>(parent, Vertices, parent->shader, texture_path);
-	comp->z_index = z_index;
-	comp->color = color;
-	comp->pendingShape = currentShape;
-	comp->pendingEnabled = Enabled;
-	comp->SetEnabled(false);
-	return comp;
-}
-
 void RenderComponent::Serialize(BinaryWriter& w) {
 	Component::Serialize(w);
 

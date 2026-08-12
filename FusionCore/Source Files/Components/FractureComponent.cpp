@@ -101,20 +101,6 @@ void FractureComponent::CopyTo(Object* other) {
 	target->SetEnabled(Enabled);
 }
 
-std::unique_ptr<Component> FractureComponent::Clone(Object* parent) {
-	std::unique_ptr<FractureComponent> comp = std::make_unique<FractureComponent>(parent);
-	comp->fracturable = fracturable;
-	comp->impulseThreshold = impulseThreshold;
-	comp->shardCount = shardCount;
-	comp->minFragmentArea = minFragmentArea;
-	comp->maxFractureGenerations = maxFractureGenerations;
-	comp->generation = generation;
-	comp->restDensity = restDensity;
-	comp->pendingEnabled = Enabled;
-	comp->SetEnabled(false);
-	return comp;
-}
-
 void FractureComponent::Serialize(BinaryWriter& w) {
 	Component::Serialize(w);
 	w.Write(fracturable);

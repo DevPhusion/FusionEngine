@@ -2,6 +2,7 @@
 #include "../../Header Files/Core/ObjectManager.h"
 #include "../../Header Files/Core/Physics/Constraint/PGSConstraint/Constraint.h"
 #include "../../Header Files/Core/Editor/Windows/Viewport.h"
+#include "../../Header Files/Core/SceneManager.h"
 
 void EngineManager::Setup(GLFWwindow* window) {
 	int windowWidth, windowHeight;
@@ -27,98 +28,9 @@ void EngineManager::ProcessEngine(float delta) {
 	}
 }
 
-void EngineManager::SaveEngineState() {
-	SavedState.Objects.clear();
-	SavedState.Constraints.clear();
-
-	for (int i = 0; i < ObjectManager::getInstance().allObjects.size(); i++)
-	{
-		Object* obj = ObjectManager::getInstance().allObjects[i].get();
-		if (obj->hideInHierarchy) continue;
-
-		if (auto* cc = obj->GetComponent<ConstraintComponent>()) {
-			for (auto& c : cc->appliedConstraints)
-				SavedState.Constraints.push_back(c->Clone());
-		}
-
-		SavedState.Objects.push_back(std::move(obj->Clone()));
-	}
-
-	for (int i = 0; i < cachedSaveObjects.size(); i++)
-		SavedState.Objects.push_back(std::move(cachedSaveObjects[i]));
-	cachedSaveObjects.clear();
-	if (FileManager::getInstance().currentProjectFile != "") FileManager::getInstance().isSceneSaved = true;
-}
-
-void EngineManager::LoadEngineState() {
-	EditorManager::getInstance().SetSelectedObject(nullptr);
-
-	std::vector<Object*> toRemove;
-	toRemove.reserve(ObjectManager::getInstance().allObjects.size());
-	for (auto& obj : ObjectManager::getInstance().allObjects)
-		toRemove.push_back(obj.get());
-	for (Object* obj : toRemove)
-		ObjectManager::getInstance().RemoveObject(obj);
-	Renderer::getInstance().constraintEditGizmos->registeredConstraints.clear();
-	ObjectManager::getInstance().allObjects.clear();
-
-	for (int i = 0; i < SavedState.Objects.size(); i++)
-	{
-		for (int j = 0; j < SavedState.Objects[i]->components.size(); j++)
-			SavedState.Objects[i]->components[j]->SetEnabled(SavedState.Objects[i]->components[j]->pendingEnabled);
-		ObjectManager::getInstance().allObjects.push_back(std::move(SavedState.Objects[i]));
-	}
-	SavedState.Objects.clear();
-
-	std::unordered_map<uint64_t, Object*> objectsById;
-	for (auto& obj : ObjectManager::getInstance().allObjects)
-		objectsById[obj->id] = obj.get();
-
-	for (auto& obj : ObjectManager::getInstance().allObjects) {
-		if (obj->parentID != -1 && objectsById.count(obj->parentID)) {
-			obj->SetParent(objectsById[obj->parentID]);
-		}
-		else {
-			obj->parent = nullptr;
-			obj->parentID = -1; 
-		}
-	}
-
-	for (auto& constraint : SavedState.Constraints)
-	{
-		Object* a = objectsById.count(constraint->objectIdA) ? objectsById[constraint->objectIdA] : nullptr;
-		Object* b = objectsById.count(constraint->objectIdB) ? objectsById[constraint->objectIdB] : nullptr;
-		if (!a) continue; 
-
-		if (!a->HasComponent<ConstraintComponent>())
-			a->AddComponent(std::make_unique<ConstraintComponent>(a));
-		glm::vec3 attachPointA = constraint->attachPointA;
-		bool useACenter = constraint->UseCenterA();
-		glm::vec3 attachPointB = constraint->attachPointB;
-		bool useBCenter = constraint->UseCenterB();
-		constraint->SetObjectA(PhysicsEngine::getInstance().GetBodyFromObject(a));
-		constraint->SetObjectB(PhysicsEngine::getInstance().GetBodyFromObject(b));
-		Renderer::getInstance().constraintEditGizmos->RegisterConstraint(constraint.get());
-		a->GetComponent<ConstraintComponent>()->AddConstraint(constraint);
-		constraint->attachPointA = attachPointA;
-		constraint->attachPointB = attachPointB;
-		constraint->useCenterA = useACenter;
-		constraint->useCenterB = useBCenter;
-	}
-	SavedState.Constraints.clear();
-
-	for (auto& obj : ObjectManager::getInstance().allObjects) {
-		for (auto& c : obj->components) {
-			c->PostLoad();
-		}
-	}
-
-	if (FileManager::getInstance().currentProjectFile != "") FileManager::getInstance().isSceneSaved = false;
-}
-
 void EngineManager::SceneChangeEvent() {
 	if (EnginePhysicsMode == PhysicsMode::Stop) {
-		FileManager::getInstance().isSceneSaved = false;
+		SceneManager::getInstance().MarkActiveDirty();
 	}
 }
 
@@ -267,7 +179,7 @@ void EngineManager::WindowCloseCallback(GLFWwindow* window) {
 		glfwSetWindowShouldClose(window, GLFW_TRUE);
 		return;
 	}
-	if (!FM.isSceneSaved || !FM.isProjectSaved) {
+	if (!FM.isProjectSaved || SceneManager::getInstance().AnySceneDirty()) {
 		glfwSetWindowShouldClose(window, GLFW_FALSE);
 		eng.pendingClose = true;
 	}

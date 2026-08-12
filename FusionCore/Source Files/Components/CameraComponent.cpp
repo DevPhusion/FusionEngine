@@ -144,18 +144,6 @@ void CameraComponent::CopyTo(Object* other) {
 	target->SetRange(range);
 }
 
-std::unique_ptr<Component> CameraComponent::Clone(Object* parent) {
-	std::unique_ptr<CameraComponent> comp = std::make_unique<CameraComponent>(parent);
-	comp->SetRange(range);
-	comp->pendingEnabled = Enabled;
-	comp->isMain = isMain;
-	comp->SetEnabled(false);
-	if (isMain) {
-		Camera::getInstance().mainCam = this;
-	}
-	return comp;
-}
-
 void CameraComponent::Serialize(BinaryWriter& w) {
 	Component::Serialize(w);
 	w.Write(isMain);

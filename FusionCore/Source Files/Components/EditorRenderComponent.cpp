@@ -207,15 +207,6 @@ void EditorRenderComponent::CopyTo(Object* other) {
 	target->SetEnabled(Enabled);
 }
 
-std::unique_ptr<Component> EditorRenderComponent::Clone(Object* parent) {
-	std::unique_ptr<EditorRenderComponent> comp = std::make_unique<EditorRenderComponent>(parent, parent->shader, texture_path, halfSize);
-	comp->z_index = z_index;
-	comp->color = color;
-	comp->pendingEnabled = Enabled;
-	comp->SetEnabled(false);
-	return comp;
-}
-
 void EditorRenderComponent::Serialize(BinaryWriter& w) {
 	Component::Serialize(w);
 	w.WriteString(texture_path);

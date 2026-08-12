@@ -7,6 +7,5 @@ public:
 	RevoluteConstraint() = default;
 
 	virtual void Prepare(std::vector<SolverRow>& rows, float delta);
-	virtual std::shared_ptr<Constraint> Clone();
 };
 

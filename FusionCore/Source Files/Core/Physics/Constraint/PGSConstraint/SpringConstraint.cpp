@@ -177,13 +177,6 @@ void SpringConstraint::DrawConstraintGizmo() {
 	}
 }
 
-
-std::shared_ptr<Constraint> SpringConstraint::Clone() {
-	std::shared_ptr<SpringConstraint> constraint = std::make_shared<SpringConstraint>(PhysicsBody(), PhysicsBody(), attachPointA, attachPointB, length, stiffness, damping);
-	constraint->CopyBaseFieldsFrom(this);
-	return constraint;
-}
-
 void SpringConstraint::Serialize(BinaryWriter& w) {
 	Constraint::Serialize(w);
 	w.Write(length);

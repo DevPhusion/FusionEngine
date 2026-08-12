@@ -80,40 +80,25 @@ namespace {
 
 	bool SaveCurrentWork() {
 		FileManager& FM = FileManager::getInstance();
-		bool ok = true;
 
-		if (!FM.isProjectSaved) {
-			if (!FM.currentProjectFile.empty()) {
-				FM.SaveProjectToFile(FM.currentProjectFile);
-			}
+		if (!FM.isProjectSaved && !FM.currentProjectFile.empty()) {
+			FM.SaveProjectToFile(FM.currentProjectFile);
 		}
 
-		if (!FM.isSceneSaved) {
-			if (FM.currentSceneFile.empty()) {
-				auto opts = FileDialogOptions::ForExtension("Fusion Scene", "fscene", "Save Scene");
-				opts.defaultFileName = "New Scene.fscene";
-				if (auto path = FileDialog::ShowSaveDialog(opts)) {
-					FM.SaveScene(*path);
-				}
-				else {
-					ok = false; 
-				}
-			}
-			else {
-				FM.SaveScene(FM.currentSceneFile);
-			}
+		if (SceneManager::getInstance().IsActiveSceneDirty()) {
+			return SceneTab::SaveActiveScene();
 		}
 
-		return ok;
+		return true;
 	}
 
-	std::string GetStatusDisplayName() {
-		FileManager& FM = FileManager::getInstance();
-		std::string baseName = FM.currentSceneFile.empty()
-			? "New Scene.fscene"
-			: std::filesystem::path(FM.currentSceneFile).filename().string();
+	std::string GetProjectDisplayName() {
+		const std::string& path = FileManager::getInstance().currentProjectFile;
+		std::string baseName = path.empty()
+			? "NewProject.fusion"
+			: std::filesystem::path(path).filename().string();
 
-		if (!FM.isSceneSaved || !FM.isProjectSaved)
+		if (!FileManager::getInstance().isProjectSaved)
 			baseName += "*";
 
 		return baseName;
@@ -195,22 +180,22 @@ void EngineStatus::ProcessWindow() {
 
 	if (IconButton("play", IconType::Play, isSimulating, iconDim, playGreen)) {
 		if (isStopped) {
-			FileManager& FM = FileManager::getInstance();
+			SceneManager& SM = SceneManager::getInstance();
 
-			if (!FM.isSceneSaved) {
-				if (!SaveCurrentWork()) {
+			if (SM.IsActiveSceneDirty()) {
+				if (!SceneTab::SaveActiveScene()) {
 					ImGui::End();
-					return; // user cancelled the save dialog — don't enter play
+					return; 
 				}
 			}
 
-			EngineManager::getInstance().editingScenePath = FM.currentSceneFile;
+			EngineManager::getInstance().editingScenePath = SM.GetCurrentSceneFile();
 
 			const std::string& mainScene = EngineManager::getInstance().EngineSettings.mainScenePath;
-			if (!mainScene.empty() && FM.currentSceneFile != mainScene) {
+			if (!mainScene.empty() && SM.GetCurrentSceneFile() != mainScene) {
 				std::error_code ec;
 				if (std::filesystem::exists(mainScene, ec) && !ec) {
-					FM.LoadSceneFromFile(mainScene);
+					SM.LoadSceneFromFile(mainScene);
 				}
 			}
 		}
@@ -224,14 +209,14 @@ void EngineStatus::ProcessWindow() {
 	ImGui::SameLine();
 
 	if (IconButton("stop", IconType::Stop, isStopped, iconDim, stopRed)) {
-		FileManager& FM = FileManager::getInstance();
+		SceneManager& SM = SceneManager::getInstance();
 		const std::string& editingScene = EngineManager::getInstance().editingScenePath;
 
 		if (!editingScene.empty()) {
-			FM.LoadSceneFromFile(editingScene);
+			SM.LoadSceneFromFile(editingScene);
 		}
 		else {
-			FM.NewScene();
+			SM.NewScene();
 		}
 
 		EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Stop);
@@ -245,7 +230,7 @@ void EngineStatus::ProcessWindow() {
 
 	ImGui::SameLine();
 
-	bool saveDisabled = !isStopped || FileManager::getInstance().isSceneSaved || FileManager::getInstance().isProjectSaved;
+	bool saveDisabled = !isStopped || FileManager::getInstance().isProjectSaved;
 	ImGui::BeginDisabled(saveDisabled);
 	if (ImGui::Button("Save")) {
 		SaveCurrentWork();
@@ -261,15 +246,15 @@ void EngineStatus::ProcessWindow() {
 	ImGui::SameLine();
 	{
 		char projectNameBuf[128];
-		std::string displayName = GetStatusDisplayName();
+		std::string displayName = GetProjectDisplayName();
 #if defined(_MSC_VER)
 		strcpy_s(projectNameBuf, displayName.c_str());
 #else
 		strncpy(projectNameBuf, displayName.c_str(), sizeof(projectNameBuf) - 1);
 		projectNameBuf[sizeof(projectNameBuf) - 1] = '\0';
 #endif
-		bool dirty = !FileManager::getInstance().isSceneSaved || !FileManager::getInstance().isProjectSaved;
-		const ImVec4 unsavedColor(0.95f, 0.65f, 0.25f, 1.0f); 
+		bool dirty = !FileManager::getInstance().isProjectSaved;
+		const ImVec4 unsavedColor(0.95f, 0.65f, 0.25f, 1.0f);
 		const ImVec4 savedColor = ImGui::GetStyleColorVec4(ImGuiCol_Text);
 
 		ImGui::PushStyleColor(ImGuiCol_Text, dirty ? unsavedColor : savedColor);
@@ -635,9 +620,18 @@ void EngineStatus::ProcessExportingPopup() {
 }
 
 void EngineStatus::ProcessUnsavedChangesPopup() {
-	if (EngineManager::getInstance().pendingClose == true
-		&& !ImGui::IsPopupOpen("Unsaved Changes"))
-		ImGui::OpenPopup("Unsaved Changes");
+	bool anythingUnsaved = !FileManager::getInstance().isProjectSaved
+		|| SceneManager::getInstance().AnySceneDirty();
+
+	if (EngineManager::getInstance().pendingClose) {
+		if (!anythingUnsaved) {
+			EngineManager::getInstance().pendingClose = false;
+			glfwSetWindowShouldClose(EngineManager::getInstance().Window, GLFW_TRUE);
+		}
+		else if (!ImGui::IsPopupOpen("Unsaved Changes")) {
+			ImGui::OpenPopup("Unsaved Changes");
+		}
+	}
 
 	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
 	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));

@@ -16,8 +16,16 @@ CollisionComponent::CollisionComponent(Object* parent) : ComponentBase<Collision
 		CollisionShapeEntry* entry = GetShape(firstId);
 		if (entry) SetSyncWithRenderComponent(*entry, true);
 	}
+}
 
-	onTransformCallbackID = parent->GetComponent<TransformComponent>()->AddTransformCallback([this]() {this->calculateBoundingCircle();});
+void CollisionComponent::Activate() {
+	isActive = true;
+
+	if (parent->HasComponent<FluidComponent>()) return;
+
+	onTransformCallbackID = parent->GetComponent<TransformComponent>()->AddTransformCallback([this]() {
+		this->calculateBoundingCircle();
+		});
 
 	physicsChangeEventCallbackID = EngineManager::getInstance().AddPhysicsModeChangedEvent([this]() {
 		if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) {
@@ -36,6 +44,38 @@ CollisionComponent::CollisionComponent(Object* parent) : ComponentBase<Collision
 			}
 		}
 		});
+
+	if (Enabled) SetEnabled(true);   
+}
+
+void CollisionComponent::Deactivate() {
+	if (!isActive) return;
+
+	TransformComponent* tc = parent->GetComponent<TransformComponent>();
+	if (tc && onTransformCallbackID != -1) {
+		tc->RemoveTransformCallback(onTransformCallbackID);
+		onTransformCallbackID = -1;
+	}
+
+	if (physicsChangeEventCallbackID != -1) {
+		EngineManager::getInstance().RemovePhysicsModeChangedEvent(physicsChangeEventCallbackID);
+		physicsChangeEventCallbackID = -1;
+	}
+
+	for (auto& entry : shapes) {
+		if (entry.polygonEditCallbackID != -1) {
+			Renderer::getInstance().polygonEditGizmos->EndEdit();
+			Renderer::getInstance().polygonEditGizmos->RemoveChangeCallback(entry.polygonEditCallbackID);
+			entry.polygonEditCallbackID = -1;
+			entry.isAddVertex = false;
+		}
+		if (entry.BAHnode) {
+			PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent, entry.id);
+			entry.BAHnode = nullptr;
+		}
+	}
+
+	isActive = false;
 }
 
 int CollisionComponent::AddShape(Shape shape, std::string name) {
@@ -936,34 +976,6 @@ void CollisionComponent::CopyTo(Object* other) {
 	target->SetEnabled(Enabled);
 }
 
-std::unique_ptr<Component> CollisionComponent::Clone(Object* parent) {
-	std::unique_ptr<CollisionComponent> comp = std::make_unique<CollisionComponent>(parent);
-	comp->collisionLayer = collisionLayer;
-	comp->collisionMask = collisionMask;
-	comp->isStatic = isStatic;
-
-	while (!comp->shapes.empty()) comp->RemoveShape(comp->shapes.back().id);
-	comp->resolutionShapeID = -1;
-
-	for (auto& entry : shapes) {
-		CollisionShapeEntry newEntry;
-		newEntry.id = entry.id;
-		newEntry.name = entry.name;
-		newEntry.syncWithRenderComponent = entry.syncWithRenderComponent;
-		newEntry.pendingShape = entry.currentShape;
-		comp->shapes.push_back(std::move(newEntry));
-
-		if (entry.id == resolutionShapeID) {
-			comp->resolutionShapeID = comp->shapes.back().id;
-		}
-	}
-
-	comp->nextShapeID = nextShapeID;
-	comp->pendingEnabled = Enabled;
-	comp->SetEnabled(false);
-	return comp;
-}
-
 void CollisionComponent::Serialize(BinaryWriter& w) {
 	Component::Serialize(w);
 
@@ -1193,7 +1205,6 @@ void CollisionComponent::calculateBoundingCircle(CollisionShapeEntry& entry) {
 	}
 
 	glm::vec3 center = tc->GetWorldPosition();
-
 	float radius = 0.0f;
 	for (auto& p : entry.points) {
 		glm::vec3 worldP = tc->ProjectToWorld(glm::vec3(p[0], p[1], 0.0f));
@@ -1205,6 +1216,8 @@ void CollisionComponent::calculateBoundingCircle(CollisionShapeEntry& entry) {
 	entry.boundingCircle.radius = radius;
 	entry.boundingCircle.collisionLayer = collisionLayer;
 	entry.boundingCircle.collisionMask = collisionMask;
+
+	if (!isActive) return;  
 
 	if (parent->HasComponent<FluidComponent>()) return;
 

@@ -70,10 +70,11 @@ public:
 	std::vector<CollisionShapeEntry> shapes;
 	int resolutionShapeID = -1; 
 
+	virtual void Activate();
+	virtual void Deactivate();
 	virtual void SetEnabled(bool enabled);
 	virtual void OnDelete();
 	virtual void ProcessInspectorUI();
-	virtual std::unique_ptr<Component> Clone(Object* parent);
 	virtual void CopyTo(Object* other);
 	virtual void Serialize(BinaryWriter& w);
 	virtual void Deserialize(BinaryReader& r);

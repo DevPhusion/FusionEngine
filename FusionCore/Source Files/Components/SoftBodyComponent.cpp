@@ -283,33 +283,6 @@ void SoftBodyComponent::CopyTo(Object* other) {
 	target->SetEnabled(Enabled);
 }
 
-std::unique_ptr<Component> SoftBodyComponent::Clone(Object* parent) {
-	std::unique_ptr<SoftBodyComponent> comp = std::make_unique<SoftBodyComponent>(parent);
-	comp->stiffness = stiffness;
-	float compliance = (stiffness > 0.0f) ? (1.0f / stiffness) : 0.0f;
-	for (auto* s : comp->springs) s->compliance = compliance;
-
-	comp->damping = damping;
-	for (auto* s : comp->springs) s->damping = damping;
-
-	comp->inverseMass = inverseMass;
-	float unitInvMass = inverseMass * (float)comp->MassAggregate.size();
-	for (int i = 0; i < comp->MassAggregate.size(); i++)
-	{
-		comp->MassAggregate[i]->inverseMass = unitInvMass;
-	}
-
-	comp->velocity = velocity;
-	if (comp->CenterPM) comp->CenterPM->velocity = velocity;
-
-	comp->useGasPressure = useGasPressure;
-	comp->gasAmount = gasAmount;
-
-	comp->pendingEnabled = Enabled;
-	comp->SetEnabled(false);
-	return comp;
-}
-
 void SoftBodyComponent::Serialize(BinaryWriter& w) {
 	Component::Serialize(w);
 	w.Write(stiffness);

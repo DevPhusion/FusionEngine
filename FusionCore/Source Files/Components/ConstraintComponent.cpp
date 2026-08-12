@@ -55,13 +55,6 @@ void ConstraintComponent::CopyTo(Object* other) {
     target->SetEnabled(Enabled);
 }
 
-std::unique_ptr<Component> ConstraintComponent::Clone(Object* parent) {
-    std::unique_ptr<ConstraintComponent> comp = std::make_unique<ConstraintComponent>(parent);
-    comp->pendingEnabled = Enabled;
-    comp->SetEnabled(false);
-    return comp;
-}
-
 void ConstraintComponent::Serialize(BinaryWriter& w) {
     Component::Serialize(w);
 }

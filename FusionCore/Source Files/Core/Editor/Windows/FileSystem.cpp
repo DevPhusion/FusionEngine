@@ -1,5 +1,6 @@
 #include "../../../../Header Files/Core/Editor/Windows/FileSystem.h"
 #include "../../../../Header Files/Core/Files/FileDialog.h"
+#include "../../../../Header Files/Core/SceneManager.h"
 #include <algorithm>
 #include <cctype>
 
@@ -283,7 +284,7 @@ void FileSystem::DrawNode(const FileSystemEntry& entry, int depth) {
 		OpenPathInVSCode(FileManager::getInstance().currentProjectDirectory, entry.absolutePath);
 	}
 	if (rowDoubleClicked && !isRenaming && !toggledOpen && entry.iconType == ResourceIconType::Scene) { 
-		FileManager::getInstance().LoadSceneFromFile(entry.absolutePath.string());
+		SceneManager::getInstance().OpenSceneTab(entry.absolutePath.string());
 	}
 
 	bool isRoot = entry.virtualPath == FileManager::getInstance().GetRootVirtualPath();

@@ -31,13 +31,6 @@ void MouseInteractComponent::CopyTo(Object* other) {
 	target->SetEnabled(Enabled);
 }
 
-std::unique_ptr<Component> MouseInteractComponent::Clone(Object* parent) {
-	std::unique_ptr<MouseInteractComponent> comp = std::make_unique<MouseInteractComponent>(parent, physicsInteract);
-	comp->pendingEnabled = Enabled;
-	comp->SetEnabled(false);
-	return comp;
-}
-
 void MouseInteractComponent::Serialize(BinaryWriter& w) {
 	Component::Serialize(w);
 }

@@ -98,8 +98,6 @@ public:
 
 	void Setup(GLFWwindow* window);
 	void ProcessEngine(float delta);
-	void SaveEngineState();
-	void LoadEngineState();
 	void SceneChangeEvent();
 	void EngineChangeEvent();
 	void SwitchInteractMode(InteractMode mode);

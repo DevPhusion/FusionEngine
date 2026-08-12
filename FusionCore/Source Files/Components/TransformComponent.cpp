@@ -30,22 +30,6 @@ void TransformComponent::CopyTo(Object* other) {
 	target->SetEnabled(Enabled);
 }
 
-std::unique_ptr<Component> TransformComponent::Clone(Object* parent) {
-	std::unique_ptr<TransformComponent> comp = std::make_unique<TransformComponent>(parent, parent->shader, rotation_center);
-	parent->RegisterComponentPointer(comp.get());   // <-- register before anything looks it up
-
-	comp->SetRotationCenter(rotation_center);
-	comp->SetOriginTransform(OriginTransform);
-	comp->UpdateWorldPosition(comp->GetWorldPosition());
-	
-	comp->pendingScale = size;
-	comp->pendingRotation = rotation;
-
-	comp->pendingEnabled = Enabled;
-	comp->SetEnabled(false);
-	return comp;
-}
-
 void TransformComponent::Serialize(BinaryWriter& w) {
 	Component::Serialize(w);
 

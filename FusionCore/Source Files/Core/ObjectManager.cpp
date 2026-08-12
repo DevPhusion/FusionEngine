@@ -7,6 +7,9 @@ void ObjectManager::AddObject(Object* parent) {
 	obj->AddComponent(std::make_unique<EditorRenderComponent>(obj.get(), obj.get()->shader, "Resources/Images/Object.png", 0.075f));
 	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj.get()->shader, obj.get()->GetComponent<EditorRenderComponent>()->GetCenter()));
 	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), false));
+	for (auto& c : obj->components) {
+		c->Activate();
+	}
 	obj->addedToScene = true;
 	obj->SetParent(parent);
 	EditorManager::getInstance().RegisterObjectCreated(obj.get());
@@ -21,6 +24,9 @@ void ObjectManager::AddCamera(Object* parent) {
 	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj.get()->shader, obj.get()->GetComponent<EditorRenderComponent>()->GetCenter()));
 	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), false));
 	obj->AddComponent(std::make_unique<CameraComponent>(obj.get()));
+	for (auto& c : obj->components) {
+		c->Activate();
+	}
 
 	obj->addedToScene = true;
 	obj->SetParent(parent);
@@ -45,6 +51,9 @@ void ObjectManager::AddBox(Object* parent) {
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<RigidBodyComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<ConstraintComponent>(obj.get()));
+	for (auto& c : obj->components) {
+		c->Activate();
+	}
 
 	obj->addedToScene = true;
 	obj->SetParent(parent);
@@ -68,6 +77,9 @@ void ObjectManager::AddCircle(Object* parent) {
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<RigidBodyComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<ConstraintComponent>(obj.get()));
+	for (auto& c : obj->components) {
+		c->Activate();
+	}
 
 	obj->addedToScene = true;
 	obj->SetParent(parent);
@@ -117,6 +129,9 @@ void ObjectManager::AddPolygon(Object* parent) {
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<RigidBodyComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<ConstraintComponent>(obj.get()));
+	for (auto& c : obj->components) {
+		c->Activate();
+	}
 
 	obj->addedToScene = true;
 	obj->SetParent(parent);
@@ -143,6 +158,10 @@ void ObjectManager::AddSoftBox(Object* parent) {
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<SoftBodyComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<ConstraintComponent>(obj.get()));
+	for (auto& c : obj->components) {
+		c->Activate();
+	}
+
 	obj->addedToScene = true;
 	obj->SetParent(parent);
 	EditorManager::getInstance().RegisterObjectCreated(obj.get());
@@ -165,6 +184,10 @@ void ObjectManager::AddSoftCircle(Object* parent) {
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<SoftBodyComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<ConstraintComponent>(obj.get()));
+	for (auto& c : obj->components) {
+		c->Activate();
+	}
+
 	obj->addedToScene = true;
 	obj->SetParent(parent);
 	EditorManager::getInstance().RegisterObjectCreated(obj.get());
@@ -213,6 +236,9 @@ void ObjectManager::AddSoftPolygon(Object* parent) {
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<SoftBodyComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<ConstraintComponent>(obj.get()));
+	for (auto& c : obj->components) {
+		c->Activate();
+	}
 
 	obj->addedToScene = true;
 	obj->SetParent(parent);
@@ -239,6 +265,10 @@ void ObjectManager::AddFluid(Object* parent) {
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<FluidComponent>(obj.get()));
 	FluidComponent* fc = obj->GetComponent<FluidComponent>();
+	for (auto& c : obj->components) {
+		c->Activate();
+	}
+
 	obj->addedToScene = true;
 	obj->SetParent(parent);
 	EditorManager::getInstance().RegisterObjectCreated(obj.get());
@@ -267,6 +297,9 @@ void ObjectManager::FlushPendingObjects() {
 	if (pendingObjects.empty()) return;
 
 	for (auto& obj : pendingObjects) {
+		for (auto& c : obj->components) {
+			c->Activate();
+		}
 		allObjects.push_back(std::move(obj));
 	}
 	pendingObjects.clear();
@@ -313,6 +346,10 @@ Object* ObjectManager::CopyObject(Object* obj) {
 	for (int i = 0; i < newObj->components.size(); i++)
 	{
 		newObj->components[i]->PostLoad();
+	}
+
+	for (auto& c : newObj->components) {
+		c->Activate();
 	}
 
 	std::string baseName = obj->name.empty() ? "Object" : obj->name;
@@ -374,7 +411,7 @@ void ObjectManager::QueueRemoveObject(Object* obj) {
 	if (!obj) return;
 
 	for (Object* o : pendingRemovals) {
-		if (o == obj) return; // already queued, don't double-remove
+		if (o == obj) return; 
 	}
 	pendingRemovals.push_back(obj);
 }

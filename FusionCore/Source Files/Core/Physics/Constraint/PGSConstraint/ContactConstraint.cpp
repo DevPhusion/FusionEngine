@@ -119,7 +119,3 @@ void ContactConstraint::PostSolve(std::vector<SolverRow>& allRows) {
     this->cacheLambda = allRows[this->normalRowOffsetIndex].lambda;
     this->cacheFrictionLambda = allRows[this->frictionRowOffsetIndex].lambda;
 }
-
-std::shared_ptr<Constraint> ContactConstraint::Clone() {
-    return nullptr;
-}

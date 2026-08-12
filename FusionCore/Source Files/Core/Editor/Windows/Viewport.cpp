@@ -64,6 +64,10 @@ void Viewport::Resize(int width, int height) {
 }
 
 void Viewport::ProcessWindow() {
+	ImGuiWindowClass statusWindowClass;
+	statusWindowClass.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_AutoHideTabBar;
+	ImGui::SetNextWindowClass(&statusWindowClass);
+
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
 	ImGui::Begin(name.c_str());
 

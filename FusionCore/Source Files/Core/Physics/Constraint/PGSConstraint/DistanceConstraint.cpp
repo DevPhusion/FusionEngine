@@ -103,13 +103,6 @@ void DistanceConstraint::DrawConstraintGizmo() {
 	DrawConstraintLine(glm::vec4(1.0f, 1.0f, 1.0f, 1.0f), 6.0f);
 }
 
-std::shared_ptr<Constraint> DistanceConstraint::Clone() {
-	std::shared_ptr<DistanceConstraint> constraint = std::make_shared<DistanceConstraint>(PhysicsBody(), PhysicsBody(), attachPointA, attachPointB, distance, retractable, extendable);
-	constraint->CopyBaseFieldsFrom(this);
-	Renderer::getInstance().constraintEditGizmos->UnregisterConstraint(constraint.get());
-	return constraint;
-}
-
 void DistanceConstraint::Serialize(BinaryWriter& w) {
 	Constraint::Serialize(w);
 	w.Write(distance);

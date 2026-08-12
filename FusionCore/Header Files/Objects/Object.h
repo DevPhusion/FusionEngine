@@ -104,19 +104,6 @@ public:
 		}
 	}
 
-	std::unique_ptr<Object> Clone() {
-		std::unique_ptr<Object> obj = std::make_unique<Object>(shader);
-		for (int i = 0; i < this->components.size(); i++)
-		{
-			obj->AddComponent(this->components[i]->Clone(obj.get()));
-		}
-		obj->id = id;
-		obj->name = name;
-		obj->parentID = parentID;
-		obj->hidden = hidden;
-		return obj;
-	}
-
 	void Serialize(BinaryWriter& w);
 
 	void Deserialize(BinaryReader& r);

@@ -6,6 +6,7 @@
 #include "Windows/EngineProfiler.h"
 #include "Windows/Console.h"
 #include "Windows/Viewport.h"
+#include "Windows/SceneTab.h"
 #include "../EngineManager.h"
 #include "../../../imgui/implot.h"
 #include <vector>

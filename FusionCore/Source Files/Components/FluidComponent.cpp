@@ -433,24 +433,6 @@ void FluidComponent::CopyTo(Object* other) {
 	target->SetEnabled(Enabled);
 }
 
-std::unique_ptr<Component> FluidComponent::Clone(Object* parent) {
-	std::unique_ptr<FluidComponent> comp = std::make_unique<FluidComponent>(parent);
-	comp->desiredParticleCount = desiredParticleCount;
-	comp->color = color;
-	comp->outlineColor = outlineColor;
-	comp->particleRadius = particleRadius;
-	comp->collisionRadius = collisionRadius;
-	comp->particleMass = particleMass;
-	comp->restDensity = restDensity;
-	comp->viscosity = viscosity;
-	comp->vorticityStrength = vorticityStrength;
-	comp->epsilon = epsilon;
-	comp->smoothingRadius = smoothingRadius;
-	comp->pendingEnabled = Enabled;
-	comp->SetEnabled(false);
-	return comp;
-}
-
 void FluidComponent::Serialize(BinaryWriter& w) {
 	Component::Serialize(w);
 	w.Write(desiredParticleCount);

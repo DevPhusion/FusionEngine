@@ -45,14 +45,9 @@ public:
 	static constexpr uint32_t magicByte = 0x4E535546;
 	static constexpr uint32_t version = 1;
 
-	static constexpr uint32_t sceneMagicByte = 0x4A52504A;
-	static constexpr uint32_t sceneVersion = 1;
-
-	bool isSceneSaved = false; 
 	bool isProjectSaved = false;
 	std::string currentProjectFile = "";
 	std::string currentProjectDirectory = "";
-	std::string currentSceneFile = "";
 
 	void ProcessScriptInSubtree(const std::string& virtualPath, const std::function<void(const std::string&)>& callback) const;
 
@@ -88,10 +83,6 @@ public:
 	void LoadProjectFromStream(std::istream& in);
 	void LoadProjectFromMemory(const std::vector<uint8_t>& data);
 	void NewProject();
-
-	void SaveScene(const std::string& path);
-	void LoadSceneFromFile(const std::string& path);
-	void NewScene();
 
 	bool IsRestoring() const { return isRestoring; }
 	std::vector<uint8_t> SnapshotObjects(const std::vector<Object*>& roots) const;

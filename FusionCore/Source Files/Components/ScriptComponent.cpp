@@ -93,23 +93,6 @@ void ScriptComponent::CopyTo(Object* other) {
 	target->SetEnabled(Enabled);
 }
 
-std::unique_ptr<Component> ScriptComponent::Clone(Object* parent) {
-	std::unique_ptr<ScriptComponent> comp = std::make_unique<ScriptComponent>(parent, "");
-	comp->SetSourcePath(sourcePath);
-	comp->pendingExportedValues = loaded ? exportedProperties : pendingExportedValues;
-
-	for (auto& prop : comp->pendingExportedValues) {
-		if (std::holds_alternative<ObjectRef>(prop.value)) {
-			std::get<ObjectRef>(prop.value).ptr = nullptr; 
-		}
-	}
-
-	comp->pendingEnabled = Enabled;
-	comp->SetEnabled(false);
-
-	return comp;
-}
-
 void ScriptComponent::Serialize(BinaryWriter& w) {
 	Component::Serialize(w);
 	w.WriteString(sourcePath);

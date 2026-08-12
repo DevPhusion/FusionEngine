@@ -27,6 +27,5 @@ public:
 	virtual void Prepare(std::vector<SolverRow>& rows, float delta);
 	virtual void PostIterationClamp(std::vector<SolverRow>& allRows, int myRowIndex, int velocityIteration);
 	virtual void PostSolve(std::vector<SolverRow>& allRows);
-	virtual std::shared_ptr<Constraint> Clone();
 };
 

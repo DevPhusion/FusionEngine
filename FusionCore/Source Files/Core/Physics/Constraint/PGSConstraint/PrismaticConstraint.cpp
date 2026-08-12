@@ -158,12 +158,6 @@ void PrismaticConstraint::DrawConstraintGizmo() {
     }
 }
 
-std::shared_ptr<Constraint> PrismaticConstraint::Clone() {
-    std::shared_ptr<PrismaticConstraint> constraint = std::make_shared<PrismaticConstraint>(PhysicsBody(), PhysicsBody(), attachPointA, attachPointB, dir);
-    constraint->CopyBaseFieldsFrom(this);
-    return constraint;
-}
-
 void PrismaticConstraint::Serialize(BinaryWriter& w) {
     Constraint::Serialize(w);
     w.Write(dir);

@@ -22,7 +22,6 @@ public:
 
     virtual void ProcessInspectorUI();
     virtual void OnDelete();
-    virtual std::unique_ptr<Component> Clone(Object* parent);
     virtual void CopyTo(Object* other);
     virtual void Serialize(BinaryWriter& w);
     virtual void Deserialize(BinaryReader& r);

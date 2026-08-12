@@ -3218,6 +3218,10 @@ Object* PhysicsEngine::CreateFractureShard(Object* source, const std::vector<glm
 		shard->RemoveComponent<FractureComponent>();
 	}
 
+	for (auto& c : shard->components) {
+		c->Activate();
+	}
+
 	Object* shardPtr = shard.get();
 	allObjects->push_back(std::move(shard));
 	return shardPtr;
