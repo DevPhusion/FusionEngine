@@ -3,14 +3,67 @@
 
 SoftBodyComponent::SoftBodyComponent(Object* parent) : ComponentBase<SoftBodyComponent>(parent) {
 	Name = "Soft Body Component";
-	BuildMassAggregate();
+}
 
-	transformCallbackID = parent->GetComponent<TransformComponent>()->AddTransformCallback([this] {UpdateMassAggregate();});
-	setShapeCallbackID = parent->GetComponent<RenderComponent>()->AddOnShapeSetCallback([this] {RebuildMassAggregate();});
+void SoftBodyComponent::Activate() {
+	isActive = true;
+
+	transformCallbackID = parent->GetComponent<TransformComponent>()->AddTransformCallback([this] { UpdateMassAggregate(); });
+	setShapeCallbackID = parent->GetComponent<RenderComponent>()->AddOnShapeSetCallback([this] { RebuildMassAggregate(); });
 
 	if (parent->HasComponent<MouseInteractComponent>()) {
 		parent->GetComponent<MouseInteractComponent>()->physicsInteract = true;
 	}
+
+	if (Enabled) {
+		RebuildMassAggregate();
+	}
+}
+
+void SoftBodyComponent::Deactivate() {
+	for (XPBDDistanceConstraint* s : springs)
+		PhysicsEngine::getInstance().UnRegisterXPBDConstraint(s);
+	springs.clear();
+
+	if (areaConstraint) PhysicsEngine::getInstance().UnRegisterXPBDConstraint(areaConstraint);
+	areaConstraint = nullptr;
+
+	for (XPBDTriAreaConstraint* t : triAreaConstraints)
+		PhysicsEngine::getInstance().UnRegisterXPBDConstraint(t);
+	triAreaConstraints.clear();
+
+	auto& allProxies = PhysicsEngine::getInstance().allSoftBodyProxies;
+	for (auto* link : proxyLinks)
+		PhysicsEngine::getInstance().UnRegisterXPBDConstraint(link);
+	for (auto& proxy : VirtualProxies) {
+		PointMass* target = proxy.get();
+		allProxies.erase(std::remove(allProxies.begin(), allProxies.end(), target), allProxies.end());
+	}
+	proxyLinks.clear();
+	VirtualProxies.clear();
+
+	auto& allPms = PhysicsEngine::getInstance().allSoftBodyPointMasses;
+	for (auto& pm : MassAggregate) {
+		PointMass* target = pm.get();
+		allPms.erase(std::remove(allPms.begin(), allPms.end(), target), allPms.end());
+	}
+	MassAggregate.clear();
+
+	for (auto& pm : AdditionalPointMasses) {
+		PointMass* target = pm.get();
+		allPms.erase(std::remove(allPms.begin(), allPms.end(), target), allPms.end());
+	}
+	AdditionalPointMasses.clear();
+
+	TransformComponent* tc = parent->GetComponent<TransformComponent>();
+	if (tc && transformCallbackID != -1) tc->RemoveTransformCallback(transformCallbackID);
+	transformCallbackID = -1;
+
+	RenderComponent* rc = parent->GetComponent<RenderComponent>();
+	if (rc && setShapeCallbackID != -1) rc->RemoveOnShapeSetCallback(setShapeCallbackID);
+	setShapeCallbackID = -1;
+
+	isActive = false;
 }
 
 void SoftBodyComponent::ProcessSoftBody(float delta) {
@@ -368,50 +421,7 @@ void SoftBodyComponent::SetEnabled(bool Enabled) {
 }
 
 void SoftBodyComponent::OnDelete() {
-	for (XPBDDistanceConstraint* s : springs)
-		PhysicsEngine::getInstance().UnRegisterXPBDConstraint(s);
-	springs.clear();
-	PhysicsEngine::getInstance().UnRegisterXPBDConstraint(areaConstraint);
-
-	for (XPBDTriAreaConstraint* t : triAreaConstraints)
-		PhysicsEngine::getInstance().UnRegisterXPBDConstraint(t);
-	triAreaConstraints.clear();
-
-	auto& allProxies = PhysicsEngine::getInstance().allSoftBodyProxies;
-
-	for (int i = 0; i < proxyLinks.size(); i++)
-	{
-		PhysicsEngine::getInstance().UnRegisterXPBDConstraint(proxyLinks[i]);
-	}
-
-	for (int i = 0; i < VirtualProxies.size(); i++)
-	{
-		PointMass* target = VirtualProxies[i].get();
-		allProxies.erase(std::remove(allProxies.begin(), allProxies.end(), target), allProxies.end());
-	}
-
-	proxyLinks.clear();
-	VirtualProxies.clear();
-
-	auto& allPms = PhysicsEngine::getInstance().allSoftBodyPointMasses;  
-	for (int i = 0; i < MassAggregate.size(); i++)
-	{
-		PointMass* target = MassAggregate[i].get();
-		allPms.erase(std::remove(allPms.begin(), allPms.end(), target), allPms.end());
-	}
-
-	MassAggregate.clear();
-
-	for (int i = 0; i < AdditionalPointMasses.size(); i++) {
-		PointMass* target = AdditionalPointMasses[i].get();
-		allPms.erase(std::remove(allPms.begin(), allPms.end(), target), allPms.end());
-	}
-	AdditionalPointMasses.clear();
-
-	TransformComponent* tc = parent->GetComponent<TransformComponent>();
-	if (tc) tc->RemoveTransformCallback(transformCallbackID);
-	RenderComponent* rc = parent->GetComponent<RenderComponent>();
-	if (rc) rc->RemoveOnShapeSetCallback(setShapeCallbackID);
+	Deactivate();
 }
 
 std::vector<SoftEdge> SoftBodyComponent::GetEdgesFromMassAggregate() {

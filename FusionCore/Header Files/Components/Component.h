@@ -27,8 +27,8 @@ public:
 
 	std::string Name;
 
-	virtual void Activate() {}
-	virtual void Deactivate() {}
+	virtual void Activate() { isActive = true; }
+	virtual void Deactivate() { isActive = false; }
 	virtual void SetEnabled(bool enabled);
 	virtual size_t GetTypeID() const = 0;
 	virtual void CopyTo(Object* other) = 0;

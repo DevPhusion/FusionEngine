@@ -16,18 +16,34 @@ Constraint::Constraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attac
 
     this->attachPointA = attachPointA;
     this->attachPointB = attachPointB;
-
-	Renderer::getInstance().constraintEditGizmos->RegisterConstraint(this);
-	EngineManager::getInstance().AddPhysicsModeChangedEvent([this]() {
-		if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::Simulate &&
-            EngineManager::getInstance().EngineInteractMode == EngineManager::ConstraintEdit) {
-			EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
-		}
-	});
 }
 
 Constraint::~Constraint() {
+    Deactivate();
+}
+
+void Constraint::Activate() {
+    if (isActive) return;
+    isActive = true;
+
+    Renderer::getInstance().constraintEditGizmos->RegisterConstraint(this);
+    physicsModeChangedCallbackID = EngineManager::getInstance().AddPhysicsModeChangedEvent([this]() {
+        if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::Simulate &&
+            EngineManager::getInstance().EngineInteractMode == EngineManager::ConstraintEdit) {
+            EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
+        }
+        });
+}
+
+void Constraint::Deactivate() {
+    if (!isActive) return;
+    isActive = false;
+
     Renderer::getInstance().constraintEditGizmos->UnregisterConstraint(this);
+    if (physicsModeChangedCallbackID != -1) {
+        EngineManager::getInstance().RemovePhysicsModeChangedEvent(physicsModeChangedCallbackID);
+        physicsModeChangedCallbackID = -1;
+    }
 }
 
 void Constraint::RemoveMirrorFromObjectB()
@@ -82,6 +98,7 @@ void Constraint::SetObjectB(PhysicsBody obj)
     ConstraintComponent* cc = obj.obj->GetComponent<ConstraintComponent>();
     if (cc == nullptr) {
         auto newCC = std::make_unique<ConstraintComponent>(obj.obj);
+        newCC->Activate();
         newCC->mirroredConstraints.push_back(this);
         obj.obj->AddComponent(std::move(newCC));
     }
@@ -99,7 +116,7 @@ void Constraint::SetObjectB(PhysicsBody obj)
 void Constraint::Unregister()
 {
     RemoveMirrorFromObjectB();
-    Renderer::getInstance().constraintEditGizmos->UnregisterConstraint(this);
+    Deactivate();
     SetObjectA(PhysicsBody());
     SetObjectB(PhysicsBody());
 }
@@ -307,7 +324,6 @@ void Constraint::ProcessInspectorUI(Object* parent)
             for (auto& objPtr : om.allObjects)
             {
                 Object* candidate = objPtr.get();
-                if (candidate->hideInHierarchy || candidate == objectA.obj) continue;
 
                 if (ImGui::Selectable(candidate->name.c_str()))
                 {

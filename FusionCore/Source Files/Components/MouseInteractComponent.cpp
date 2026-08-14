@@ -5,18 +5,6 @@ bool MouseInteractComponent::ObjectSelected = false;
 MouseInteractComponent::MouseInteractComponent(Object* parent, bool physicsInteract) : ComponentBase<MouseInteractComponent>(parent) {
 	Name = "Mouse Interact Component";
 	this->physicsInteract = physicsInteract;
-
-	int priority = 0;
-	if (parent->HasComponent<RenderComponent>()) {
-		priority = parent->GetComponent<RenderComponent>()->z_index;
-	}
-	else if (parent->HasComponent<EditorRenderComponent>()) {
-		priority = parent->GetComponent<EditorRenderComponent>()->z_index;
-	}
-
-	mouseButtonCallbackID = InputManager::getInstance().SetMouseButtonCallback([this](int button, int action, int mods) {this->FindSelectedPolygon(button, action, mods);}, priority);
-	cursorPosCallbackID = InputManager::getInstance().SetCursorPositionCallback([this](double xpos, double ypos) {this->DragPolygon(xpos, ypos);}, priority);
-	physicsModeChangedCallbackID = EngineManager::getInstance().AddPhysicsModeChangedEvent([this]() {this->OnPhysicsModeChanged();});
 	Hidden = true;
 }
 
@@ -31,6 +19,51 @@ void MouseInteractComponent::CopyTo(Object* other) {
 	target->SetEnabled(Enabled);
 }
 
+void MouseInteractComponent::RegisterCallbacks() {
+	int priority = 0;
+	if (parent->HasComponent<RenderComponent>()) {
+		priority = parent->GetComponent<RenderComponent>()->z_index;
+	}
+	else if (parent->HasComponent<EditorRenderComponent>()) {
+		priority = parent->GetComponent<EditorRenderComponent>()->z_index;
+	}
+
+	mouseButtonCallbackID = InputManager::getInstance().SetMouseButtonCallback([this](int button, int action, int mods) {this->FindSelectedPolygon(button, action, mods);}, priority);
+	cursorPosCallbackID = InputManager::getInstance().SetCursorPositionCallback([this](double xpos, double ypos) {this->DragPolygon(xpos, ypos);}, priority);
+	physicsModeChangedCallbackID = EngineManager::getInstance().AddPhysicsModeChangedEvent([this]() {this->OnPhysicsModeChanged();});
+}
+
+void MouseInteractComponent::UnregisterCallbacks() {
+	InputManager::getInstance().RemoveMouseButtonCallback(mouseButtonCallbackID);
+	InputManager::getInstance().RemoveCursorPositionCallback(cursorPosCallbackID);
+	EngineManager::getInstance().RemovePhysicsModeChangedEvent(physicsModeChangedCallbackID);
+	mouseButtonCallbackID = {};
+	cursorPosCallbackID = {};
+	physicsModeChangedCallbackID = -1;
+}
+
+void MouseInteractComponent::Activate() {
+	if (isActive) return;
+	isActive = true;
+	RegisterCallbacks();
+}
+
+void MouseInteractComponent::Deactivate() {
+	if (!isActive) return;
+	isActive = false;
+	UnregisterCallbacks();
+
+	if (Selected) {
+		Selected = false;
+		ObjectSelected = false;
+	}
+	isEditingViaMouse = false;
+
+	if (parent && parent->HasComponent<RigidBodyComponent>()) {
+		parent->GetComponent<RigidBodyComponent>()->isDragging = false;
+	}
+}
+
 void MouseInteractComponent::Serialize(BinaryWriter& w) {
 	Component::Serialize(w);
 }
@@ -43,13 +76,7 @@ void MouseInteractComponent::ProcessInspectorUI() {
 }
 
 void MouseInteractComponent::OnDelete() {
-	InputManager::getInstance().RemoveMouseButtonCallback(mouseButtonCallbackID);
-	InputManager::getInstance().RemoveCursorPositionCallback(cursorPosCallbackID);
-	EngineManager::getInstance().RemovePhysicsModeChangedEvent(physicsModeChangedCallbackID);
-
-	if (parent && parent->HasComponent<RigidBodyComponent>()) {
-		parent->GetComponent<RigidBodyComponent>()->isDragging = false;
-	}
+	Deactivate();
 }
 
 void MouseInteractComponent::SetSelectedPolygon(Object* obj, bool enable) {

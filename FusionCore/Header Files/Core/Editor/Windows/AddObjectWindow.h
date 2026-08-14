@@ -10,7 +10,11 @@ public:
 	std::string SelectedType = "";
 	Object* parent = nullptr;
 
+	std::vector<std::string> sceneFiles; 
+	void RefreshSceneList();
+
 	AddObjectWindow(std::string name);
+	virtual void Show();
 	virtual void ProcessWindow();
 };
 

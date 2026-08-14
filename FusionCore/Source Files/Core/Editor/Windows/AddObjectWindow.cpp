@@ -1,8 +1,32 @@
 #include "../../../../Header Files/Core/Editor/Windows/AddObjectWindow.h"
 #include "../../../../Header Files/Core/ObjectManager.h"
+#include "../../../../Header Files/Core/SceneManager.h"
 
 AddObjectWindow::AddObjectWindow(std::string name) {
 	this->name = name;
+	RefreshSceneList();
+}
+
+void AddObjectWindow::RefreshSceneList() {
+	sceneFiles.clear();
+
+	std::function<void(const std::string&)> scan = [&](const std::string& virtualPath) {
+		for (auto& entry : FileManager::getInstance().GetDirectoryContents(virtualPath)) {
+			if (entry.isDirectory) {
+				scan(entry.virtualPath);
+			}
+			else if (entry.iconType == ResourceIconType::Scene) {
+				sceneFiles.push_back(entry.absolutePath.string());
+			}
+		}
+		};
+	scan(FileManager::getInstance().GetRootVirtualPath());
+}
+
+void AddObjectWindow::Show() {
+	EditorWindow::Show();
+
+	RefreshSceneList();
 }
 
 void AddObjectWindow::ProcessWindow() {
@@ -19,7 +43,7 @@ void AddObjectWindow::ProcessWindow() {
 
 	if (EngineManager::getInstance().EngineInteractMode == EngineManager::InteractMode::EditorSelect) {
 		if (ImGui::TreeNodeEx("Add Object", root_flags)) {
-		
+
 			for (int i = 0; i < ObjectTypes.size(); i++)
 			{
 				ImGuiTreeNodeFlags item_flags = ImGuiTreeNodeFlags_Leaf |
@@ -33,6 +57,29 @@ void AddObjectWindow::ProcessWindow() {
 				ImGui::TreeNodeEx(ObjectTypes[i].c_str(), item_flags);
 				if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
 					SelectedType = ObjectTypes[i];
+				}
+			}
+
+			ImGui::TreePop();
+		}
+
+		if (ImGui::TreeNodeEx("Add Scene", root_flags)) {
+			if (sceneFiles.empty()) {
+				ImGui::TextDisabled("(no .fscene files found in this project)");
+			}
+
+			for (auto& scenePath : sceneFiles) {
+				if (scenePath == SceneManager::getInstance().GetScene(SceneManager::getInstance().GetActiveIndex()).filePath) continue;
+				std::string displayName = std::filesystem::path(scenePath).stem().string();
+
+				ImGuiTreeNodeFlags item_flags = ImGuiTreeNodeFlags_Leaf |
+					ImGuiTreeNodeFlags_NoTreePushOnOpen |
+					ImGuiTreeNodeFlags_SpanAvailWidth;
+
+				ImGui::TreeNodeEx(displayName.c_str(), item_flags);
+				if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
+					SceneManager::getInstance().AddScene(scenePath, parent);
+					Hide();
 				}
 			}
 
@@ -109,7 +156,7 @@ void AddObjectWindow::ProcessWindow() {
 		}
 	}
 
-	ImGui::SameLine(); 
+	ImGui::SameLine();
 
 	if (ImGui::Button("Close", ImVec2(button_width, 0.0f))) {
 		if (EngineManager::getInstance().EngineInteractMode == EngineManager::InteractMode::AddVertex) {

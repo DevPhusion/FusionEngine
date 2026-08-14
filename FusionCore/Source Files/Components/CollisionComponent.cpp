@@ -19,6 +19,7 @@ CollisionComponent::CollisionComponent(Object* parent) : ComponentBase<Collision
 }
 
 void CollisionComponent::Activate() {
+	if (isActive) return;
 	isActive = true;
 
 	if (parent->HasComponent<FluidComponent>()) return;
@@ -1144,30 +1145,7 @@ void CollisionComponent::SetEnabled(bool enabled) {
 }
 
 void CollisionComponent::OnDelete() {
-	TransformComponent* tc = parent->GetComponent<TransformComponent>();
-	if (tc) tc->RemoveTransformCallback(onTransformCallbackID);
-
-	if (physicsChangeEventCallbackID != -1) {
-		EngineManager::getInstance().RemovePhysicsModeChangedEvent(physicsChangeEventCallbackID);
-		physicsChangeEventCallbackID = -1;
-	}
-
-	RenderComponent* rc = parent->GetComponent<RenderComponent>();
-	for (auto& entry : shapes) {
-		if (entry.renderSyncCallbackID != -1) {
-			if (rc) rc->RemoveOnShapeSetCallback(entry.renderSyncCallbackID);
-			entry.renderSyncCallbackID = -1;
-		}
-		if (entry.polygonEditCallbackID != -1) {
-			Renderer::getInstance().polygonEditGizmos->RemoveChangeCallback(entry.polygonEditCallbackID);
-			entry.polygonEditCallbackID = -1;
-		}
-		if (entry.BAHnode) {
-			PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent, entry.id);
-			entry.BAHnode = nullptr;
-		}
-	}
-
+	Deactivate();  
 	PhysicsEngine::getInstance().PurgeObjectFromCollisionTracking(parent);
 }
 

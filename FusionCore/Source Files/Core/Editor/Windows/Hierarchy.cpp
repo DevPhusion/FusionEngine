@@ -49,6 +49,49 @@ namespace {
 
 		return clicked;
 	}
+
+	static ImU32 SceneIconColor(bool isOpen) {
+		if (isOpen) return IM_COL32(120, 190, 255, 255); 
+		return IM_COL32(200, 200, 200, 255);
+	}
+
+	static void DrawSceneIcon(ImDrawList* drawList, ImVec2 center, float size, bool isOpen) {
+		ImU32 color = SceneIconColor(isOpen);
+
+		float halfW = size * 0.34f;
+		float halfH = size * 0.42f;
+		float fold = size * 0.16f;
+		float thickness = size * 0.09f;
+
+		ImVec2 topLeft(center.x - halfW, center.y - halfH);
+		ImVec2 topRight(center.x + halfW, center.y - halfH);
+		ImVec2 bottomRight(center.x + halfW, center.y + halfH);
+		ImVec2 bottomLeft(center.x - halfW, center.y + halfH);
+		ImVec2 foldStart(topRight.x - fold, topRight.y);
+		ImVec2 foldEnd(topRight.x, topRight.y + fold);
+
+		ImVec2 outline[6] = { topLeft, foldStart, foldEnd, bottomRight, bottomLeft, topLeft };
+		drawList->AddPolyline(outline, 6, color, ImDrawFlags_None, thickness);
+
+		drawList->AddTriangleFilled(foldStart, topRight, foldEnd, color);
+
+		float lineY1 = center.y - halfH * 0.05f;
+		float lineY2 = center.y + halfH * 0.5f;
+		drawList->AddLine(ImVec2(center.x - halfW * 0.55f, lineY1), ImVec2(center.x + halfW * 0.35f, lineY1), color, thickness * 0.7f);
+		drawList->AddLine(ImVec2(center.x - halfW * 0.55f, lineY2), ImVec2(center.x + halfW * 0.35f, lineY2), color, thickness * 0.7f);
+	}
+
+	static bool DrawSceneToggleButton(const char* strId, float size, bool isOpen) {
+		ImVec2 pos = ImGui::GetCursorScreenPos();
+		ImGui::InvisibleButton(strId, ImVec2(size, size));
+		bool clicked = ImGui::IsItemClicked();
+
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+		ImVec2 center(pos.x + size * 0.5f, pos.y + size * 0.5f);
+		DrawSceneIcon(drawList, center, size, isOpen);
+
+		return clicked;
+	}
 }
 
 Hierarchy::Hierarchy(std::string name) {
@@ -142,7 +185,12 @@ void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* re
 			if (EditorManager::getInstance().selectedObject == currentObj) {
 				EditorManager::getInstance().SetSelectedObject(nullptr);
 			}
-			ObjectManager::getInstance().RemoveObject(currentObj);
+			if (currentObj->isSceneRoot) {
+				SceneManager::getInstance().RemoveScene(currentObj);
+			}
+			else {
+				ObjectManager::getInstance().RemoveObject(currentObj);
+			}
 			EngineManager::getInstance().SceneChangeEvent();
 			nodeDeleted = true;
 		}
@@ -229,8 +277,28 @@ void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* re
 
 	float eyeIconSize = ImGui::GetFrameHeight() * 0.6f;
 	float rightPadding = ImGui::GetStyle().ScrollbarSize > 0.0f ? ImGui::GetStyle().ScrollbarSize + 2.0f : 4.0f;
+	float iconSpacing = 4.0f;
 
-	ImGui::SameLine(availWidth - eyeIconSize - rightPadding);
+	float eyeIconX = availWidth - eyeIconSize - rightPadding;
+
+	if (currentObj->isSceneRoot) {
+		float sceneIconSize = eyeIconSize;
+		float sceneIconX = eyeIconX - sceneIconSize - iconSpacing;
+
+		ImGui::SameLine(sceneIconX);
+
+		bool isOpen = SceneManager::getInstance().FindSceneByPath(currentObj->sourceScenePath) != -1;
+		std::string sceneId = "##scene_" + std::to_string(currentObj->id);
+
+		if (DrawSceneToggleButton(sceneId.c_str(), sceneIconSize, isOpen)) {
+			SceneManager::getInstance().OpenSceneTab(currentObj->sourceScenePath);
+		}
+		if (ImGui::IsItemHovered()) {
+			ImGui::SetTooltip(isOpen ? "Switch to Scene" : "Open Scene");
+		}
+	}
+
+	ImGui::SameLine(eyeIconX);
 
 	std::string eyeId = "##eye_" + std::to_string(currentObj->id);
 	if (DrawEyeToggleButton(eyeId.c_str(), currentObj->hidden, eyeIconSize)) {
@@ -308,7 +376,7 @@ void Hierarchy::ProcessWindow() {
 			Object* currentObj = (*obj)[i].get();
 
 			if (currentObj == nullptr) continue;
-			if (currentObj->parent != nullptr) continue; // only root-level objects here; children are drawn recursively
+			if (currentObj->parent != nullptr) continue; 
 
 			DrawObjectNode(currentObj, filter_buffer, renameBuffer);
 		}
@@ -325,7 +393,12 @@ void Hierarchy::OnKeyPressed(int key, int scancode, int action, int mods) {
 		if (EditorManager::getInstance().selectedObject != nullptr) {
 			Object* obj = EditorManager::getInstance().selectedObject;
 			EditorManager::getInstance().SetSelectedObject(nullptr);
-			ObjectManager::getInstance().RemoveObject(obj);
+			if (obj->isSceneRoot) {
+				SceneManager::getInstance().RemoveScene(obj);
+			}
+			else {
+				ObjectManager::getInstance().RemoveObject(obj);
+			}
 		}
 	}
 	if (InputManager::getInstance().keys[GLFW_KEY_LEFT_CONTROL] && InputManager::getInstance().keys[GLFW_KEY_D]) {

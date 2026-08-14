@@ -32,6 +32,8 @@ public:
 	bool hideInHierarchy = false;
 	bool hidden = false;
 	bool addedToScene = false;
+	bool isSceneRoot = false;   
+	std::string sourceScenePath;
 	std::vector<std::unique_ptr<Component>> components = {};
 	std::vector<Component*> componentByType;
 	Object* parent = nullptr;

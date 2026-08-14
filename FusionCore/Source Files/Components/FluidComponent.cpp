@@ -4,8 +4,12 @@
 FluidComponent::FluidComponent(Object* parent) : ComponentBase<FluidComponent>(parent) {
 	Name = "Fluid Component";
 
-	SeedParticles();
 	InitRenderResources();
+}
+
+void FluidComponent::Activate() {
+	isActive = true;
+
 	setShapeCallbackID = parent->GetComponent<RenderComponent>()->AddOnShapeSetCallback([this] {
 		SeedParticles();
 		ResizeInstanceBuffer();
@@ -18,8 +22,23 @@ FluidComponent::FluidComponent(Object* parent) : ComponentBase<FluidComponent>(p
 	if (cc) {
 		TransformComponent* tc = parent->GetComponent<TransformComponent>();
 		if (tc) tc->RemoveTransformCallback(cc->onTransformCallbackID);
-		//PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent);
 	}
+
+	SeedParticles();      
+	ResizeInstanceBuffer();
+}
+
+void FluidComponent::Deactivate() {
+	RenderComponent* rc = parent->GetComponent<RenderComponent>();
+	if (rc && setShapeCallbackID != -1) rc->RemoveOnShapeSetCallback(setShapeCallbackID);
+	setShapeCallbackID = -1;
+
+	TransformComponent* tc = parent->GetComponent<TransformComponent>();
+	if (tc && transformCallbackID != -1) tc->RemoveTransformCallback(transformCallbackID);
+	transformCallbackID = -1;
+
+	ClearParticles();  
+	isActive = false;
 }
 
 void FluidComponent::ClearParticles() {
@@ -368,23 +387,16 @@ void FluidComponent::ProcessInspectorUI() {
 }
 
 void FluidComponent::OnDelete() {
-	auto& allParticles = PhysicsEngine::getInstance().allFluidParticles;
-	std::unordered_set<FluidParticle*> toRemove(particles.begin(), particles.end());
-	allParticles.erase(
-		std::remove_if(allParticles.begin(), allParticles.end(),
-			[&](FluidParticle* p) { return toRemove.count(p) != 0; }),
-		allParticles.end());
-
-	for (FluidParticle* p : particles) delete p;
-	particles.clear();
-
 	RenderComponent* rc = parent->GetComponent<RenderComponent>();
 	if (rc && setShapeCallbackID != -1) rc->RemoveOnShapeSetCallback(setShapeCallbackID);
 
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
 	if (tc && transformCallbackID != -1) tc->RemoveTransformCallback(transformCallbackID);
 
-	if (!renderInitialized) return;   
+	ClearParticles();
+	isActive = false;
+
+	if (!renderInitialized) return;
 
 	glDeleteBuffers(1, &quadVBO);
 	glDeleteBuffers(1, &quadEBO);

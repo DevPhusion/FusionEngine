@@ -283,7 +283,8 @@ void FileSystem::DrawNode(const FileSystemEntry& entry, int depth) {
 	if (rowDoubleClicked && !isRenaming && !toggledOpen && entry.iconType == ResourceIconType::Script) {
 		OpenPathInVSCode(FileManager::getInstance().currentProjectDirectory, entry.absolutePath);
 	}
-	if (rowDoubleClicked && !isRenaming && !toggledOpen && entry.iconType == ResourceIconType::Scene) { 
+	if (rowDoubleClicked && !isRenaming && !toggledOpen && entry.iconType == ResourceIconType::Scene
+		&& EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Stop) { 
 		SceneManager::getInstance().OpenSceneTab(entry.absolutePath.string());
 	}
 

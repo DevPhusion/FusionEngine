@@ -8,6 +8,8 @@ public:
 	CameraComponent(Object* parent);
 	CameraComponent() = default;
 
+	virtual void Activate();
+	virtual void Deactivate();
 	virtual void SetEnabled(bool enabled);
 	virtual void OnDelete();
 	virtual void ProcessInspectorUI();
@@ -24,7 +26,7 @@ private:
 
 	int transformCallbackID = -1;
 	int physicsModeChangedID = -1;
-	bool isActive = false;
+	bool isDrivingCamera = false;
 
 	void SyncCamera();
 	void OnPhysicsModeChanged();

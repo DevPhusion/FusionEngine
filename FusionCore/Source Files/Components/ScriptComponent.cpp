@@ -64,6 +64,17 @@ ScriptComponent::ScriptComponent(Object* parent, std::string sourcePath) : Compo
 	this->Name = "Script Component";
 }
 
+void ScriptComponent::Deactivate() {
+	if (!isActive) return;
+
+	if (loaded) {
+		pendingExportedValues = exportedProperties;
+	}
+	Unload();
+
+	isActive = false;
+}
+
 std::string ScriptComponent::GetDisplayName() {
 	if (sourcePath.empty()) return "";
 	return std::filesystem::path(sourcePath).stem().string();
@@ -78,7 +89,7 @@ void ScriptComponent::SetSourcePath(std::string path) {
 }
 
 void ScriptComponent::OnDelete() {
-	Unload();
+	Deactivate();
 }
 
 void ScriptComponent::CopyTo(Object* other) {
@@ -256,6 +267,7 @@ void ScriptComponent::Reload() {
 
 void ScriptComponent::EnsureLoaded() {
 	if (loaded || loadFailed) return;
+	if (!isActive) return;
 	loadFailed = true;
 
 	if (sourcePath.empty()) return;
@@ -567,7 +579,6 @@ void ScriptComponent::ProcessInspectorUI() {
 
 					for (auto& objPtr : ObjectManager::getInstance().allObjects) {
 						Object* candidate = objPtr.get();
-						if (candidate->hideInHierarchy) continue;
 						if (ImGui::Selectable(candidate->name.c_str(), candidate == value.ptr)) {
 							EditorManager::getInstance().BeginEdit({ parent });
 							UnregisterObjectDeleteCallback(prop);

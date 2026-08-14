@@ -13,11 +13,30 @@ ConstraintComponent::ConstraintComponent(Object* parent)
     Name = "Constraint Component";
 }
 
+void ConstraintComponent::Activate() {
+    if (isActive) return;
+    isActive = true;
+
+    for (auto& c : appliedConstraints) {
+        c->Activate();
+    }
+}
+
+void ConstraintComponent::Deactivate() {
+    if (!isActive) return;
+    isActive = false;
+
+    for (auto& c : appliedConstraints) {
+        c->Deactivate();
+    }
+}
+
 void ConstraintComponent::AddConstraint(std::shared_ptr<Constraint> constraint)
 {
     if (!constraint) return;
     EngineManager::getInstance().SceneChangeEvent();
     PhysicsEngine::getInstance().RegisterPGSConstraint(constraint.get());
+    if (isActive) constraint->Activate();   
     appliedConstraints.push_back(std::move(constraint));
 }
 
@@ -70,6 +89,7 @@ void ConstraintComponent::OnDelete()
         c->Unregister();
     }
     appliedConstraints.clear();
+    isActive = false;
 }
 
 void ConstraintComponent::ProcessInspectorUI()

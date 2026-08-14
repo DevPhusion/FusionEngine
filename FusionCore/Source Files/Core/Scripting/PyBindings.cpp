@@ -332,6 +332,7 @@ namespace {
 			ScriptComponent* raw = comp.get();
 			obj.AddComponent(std::move(comp));
 
+			raw->Activate();
 			raw->EnsureLoaded();
 			if (!raw->IsLoaded()) {
 				throw py::value_error("add_component: failed to load script '" + virtualPath + "'");
@@ -559,6 +560,7 @@ namespace {
 			T* raw = comp.get();
 			obj.RegisterComponentPointer(raw);
 			obj.AddComponent(std::move(comp));
+			raw->Activate();
 			return py::cast(raw, py::return_value_policy::reference);
 			};
 	}
@@ -2213,6 +2215,14 @@ namespace {
 		return obj;
 	}
 
+	void RegisterSceneBindings(py::module_& m) {
+		m.def("load_scene", [](const std::string& virtualPath) {
+			SceneManager::getInstance().RequestLoadScene(virtualPath);
+			}, py::arg("path"),
+				"Load a scene from a res:// path, replacing the current live scene, e.g.\n"
+				"  load_scene('res://levels/level_2.fscene')");
+	}
+
 	void RegisterObjectBindings(py::module_& m) {
 		py::class_<Object, std::unique_ptr<Object, py::nodelete>>(m, "Object")
 			.def(py::init(&CreateDefaultObject),
@@ -2608,6 +2618,7 @@ void RegisterEngineBindings(py::module_& m) {
 	RegisterInputBindings(m);
 	RegisterConsoleBindings(m);
 	RegisterComponentBindings(m);
+	RegisterSceneBindings(m);
 	RegisterObjectBindings(m);
 	InstallPackageImportHook(m);
 }

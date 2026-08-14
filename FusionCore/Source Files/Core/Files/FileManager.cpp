@@ -5,6 +5,7 @@
 #include "../../../Header Files/Core/Physics/Constraint/PGSConstraint/Constraints.h"
 #include "../../../Header Files/Core/Scripting/PyBindings.h"
 #include "../../../Header Files/Core/SceneManager.h"
+#include "../../../Header Files/Core/Files/Export/PackageReader.h"
 
 namespace fs = std::filesystem;
 
@@ -435,9 +436,16 @@ void FileManager::SaveProjectToFile(const std::string& path) {
 }
 
 void FileManager::LoadProjectFromFile(const std::string& path) {
+	currentProjectFile = path;
+	currentProjectDirectory = fs::path(path).parent_path().string();
+	SetupResourcesFolder();
+
 	std::ifstream in(path, std::ios::binary);
-	if (!in.is_open())
+	if (!in.is_open()) {
 		Console::PrintError("LoadProject: failed to open file for reading {}").Format(path);
+		return;   
+	}
+
 	LoadProjectFromStream(in);
 }
 
@@ -467,9 +475,23 @@ void FileManager::LoadProjectFromStream(std::istream& in) {
 
 	const std::string& mainScenePath = EngineManager::getInstance().EngineSettings.mainScenePath;
 
+	std::string sceneToLoad;
+	bool mainSceneAvailable = false;
 	std::error_code ec;
-	if (!mainScenePath.empty() && fs::exists(mainScenePath, ec) && !ec) {
-		SceneManager::getInstance().LoadSceneFromFile(mainScenePath);
+
+	if (!mainScenePath.empty()) {
+		if (EngineManager::getInstance().isPlayer) {
+			sceneToLoad = mainScenePath;
+			mainSceneAvailable = PackageReader::getInstance().Get(sceneToLoad) != nullptr;
+		}
+		else {
+			sceneToLoad = mainScenePath;
+			mainSceneAvailable = fs::exists(mainScenePath, ec) && !ec;
+		}
+	}
+
+	if (mainSceneAvailable) {
+		SceneManager::getInstance().LoadSceneFromFile(sceneToLoad);
 	}
 	else {
 		if (!mainScenePath.empty())

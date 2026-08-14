@@ -86,6 +86,9 @@ public:
     glm::vec3 GetAttachWorldA() const;
     glm::vec3 GetAttachWorldB() const;
 
+    void Activate();
+    void Deactivate();
+
     bool IsAttachAEditing() const { return attachAEditing; }
     bool IsAttachBEditing() const { return attachBEditing; }
     bool useCenterA = true;
@@ -107,6 +110,9 @@ protected:
     void CopyBaseFieldsFrom(const Constraint* src);
 
 private:
+    bool isActive = false;
+    int physicsModeChangedCallbackID = -1;
+
     bool attachAEditing = false;
     bool attachBEditing = false;
 

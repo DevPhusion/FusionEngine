@@ -13,6 +13,7 @@
 #include "../FusionCore/Header Files/Core/Files/ProjectLauncher.h"
 #include "../FusionCore/Header Files/Core/Rendering/Shader.h"
 #include "../FusionCore/Header Files/Core/Scripting/PyBindings.h"
+#include "../FusionCore/Header Files/Core/SceneManager.h"
 
 
 PYBIND11_EMBEDDED_MODULE(fusion, m) {
@@ -135,6 +136,8 @@ int main(int argc, char* argv[]) {
 			physicsAccumulator -= PHYSICS_STEP;
 		}
 
+		SceneManager::getInstance().ProcessPendingSceneLoad();
+
 		EngineManager::getInstance().ProcessEngine(delta);
 
 		Viewport* gameViewport = EditorManager::getInstance().gameViewport;
@@ -152,7 +155,7 @@ int main(int argc, char* argv[]) {
 		glClearColor(0.11f, 0.11f, 0.13f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		EditorManager::getInstance().ProcessEditor();               // ImGui draws the Viewport image + all panels
+		EditorManager::getInstance().ProcessEditor();              
 
 		InputManager::getInstance().ClearFrameState();
 

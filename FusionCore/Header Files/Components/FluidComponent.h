@@ -57,6 +57,8 @@ public:
     float metaballEdgeSoft = 0.05f;
     float outlineWidthTexels = 2.0f;
 
+    virtual void Activate();
+	virtual void Deactivate();
     virtual void OnDelete();
     virtual void ProcessInspectorUI();
     virtual void CopyTo(Object* other);

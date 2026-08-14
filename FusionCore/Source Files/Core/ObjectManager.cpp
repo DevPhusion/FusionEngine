@@ -356,7 +356,6 @@ Object* ObjectManager::CopyObject(Object* obj) {
 	newObj->name = GenerateUniqueName(baseName, nullptr);
 
 	newObj->SetParent(obj->parent);
-
 	Object* returnObj = newObj.get();
 	newObj->addedToScene = true;
 	allObjects.push_back(std::move(newObj));
@@ -378,6 +377,15 @@ void ObjectManager::RemoveObject(Object* obj) {
 
 	EngineManager::getInstance().SceneChangeEvent();
 	if (EditorManager::getInstance().selectedObject == obj) EditorManager::getInstance().SetSelectedObject(nullptr);
+
+	if (obj->parent != nullptr) {
+		for (int i = 0; i < obj->parent->children.size(); i++)
+		{
+			if (obj->parent->children[i] == obj) {
+				obj->parent->children.erase(obj->parent->children.begin() + i);
+			}
+		}
+	}
 
 	std::vector<Object*> reparentedChildren;
 	for (int i = 0; i < allObjects.size(); i++) {

@@ -20,12 +20,16 @@ public:
     bool Selected;
     bool Inspectable = true;
 
+    virtual void Activate();
+    virtual void Deactivate();
     virtual void ProcessInspectorUI();
     virtual void OnDelete();
     virtual void CopyTo(Object* other);
     virtual void Serialize(BinaryWriter& w);
     virtual void Deserialize(BinaryReader& r);
 
+    void RegisterCallbacks();
+    void UnregisterCallbacks();
     void FindSelectedPolygon(int button, int action, int mods);
     void DragPolygon(double xpos, double ypos);
     void SetSelectedPolygon(Object* obj, bool enable);

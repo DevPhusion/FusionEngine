@@ -73,6 +73,8 @@ public:
 	void RemoveVirtualProxy(PointMass* proxy);
 	std::vector<SoftEdge> GetEdgesFromMassAggregate();
 
+	virtual void Activate();
+	virtual void Deactivate();
 	virtual void PostLoad();
 	virtual void SetEnabled(bool Enabled);
 	virtual void ProcessInspectorUI();

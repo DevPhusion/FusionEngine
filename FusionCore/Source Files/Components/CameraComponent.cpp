@@ -3,7 +3,6 @@
 
 CameraComponent::CameraComponent(Object* parent) : ComponentBase<CameraComponent>(parent) {
 	Name = "Camera Component";
-	RegisterCallbacks();
 	EditorRenderComponent* erc = parent->GetComponent<EditorRenderComponent>();
 	if (erc) {
 		erc->SetTexture("Resources/Images/Camera.png");
@@ -16,7 +15,7 @@ void CameraComponent::RegisterCallbacks() {
 
 	if (TransformComponent* tc = parent->GetComponent<TransformComponent>()) {
 		transformCallbackID = tc->AddTransformCallback([this]() {
-			if (isActive) SyncCamera();
+			if (isDrivingCamera) SyncCamera();
 			});
 	}
 }
@@ -32,15 +31,48 @@ void CameraComponent::UnregisterCallbacks() {
 	transformCallbackID = -1;
 }
 
+void CameraComponent::Activate() {
+	if (isActive) return;   
+	isActive = true;
+
+	if (!Enabled) return;   
+
+	RegisterCallbacks();
+
+	if (isMain) {
+		if (Camera::getInstance().mainCam && Camera::getInstance().mainCam != this) {
+			Camera::getInstance().mainCam->isMain = false;
+		}
+		Camera::getInstance().mainCam = this;
+	}
+
+	OnPhysicsModeChanged();
+}
+
+void CameraComponent::Deactivate() {
+	if (!isActive) return;
+	isActive = false;
+
+	if (Enabled) {
+		UnregisterCallbacks();
+	}
+
+	if (Camera::getInstance().mainCam == this) {
+		Camera::getInstance().mainCam = nullptr;
+	}
+
+	isDrivingCamera = false;  
+}
+
 void CameraComponent::OnPhysicsModeChanged() {
 	Camera& cam = Camera::getInstance();
 
 	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate && isMain) {
-		isActive = true;
+		isDrivingCamera = true;
 		SyncCamera();
 	}
 	else {
-		isActive = false;
+		isDrivingCamera = false;
 	}
 }
 
@@ -48,7 +80,7 @@ void CameraComponent::SyncCamera() {
 	if (!Enabled) return;
 
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
-	if (!isActive) return;
+	if (!isDrivingCamera) return;
 	if (!tc) return;
 
 	Camera& cam = Camera::getInstance();
@@ -62,7 +94,7 @@ void CameraComponent::SyncCamera() {
 
 void CameraComponent::SetRange(float range) {
 	this->range = range;
-	if (isActive) Camera::getInstance().SetCameraZoom(range);
+	if (isDrivingCamera) Camera::getInstance().SetCameraZoom(range);
 }
 
 void CameraComponent::ProcessInspectorUI() {
@@ -109,13 +141,14 @@ void CameraComponent::ProcessInspectorUI() {
 }
 
 void CameraComponent::OnDelete() {
-	UnregisterCallbacks();
-	if (Camera::getInstance().mainCam == this)
-		Camera::getInstance().mainCam = nullptr;
+	Deactivate();
 }
 
 void CameraComponent::SetEnabled(bool enabled) {
 	Component::SetEnabled(enabled);
+
+	if (!isActive) return;   // background scene — Activate() will apply this when it becomes live
+
 	if (enabled) {
 		RegisterCallbacks();
 		if (isMain) {
@@ -153,10 +186,7 @@ void CameraComponent::Serialize(BinaryWriter& w) {
 void CameraComponent::Deserialize(BinaryReader& r) {
 	Component::Deserialize(r);
 	isMain = r.Read<bool>();
-	if (isMain) {
-		Camera::getInstance().mainCam = this;
-	}
-	SetRange(r.Read<float>());
+	range = r.Read<float>();   
 }
 
 void CameraComponent::DrawDebug() {
@@ -173,7 +203,7 @@ void CameraComponent::DrawDebug() {
 		glm::vec2(-aspect, -1.0f),
 		glm::vec2(aspect, -1.0f),
 		glm::vec2(aspect,  1.0f),
-		glm::vec2(-aspect,  1.0f) 
+		glm::vec2(-aspect,  1.0f)
 	};
 
 	glm::mat4 rotMat = glm::rotate(glm::mat4(1.0f), rot, glm::vec3(0.0f, 0.0f, 1.0f));
@@ -184,8 +214,8 @@ void CameraComponent::DrawDebug() {
 		worldCorners[i] = worldPos + glm::vec3(rotMat * scaled);
 	}
 
-	glm::vec4 color = isMain ? glm::vec4(1.0f, 0.8f, 0.0f, 1.0f)   
-		: glm::vec4(0.6f, 0.6f, 0.6f, 1.0f);  
+	glm::vec4 color = isMain ? glm::vec4(1.0f, 0.8f, 0.0f, 1.0f)
+		: glm::vec4(0.6f, 0.6f, 0.6f, 1.0f);
 
 	for (int i = 0; i < 4; i++) {
 		Renderer::getInstance().DrawLine(worldCorners[i], worldCorners[(i + 1) % 4], color, 2.0f, false);

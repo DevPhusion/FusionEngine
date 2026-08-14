@@ -36,6 +36,9 @@ void Object::Serialize(BinaryWriter& w) {
 	w.Write(hidden);
 	w.Write(parentID);
 
+	w.Write(isSceneRoot);
+	w.WriteString(sourceScenePath);
+
 	w.WriteString(shader.vertexPath);
 	w.WriteString(shader.fragmentPath);
 
@@ -57,6 +60,10 @@ void Object::DeserializeBody(BinaryReader& r) {
     this->hideInHierarchy = r.Read<bool>();
     this->hidden = r.Read<bool>();
     this->parentID = r.Read<uint64_t>();
+
+	this->isSceneRoot = r.Read<bool>();
+	this->sourceScenePath = r.ReadString();
+
     std::string vertPath = r.ReadString();
     std::string fragPath = r.ReadString();
     this->shader = Shader(vertPath.c_str(), fragPath.c_str());

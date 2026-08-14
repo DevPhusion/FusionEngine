@@ -82,21 +82,22 @@ void SceneTab::ProcessCloseConfirmPopup() {
 
 void SceneTab::ProcessTabBar() {
 	SceneManager& SM = SceneManager::getInstance();
-	int focusIndex = SM.ConsumeFocusRequest();   // NEW — one-shot, cleared immediately
+	int focusIndex = SM.ConsumeFocusRequest();
+
+	int closeRequestedIndex = -1;  
 
 	if (ImGui::BeginTabBar("##SceneTabBar", ImGuiTabBarFlags_Reorderable)) {
 		for (int i = 0; i < SM.GetSceneCount(); i++) {
-			ImGui::PushID(i);
-
 			OpenScene& scene = SM.GetScene(i);
 
 			bool open = true;
-			ImGuiTabItemFlags flags = scene.isDirty ? ImGuiTabItemFlags_UnsavedDocument : ImGuiTabItemFlags_None;
-			if (i == focusIndex)                    
+			ImGuiTabItemFlags flags = ImGuiTabItemFlags_None;
+			if (i == focusIndex)
 				flags |= ImGuiTabItemFlags_SetSelected;
 
 			std::string label = scene.displayName;
 			if (scene.isDirty) label += "*";
+			label += "###scene" + std::to_string(scene.uid);
 
 			const ImVec4 unsavedColor(0.95f, 0.65f, 0.25f, 1.0f);
 			if (scene.isDirty) ImGui::PushStyleColor(ImGuiCol_Text, unsavedColor);
@@ -110,9 +111,7 @@ void SceneTab::ProcessTabBar() {
 			if (scene.isDirty) ImGui::PopStyleColor();
 
 			if (!open)
-				RequestClose(i);
-
-			ImGui::PopID();
+				closeRequestedIndex = i;  
 		}
 
 		if (ImGui::TabItemButton("+", ImGuiTabItemFlags_Trailing | ImGuiTabItemFlags_NoTooltip))
@@ -120,9 +119,13 @@ void SceneTab::ProcessTabBar() {
 
 		ImGui::EndTabBar();
 	}
+
+	if (closeRequestedIndex != -1)
+		RequestClose(closeRequestedIndex);
 }
 
 void SceneTab::ProcessWindow() {
+	if (EngineManager::getInstance().EnginePhysicsMode != EngineManager::PhysicsMode::Stop) return;
 
 	ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
 	ImGuiWindowClass statusWindowClass;

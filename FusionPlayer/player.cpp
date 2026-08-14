@@ -15,6 +15,7 @@
 #include "../FusionCore/Header Files/Core/Rendering/Shader.h"
 #include "../FusionCore/Header Files/Core/Scripting/PyBindings.h"
 #include "../FusionCore/Header Files/Core/Scripting/ScriptManager.h"
+#include "../FusionCore/Header Files/Core/SceneManager.h" 
 
 PYBIND11_EMBEDDED_MODULE(fusion, m) {
 	RegisterEngineBindings(m);
@@ -211,6 +212,8 @@ int main(int argc, char* argv[]) {
 			PhysicsEngine::getInstance().ProcessPhysics(PHYSICS_STEP);
 			physicsAccumulator -= PHYSICS_STEP;
 		}
+
+		SceneManager::getInstance().ProcessPendingSceneLoad();
 
 		EngineManager::getInstance().ProcessEngine(delta);
 

@@ -1,5 +1,6 @@
 #include "../../../../Header Files/Core/Files/Export/ProjectExportManager.h"
 #include "../../../../Header Files/Core/Files/FileManager.h"
+#include "../../../../Header Files/Core/EngineManager.h"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -310,6 +311,11 @@ bool ProjectExportManager::DoExport(const ExportConfiguration& config, std::stri
 					std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(scriptIn)), std::istreambuf_iterator<char>());
 					packEntries.push_back({ "res://" + relative.generic_string(), std::move(bytes) });
 				}
+				else if (entry.path().extension() == ".fscene") {
+					std::ifstream sceneIn(entry.path(), std::ios::binary);
+					std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(sceneIn)), std::istreambuf_iterator<char>());
+					packEntries.push_back({ "res://" + relative.generic_string(), std::move(bytes) });
+				}
 				else {
 					fs::path dst = resourcesDst / relative;
 					fs::create_directories(dst.parent_path(), ec);
@@ -331,8 +337,16 @@ bool ProjectExportManager::DoExport(const ExportConfiguration& config, std::stri
 
 	SetStatus(ExportStage::SavingProject, "Packaging project file...");
 	{
+		std::string& liveMainScene = EngineManager::getInstance().EngineSettings.mainScenePath;
+		std::string originalMainScene = liveMainScene;
+		if (!originalMainScene.empty()) {
+			liveMainScene = FileManager::getInstance().AbsoluteToVirtual(originalMainScene);
+		}
+
 		fs::path tempFusionPath = fs::temp_directory_path(ec) / (exeName + "_export_tmp.fusion");
 		FileManager::getInstance().SaveProjectToFile(tempFusionPath.string());
+
+		liveMainScene = originalMainScene;   
 
 		std::ifstream fusionIn(tempFusionPath, std::ios::binary);
 		std::vector<uint8_t> fusionBytes((std::istreambuf_iterator<char>(fusionIn)), std::istreambuf_iterator<char>());

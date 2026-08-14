@@ -1780,7 +1780,6 @@ void PhysicsEngine::GenerateRigidBoundaries() {
 	rigidBoundaries.clear();
 	for (auto& objPtr : *allObjects) {
 		Object* obj = objPtr.get();
-		if (obj->hideInHierarchy) continue;
 		if (obj->HasComponent<SoftBodyComponent>() || obj->HasComponent<FluidComponent>()) continue;
 		if (!obj->HasComponent<CollisionComponent>()) continue;
 
@@ -1833,7 +1832,6 @@ void PhysicsEngine::GenerateSoftBoundaries() {
 	softBoundaries.clear();
 	for (auto& objPtr : *allObjects) {
 		Object* obj = objPtr.get();
-		if (obj->hideInHierarchy) continue;
 		if (!obj->HasComponent<SoftBodyComponent>()) continue;
 
 		SoftBodyComponent* sb = obj->GetComponent<SoftBodyComponent>();
@@ -3449,7 +3447,6 @@ std::vector<RayCastHit> PhysicsEngine::RayCastAll(const glm::vec3& origin, const
 
 	for (auto& objPtr : *allObjects) {
 		Object* obj = objPtr.get();
-		if (obj->hideInHierarchy) continue;
 		if (std::find(ignoreObjects.begin(), ignoreObjects.end(), obj) != ignoreObjects.end()) continue;
 
 		CollisionComponent* cc = obj->GetComponent<CollisionComponent>();

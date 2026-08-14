@@ -9,6 +9,8 @@ public:
 	ConstraintComponent(Object* parent);
 	ConstraintComponent() = default;
 
+	virtual void Activate();
+	virtual void Deactivate();
 	virtual void ProcessInspectorUI();
 	virtual void OnDelete();
 	virtual void CopyTo(Object* other);

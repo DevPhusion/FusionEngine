@@ -39,6 +39,7 @@ public:
 	void Reload();
 	void Unload();
 
+	virtual void Deactivate();
 	virtual void OnDelete();
 	virtual void ProcessInspectorUI();
 	virtual void CopyTo(Object* other);

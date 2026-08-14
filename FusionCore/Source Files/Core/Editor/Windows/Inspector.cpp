@@ -292,6 +292,7 @@ void Inspector::ProcessWindow() {
                     if (ImGui::MenuItem(scriptDisplayName.c_str())) {
                         EditorManager::getInstance().BeginEdit({ selected });
                         selected->AddComponent(std::make_unique<ScriptComponent>(selected, scriptPath));
+                        selected->GetComponent<ScriptComponent>()->Activate();
                         EditorManager::getInstance().EndEdit({ selected });
                         EngineManager::getInstance().SceneChangeEvent();
                         m_SearchBuffer[0] = '\0';
