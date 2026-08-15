@@ -385,6 +385,10 @@ void ObjectManager::RemoveObject(Object* obj) {
 				obj->parent->children.erase(obj->parent->children.begin() + i);
 			}
 		}
+
+		if (obj->parent->isSceneRoot && obj->parent->children.size() == 0) {
+			RemoveObject(obj->parent);
+		}
 	}
 
 	std::vector<Object*> reparentedChildren;

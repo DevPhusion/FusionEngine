@@ -290,7 +290,8 @@ void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* re
 		bool isOpen = SceneManager::getInstance().FindSceneByPath(currentObj->sourceScenePath) != -1;
 		std::string sceneId = "##scene_" + std::to_string(currentObj->id);
 
-		if (DrawSceneToggleButton(sceneId.c_str(), sceneIconSize, isOpen)) {
+		if (DrawSceneToggleButton(sceneId.c_str(), sceneIconSize, isOpen) &&
+			EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Stop) {
 			SceneManager::getInstance().OpenSceneTab(currentObj->sourceScenePath);
 		}
 		if (ImGui::IsItemHovered()) {

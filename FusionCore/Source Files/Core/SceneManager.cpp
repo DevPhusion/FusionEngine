@@ -13,22 +13,11 @@ SceneManager::SceneManager() {
 	activeIndex = 0;
 }
 
-std::string SceneManager::ToComparablePath(const std::string& path) const {
-	if (path.empty()) return path;
-
-	if (path.rfind("res://", 0) == 0) {
-		if (!EngineManager::getInstance().isPlayer)
-			return FileManager::getInstance().VirtualToAbsolute(path).string();
-	}
-
-	return path;
-}
-
 std::string SceneManager::NormalizeToVirtualPath(const std::string& path) const {
 	if (path.empty() || path.rfind("res://", 0) == 0) return path;
 
 	if (EngineManager::getInstance().isPlayer) {
-		Console::PrintError("SceneManager: scene reference '{}' is not a res:// path and can't be resolved in an exported build.").Format(path);
+		Console::PrintError("SceneManager: scene reference '{}' is not a res:// path.").Format(path);
 		return path;
 	}
 
@@ -177,9 +166,9 @@ bool SceneManager::ParseSceneObjects(const std::string& path, std::vector<std::u
 int SceneManager::FindSceneByPath(const std::string& path) const {
 	if (path.empty()) return -1;
 
-	std::string target = ToComparablePath(path);
+	std::string target = NormalizeToVirtualPath(path);
 	for (int i = 0; i < (int)openScenes.size(); i++) {
-		if (ToComparablePath(openScenes[i].filePath) == target) return i;
+		if (openScenes[i].filePath == target) return i;
 	}
 	return -1;
 }
@@ -192,7 +181,9 @@ void SceneManager::SwitchToScene(int index) {
 }
 
 int SceneManager::OpenSceneTab(const std::string& path) {
-	int existing = FindSceneByPath(path);
+	std::string virtualPath = NormalizeToVirtualPath(path);
+
+	int existing = FindSceneByPath(virtualPath);
 	if (existing != -1) {
 		SwitchToScene(existing);
 		return existing;
@@ -202,13 +193,13 @@ int SceneManager::OpenSceneTab(const std::string& path) {
 
 	OpenScene scene;
 	scene.uid = AllocateSceneUid();
-	scene.filePath = path;
-	scene.displayName = fs::path(path).filename().string();
+	scene.filePath = virtualPath;
+	scene.displayName = fs::path(virtualPath).filename().string();
 	openScenes.push_back(std::move(scene));
 
 	int newIndex = (int)openScenes.size() - 1;
 	SwapLiveWithScene(newIndex);
-	LoadSceneFromFile(path);
+	LoadSceneFromFile(virtualPath);
 
 	return newIndex;
 }
@@ -268,9 +259,12 @@ void SceneManager::CloseSceneTab(int index, bool discardUnsaved) {
 }
 
 void SceneManager::SaveScene(const std::string& path) {
-	std::ofstream out(path, std::ios::binary);
+	std::string virtualPath = NormalizeToVirtualPath(path);
+	fs::path absPath = FileManager::getInstance().VirtualToAbsolute(virtualPath);
+
+	std::ofstream out(absPath, std::ios::binary);
 	if (!out.is_open()) {
-		Console::PrintError("SaveScene: failed to open file for writing {}").Format(path);
+		Console::PrintError("SaveScene: failed to open file for writing {}").Format(absPath.string());
 		return;
 	}
 
@@ -309,8 +303,8 @@ void SceneManager::SaveScene(const std::string& path) {
 	}
 
 	OpenScene& active = openScenes[activeIndex];
-	active.filePath = path;
-	active.displayName = fs::path(path).filename().string();
+	active.filePath = virtualPath;
+	active.displayName = fs::path(virtualPath).filename().string();
 	active.isDirty = false;
 }
 
@@ -324,37 +318,28 @@ bool SceneManager::SaveActiveScene() {
 }
 
 void SceneManager::LoadSceneFromFile(const std::string& path) {
+	std::string virtualPath = NormalizeToVirtualPath(path);
+
 	std::unique_ptr<std::istream> in;
 	std::string packedBuffer;
-	std::string resolvedPath = path;
 
 	if (EngineManager::getInstance().isPlayer) {
-		std::string virtualPath = path.rfind("res://", 0) == 0
-			? path
-			: FileManager::getInstance().AbsoluteToVirtual(path);
-
 		const std::vector<uint8_t>* packed = PackageReader::getInstance().Get(virtualPath);
 		if (!packed) {
 			Console::PrintError("LoadScene: scene not found in package: {}").Format(virtualPath);
 			return;
 		}
-
 		packedBuffer.assign(reinterpret_cast<const char*>(packed->data()), packed->size());
 		in = std::make_unique<std::istringstream>(packedBuffer, std::ios::binary);
-		resolvedPath = virtualPath;
 	}
 	else {
-		std::string absPath = path.rfind("res://", 0) == 0
-			? FileManager::getInstance().VirtualToAbsolute(path).string()
-			: path;
-
+		fs::path absPath = FileManager::getInstance().VirtualToAbsolute(virtualPath);
 		auto fileStream = std::make_unique<std::ifstream>(absPath, std::ios::binary);
 		if (!fileStream->is_open()) {
-			Console::PrintError("LoadScene: failed to open file for reading {}").Format(absPath);
+			Console::PrintError("LoadScene: failed to open file for reading {}").Format(absPath.string());
 			return;
 		}
 		in = std::move(fileStream);
-		resolvedPath = absPath;
 	}
 
 	BinaryReader r(*in);
@@ -430,7 +415,7 @@ void SceneManager::LoadSceneFromFile(const std::string& path) {
 	}
 
 	std::vector<std::string> expansionStack;
-	expansionStack.push_back(resolvedPath);   
+	expansionStack.push_back(virtualPath);   
 	for (Object* root : rootsToExpand) {
 		ExpandSceneRoot(root, ObjectManager::getInstance().allObjects,
 			PhysicsEngine::getInstance().registeredPGSConstraints, false, expansionStack);
@@ -439,8 +424,8 @@ void SceneManager::LoadSceneFromFile(const std::string& path) {
 	ActivateLiveScene();
 
 	OpenScene& active = openScenes[activeIndex];
-	active.filePath = resolvedPath;
-	active.displayName = fs::path(resolvedPath).filename().string();
+	active.filePath = virtualPath;
+	active.displayName = fs::path(virtualPath).filename().string();
 	active.isDirty = false;
 }
 
@@ -453,13 +438,13 @@ void SceneManager::NewScene() {
 	active.isDirty = false;
 }
 
-Object* SceneManager::AddScene(const std::string& path, Object* parent) {
+Object* SceneManager::AddScene(const std::string& path, Object* parent, std::vector<Object*>& outNewObjects) {
 	EngineManager::getInstance().SceneChangeEvent();
 
 	std::string virtualPath = NormalizeToVirtualPath(path);
 
 	std::unique_ptr<Object> rootObj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
-	rootObj->AddComponent(std::make_unique<EditorRenderComponent>(rootObj.get(), rootObj->shader, "Resources/Images/Object.png", 0.075f));
+	rootObj->AddComponent(std::make_unique<EditorRenderComponent>(rootObj.get(), rootObj->shader, "Resources/Images/Scene.png", 0.075f));
 	rootObj->AddComponent(std::make_unique<TransformComponent>(rootObj.get(), rootObj->shader, rootObj->GetComponent<EditorRenderComponent>()->GetCenter()));
 	rootObj->AddComponent(std::make_unique<MouseInteractComponent>(rootObj.get(), false));
 
@@ -475,6 +460,8 @@ Object* SceneManager::AddScene(const std::string& path, Object* parent) {
 	rootRaw->addedToScene = true;
 	rootRaw->SetParent(parent);
 	EditorManager::getInstance().RegisterObjectCreated(rootRaw);
+
+	size_t newObjectsStartIndex = ObjectManager::getInstance().allObjects.size();
 	ObjectManager::getInstance().allObjects.push_back(std::move(rootObj));
 
 	std::vector<std::string> expansionStack;
@@ -483,7 +470,18 @@ Object* SceneManager::AddScene(const std::string& path, Object* parent) {
 		Console::PrintError("AddScene: failed to expand {}").Format(virtualPath);
 	}
 
+	outNewObjects.clear();
+	auto& all = ObjectManager::getInstance().allObjects;
+	for (size_t i = newObjectsStartIndex; i < all.size(); i++) {
+		outNewObjects.push_back(all[i].get());
+	}
+
 	return rootRaw;
+}
+
+Object* SceneManager::AddScene(const std::string& path, Object* parent) {
+	std::vector<Object*> discard;
+	return AddScene(path, parent, discard);
 }
 
 void SceneManager::RemoveScene(Object* root) {

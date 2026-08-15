@@ -526,7 +526,19 @@ void ScriptManager::ClearRegisteredScripts() {
 }
 
 void ScriptManager::RunAllScriptsLoad() {
-	for (auto& obj : ObjectManager::getInstance().allObjects) {
+	auto& objects = ObjectManager::getInstance().allObjects;
+	for (size_t i = 0; i < objects.size(); i++) {
+		Object* obj = objects[i].get();
+		for (auto& comp : obj->components) {
+			if (auto* script = dynamic_cast<ScriptComponent*>(comp.get())) {
+				if (comp->Enabled) script->RunOnLoad();
+			}
+		}
+	}
+}
+
+void ScriptManager::RunScriptsLoad(const std::vector<Object*>& objects) {
+	for (Object* obj : objects) {
 		for (auto& comp : obj->components) {
 			if (auto* script = dynamic_cast<ScriptComponent*>(comp.get())) {
 				if (comp->Enabled) script->RunOnLoad();
@@ -536,7 +548,19 @@ void ScriptManager::RunAllScriptsLoad() {
 }
 
 void ScriptManager::RunAllScriptsStart() {
-	for (auto& obj : ObjectManager::getInstance().allObjects) {
+	auto& objects = ObjectManager::getInstance().allObjects;
+	for (size_t i = 0; i < objects.size(); i++) {
+		Object* obj = objects[i].get();
+		for (auto& comp : obj->components) {
+			if (auto* script = dynamic_cast<ScriptComponent*>(comp.get())) {
+				if (comp->Enabled) script->RunOnStart();
+			}
+		}
+	}
+}
+
+void ScriptManager::RunScriptsStart(const std::vector<Object*>& objects) {
+	for (Object* obj : objects) {
 		for (auto& comp : obj->components) {
 			if (auto* script = dynamic_cast<ScriptComponent*>(comp.get())) {
 				if (comp->Enabled) script->RunOnStart();
@@ -546,7 +570,9 @@ void ScriptManager::RunAllScriptsStart() {
 }
 
 void ScriptManager::RunAllScriptsProcess(float delta) {
-	for (auto& obj : ObjectManager::getInstance().allObjects) {
+	auto& objects = ObjectManager::getInstance().allObjects;
+	for (size_t i = 0; i < objects.size(); i++) {
+		Object* obj = objects[i].get();
 		for (auto& comp : obj->components) {
 			if (auto* script = dynamic_cast<ScriptComponent*>(comp.get())) {
 				if (comp->Enabled) script->RunProcess(delta);
@@ -556,7 +582,9 @@ void ScriptManager::RunAllScriptsProcess(float delta) {
 }
 
 void ScriptManager::RunAllScriptsStop() {
-	for (auto& obj : ObjectManager::getInstance().allObjects) {
+	auto& objects = ObjectManager::getInstance().allObjects;
+	for (size_t i = 0; i < objects.size(); i++) {
+		Object* obj = objects[i].get();
 		for (auto& comp : obj->components) {
 			if (auto* script = dynamic_cast<ScriptComponent*>(comp.get())) {
 				script->Unload();

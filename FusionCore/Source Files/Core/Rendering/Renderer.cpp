@@ -18,7 +18,7 @@ void Renderer::Draw() {
 
     auto& debug = EngineManager::getInstance().EngineSettings;
 
-    if (debug.drawBackgroundGrid) {
+    if (debug.drawBackgroundGrid && EngineManager::getInstance().EnginePhysicsMode != EngineManager::PhysicsMode::Simulate) {
         {
             TIME_BLOCK("Draw background grid");
             backgroundGrid.Draw(camPos, screenSize, zoom);

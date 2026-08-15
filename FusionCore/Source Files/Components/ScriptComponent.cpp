@@ -3,9 +3,29 @@
 #include "../../Header Files/Core/EngineManager.h"
 #include "../../Header Files/Core/ObjectManager.h"
 
+#include <algorithm>
+#include <cctype>
+#include <sstream>
+
 namespace py = pybind11;
 
 namespace {
+	bool MatchesFileFilter(const std::string& virtualPath, const std::string& filterPattern) {
+		if (filterPattern.empty() || filterPattern == "*.*" || filterPattern == "*") return true;
+
+		std::string ext = std::filesystem::path(virtualPath).extension().string();
+		std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+		std::stringstream ss(filterPattern);
+		std::string token;
+		while (std::getline(ss, token, ';')) {
+			if (!token.empty() && token[0] == '*') token.erase(0, 1);
+			std::transform(token.begin(), token.end(), token.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+			if (token == ext) return true;
+		}
+		return false;
+	}
+
 	void WriteExportedValue(BinaryWriter& w, const ExportedValue& value) {
 		w.Write(static_cast<int>(value.index()));
 		std::visit([&](auto&& v) {
@@ -51,7 +71,7 @@ namespace {
 		case 7: {
 			ObjectRef ref;
 			ref.id = r.Read<uint64_t>();
-			ref.ptr = nullptr; 
+			ref.ptr = nullptr;
 			return ref;
 		}
 		default: return std::string();
@@ -85,7 +105,7 @@ void ScriptComponent::SetSourcePath(std::string path) {
 	if (!sourcePath.empty()) {
 		ScriptManager::getInstance().NotifyScriptAttached(sourcePath);
 	}
-	Unload(); 
+	Unload();
 }
 
 void ScriptComponent::OnDelete() {
@@ -182,7 +202,7 @@ void ScriptComponent::OnExportedObjectDeleted(const std::string& name, uint64_t 
 	if (!std::holds_alternative<ObjectRef>(it->value)) return;
 
 	ObjectRef& ref = std::get<ObjectRef>(it->value);
-	if (ref.id != expectedId) return; 
+	if (ref.id != expectedId) return;
 
 	ref.ptr = nullptr;
 	ref.id = 0;
@@ -207,7 +227,7 @@ void ScriptComponent::Unload() {
 
 void ScriptComponent::CheckForFileChanges() {
 	if (sourcePath.empty()) return;
-	if (!loaded && !loadFailed) return; 
+	if (!loaded && !loadFailed) return;
 
 	auto now = std::chrono::steady_clock::now();
 	if (now < nextFileCheckTime) return;
@@ -216,7 +236,7 @@ void ScriptComponent::CheckForFileChanges() {
 	std::filesystem::path absPath = FileManager::getInstance().VirtualToAbsolute(sourcePath);
 	std::error_code ec;
 	auto currentWriteTime = std::filesystem::last_write_time(absPath, ec);
-	if (ec) return; 
+	if (ec) return;
 
 	if (currentWriteTime != lastWriteTime) {
 		lastWriteTime = currentWriteTime;
@@ -236,12 +256,12 @@ void ScriptComponent::Reload() {
 		py::dict sysModules = sysModule.attr("modules");
 
 		if (sysModules.contains(moduleName)) {
-			sysModules.attr("pop")(moduleName, py::none()); 
+			sysModules.attr("pop")(moduleName, py::none());
 		}
 	}
 
 	Unload();
-	EnsureLoaded(); 
+	EnsureLoaded();
 
 	if (!loaded) {
 		Console::PrintError("ScriptComponent: reload failed for {} — keeping previous instance unloaded").Format(sourcePath);
@@ -345,6 +365,7 @@ void ScriptComponent::ScanExportedProperties() {
 		prop.suffix = marker.suffix;
 		prop.min = marker.min;
 		prop.max = marker.max;
+		prop.fileFilter = marker.fileFilter;
 
 		if (py::isinstance<py::bool_>(defaultValue)) {
 			prop.value = defaultValue.cast<bool>();
@@ -373,7 +394,7 @@ void ScriptComponent::ScanExportedProperties() {
 			RegisterObjectDeleteCallback(prop);
 		}
 		else if (PyType_Check(defaultValue.ptr()) && defaultValue.is(py::type::of<Object>())) {
-			prop.value = ObjectRef{}; 
+			prop.value = ObjectRef{};
 		}
 		else {
 			Console::PrintWarning("ScriptComponent: exported property '{}' has an unsupported type; skipping").Format(attrName);
@@ -464,17 +485,72 @@ void ScriptComponent::ProcessInspectorUI() {
 			ImGui::SameLine();
 
 			if constexpr (std::is_same_v<T, std::string>) {
-				char buf[256];
-				std::memset(buf, 0, sizeof(buf));
-				std::size_t len = std::min(value.size(), sizeof(buf) - 1);
-				std::memcpy(buf, value.data(), len);
+				if (prop.displayType == ExportType::File) {
+					char displayBuf[256] = "None (click to choose...)";
+					if (!value.empty()) {
+#if defined(_MSC_VER)
+						strcpy_s(displayBuf, value.c_str());
+#else
+						strncpy(displayBuf, value.c_str(), sizeof(displayBuf) - 1);
+						displayBuf[sizeof(displayBuf) - 1] = '\0';
+#endif
+					}
 
-				if (ImGui::InputText("##val", buf, sizeof(buf))) {
-					if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
-					value = std::string(buf);
-					SetInstanceAttrFromVariant(prop.name, prop.value);
+					ImGui::InputText("##val", displayBuf, sizeof(displayBuf), ImGuiInputTextFlags_ReadOnly);
+					if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+					if (ImGui::IsItemClicked()) {
+						FileDialogOptions opts;
+						opts.title = "Choose File";
+						opts.filters = {
+							{ prop.fileFilter == "*.fscene" ? "Scene Files" : "Files", prop.fileFilter },
+							{ "All Files", "*.*" }
+						};
+						if (auto chosen = FileDialog::ShowOpenDialog(opts)) {
+							std::string virtualPath = FileManager::getInstance().AbsoluteToVirtual(*chosen);
+							EditorManager::getInstance().BeginEdit({ parent });
+							value = virtualPath;
+							SetInstanceAttrFromVariant(prop.name, prop.value);
+							EditorManager::getInstance().EndEdit({ parent });
+							EngineManager::getInstance().SceneChangeEvent();
+						}
+					}
+
+					if (ImGui::BeginDragDropTarget()) {
+						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(FileManager::kResourceDragDropPayloadType)) {
+							std::string virtualPath(static_cast<const char*>(payload->Data));
+							FileManager& fm = FileManager::getInstance();
+
+							if (fm.IsDirectory(virtualPath)) {
+							}
+							else if (!MatchesFileFilter(virtualPath, prop.fileFilter)) {
+								Console::PrintWarning("Script export '" + prop.name +
+									"': dropped file does not match the required extension (" + prop.fileFilter + ")");
+							}
+							else {
+								EditorManager::getInstance().BeginEdit({ parent });
+								value = virtualPath;
+								SetInstanceAttrFromVariant(prop.name, prop.value);
+								EditorManager::getInstance().EndEdit({ parent });
+								EngineManager::getInstance().SceneChangeEvent();
+							}
+						}
+						ImGui::EndDragDropTarget();
+					}
 				}
-				if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
+				else {
+					char buf[256];
+					std::memset(buf, 0, sizeof(buf));
+					std::size_t len = std::min(value.size(), sizeof(buf) - 1);
+					std::memcpy(buf, value.data(), len);
+
+					if (ImGui::InputText("##val", buf, sizeof(buf))) {
+						if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
+						value = std::string(buf);
+						SetInstanceAttrFromVariant(prop.name, prop.value);
+						EngineManager::getInstance().SceneChangeEvent();
+					}
+					if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
+				}
 			}
 			else if constexpr (std::is_same_v<T, int>) {
 				bool changed = false;
@@ -491,7 +567,10 @@ void ScriptComponent::ProcessInspectorUI() {
 					break;
 				}
 				if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
-				if (changed) SetInstanceAttrFromVariant(prop.name, prop.value);
+				if (changed) {
+					SetInstanceAttrFromVariant(prop.name, prop.value);
+					EngineManager::getInstance().SceneChangeEvent();
+				}
 				if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
 			}
 			else if constexpr (std::is_same_v<T, float>) {
@@ -512,7 +591,10 @@ void ScriptComponent::ProcessInspectorUI() {
 					break;
 				}
 				if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
-				if (changed) SetInstanceAttrFromVariant(prop.name, prop.value);
+				if (changed) {
+					SetInstanceAttrFromVariant(prop.name, prop.value);
+					EngineManager::getInstance().SceneChangeEvent();
+				}
 				if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
 			}
 			else if constexpr (std::is_same_v<T, bool>) {
@@ -520,12 +602,14 @@ void ScriptComponent::ProcessInspectorUI() {
 					EditorManager::getInstance().BeginEdit({ parent });
 					SetInstanceAttrFromVariant(prop.name, prop.value);
 					EditorManager::getInstance().EndEdit({ parent });
+					EngineManager::getInstance().SceneChangeEvent();
 				}
 			}
 			else if constexpr (std::is_same_v<T, glm::vec2>) {
 				if (ImGui::InputFloat2("##val", &value.x)) {
 					if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
 					SetInstanceAttrFromVariant(prop.name, prop.value);
+					EngineManager::getInstance().SceneChangeEvent();
 				}
 				if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
 			}
@@ -537,7 +621,10 @@ void ScriptComponent::ProcessInspectorUI() {
 				default:                      changed = ImGui::InputFloat3("##val", &value.x); break;
 				}
 				if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
-				if (changed) SetInstanceAttrFromVariant(prop.name, prop.value);
+				if (changed) {
+					SetInstanceAttrFromVariant(prop.name, prop.value);
+					EngineManager::getInstance().SceneChangeEvent();
+				}
 				if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
 			}
 			else if constexpr (std::is_same_v<T, glm::vec4>) {
@@ -548,7 +635,10 @@ void ScriptComponent::ProcessInspectorUI() {
 				default:                      changed = ImGui::InputFloat4("##val", &value.x); break;
 				}
 				if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
-				if (changed) SetInstanceAttrFromVariant(prop.name, prop.value);
+				if (changed) {
+					SetInstanceAttrFromVariant(prop.name, prop.value);
+					EngineManager::getInstance().SceneChangeEvent();
+				}
 				if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
 			}
 			else if constexpr (std::is_same_v<T, ObjectRef>) {
@@ -591,6 +681,7 @@ void ScriptComponent::ProcessInspectorUI() {
 					ImGui::EndPopup();
 					if (changed) {
 						SetInstanceAttrFromVariant(prop.name, prop.value);
+						EngineManager::getInstance().SceneChangeEvent();
 						EditorManager::getInstance().EndEdit({ parent });
 					}
 				}
@@ -636,7 +727,7 @@ void ScriptComponent::RunOnStart() {
 }
 
 void ScriptComponent::RunProcess(float delta) {
-	if (!loaded) return; 
+	if (!loaded) return;
 
 	py::gil_scoped_acquire gil;
 	try {

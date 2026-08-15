@@ -10,7 +10,8 @@
 #include <fstream>
 #include <sstream>
 #include <cstdlib>
-#include "../../../Header Files/Core/Editor/Windows/Console.h"
+#include "../Editor/Windows/Console.h"
+#include "../../Objects/Object.h"
 
 namespace fs = std::filesystem;
 namespace py = pybind11;
@@ -42,6 +43,8 @@ public:
 	
 	void RunAllScriptsLoad();
 	void RunAllScriptsStart();
+	void RunScriptsLoad(const std::vector<Object*>& objects);
+	void RunScriptsStart(const std::vector<Object*>& objects);
 	void RunAllScriptsProcess(float delta);
 	void RunAllScriptsStop();
 

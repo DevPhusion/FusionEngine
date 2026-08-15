@@ -28,7 +28,6 @@ public:
 	static constexpr uint32_t sceneMagicByte = 0x4A52504A;
 	static constexpr uint32_t sceneVersion = 1;
 
-	std::string ToComparablePath(const std::string& path) const;
 	std::string NormalizeToVirtualPath(const std::string& path) const;
 
 	int OpenSceneTab(const std::string& path);     
@@ -48,6 +47,7 @@ public:
 	void NewScene();        
 
 	Object* AddScene(const std::string& path, Object* parent = nullptr);
+	Object* AddScene(const std::string& path, Object* parent, std::vector<Object*>& outNewObjects);
 	void RemoveScene(Object* root);
 
 	void RequestLoadScene(const std::string& path);

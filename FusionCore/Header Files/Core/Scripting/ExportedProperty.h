@@ -14,6 +14,7 @@ enum class ExportType {
     ColorEdit,
     ColorPicker,
     Drag,
+    File,
 };
 
 struct ObjectRef {
@@ -31,6 +32,7 @@ struct ExportedProperty {
     std::string suffix;
     float min = 0.0f;
     float max = 1.0f;
+    std::string fileFilter = "*.*";
     uint64_t objectRefDeleteCallbackId = -1;
 };
 
@@ -41,4 +43,5 @@ struct ExportMarker {
     std::string suffix;
     float min = 0.0f;
     float max = 1.0f;
+    std::string fileFilter = "*.*";
 };

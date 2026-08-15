@@ -12,6 +12,24 @@
 #include <numbers>
 
 namespace {
+	bool IsIntOrFloat(const py::object& v) {
+		if (py::isinstance<py::bool_>(v)) return false;  
+		return py::isinstance<py::int_>(v) || py::isinstance<py::float_>(v);
+	}
+
+	bool IsNumericOrVector(const py::object& v) {
+		return IsIntOrFloat(v) || py::isinstance<glm::vec2>(v)
+			|| py::isinstance<glm::vec3>(v) || py::isinstance<glm::vec4>(v);
+	}
+
+	bool IsColorVector(const py::object& v) {
+		return py::isinstance<glm::vec3>(v) || py::isinstance<glm::vec4>(v);
+	}
+
+	std::string PyTypeName(const py::object& v) {
+		return py::str(py::type::of(v).attr("__name__")).cast<std::string>();
+	}
+
 	void RegisterMathBindings(py::module_& m) {
 		py::class_<glm::vec2>(m, "Vector2")
 			.def(py::init<>())
@@ -299,9 +317,32 @@ namespace {
 		return registry;
 	}
 
+	std::unordered_map<PyObject*, py::object>& RegisteredClassRefs() {
+		static std::unordered_map<PyObject*, py::object> registry;
+		return registry;
+	}
+
+	std::unordered_map<std::string, PyObject*>& VirtualPathToRegisteredKey() {
+		static std::unordered_map<std::string, PyObject*> registry;
+		return registry;
+	}
+
 	void RegisterScriptClassAsComponentType(const py::object& classObj, const std::string& virtualPath) {
 		PyObject* key = classObj.ptr();
-		if (ComponentRegistry().count(key)) return; 
+
+		auto pathIt = VirtualPathToRegisteredKey().find(virtualPath);
+		if (pathIt != VirtualPathToRegisteredKey().end() && pathIt->second != key) {
+			PyObject* staleKey = pathIt->second;
+			ComponentRegistry().erase(staleKey);
+			ComponentRemoverRegistry().erase(staleKey);
+			ComponentAdderRegistry().erase(staleKey);
+			RegisteredClassRefs().erase(staleKey);
+		}
+		VirtualPathToRegisteredKey()[virtualPath] = key;
+
+		if (ComponentRegistry().count(key)) return;
+
+		RegisteredClassRefs()[key] = classObj;
 
 		ComponentRegistry()[key] = [key](Object* obj) -> py::object {
 			py::gil_scoped_acquire gil;
@@ -380,6 +421,12 @@ namespace {
 	template <typename Registry>
 	auto FindOrAutoRegister(Registry& registry, const py::object& componentClass) {
 		auto it = registry.find(componentClass.ptr());
+		if (it != registry.end()) {
+			auto refIt = RegisteredClassRefs().find(componentClass.ptr());
+			if (refIt == RegisteredClassRefs().end() || !refIt->second.is(componentClass)) {
+				it = registry.end();
+			}
+		}
 		if (it == registry.end() && TryAutoRegisterScriptClass(componentClass)) {
 			it = registry.find(componentClass.ptr());
 		}
@@ -539,6 +586,8 @@ namespace {
 
 	template <typename T>
 	void RegisterComponentGetter(py::object pyClass) {
+		RegisteredClassRefs()[pyClass.ptr()] = pyClass; 
+
 		ComponentRegistry()[pyClass.ptr()] = [](Object* obj) -> py::object {
 			T* comp = obj->GetComponent<T>();
 			if (!comp) return py::none();
@@ -548,6 +597,8 @@ namespace {
 
 	template <typename T>
 	void RegisterComponentRemover(py::object pyClass) {
+		RegisteredClassRefs()[pyClass.ptr()] = pyClass;
+
 		ComponentRemoverRegistry()[pyClass.ptr()] = [](Object* obj) {
 			obj->RemoveComponent<T>();
 			};
@@ -555,6 +606,8 @@ namespace {
 
 	template <typename T>
 	void RegisterComponentAdder(py::object pyClass, std::function<std::unique_ptr<T>(Object&)> factory) {
+		RegisteredClassRefs()[pyClass.ptr()] = pyClass;
+
 		ComponentAdderRegistry()[pyClass.ptr()] = [factory](Object& obj) -> py::object {
 			auto comp = factory(obj);
 			T* raw = comp.get();
@@ -577,37 +630,104 @@ namespace {
 		EnableAddObject<ScriptBase>(scriptClass);
 		EnableAddChild<ScriptBase>(scriptClass);
 		EnableRemoveObject<ScriptBase>(scriptClass);
+		
+		py::class_<ExportMarker>(m, "_ExportMarker");
 
-		py::enum_<ExportType>(m, "ExportType")
-			.value("Default", ExportType::Default)
-			.value("Slider", ExportType::Slider)
-			.value("AngleSlider", ExportType::AngleSlider)
-			.value("ColorEdit", ExportType::ColorEdit)
-			.value("ColorPicker", ExportType::ColorPicker)
-			.value("Drag", ExportType::Drag)
-			.export_values();
+		m.def("export", [](py::object value) {
+			return ExportMarker{ value, ExportType::Default, "", "", 0.0f, 1.0f };
+			}, py::arg("value"),
+				"Mark a script attribute as editable in the inspector using the default "
+				"widget for its type, e.g.\n"
+				"  name = export(\"Goblin\")\n"
+				"  hp = export(100)\n"
+				"For customizable export, use the appropriate export function: export_range, export_color_picker");
 
-		py::class_<ExportMarker>(m, "_ExportMarker")
-			.def(py::init<py::object, ExportType, std::string, std::string, float, float>(),
-				py::arg("value"), py::arg("type") = ExportType::Default,
+		m.def("export_range", [](py::object value, float min, float max, bool slider, std::string prefix, std::string suffix) {
+			if (!IsNumericOrVector(value)) {
+				throw py::type_error("export_range: value must be an int, float, Vector2, "
+					"Vector3, or Vector4, got " + PyTypeName(value));
+			}
+			ExportType type = slider ? ExportType::Slider : ExportType::Default;
+			return ExportMarker{ value, type, prefix, suffix, min, max };
+			}, py::arg("value"),
+				py::arg("min") = -std::numeric_limits<float>::infinity(),
+				py::arg("max") = std::numeric_limits<float>::infinity(),
+				py::arg("slider") = false,
 				py::arg("prefix") = "", py::arg("suffix") = "",
-				py::arg("min") = 0.0f, py::arg("max") = 1.0f)
-			.def_readonly("value", &ExportMarker::value)
-			.def_readonly("type", &ExportMarker::type)
-			.def_readonly("prefix", &ExportMarker::prefix)
-			.def_readonly("suffix", &ExportMarker::suffix)
-			.def_readonly("min", &ExportMarker::min)
-			.def_readonly("max", &ExportMarker::max);
+				"Mark a script attribute as editable within a min/max range. Shown as a "
+				"bounded slider by default; pass slider=False for a plain input field that "
+				"still applies min/max (and any prefix/suffix), e.g.\n"
+				"  speed = export_range(200.0, 0.0, 500.0)\n"
+				"  hp = export_range(100, 0, 999, slider=False, suffix=\" hp\")");
 
-		m.def("export", [](py::object value, ExportType type, std::string prefix,
-			std::string suffix, float min, float max) {
-				return ExportMarker{ value, type, prefix, suffix, min, max };
-			},
-			py::arg("value"), py::arg("type") = ExportType::Default,
-			py::arg("prefix") = "", py::arg("suffix") = "",
-			py::arg("min") = 0.0f, py::arg("max") = 1.0f,
-			"Mark a script attribute as editable in the inspector, e.g.\n"
-			"  speed = export(200.0, ExportType.Slider, min=0.0, max=500.0)");
+		m.def("export_drag", [](py::object value, float min, float max, std::string prefix, std::string suffix) {
+			if (!IsNumericOrVector(value)) {
+				throw py::type_error("export_drag: value must be an int, float, Vector2, "
+					"Vector3, or Vector4, got " + PyTypeName(value));
+			}
+			return ExportMarker{ value, ExportType::Drag, prefix, suffix, min, max };
+			}, py::arg("value"), py::arg("min") = 0.0f, py::arg("max") = 0.0f,
+				py::arg("prefix") = "", py::arg("suffix") = "",
+				"Mark a script attribute as editable with a click-and-drag field. "
+				"min=max=0 (the default) means unbounded, e.g.\n"
+				"  jump_force = export_drag(15.0)\n"
+				"  ammo = export_drag(30, 0, 999)");
+
+		m.def("export_angle_slider", [](py::object value, float minDegrees, float maxDegrees) {
+			if (!py::isinstance<py::float_>(value)) {
+				throw py::type_error("export_angle_slider: value must be a float (radians), "
+					"got " + PyTypeName(value) + " — try a float literal like 0.0");
+			}
+			return ExportMarker{ value, ExportType::AngleSlider, "", "", minDegrees, maxDegrees };
+			}, py::arg("value"), py::arg("min_degrees") = -360.0f, py::arg("max_degrees") = 360.0f,
+				"Mark a float script attribute (stored in radians) as editable with an "
+				"angle slider displayed in degrees, e.g.\n"
+				"  facing = export_angle_slider(0.0)\n"
+				"  cone_angle = export_angle_slider(0.5, 0.0, 180.0)");
+
+		m.def("export_color_edit", [](py::object value) {
+			if (!IsColorVector(value)) {
+				throw py::type_error("export_color_edit: value must be a Vector3 or Vector4, "
+					"got " + PyTypeName(value));
+			}
+			return ExportMarker{ value, ExportType::ColorEdit, "", "", 0.0f, 1.0f };
+			}, py::arg("value"),
+				"Mark a Vector3 or Vector4 script attribute as editable with a color "
+				"swatch that opens a picker popup, e.g.\n"
+				"  tint = export_color_edit(Vector4(1, 1, 1, 1))");
+
+		m.def("export_color_picker", [](py::object value) {
+			if (!IsColorVector(value)) {
+				throw py::type_error("export_color_picker: value must be a Vector3 or Vector4, "
+					"got " + PyTypeName(value));
+			}
+			return ExportMarker{ value, ExportType::ColorPicker, "", "", 0.0f, 1.0f };
+			}, py::arg("value"),
+				"Mark a Vector3 or Vector4 script attribute as editable with a full "
+				"color picker always shown inline, e.g.\n"
+				"  glow_color = export_color_picker(Vector3(0.2, 0.8, 1.0))");
+
+		m.def("export_file", [](py::object value, std::string extension) {
+			if (!py::isinstance<py::str>(value)) {
+				throw py::type_error("export_file: value must be a str (a res:// path), got " + PyTypeName(value));
+			}
+			return ExportMarker{ value, ExportType::File, "", "", 0.0f, 1.0f, extension };
+			}, py::arg("value"), py::arg("extension") = "*.*",
+				"Mark a str script attribute as editable with a file picker that stores a "
+				"res:// virtual path. Clicking opens a file dialog; files can also be "
+				"dragged in from the resource browser. extension filters which files are "
+				"shown/accepted, using ';'-separated glob patterns, e.g.\n"
+				"  icon = export_file(\"\", \"*.png;*.jpg;*.jpeg\")");
+
+		m.def("export_scene", [](py::object value) {
+			if (!py::isinstance<py::str>(value)) {
+				throw py::type_error("export_scene: value must be a str (a res:// path), got " + PyTypeName(value));
+			}
+			return ExportMarker{ value, ExportType::File, "", "", 0.0f, 1.0f, "*.fscene" };
+			}, py::arg("value"),
+				"Mark a str script attribute as editable with a file picker restricted to "
+				".fscene files, storing a res:// virtual path, e.g.\n"
+				"  next_level = export_scene(\"res://levels/level_2.fscene\")");
 
 		m.def("get_script", &ImportScriptClass, py::arg("path"),
 			"Import and return the Script subclass at the given res:// path. Only needed "
@@ -2221,6 +2341,28 @@ namespace {
 			}, py::arg("path"),
 				"Load a scene from a res:// path, replacing the current live scene, e.g.\n"
 				"  load_scene('res://levels/level_2.fscene')");
+
+		m.def("add_scene", [](const std::string& path, Object* parent) -> Object* {
+			if (path.rfind("res://", 0) != 0) {
+				throw py::value_error("add_scene: path must be a res:// path, got '" + path + "'");
+			}
+
+			std::vector<Object*> newObjects;
+			Object* root = SceneManager::getInstance().AddScene(path, parent, newObjects);   
+			if (!root) {
+				throw py::value_error("add_scene: failed to load scene '" + path + "'");
+			}
+
+			ScriptManager::getInstance().RunScriptsLoad(newObjects);
+			ScriptManager::getInstance().RunScriptsStart(newObjects);
+
+			return root;
+			}, py::arg("path"), py::arg("parent") = nullptr, py::return_value_policy::reference,
+				"Load a scene from a res:// path and add it as a child of parent (or as a "
+				"root-level object if parent is None). Returns the newly created root Object "
+				"of the loaded scene, e.g. "
+				"  enemy = add_scene('res://enemy.fscene', self.owner)\n"
+				"  enemy.get_component(TransformComponent).world_position = spawn_point");
 	}
 
 	void RegisterObjectBindings(py::module_& m) {
