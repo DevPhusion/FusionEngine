@@ -7,80 +7,78 @@
 #include <windows.h>
 #endif
 
-namespace {
-	int RunHiddenCommand(const std::string& command, std::string* outOutput = nullptr) {
+int ScriptManager::RunHiddenCommand(const std::string& command, std::string* outOutput) {
 #ifdef _WIN32
-		SECURITY_ATTRIBUTES saAttr{};
-		saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
-		saAttr.bInheritHandle = TRUE;
-		saAttr.lpSecurityDescriptor = nullptr;
+	SECURITY_ATTRIBUTES saAttr{};
+	saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
+	saAttr.bInheritHandle = TRUE;
+	saAttr.lpSecurityDescriptor = nullptr;
 
-		HANDLE hReadPipe = nullptr, hWritePipe = nullptr;
-		if (outOutput) {
-			if (!CreatePipe(&hReadPipe, &hWritePipe, &saAttr, 0))
-				return -1;
-			SetHandleInformation(hReadPipe, HANDLE_FLAG_INHERIT, 0);
-		}
-
-		STARTUPINFOA si{};
-		si.cb = sizeof(si);
-		si.dwFlags = STARTF_USESHOWWINDOW;
-		si.wShowWindow = SW_HIDE;
-		if (outOutput) {
-			si.dwFlags |= STARTF_USESTDHANDLES;
-			si.hStdOutput = hWritePipe;
-			si.hStdError = hWritePipe;
-		}
-
-		PROCESS_INFORMATION pi{};
-
-		std::vector<char> buffer(command.begin(), command.end());
-		buffer.push_back('\0');
-
-		BOOL ok = CreateProcessA(
-			nullptr, buffer.data(),
-			nullptr, nullptr, outOutput ? TRUE : FALSE,
-			CREATE_NO_WINDOW,
-			nullptr, nullptr,
-			&si, &pi);
-
-		if (!ok) {
-			if (outOutput) { CloseHandle(hReadPipe); CloseHandle(hWritePipe); }
+	HANDLE hReadPipe = nullptr, hWritePipe = nullptr;
+	if (outOutput) {
+		if (!CreatePipe(&hReadPipe, &hWritePipe, &saAttr, 0))
 			return -1;
-		}
-
-		if (outOutput) {
-			CloseHandle(hWritePipe);
-
-			char readBuf[4096];
-			DWORD bytesRead = 0;
-			while (ReadFile(hReadPipe, readBuf, sizeof(readBuf), &bytesRead, nullptr) && bytesRead > 0) {
-				outOutput->append(readBuf, bytesRead);
-			}
-			CloseHandle(hReadPipe);
-		}
-
-		WaitForSingleObject(pi.hProcess, INFINITE);
-
-		DWORD exitCode = 1;
-		GetExitCodeProcess(pi.hProcess, &exitCode);
-
-		CloseHandle(pi.hProcess);
-		CloseHandle(pi.hThread);
-		return static_cast<int>(exitCode);
-#else
-		if (!outOutput) return std::system(command.c_str());
-
-		std::string cmdWithRedirect = command + " 2>&1";
-		FILE* pipe = popen(cmdWithRedirect.c_str(), "r");
-		if (!pipe) return -1;
-
-		char buf[4096];
-		while (fgets(buf, sizeof(buf), pipe)) *outOutput += buf;
-
-		return pclose(pipe);
-#endif
+		SetHandleInformation(hReadPipe, HANDLE_FLAG_INHERIT, 0);
 	}
+
+	STARTUPINFOA si{};
+	si.cb = sizeof(si);
+	si.dwFlags = STARTF_USESHOWWINDOW;
+	si.wShowWindow = SW_HIDE;
+	if (outOutput) {
+		si.dwFlags |= STARTF_USESTDHANDLES;
+		si.hStdOutput = hWritePipe;
+		si.hStdError = hWritePipe;
+	}
+
+	PROCESS_INFORMATION pi{};
+
+	std::vector<char> buffer(command.begin(), command.end());
+	buffer.push_back('\0');
+
+	BOOL ok = CreateProcessA(
+		nullptr, buffer.data(),
+		nullptr, nullptr, outOutput ? TRUE : FALSE,
+		CREATE_NO_WINDOW,
+		nullptr, nullptr,
+		&si, &pi);
+
+	if (!ok) {
+		if (outOutput) { CloseHandle(hReadPipe); CloseHandle(hWritePipe); }
+		return -1;
+	}
+
+	if (outOutput) {
+		CloseHandle(hWritePipe);
+
+		char readBuf[4096];
+		DWORD bytesRead = 0;
+		while (ReadFile(hReadPipe, readBuf, sizeof(readBuf), &bytesRead, nullptr) && bytesRead > 0) {
+			outOutput->append(readBuf, bytesRead);
+		}
+		CloseHandle(hReadPipe);
+	}
+
+	WaitForSingleObject(pi.hProcess, INFINITE);
+
+	DWORD exitCode = 1;
+	GetExitCodeProcess(pi.hProcess, &exitCode);
+
+	CloseHandle(pi.hProcess);
+	CloseHandle(pi.hThread);
+	return static_cast<int>(exitCode);
+#else
+	if (!outOutput) return std::system(command.c_str());
+
+	std::string cmdWithRedirect = command + " 2>&1";
+	FILE* pipe = popen(cmdWithRedirect.c_str(), "r");
+	if (!pipe) return -1;
+
+	char buf[4096];
+	while (fgets(buf, sizeof(buf), pipe)) *outOutput += buf;
+
+	return pclose(pipe);
+#endif
 }
 
 ScriptManager::~ScriptManager() {
@@ -104,7 +102,8 @@ std::string ScriptManager::GetStatusMessage() const {
 
 bool ScriptManager::IsBusy() const {
 	SetupStage s = stage.load();
-	return s == SetupStage::CreatingVenv || s == SetupStage::GeneratingStubs || s == SetupStage::LinkingInterpreter;
+	return s == SetupStage::CreatingVenv || s == SetupStage::SyncingPackages ||
+		s == SetupStage::GeneratingStubs || s == SetupStage::LinkingInterpreter;
 }
 
 bool ScriptManager::SetupPythonEnvironment(const std::string& projectDirectory) {
@@ -135,6 +134,14 @@ void ScriptManager::RunBackgroundSetup() {
 	if (!CreateVirtualEnvironment(venvRoot)) {
 		SetStatus(SetupStage::Failed, "Failed to create Python virtual environment.");
 		return;
+	}
+
+	SetStatus(SetupStage::SyncingPackages, "Syncing project packages...");
+	PackageManager::getInstance().LoadForProject(projectRoot.string());
+	if (PackageManager::getInstance().NeedsSync()) {
+		if (!PackageManager::getInstance().SyncInstalledPackages(GetVenvPythonExecutable(venvRoot))) {
+			Console::PrintError("ScriptManager: one or more optional packages failed to sync for this project.");
+		}
 	}
 
 	if (!EngineManager::getInstance().isPlayer) {

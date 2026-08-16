@@ -407,8 +407,6 @@ void SceneManager::LoadSceneFromFile(const std::string& path) {
 		}
 	}
 
-	Console::Print("LoadScene: successfully loaded scene with {} objects").Format(objectCount);
-
 	std::vector<Object*> rootsToExpand;
 	for (auto& obj : ObjectManager::getInstance().allObjects) {
 		if (obj->isSceneRoot) rootsToExpand.push_back(obj.get());

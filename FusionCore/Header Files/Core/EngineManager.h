@@ -71,6 +71,8 @@ public:
 	};
 
 	bool isPlayer = false;
+	bool isHeadless = false;
+	bool enteringHeadlessMonitor = false;
 
 	InteractMode EngineInteractMode = EditorSelect;
 	PhysicsMode EnginePhysicsMode = Stop;

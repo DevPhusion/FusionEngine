@@ -1,6 +1,7 @@
 #include "../../../../Header Files/Core/Editor/Windows/EngineStatus.h"
 #include "../../../../Header Files/Core/Rendering/Renderer.h"
 #include "../../../../Header Files/Core/Files/FileDialog.h"
+#include "../../../../Header Files/Core/Editor/HeadlessMonitor.h"
 #include <filesystem>
 
 namespace {
@@ -162,7 +163,7 @@ void EngineStatus::ProcessWindow() {
 	const float rightGroupW = ButtonWidth("Settings") + style.ItemSpacing.x
 		+ projectNameWidth + style.ItemSpacing.x
 		+ ButtonWidth("Save") + style.ItemSpacing.x
-		+ ButtonWidth("Export");
+		+ ButtonWidth("Export") + style.ItemSpacing.x + ButtonWidth("Run Headless");
 	const float rightStartX = rowStartX + fullWidth - rightGroupW;
 
 	std::string fpsText = std::to_string(EngineManager::getInstance().fps) + " FPS";
@@ -242,6 +243,26 @@ void EngineStatus::ProcessWindow() {
 	if (ImGui::Button("Export"))
 		ImGui::OpenPopup("Export Project");
 	ProcessExportPopup();
+
+	ImGui::SameLine();
+	{
+		bool disableHeadless = HeadlessMonitor::getInstance().IsRunning()
+			|| FileManager::getInstance().currentProjectFile.empty();
+		ImGui::BeginDisabled(disableHeadless);
+		if (ImGui::Button("Run Headless")) {
+			if (SaveCurrentWork()) {
+				std::string err;
+				if (HeadlessMonitor::getInstance().Launch(FileManager::getInstance().currentProjectFile, err)) {
+					headlessLaunchError.clear();
+					EngineManager::getInstance().enteringHeadlessMonitor = true;
+				}
+				else {
+					headlessLaunchError = err;
+				}
+			}
+		}
+		ImGui::EndDisabled();
+	}
 
 	ImGui::SameLine();
 	{

@@ -84,6 +84,9 @@ void Object::ApplyState(BinaryReader& r) {
 	this->hideInHierarchy = r.Read<bool>();
 	this->hidden = r.Read<bool>();
 	this->parentID = r.Read<uint64_t>();
+
+	this->isSceneRoot = r.Read<bool>();
+	this->sourceScenePath = r.ReadString();
 	r.ReadString();
 	r.ReadString();
 

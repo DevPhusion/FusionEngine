@@ -308,6 +308,112 @@ void ProjectLauncher::ProcessNewProjectPopup() {
 	}
 }
 
+void ProjectLauncher::ProcessConfigurePackagesPopup() {
+	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowSize(ImVec2(480, 420), ImGuiCond_Appearing);
+
+	if (ImGui::BeginPopupModal("Configure Packages", nullptr, ImGuiWindowFlags_NoSavedSettings)) {
+		PackageManager& pm = PackageManager::getInstance();
+
+		if (selectedIndex >= 0 && selectedIndex < (int)projects.size())
+			ImGui::TextDisabled("%s", projects[selectedIndex].name.c_str());
+		ImGui::TextWrapped("Selected packages install into this project's own Python "
+			"environment the next time it's opened.");
+		ImGui::Dummy(ImVec2(0, 6));
+
+		ImGui::SetNextItemWidth(-1.0f);
+		ImGui::InputTextWithHint("##PackageSearch", "Search packages", packageSearchBuf, IM_ARRAYSIZE(packageSearchBuf));
+		std::string search = ToLower(packageSearchBuf);
+
+		ImGui::Dummy(ImVec2(0, 4));
+		ImGui::Separator();
+		ImGui::Dummy(ImVec2(0, 6));
+
+		if (ImGui::BeginTabBar("##PackageTabs")) {
+
+			if (ImGui::BeginTabItem("Selected")) {
+				ImGui::Dummy(ImVec2(0, 4));
+				bool any = false;
+
+				for (auto& def : pm.GetAvailablePackages()) {
+					if (!pm.IsPackageSelected(def.id)) continue;
+					if (!search.empty() && ToLower(def.displayName).find(search) == std::string::npos)
+						continue;
+					any = true;
+
+					ImGui::PushID(def.id.c_str());
+
+					ImGui::TextUnformatted(def.displayName.c_str());
+					ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+					ImGui::TextWrapped("%s", def.description.c_str());
+					ImGui::PopStyleColor();
+
+					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.45f, 0.18f, 0.18f, 1.0f));
+					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.55f, 0.22f, 0.22f, 1.0f));
+					ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.40f, 0.15f, 0.15f, 1.0f));
+					if (ImGui::Button("Remove", ImVec2(100, 0)))
+						pm.DeselectPackage(def.id);
+					ImGui::PopStyleColor(3);
+
+					ImGui::Dummy(ImVec2(0, 10));
+					ImGui::PopID();
+				}
+
+				if (!any) {
+					ImGui::TextDisabled(search.empty()
+						? "No packages selected for this project yet."
+						: "No selected packages match your search.");
+				}
+				ImGui::EndTabItem();
+			}
+
+			if (ImGui::BeginTabItem("Available")) {
+				ImGui::Dummy(ImVec2(0, 4));
+				bool any = false;
+
+				for (auto& def : pm.GetAvailablePackages()) {
+					if (pm.IsPackageSelected(def.id)) continue; 
+					if (!search.empty() && ToLower(def.displayName).find(search) == std::string::npos)
+						continue;
+					any = true;
+
+					ImGui::PushID(def.id.c_str());
+
+					ImGui::TextUnformatted(def.displayName.c_str());
+					ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+					ImGui::TextWrapped("%s", def.description.c_str());
+					ImGui::PopStyleColor();
+
+					if (ImGui::Button("Install", ImVec2(100, 0)))
+						pm.SelectPackage(def.id);
+
+					ImGui::Dummy(ImVec2(0, 10));
+					ImGui::PopID();
+				}
+
+				if (!any) {
+					ImGui::TextDisabled(search.empty()
+						? "All available packages are already selected."
+						: "No available packages match your search.");
+				}
+				ImGui::EndTabItem();
+			}
+
+			ImGui::EndTabBar();
+		}
+
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::Separator();
+		ImGui::Dummy(ImVec2(0, 6));
+
+		if (ImGui::Button("Close", ImVec2(120, 0)))
+			ImGui::CloseCurrentPopup();
+
+		ImGui::EndPopup();
+	}
+}
+
 void ProjectLauncher::ProcessLauncher() {
 	ScriptManager::getInstance().Update();
 
@@ -354,6 +460,16 @@ void ProjectLauncher::ProcessLauncher() {
 	if (ImGui::Button("Remove"))
 		RemoveProject(selectedIndex);
 	ImGui::EndDisabled();
+
+	ImGui::SameLine(0.0f, 12.0f);
+	ImGui::BeginDisabled(selectedIndex < 0);
+	if (ImGui::Button("Configure")) {
+		PackageManager::getInstance().LoadForProject(projects[selectedIndex].folderPath);
+		packageSearchBuf[0] = '\0';
+		ImGui::OpenPopup("Configure Packages");
+	}
+	ImGui::EndDisabled();
+	ProcessConfigurePackagesPopup();
 
 	ImGui::SameLine(0.0f, 24.0f);
 	ImGui::SetNextItemWidth(220.0f);

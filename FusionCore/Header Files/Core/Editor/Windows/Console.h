@@ -56,6 +56,7 @@ public:
 	Console() = default;
 
 	virtual void ProcessWindow() override;
+	void DrawContent();
 
 	static MessageBuilder Print(const std::string& message);
 	static MessageBuilder Print(const char* message);

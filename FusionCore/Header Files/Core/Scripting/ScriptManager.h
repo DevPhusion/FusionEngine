@@ -11,10 +11,21 @@
 #include <sstream>
 #include <cstdlib>
 #include "../Editor/Windows/Console.h"
+#include "PackageManager.h"
 #include "../../Objects/Object.h"
 
 namespace fs = std::filesystem;
 namespace py = pybind11;
+
+enum class SetupStage {
+	Idle,
+	CreatingVenv,
+	SyncingPackages,
+	GeneratingStubs,
+	LinkingInterpreter,
+	Done,
+	Failed
+};
 
 class ScriptManager
 {
@@ -32,14 +43,7 @@ public:
 	static constexpr const char* kBuildPythonPath =
 		"C:\\Users\\User\\AppData\\Local\\Programs\\Python\\Python311\\python.exe";
 
-	enum class SetupStage {
-		Idle,
-		CreatingVenv,
-		GeneratingStubs,
-		LinkingInterpreter, 
-		Done,
-		Failed
-	};
+	int RunHiddenCommand(const std::string& command, std::string* outOutput = nullptr);
 	
 	void RunAllScriptsLoad();
 	void RunAllScriptsStart();

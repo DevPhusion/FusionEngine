@@ -155,6 +155,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Source Files\Core\Editor\HeadlessMonitor.cpp" />
+    <ClCompile Include="Source Files\Core\Scripting\PackageManager.cpp" />
     <ClCompile Include="Source Files\Core\Editor\Windows\SceneTab.cpp" />
     <ClCompile Include="Source Files\Core\SceneManager.cpp" />
     <ClCompile Include="Source Files\Core\Files\Export\PackageReader.cpp" />
@@ -302,6 +304,7 @@
     <ClInclude Include="Header Files\Core\Scripting\ExportedProperty.h" />
     <ClInclude Include="Header Files\Objects\Object.h" />
     <ClInclude Include="Header Files\Objects\PointMass.h" />
+    <ClInclude Include="Header Files\Core\Editor\HeadlessMonitor.h" />
     <ClInclude Include="imgui\dirent.h" />
     <ClInclude Include="imgui\imconfig.h" />
     <ClInclude Include="imgui\imgui.h" />
@@ -324,6 +327,7 @@
     <ClInclude Include="Header Files\Core\Files\Export\PackageReader.h" />
     <ClInclude Include="Header Files\Core\SceneManager.h" />
     <ClInclude Include="Header Files\Core\Editor\Windows\SceneTab.h" />
+    <ClInclude Include="Header Files\Core\Scripting\PackageManager.h" />
     <ClInclude Include="stb_image.h" />
     <ClInclude Include="Header Files\Core\Editor\Windows\Viewport.h" />
   </ItemGroup>

@@ -71,7 +71,8 @@ namespace {
 	}
 
 	bool IsDevOnlyDirectory(const std::string& dirName) {
-		return dirName == ".vs" || dirName == "obj" || dirName == "x64" || dirName == "Debug";
+		return dirName == ".vs" || dirName == "obj" || dirName == "x64" || dirName == "Debug" ||
+			dirName == "PythonStubs" || dirName == ".vscode" || dirName == "typings";
 	}
 
 	bool WritePackageFile(const fs::path& packPath, const std::vector<PackEntry>& entries, std::string& outError) {

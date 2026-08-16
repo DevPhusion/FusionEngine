@@ -26,15 +26,13 @@ void Console::AddMessage(MessageType type, const std::string& text) {
 		messages.pop_front();
 	}
 
-	if (EngineManager::getInstance().isPlayer) {
+	if (EngineManager::getInstance().isPlayer || EngineManager::getInstance().isHeadless) {
 		const char* prefix = "[Info] ";
 		if (type == MessageType::Warning) prefix = "[Warning] ";
 		else if (type == MessageType::Error) prefix = "[Error] ";
 
-		if (type == MessageType::Error)
-			std::cerr << prefix << text << std::endl;
-		else
-			std::cout << prefix << text << std::endl;
+		std::ostream& out = (type == MessageType::Error) ? std::cerr : std::cout;
+		out << prefix << text << '\x1e' << std::endl; 
 	}
 }
 
@@ -78,7 +76,11 @@ static bool ContainsCaseInsensitive(const std::string& haystack, const std::stri
 
 void Console::ProcessWindow() {
 	ImGui::Begin(name.c_str());
+	DrawContent();
+	ImGui::End();
+}
 
+void Console::DrawContent() {
 	std::lock_guard<std::mutex> lock(mutex);
 
 	if (ImGui::Button("Clear")) {
@@ -96,6 +98,8 @@ void Console::ProcessWindow() {
 	float bottomBarHeight = ImGui::GetFrameHeightWithSpacing() + 4.0f;
 
 	ImGui::BeginChild("ConsoleMessages", ImVec2(0, -bottomBarHeight), true, ImGuiWindowFlags_HorizontalScrollbar);
+
+	const ImVec4 mutedColor(0.55f, 0.55f, 0.55f, 1.0f);
 
 	for (auto& msg : messages) {
 		if (msg.type == MessageType::Info && !showInfo) continue;
@@ -120,9 +124,21 @@ void Console::ProcessWindow() {
 			break;
 		}
 
+		size_t newlinePos = msg.text.find('\n');
+		std::string firstLine = (newlinePos == std::string::npos) ? msg.text : msg.text.substr(0, newlinePos);
+
 		ImGui::PushStyleColor(ImGuiCol_Text, color);
-		ImGui::TextWrapped("%s%s", prefix, msg.text.c_str());
+		ImGui::TextWrapped("%s%s", prefix, firstLine.c_str());
 		ImGui::PopStyleColor();
+
+		if (newlinePos != std::string::npos) {
+			std::string rest = msg.text.substr(newlinePos + 1);
+			if (!rest.empty()) {
+				ImGui::PushStyleColor(ImGuiCol_Text, mutedColor);
+				ImGui::TextWrapped("%s", rest.c_str());
+				ImGui::PopStyleColor();
+			}
+		}
 	}
 
 	if (autoScroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY() - 1.0f) {
@@ -152,6 +168,4 @@ void Console::ProcessWindow() {
 	ImGui::PopStyleColor();
 	ImGui::SameLine();
 	ImGui::TextColored(ImVec4(0.95f, 0.30f, 0.30f, 1.0f), "Errors: %s", FormatCount(totalErrorCount).c_str());
-
-	ImGui::End();
 }

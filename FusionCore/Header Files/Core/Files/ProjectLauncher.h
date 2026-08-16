@@ -52,6 +52,8 @@ private:
 	char newProjectNameBuf[128] = {};
 	std::string newProjectFolder;
 
+	char packageSearchBuf[128] = {};
+
 	std::string ConfigFilePath() const;
 	void LoadProjectList();
 	void SaveProjectList();
@@ -63,6 +65,7 @@ private:
 	void ImportProject();
 	void CreateProjectFromPopup();
 	void ProcessNewProjectPopup();
+	void ProcessConfigurePackagesPopup();
 	void ProcessLoadingProjectDisplay(const std::string& message);
 	void RemoveProject(int index);
 	void SortProjects();

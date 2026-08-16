@@ -24,5 +24,6 @@ public:
 	void OnKeyButtonPressed(int key, int scancode, int action, int mods);
 private:
 	std::string exportErrorMessage;
+	std::string headlessLaunchError;
 };
 
