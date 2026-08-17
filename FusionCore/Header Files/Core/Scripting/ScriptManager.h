@@ -67,6 +67,7 @@ public:
 
 	SetupStage GetStage() const { return stage.load(); }
 	bool IsBusy() const;
+	bool IsReady() const { return stage.load() == SetupStage::Done; }
 	std::string GetStatusMessage() const;
 
 	bool IsInitialized() const { return interpreter != nullptr; }
@@ -104,6 +105,7 @@ private:
 	std::filesystem::path GetVenvSitePackages(const std::filesystem::path& venvPath) const;
 
 	std::unique_ptr<pybind11::scoped_interpreter> interpreter;
+	std::unique_ptr<pybind11::gil_scoped_release> mainThreadGilRelease;
 	std::filesystem::path venvRoot;
 	std::filesystem::path projectRoot;
 

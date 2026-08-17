@@ -2322,6 +2322,41 @@ namespace {
 		EnableAddObject<CameraComponent>(cameraClass);
 		EnableAddChild<CameraComponent>(cameraClass);
 		EnableRemoveObject<CameraComponent>(cameraClass);
+
+		auto agentClass = py::class_<AgentComponent>(m, "AgentComponent")
+			.def_property("enable",
+				[](AgentComponent& self) { return self.Enabled; },
+				[](AgentComponent& self, bool e) { self.SetEnabled(e); })
+
+			.def("add_observation", py::overload_cast<float>(&AgentComponent::AddObservation), py::arg("value"))
+			.def("add_observation", [](AgentComponent& self, std::vector<float> values) {
+			self.AddObservationVec(values);
+				}, py::arg("values"))
+			.def("set_observation", &AgentComponent::SetObservation, py::arg("values"))
+			.def("clear_observation", &AgentComponent::ClearObservation)
+
+			.def("add_reward", &AgentComponent::AddReward, py::arg("delta"))
+			.def("set_reward", &AgentComponent::SetReward, py::arg("value"))
+			.def("end_episode", &AgentComponent::EndEpisode)
+
+			.def_property_readonly("action", [](AgentComponent& self) { return self.GetAction(); },
+				"The most recent action written by the training process, e.g.\n"
+				"  move_dir = self.get_component(AgentComponent).action[0]")
+
+			.def_property_readonly("agent_id", [](AgentComponent& self) { return self.AgentId(); });
+
+		EnableGetComponent<AgentComponent>(agentClass);
+		EnableHasComponent<AgentComponent>(agentClass);
+		RegisterComponentGetter<AgentComponent>(agentClass);
+		EnableGetOwner<AgentComponent>(agentClass);
+		RegisterComponentRemover<AgentComponent>(agentClass);
+		RegisterComponentAdder<AgentComponent>(agentClass,
+			[](Object& obj) { return std::make_unique<AgentComponent>(&obj); });
+		EnableAddComponent<AgentComponent>(agentClass);
+		EnableRemoveComponent<AgentComponent>(agentClass);
+		EnableAddObject<AgentComponent>(agentClass);
+		EnableAddChild<AgentComponent>(agentClass);
+		EnableRemoveObject<AgentComponent>(agentClass);
 	}
 
 	Object* CreateDefaultObject() {
@@ -2586,6 +2621,74 @@ namespace {
 				});
 	}
 
+	AgentComponent* FindFirstAgent() {
+		for (auto& obj : ObjectManager::getInstance().allObjects) {
+			if (auto* agent = obj->GetComponent<AgentComponent>()) return agent;
+		}
+		return nullptr;
+	}
+
+	void RegisterEnvironmentBindings(py::module_& m) {
+		py::module_ envMod = m.def_submodule("Environment", "Headless RL stepping API");
+
+		envMod.def("step", [](std::vector<float> action) {
+			AgentComponent* agent = FindFirstAgent();
+			if (!agent) throw py::value_error("Environment.step: no AgentComponent in the scene");
+
+			agent->SetAction(action);
+
+			const float PHYSICS_STEP = 1.0f / 60.0f;
+			{
+				py::gil_scoped_release release;   // physics/scripts re-acquire the GIL internally as needed
+				PhysicsEngine::getInstance().ProcessPhysics(PHYSICS_STEP);
+				SceneManager::getInstance().ProcessPendingSceneLoad();
+				ScriptManager::getInstance().Update();
+			}
+
+			py::list obs;
+			for (float v : agent->GetObservation()) obs.append(v);
+
+			float reward = agent->ConsumeReward();
+			bool done = agent->ConsumeDone();
+			return py::make_tuple(obs, reward, done);
+			}, py::arg("action"),
+				"Advance the simulation by one physics tick with the given action applied, "
+				"returning (observation, reward, done) for the scene's first AgentComponent.");
+
+		envMod.def("reset", []() -> py::list {
+			const std::string& editingScene = EngineManager::getInstance().editingScenePath;
+			if (!editingScene.empty())
+				SceneManager::getInstance().LoadSceneFromFile(editingScene);
+			else
+				SceneManager::getInstance().NewScene();
+
+			SceneManager::getInstance().ProcessPendingSceneLoad();
+			ScriptManager::getInstance().RunAllScriptsLoad();
+			ScriptManager::getInstance().RunAllScriptsStart();
+
+			AgentComponent* agent = FindFirstAgent();
+			if (!agent) {
+				throw py::value_error("Environment.reset: no AgentComponent found in the scene.");
+			}
+
+			agent->SetAction(std::vector<float>(2, 0.0f)); 
+			{
+				py::gil_scoped_release release;
+				PhysicsEngine::getInstance().ProcessPhysics(0.0f);
+				SceneManager::getInstance().ProcessPendingSceneLoad();
+				ScriptManager::getInstance().Update();
+			}
+
+			agent->ConsumeReward();
+			agent->ConsumeDone();
+
+			py::list obs;
+			for (float v : agent->GetObservation()) obs.append(v);
+			return obs;
+			}, "Reload the editing scene, run one priming tick so the initial observation is "
+			"populated, and return it.");
+	}
+
 	void ResetDynamicComponentRegistriesImpl() {
 		ComponentRegistry().clear();
 		ComponentRemoverRegistry().clear();
@@ -2646,6 +2749,127 @@ class _FusionPackFinder(importlib.abc.MetaPathFinder):
 if not any(type(f).__name__ == "_FusionPackFinder" for f in sys.meta_path):
     sys.meta_path.insert(0, _FusionPackFinder())
 )", ns);
+	}
+
+	constexpr const char* kFusionGymSource = R"PYCODE(
+import numpy as np
+import gymnasium as gym
+from gymnasium import spaces
+import fusion
+
+
+class FusionEnv(gym.Env):
+    def __init__(self, action_size: int = 2, obs_size: int | None = None):
+        super().__init__()
+        self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(action_size,), dtype=np.float32)
+
+        initial_obs = fusion.Environment.reset()
+        size = obs_size or len(initial_obs)
+        if size == 0:
+            raise ValueError(
+                "FusionEnv: the agent's observation is empty (Inspector shows "
+                "'Observation size: 0'). Call agent.add_observation(...) from the "
+                "attached script's Process (or OnLoad) before training — SB3 cannot "
+                "learn from a zero-dimensional observation space."
+            )
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(size,), dtype=np.float32)
+        self._last_obs = np.array(initial_obs, dtype=np.float32)
+
+    def reset(self, *, seed=None, options=None):
+        super().reset(seed=seed)
+        obs = fusion.Environment.reset()
+        self._last_obs = np.array(obs, dtype=np.float32)
+        return self._last_obs, {}
+
+    def step(self, action):
+        obs, reward, done = fusion.Environment.step(list(map(float, action)))
+        self._last_obs = np.array(obs, dtype=np.float32)
+        return self._last_obs, float(reward), bool(done), False, {}
+
+
+class _ConsoleWriter:
+    def __init__(self, is_error: bool = False):
+        self._is_error = is_error
+        self._buffer = ""
+
+    def write(self, s):
+        if not s:
+            return 0
+        self._buffer += s
+        while "\n" in self._buffer:
+            line, self._buffer = self._buffer.split("\n", 1)
+            line = line.rstrip()
+            if line:
+                if self._is_error:
+                    fusion.Console.PrintError(line)
+                else:
+                    fusion.Console.Print(line)
+        return len(s)
+
+    def flush(self):
+        if self._buffer.strip():
+            if self._is_error:
+                fusion.Console.PrintError(self._buffer.strip())
+            else:
+                fusion.Console.Print(self._buffer.strip())
+        self._buffer = ""
+
+    def isatty(self):
+        return False
+
+
+def train(algorithm: str, total_timesteps: int, save_dir: str, status_cb=None):
+    import sys
+    import os
+
+    sys.stdout = _ConsoleWriter(is_error=False)
+    sys.stderr = _ConsoleWriter(is_error=True)
+
+    from stable_baselines3 import PPO, SAC, A2C, DDPG, TD3
+
+    algos = {"PPO": PPO, "SAC": SAC, "A2C": A2C, "DDPG": DDPG, "TD3": TD3}
+    if algorithm not in algos:
+        raise ValueError(f"Unknown algorithm '{algorithm}'")
+
+    if status_cb: status_cb("Building environment")
+    env = FusionEnv()
+
+    if status_cb: status_cb(f"Training {algorithm} for {total_timesteps} steps...")
+    model = algos[algorithm]("MlpPolicy", env, verbose=1)
+    model.learn(total_timesteps=total_timesteps)
+
+    os.makedirs(save_dir, exist_ok=True)
+    save_path = os.path.join(save_dir, "trained_model")
+    model.save(save_path)
+    if status_cb: status_cb(f"Done, model saved to {save_path}.zip")
+)PYCODE";
+
+	void InstallFusionGymModule(py::module_& m) {
+		static bool installed = false;
+		if (installed) return;
+		installed = true;
+
+		py::object sysModule = py::module_::import("sys");
+		py::dict sysModules = sysModule.attr("modules");
+
+		if (sysModules.contains("fusion_gym")) return; // already loaded this interpreter session
+
+		py::object typesModule = py::module_::import("types");
+		py::object moduleObj = typesModule.attr("ModuleType")("fusion_gym");
+		moduleObj.attr("__file__") = "<embedded fusion_gym>";
+
+		py::object builtins = py::module_::import("builtins");
+		py::object codeObj = builtins.attr("compile")(kFusionGymSource, "<embedded fusion_gym>", "exec");
+
+		sysModules["fusion_gym"] = moduleObj;
+		try {
+			builtins.attr("exec")(codeObj, moduleObj.attr("__dict__"));
+		}
+		catch (const py::error_already_set&) {
+			sysModules.attr("pop")("fusion_gym", py::none());
+			Console::PrintError("PyBindings: failed to install embedded fusion_gym module: {}");
+			throw;
+		}
 	}
 }
 
@@ -2760,7 +2984,9 @@ void RegisterEngineBindings(py::module_& m) {
 	RegisterInputBindings(m);
 	RegisterConsoleBindings(m);
 	RegisterComponentBindings(m);
+	RegisterEnvironmentBindings(m);
 	RegisterSceneBindings(m);
 	RegisterObjectBindings(m);
 	InstallPackageImportHook(m);
+	InstallFusionGymModule(m);
 }

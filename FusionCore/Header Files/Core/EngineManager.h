@@ -72,7 +72,6 @@ public:
 
 	bool isPlayer = false;
 	bool isHeadless = false;
-	bool enteringHeadlessMonitor = false;
 
 	InteractMode EngineInteractMode = EditorSelect;
 	PhysicsMode EnginePhysicsMode = Stop;
@@ -87,6 +86,7 @@ public:
 	GLFWwindow* Window = nullptr;
 
 	float fps;
+	float headlessFps = 0.0f;
 	float windowWidth;
 	float windowHeight;
 	float aspectRatio;
@@ -100,6 +100,7 @@ public:
 
 	void Setup(GLFWwindow* window);
 	void ProcessEngine(float delta);
+	void ProcessEngineHeadless(float delta);
 	void SceneChangeEvent();
 	void EngineChangeEvent();
 	void SwitchInteractMode(InteractMode mode);
@@ -119,6 +120,9 @@ private:
 	int CurrentPhysicsModeChangedID = -1;
 	float time;
 	float frameCount;
+	int headlessFrameCount = 0;
+	float headlessTime = 0.0f;
+
 	EngineManager() = default;
 
 };

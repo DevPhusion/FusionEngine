@@ -1,0 +1,42 @@
+#pragma once
+#include "Component.h"
+#include "../Objects/Object.h"
+#include <vector>
+#include <cstdint>
+
+class AgentComponent : public ComponentBase<AgentComponent>
+{
+public:
+	AgentComponent(Object* parent);
+	AgentComponent() = default;
+
+	void AddObservation(float value);
+	void AddObservationVec(const std::vector<float>& values);
+	void SetObservation(const std::vector<float>& values);
+	void ClearObservation();
+
+	std::vector<float> GetAction() const { return pendingAction; }
+
+	void AddReward(float delta);
+	void SetReward(float value);
+	void EndEpisode();
+
+	void SetAction(std::vector<float> action) { pendingAction = std::move(action); }
+	std::vector<float> GetObservation() { return observation; }
+	float ConsumeReward();
+	bool ConsumeDone();
+
+	uint32_t AgentId() const { return agentId; }
+
+	virtual void Deactivate();
+	virtual void OnDelete();
+	virtual void ProcessInspectorUI();
+	virtual void CopyTo(Object* other);
+
+private:
+	std::vector<float> observation;
+	std::vector<float> pendingAction;
+	float rewardAccumulator = 0.0f;
+	bool done = false;
+	uint32_t agentId = 0;
+};

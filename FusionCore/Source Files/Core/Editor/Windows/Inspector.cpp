@@ -8,6 +8,7 @@
 #include "../../../../Header Files/Components/FluidComponent.h"
 #include "../../../../Header Files/Components/CameraComponent.h"
 #include "../../../../Header Files/Components/ScriptComponent.h"
+#include "../../../../Header Files/Components/AgentComponent.h"
 
 
 namespace {
@@ -265,6 +266,16 @@ void Inspector::ProcessWindow() {
                     m_SearchBuffer[0] = '\0';
                     ImGui::CloseCurrentPopup();
                 }
+            if (!selected->HasComponent<AgentComponent>() && std::string("Agent Component").find(search) != std::string::npos)
+                if (ImGui::MenuItem("Agent Component")) {
+                    EditorManager::getInstance().BeginEdit({ selected });
+                    selected->AddComponent(std::make_unique<AgentComponent>(selected));
+                    EditorManager::getInstance().EndEdit({ selected });
+                    EngineManager::getInstance().SceneChangeEvent();
+                    m_SearchBuffer[0] = '\0';
+                    ImGui::CloseCurrentPopup();
+                }
+
 
             const auto& registeredScripts = ScriptManager::getInstance().registeredScripts;
             if (!registeredScripts.empty()) {

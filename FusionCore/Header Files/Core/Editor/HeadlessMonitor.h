@@ -1,14 +1,12 @@
 #pragma once
 #include <string>
-#include <vector>
-#include <thread>
-#include <mutex>
-#include <atomic>
 #include "Windows/Console.h"
-#ifdef _WIN32
-#define NOMINMAX    
-#include <windows.h>
-#endif
+
+struct TrainConfig {
+	long long totalTimesteps = 100000;
+	std::string algorithm = "PPO"; // PPO | SAC | A2C | DDPG | TD3
+	std::string saveDir;
+};
 
 class HeadlessMonitor {
 public:
@@ -20,11 +18,14 @@ public:
 	HeadlessMonitor(const HeadlessMonitor&) = delete;
 	HeadlessMonitor& operator=(const HeadlessMonitor&) = delete;
 
-	bool Launch(const std::string& fusionFilePath, std::string& outError);
-
+	void Start();
 	void Stop();
+	bool IsRunning() const;
 
-	bool IsRunning() const { return running.load(); }
+	void StartTraining(const TrainConfig& config);
+	bool IsTraining() const { return training.load(); }
+	std::string GetTrainingStatus() const;
+	std::string GetTrainingError() const;
 
 	void ProcessMonitorWindow();
 
@@ -34,20 +35,13 @@ private:
 
 	Console headlessConsole{ "Headless Console" };
 
-	void ReaderThreadFunc();
-	void AppendLine(const std::string& line);
-
 	std::string projectDisplayName;
-
-#ifdef _WIN32
-	PROCESS_INFORMATION processInfo{};
-	HANDLE stdoutReadHandle = nullptr;
-	HANDLE stdoutWriteHandle = nullptr;
-#endif
-
-	std::thread readerThread;
-	std::atomic<bool> running{ false };
-	std::atomic<bool> stopRequested{ false };
-
 	bool autoScroll = true;
+
+	std::atomic<bool> training{ false };
+	std::thread trainingThread;
+
+	mutable std::mutex trainStatusMutex;
+	std::string trainStatus;
+	std::string trainError;
 };

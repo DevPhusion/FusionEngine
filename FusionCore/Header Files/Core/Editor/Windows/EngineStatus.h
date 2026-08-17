@@ -20,6 +20,7 @@ public:
 	void ProcessUnsavedChangesPopup();
 	void ProcessExportPopup();
 	void ProcessExportingPopup();
+	void ProcessTrainSettingsPopup();
 
 	void OnKeyButtonPressed(int key, int scancode, int action, int mods);
 private:

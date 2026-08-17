@@ -26,7 +26,7 @@ void Console::AddMessage(MessageType type, const std::string& text) {
 		messages.pop_front();
 	}
 
-	if (EngineManager::getInstance().isPlayer || EngineManager::getInstance().isHeadless) {
+	if (EngineManager::getInstance().isPlayer) {
 		const char* prefix = "[Info] ";
 		if (type == MessageType::Warning) prefix = "[Warning] ";
 		else if (type == MessageType::Error) prefix = "[Error] ";

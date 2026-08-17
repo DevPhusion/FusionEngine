@@ -11,6 +11,7 @@
 #include "ScriptComponent.h"
 #include "CameraComponent.h"
 #include "EditorRenderComponent.h"
+#include "AgentComponent.h"
 
 namespace {
 	std::unique_ptr<Component> CreateComponentFromName(Object* parent, std::string name) {
@@ -49,6 +50,9 @@ namespace {
 		}
 		if (name == "Script Component") {
 			return std::make_unique<ScriptComponent>(parent, "");
+		}
+		if (name == "Agent Component") {
+			return std::make_unique<AgentComponent>(parent);
 		}
 
 		return nullptr;

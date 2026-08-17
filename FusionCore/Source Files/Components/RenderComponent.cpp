@@ -213,7 +213,6 @@ std::unordered_map<std::string, std::pair<GLuint, int>>& RenderComponent::Textur
 }
 
 void RenderComponent::Draw() {
-
 	this->shader.use();
 	if (!Enabled)
 		return;

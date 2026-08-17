@@ -1,163 +1,119 @@
 #include "../../../Header Files/Core/Editor/HeadlessMonitor.h"
 #include "../../../Header Files/Core/EngineManager.h"
-#include <sstream>
+#include "../../../Header Files/Core/SceneManager.h"
+#include "../../../Header Files/Core/Files/FileManager.h"
+#include "../../../Header Files/Core/Scripting/ScriptManager.h"
 #include <filesystem>
+#include <pybind11/embed.h>
 
-namespace fs = std::filesystem;
-
-namespace {
-	std::string NormalizeLineEndings(const std::string& s) {
-		std::string result;
-		result.reserve(s.size());
-		for (size_t i = 0; i < s.size(); ++i) {
-			if (s[i] == '\r' && i + 1 < s.size() && s[i + 1] == '\n') continue;
-			result.push_back(s[i]);
-		}
-		return result;
-	}
-}
+namespace py = pybind11;
 
 HeadlessMonitor::~HeadlessMonitor() {
-	Stop();
+	if (trainingThread.joinable())
+		trainingThread.join();
 }
 
-bool HeadlessMonitor::Launch(const std::string& fusionFilePath, std::string& outError) {
-	if (running.load()) {
-		outError = "A headless run is already active.";
-		return false;
-	}
+void HeadlessMonitor::Start() {
+	projectDisplayName = std::filesystem::path(FileManager::getInstance().currentProjectFile).filename().string();
 
-#ifdef _WIN32
-	SECURITY_ATTRIBUTES saAttr{};
-	saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
-	saAttr.bInheritHandle = TRUE;
-	saAttr.lpSecurityDescriptor = nullptr;
+	EngineManager::getInstance().editingScenePath = SceneManager::getInstance().GetCurrentSceneFile();
+	EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Simulate);
+	EngineManager::getInstance().isHeadless = true;
 
-	if (!CreatePipe(&stdoutReadHandle, &stdoutWriteHandle, &saAttr, 0)) {
-		outError = "Failed to create output pipe.";
-		return false;
-	}
-	SetHandleInformation(stdoutReadHandle, HANDLE_FLAG_INHERIT, 0);
-
-	char exePathBuf[MAX_PATH];
-	GetModuleFileNameA(nullptr, exePathBuf, MAX_PATH);
-	fs::path exePath(exePathBuf);
-
-	std::ostringstream cmd;
-	cmd << "\"" << exePath.string() << "\" --headless \"" << fusionFilePath << "\"";
-
-	STARTUPINFOA si{};
-	si.cb = sizeof(si);
-	si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
-	si.wShowWindow = SW_HIDE;
-	si.hStdOutput = stdoutWriteHandle;
-	si.hStdError = stdoutWriteHandle;
-
-	processInfo = PROCESS_INFORMATION{};
-	std::string cmdStr = cmd.str();
-	std::vector<char> buffer(cmdStr.begin(), cmdStr.end());
-	buffer.push_back('\0');
-
-	std::string workDir = exePath.parent_path().string();
-
-	BOOL ok = CreateProcessA(
-		nullptr, buffer.data(),
-		nullptr, nullptr, TRUE,
-		CREATE_NO_WINDOW,
-		nullptr, workDir.c_str(),
-		&si, &processInfo);
-
-	CloseHandle(stdoutWriteHandle); 
-	stdoutWriteHandle = nullptr;
-
-	if (!ok) {
-		outError = "Failed to launch headless process.";
-		CloseHandle(stdoutReadHandle);
-		stdoutReadHandle = nullptr;
-		return false;
-	}
-
-	projectDisplayName = fs::path(fusionFilePath).filename().string();
-	stopRequested.store(false);
-	running.store(true);
-
-	readerThread = std::thread([this]() { ReaderThreadFunc(); });
-	return true;
-#else
-	outError = "Headless launch is currently only implemented on Windows.";
-	return false;
-#endif
+	Console::Print("[Monitor] Headless run started for " + projectDisplayName + ".");
 }
 
-void HeadlessMonitor::ReaderThreadFunc() {
-#ifdef _WIN32
-	char buf[4096];
-	std::string partial;
-	DWORD bytesRead = 0;
-
-	while (ReadFile(stdoutReadHandle, buf, sizeof(buf), &bytesRead, nullptr) && bytesRead > 0) {
-		partial.append(buf, bytesRead);
-
-		size_t pos;
-		while ((pos = partial.find('\x1e')) != std::string::npos) {
-			std::string record = partial.substr(0, pos);
-			AppendLine(NormalizeLineEndings(record));
-			partial.erase(0, pos + 1);
-
-			if (!partial.empty() && partial.front() == '\n') partial.erase(0, 1);
-			else if (partial.size() >= 2 && partial[0] == '\r' && partial[1] == '\n') partial.erase(0, 2);
-		}
-	}
-	if (!partial.empty()) AppendLine(NormalizeLineEndings(partial));
-
-	WaitForSingleObject(processInfo.hProcess, INFINITE);
-	CloseHandle(processInfo.hProcess);
-	CloseHandle(processInfo.hThread);
-	CloseHandle(stdoutReadHandle);
-	stdoutReadHandle = nullptr;
-
-	AppendLine(stopRequested.load() ? "[Monitor] Headless run stopped." : "[Monitor] Headless run exited.");
-	running.store(false);
-#endif
-}
-
-void HeadlessMonitor::AppendLine(const std::string& line) {
-	Console::MessageType type = Console::MessageType::Info;
-	std::string text = line;
-
-	auto stripPrefix = [&](const char* prefix, Console::MessageType t) {
-		size_t len = std::char_traits<char>::length(prefix);
-		if (line.compare(0, len, prefix) == 0) {
-			type = t;
-			text = line.substr(len);
-			return true;
-		}
-		return false;
-		};
-
-	if (!stripPrefix("[Error] ", Console::MessageType::Error) &&
-		!stripPrefix("[Warning] ", Console::MessageType::Warning)) {
-		stripPrefix("[Info] ", Console::MessageType::Info);
-	}
-
-	Console::AddMessage(type, text);
+bool HeadlessMonitor::IsRunning() const {
+	return EngineManager::getInstance().isHeadless
+		&& EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate;
 }
 
 void HeadlessMonitor::Stop() {
-	if (!running.load()) {
-		if (readerThread.joinable()) readerThread.join();
+	if (!IsRunning()) return;
+
+	SceneManager& SM = SceneManager::getInstance();
+	const std::string& editingScene = EngineManager::getInstance().editingScenePath;
+
+	if (!editingScene.empty()) {
+		SM.LoadSceneFromFile(editingScene);
+	}
+	else {
+		SM.NewScene();
+	}
+
+	EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Stop);
+
+	Console::Print("[Monitor] Headless run stopped.");
+}
+
+void HeadlessMonitor::StartTraining(const TrainConfig& config) {
+	if (training.load()) {
+		Console::PrintError("[Monitor] Training is already running.");
 		return;
 	}
 
-#ifdef _WIN32
-	stopRequested.store(true);
-	if (processInfo.hProcess) {
-		TerminateProcess(processInfo.hProcess, 0); 
+	if (!ScriptManager::getInstance().IsReady()) {
+		Console::PrintError("[Monitor] Cannot start training: Python backend isn't ready yet "
+			"(still setting up the project's virtual environment).");
+		return;
 	}
-#endif
 
-	if (readerThread.joinable()) readerThread.join();
-	running.store(false);
+	if (trainingThread.joinable())
+		trainingThread.join();
+
+	Start(); 
+	training.store(true);
+	{
+		std::lock_guard<std::mutex> lock(trainStatusMutex);
+		trainStatus = "Starting...";
+		trainError.clear();
+	}
+
+	trainingThread = std::thread([this, config]() {
+		py::gil_scoped_acquire gil;
+		try {
+			py::module_ fusionGym = py::module_::import("fusion_gym");
+			py::object trainFn = fusionGym.attr("train");
+
+			std::string saveDir = config.saveDir;
+			if (saveDir.empty()) {
+				std::filesystem::path projectDir =
+					std::filesystem::path(FileManager::getInstance().currentProjectFile).parent_path();
+				saveDir = (projectDir / "TrainedModels").string();
+			}
+
+			trainFn(config.algorithm, config.totalTimesteps, saveDir,
+				py::cpp_function([this](std::string msg) {
+					std::lock_guard<std::mutex> lock(trainStatusMutex);
+					trainStatus = msg;
+					}));
+		}
+		catch (const py::error_already_set& e) {
+			std::string msg = e.what();
+			Console::PrintError("[Monitor] Training failed: {}").Format(msg);
+			std::lock_guard<std::mutex> lock(trainStatusMutex);
+			trainError = msg;
+		}
+		catch (const std::exception& e) {
+			std::string msg = e.what();
+			Console::PrintError("[Monitor] Training failed: {}").Format(msg);
+			std::lock_guard<std::mutex> lock(trainStatusMutex);
+			trainError = msg;
+		}
+
+		Stop();
+		training.store(false);
+		});
+}
+
+std::string HeadlessMonitor::GetTrainingStatus() const {
+	std::lock_guard<std::mutex> lock(trainStatusMutex);
+	return trainStatus;
+}
+
+std::string HeadlessMonitor::GetTrainingError() const {
+	std::lock_guard<std::mutex> lock(trainStatusMutex);
+	return trainError;
 }
 
 void HeadlessMonitor::ProcessMonitorWindow() {
@@ -179,12 +135,30 @@ void HeadlessMonitor::ProcessMonitorWindow() {
 	ImGui::Dummy(ImVec2(0, 6));
 	ImGui::Indent(8.0f);
 
-	bool isRunning = running.load();
+	bool isRunning = IsRunning();
+	bool isTraining = IsTraining();
+
 	ImGui::TextColored(isRunning ? ImVec4(0.35f, 0.85f, 0.4f, 1.0f) : ImVec4(0.85f, 0.35f, 0.35f, 1.0f),
 		isRunning ? "Running" : "Stopped");
 
 	ImGui::SameLine(0.0f, 16.0f);
-	ImGui::BeginDisabled(!isRunning);
+	ImGui::Text("%.0f steps/s", EngineManager::getInstance().headlessFps);
+
+	if (isTraining) {
+		ImGui::SameLine(0.0f, 16.0f);
+		ImGui::TextColored(ImVec4(0.55f, 0.75f, 0.95f, 1.0f), "%s", GetTrainingStatus().c_str());
+	}
+
+	std::string trainErr = GetTrainingError();
+	if (!trainErr.empty()) {
+		ImGui::Dummy(ImVec2(0, 4));
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.35f, 0.35f, 1.0f));
+		ImGui::TextWrapped("Training failed: %s", trainErr.c_str());
+		ImGui::PopStyleColor();
+	}
+
+	ImGui::SameLine(0.0f, 16.0f);
+	ImGui::BeginDisabled(!isRunning || isTraining);
 	if (ImGui::Button("Stop"))
 		Stop();
 	ImGui::EndDisabled();
@@ -194,26 +168,15 @@ void HeadlessMonitor::ProcessMonitorWindow() {
 
 	if (!isRunning) {
 		ImGui::SameLine(0.0f, 12.0f);
-		if (ImGui::Button("Back to Editor"))
-			EngineManager::getInstance().enteringHeadlessMonitor = false;
+		if (ImGui::Button("Back to Editor")) {
+			EngineManager::getInstance().isHeadless = false;
+		}
 	}
 
 	ImGui::Unindent(8.0f);
 	ImGui::Dummy(ImVec2(0, 8));
 
-	if (ImGui::BeginTabBar("##MonitorTabs")) {
-		if (ImGui::BeginTabItem("Console")) {
-			headlessConsole.DrawContent();
-			ImGui::EndTabItem();
-		}
-
-		if (ImGui::BeginTabItem("Agents")) {
-			ImGui::TextDisabled("Agent training monitoring will appear here once the RL package reports data.");
-			ImGui::EndTabItem();
-		}
-
-		ImGui::EndTabBar();
-	}
+	headlessConsole.DrawContent();
 
 	ImGui::End();
 }

@@ -247,22 +247,22 @@ void EngineStatus::ProcessWindow() {
 	ImGui::SameLine();
 	{
 		bool disableHeadless = HeadlessMonitor::getInstance().IsRunning()
-			|| FileManager::getInstance().currentProjectFile.empty();
+			|| FileManager::getInstance().currentProjectFile.empty()
+			|| !ScriptManager::getInstance().IsReady();
+
 		ImGui::BeginDisabled(disableHeadless);
-		if (ImGui::Button("Run Headless")) {
-			if (SaveCurrentWork()) {
-				std::string err;
-				if (HeadlessMonitor::getInstance().Launch(FileManager::getInstance().currentProjectFile, err)) {
-					headlessLaunchError.clear();
-					EngineManager::getInstance().enteringHeadlessMonitor = true;
-				}
-				else {
-					headlessLaunchError = err;
-				}
-			}
-		}
+		if (ImGui::Button("Run Headless"))
+			ImGui::OpenPopup("Train Settings");
 		ImGui::EndDisabled();
+
+		if (!ScriptManager::getInstance().IsReady()
+			&& !FileManager::getInstance().currentProjectFile.empty()
+			&& ImGui::IsItemHovered()) {
+			ImGui::SetTooltip("Python backend is still setting up (%s)",
+				ScriptManager::getInstance().GetStatusMessage().c_str());
+		}
 	}
+	ProcessTrainSettingsPopup();
 
 	ImGui::SameLine();
 	{
@@ -693,6 +693,79 @@ void EngineStatus::ProcessUnsavedChangesPopup() {
 			EngineManager::getInstance().pendingClose = false;
 			ImGui::CloseCurrentPopup();
 		}
+
+		ImGui::EndPopup();
+	}
+}
+
+void EngineStatus::ProcessTrainSettingsPopup() {
+	static int steps = 100000;
+	static int algoIndex = 0;
+	static std::string saveDir;
+	static bool saveDirInitialized = false;
+	const char* algos[] = { "PPO", "SAC", "A2C", "DDPG", "TD3" };
+
+	if (!saveDirInitialized && !FileManager::getInstance().currentProjectFile.empty()) {
+		std::filesystem::path projectDir =
+			std::filesystem::path(FileManager::getInstance().currentProjectFile).parent_path();
+		saveDir = (projectDir / "TrainedModels").string();
+		saveDirInitialized = true;
+	}
+
+	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+	if (ImGui::BeginPopupModal("Train Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
+		ImGui::Text("Algorithm");
+		ImGui::SetNextItemWidth(160.0f);
+		ImGui::Combo("##Algo", &algoIndex, algos, IM_ARRAYSIZE(algos));
+
+		ImGui::Text("Total timesteps");
+		ImGui::SetNextItemWidth(160.0f);
+		ImGui::InputInt("##Steps", &steps, 1000, 10000);
+		steps = std::max(1, steps);
+
+		ImGui::Dummy(ImVec2(0, 6));
+		ImGui::Text("Save folder");
+		{
+			char folderBuf[256];
+			std::string display = saveDir.empty() ? "(no folder selected)" : saveDir;
+#if defined(_MSC_VER)
+			strcpy_s(folderBuf, display.c_str());
+#else
+			strncpy(folderBuf, display.c_str(), sizeof(folderBuf) - 1);
+			folderBuf[sizeof(folderBuf) - 1] = '\0';
+#endif
+			ImGui::SetNextItemWidth(280.0f);
+			ImGui::InputText("##SaveDir", folderBuf, IM_ARRAYSIZE(folderBuf), ImGuiInputTextFlags_ReadOnly);
+			ImGui::SameLine();
+			if (ImGui::Button("Browse##SaveDir")) {
+				if (auto folder = FileDialog::ShowFolderDialog("Choose Save Folder")) {
+					saveDir = *folder;
+				}
+			}
+		}
+
+		ImGui::Dummy(ImVec2(0, 8));
+		ImGui::Separator();
+		ImGui::Dummy(ImVec2(0, 6));
+
+		bool canStart = !saveDir.empty();
+		ImGui::BeginDisabled(!canStart);
+		if (ImGui::Button("Start Training", ImVec2(140, 0))) {
+			if (SaveCurrentWork()) {
+				TrainConfig cfg;
+				cfg.totalTimesteps = steps;
+				cfg.algorithm = algos[algoIndex];
+				cfg.saveDir = saveDir;
+				HeadlessMonitor::getInstance().StartTraining(cfg);
+				ImGui::CloseCurrentPopup();
+			}
+		}
+		ImGui::EndDisabled();
+		ImGui::SameLine();
+		if (ImGui::Button("Cancel", ImVec2(120, 0)))
+			ImGui::CloseCurrentPopup();
 
 		ImGui::EndPopup();
 	}

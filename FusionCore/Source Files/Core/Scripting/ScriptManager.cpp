@@ -84,6 +84,7 @@ int ScriptManager::RunHiddenCommand(const std::string& command, std::string* out
 ScriptManager::~ScriptManager() {
 	if (workerThread.joinable())
 		workerThread.join();
+	mainThreadGilRelease.reset();
 	interpreter.reset();
 }
 
@@ -171,6 +172,7 @@ void ScriptManager::Update() {
 
 void ScriptManager::StartEmbeddedInterpreter() {
 	interpreter = std::make_unique<py::scoped_interpreter>();
+	mainThreadGilRelease = std::make_unique<py::gil_scoped_release>();
 }
 
 bool ScriptManager::CreateVirtualEnvironment(const fs::path& venvPath) {
@@ -247,6 +249,8 @@ std::filesystem::path ScriptManager::GetVenvSitePackages(const fs::path& venvPat
 void ScriptManager::LinkInterpreterToVenv(const fs::path& venvPath) {
 	fs::path sitePackages = GetVenvSitePackages(venvPath);
 	if (sitePackages.empty()) return;
+
+	py::gil_scoped_acquire gil;   
 
 	py::module_ sys = py::module_::import("sys");
 	py::list path = sys.attr("path");

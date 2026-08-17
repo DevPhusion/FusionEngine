@@ -4,9 +4,6 @@
 #include<iostream>
 #include <windows.h>
 #include <filesystem>
-#include <atomic>
-#include <thread>
-#include <chrono>
 #include "../FusionCore/Header Files/Core/InputManager.h"
 #include "../FusionCore/Header Files/Core/Rendering/Renderer.h"
 #include "../FusionCore/Header Files/Core/Physics/PhysicsEngine.h"
@@ -35,22 +32,7 @@ void SetWorkingDirectoryToExePath() {
 }
 
 namespace {
-	std::atomic<bool> g_stopRequested{ false };
-
-	BOOL WINAPI ConsoleCtrlHandler(DWORD ctrlType) {
-		switch (ctrlType) {
-		case CTRL_C_EVENT:
-		case CTRL_BREAK_EVENT:
-		case CTRL_CLOSE_EVENT:
-			g_stopRequested.store(true);
-			return TRUE;
-		default:
-			return FALSE;
-		}
-	}
-
 	struct LaunchArgs {
-		bool headless = false;
 		std::string projectPath;
 	};
 
@@ -58,19 +40,10 @@ namespace {
 		LaunchArgs args;
 		for (int i = 1; i < argc; i++) {
 			std::string arg = argv[i];
-			if (arg == "--headless" || arg == "-headless")
-				args.headless = true;
-			else if (args.projectPath.empty())
+			if (args.projectPath.empty())
 				args.projectPath = arg;
 		}
 		return args;
-	}
-
-	void WaitForScriptEnvironmentReady() {
-		while (ScriptManager::getInstance().IsBusy()) {
-			ScriptManager::getInstance().Update();
-			std::this_thread::sleep_for(std::chrono::milliseconds(16));
-		}
 	}
 }
 
@@ -78,17 +51,6 @@ int main(int argc, char* argv[]) {
 	SetWorkingDirectoryToExePath();
 
 	LaunchArgs launchArgs = ParseLaunchArgs(argc, argv);
-	const bool headless = launchArgs.headless;
-
-	if (headless && launchArgs.projectPath.empty()) {
-		std::cerr << "--headless requires a project path, e.g.\n"
-			"  FusionApp.exe --headless \"D:\\Projects\\MyProject\\MyProject.fusion\"" << std::endl;
-		return 1;
-	}
-
-	if (headless) {
-		SetConsoleCtrlHandler(ConsoleCtrlHandler, TRUE);
-	}
 
 	glfwInit();
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -99,84 +61,36 @@ int main(int argc, char* argv[]) {
 	const int launcherHeight = 600;
 
 	glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-	GLFWwindow* window = glfwCreateWindow(launcherWidth, launcherHeight,
-		headless ? "Fusion Engine - Headless" : "Fusion Engine - Projects", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(launcherWidth, launcherHeight, "Fusion Engine - Projects", NULL, NULL);
 	glfwMakeContextCurrent(window);
 	gladLoadGL();
 
-	if (!headless) {
-		const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-		if (mode) {
-			int posX = (mode->width - launcherWidth) / 2;
-			int posY = (mode->height - launcherHeight) / 2;
-			glfwSetWindowPos(window, posX, posY);
-		}
-		glfwShowWindow(window);
+	const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
+	if (mode) {
+		int posX = (mode->width - launcherWidth) / 2;
+		int posY = (mode->height - launcherHeight) / 2;
+		glfwSetWindowPos(window, posX, posY);
+	}
+	glfwShowWindow(window);
 
-		GLFWimage images[1];
-		images[0].pixels = stbi_load("Resources/Images/engineIcon.png", &images[0].width, &images[0].height, 0, 4);
-		if (images[0].pixels) {
-			glfwSetWindowIcon(window, 1, images);
-			stbi_image_free(images[0].pixels);
-		}
+	GLFWimage images[1];
+	images[0].pixels = stbi_load("Resources/Images/engineIcon.png", &images[0].width, &images[0].height, 0, 4);
+	if (images[0].pixels) {
+		glfwSetWindowIcon(window, 1, images);
+		stbi_image_free(images[0].pixels);
 	}
 
 	EngineManager::getInstance().isPlayer = false;
-	EngineManager::getInstance().isHeadless = headless;
 
 	Renderer::getInstance().Setup(&ObjectManager::getInstance().allObjects);
-
-	if (!headless) {
-		EditorManager::getInstance().Setup(window);
-	}
+	EditorManager::getInstance().Setup(window);
 
 	InputManager::getInstance().Setup(window);
 	EngineManager::getInstance().Setup(window);
 	PhysicsEngine::getInstance().Setup(&ObjectManager::getInstance().allObjects);
 	Camera::getInstance().Setup();
 
-	if (!headless) {
-		Renderer::getInstance().SetupGrid();
-	}
-
-	if (headless) {
-		FileManager::getInstance().LoadProjectFromFile(launchArgs.projectPath);
-		WaitForScriptEnvironmentReady();
-
-		EngineManager::getInstance().editingScenePath = SceneManager::getInstance().GetCurrentSceneFile();
-		EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Simulate);
-
-		std::cout << "Fusion Engine: running headless, project loaded from " << launchArgs.projectPath << std::endl;
-
-		const float PHYSICS_STEP = 1.0f / 60.0f;
-
-		uint64_t stepsThisWindow = 0;
-		double statsWindowStart = glfwGetTime();
-
-		while (!g_stopRequested.load()) {
-			glfwPollEvents(); 
-
-			PhysicsEngine::getInstance().ProcessPhysics(PHYSICS_STEP);
-			SceneManager::getInstance().ProcessPendingSceneLoad();
-			ScriptManager::getInstance().Update();
-			InputManager::getInstance().ClearFrameState();
-
-			stepsThisWindow++;
-			double now = glfwGetTime();
-			if (now - statsWindowStart >= 1.0) {
-				double simSeconds = stepsThisWindow * (double)PHYSICS_STEP;
-				double realSeconds = now - statsWindowStart;
-				std::cout << "Fusion Engine: " << stepsThisWindow << " steps/sec ("
-					<< (simSeconds / realSeconds) << "x realtime)" << std::endl;
-				stepsThisWindow = 0;
-				statsWindowStart = now;
-			}
-		}
-
-		glfwDestroyWindow(window);
-		glfwTerminate();
-		return 0;
-	}
+	Renderer::getInstance().SetupGrid();
 
 	ProjectLauncher::getInstance().Setup(window);
 	glfwPollEvents();
@@ -190,6 +104,9 @@ int main(int argc, char* argv[]) {
 	float physicsAccumulator = 0.0f;
 	const float PHYSICS_STEP = 1.0f / 60.0f;
 	bool enteredEditor = false;
+	bool enteredHeadlessMonitor = false;
+	double headlessMonitorLastDraw = 0.0;
+	double headlessPrevT = 0.0;
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
@@ -211,21 +128,54 @@ int main(int argc, char* argv[]) {
 			continue;
 		}
 
-		if (EngineManager::getInstance().enteringHeadlessMonitor) {
-			glClearColor(0.11f, 0.11f, 0.13f, 1.0f);
-			glClear(GL_COLOR_BUFFER_BIT);
+		if (EngineManager::getInstance().isHeadless) {
+			if (!enteredHeadlessMonitor) {
+				enteredHeadlessMonitor = true;
+				glfwSwapInterval(0);
+				headlessMonitorLastDraw = 0.0;
+				headlessPrevT = glfwGetTime();
+			}
 
-			ImGui_ImplOpenGL3_NewFrame();
-			ImGui_ImplGlfw_NewFrame();
-			ImGui::NewFrame();
+			if (HeadlessMonitor::getInstance().IsRunning() && !HeadlessMonitor::getInstance().IsTraining()) {
+				PhysicsEngine::getInstance().ProcessPhysics(PHYSICS_STEP);
+				SceneManager::getInstance().ProcessPendingSceneLoad();
+				ScriptManager::getInstance().Update();
+				InputManager::getInstance().ClearFrameState();
 
-			HeadlessMonitor::getInstance().ProcessMonitorWindow();
+				double now = glfwGetTime();
+				float realDelta = (float)(now - headlessPrevT);
+				headlessPrevT = now;
+				EngineManager::getInstance().ProcessEngineHeadless(realDelta);
+			}
+			else {
+				headlessPrevT = glfwGetTime();
+			}
 
-			ImGui::Render();
-			ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+			const double MONITOR_REFRESH_INTERVAL = 1.0 / 30.0;
+			double drawNow = glfwGetTime();
+			if (drawNow - headlessMonitorLastDraw >= MONITOR_REFRESH_INTERVAL) {
+				headlessMonitorLastDraw = drawNow;
 
-			glfwSwapBuffers(window);
+				glClearColor(0.11f, 0.11f, 0.13f, 1.0f);
+				glClear(GL_COLOR_BUFFER_BIT);
+
+				ImGui_ImplOpenGL3_NewFrame();
+				ImGui_ImplGlfw_NewFrame();
+				ImGui::NewFrame();
+
+				HeadlessMonitor::getInstance().ProcessMonitorWindow();
+
+				ImGui::Render();
+				ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+				glfwSwapBuffers(window);
+			}
+
 			continue;
+		}
+		else if (enteredHeadlessMonitor) {
+			enteredHeadlessMonitor = false;
+			glfwSwapInterval(1);
 		}
 
 		if (!enteredEditor) {
@@ -282,7 +232,6 @@ int main(int argc, char* argv[]) {
 	ImGui::DestroyContext();
 	ImPlot::DestroyContext();
 	glfwDestroyWindow(window);
-	HeadlessMonitor::getInstance().Stop();
 	glfwTerminate();
 	return 0;
 }

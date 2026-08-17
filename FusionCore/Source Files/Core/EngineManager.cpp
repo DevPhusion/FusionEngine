@@ -28,6 +28,17 @@ void EngineManager::ProcessEngine(float delta) {
 	}
 }
 
+void EngineManager::ProcessEngineHeadless(float delta) {
+	headlessFrameCount++;
+	headlessTime += delta;
+
+	if (headlessTime >= 1) {
+		headlessFps = headlessFrameCount / headlessTime;
+		headlessFrameCount = 0;
+		headlessTime = 0;
+	}
+}
+
 void EngineManager::SceneChangeEvent() {
 	if (EnginePhysicsMode == PhysicsMode::Stop) {
 		SceneManager::getInstance().MarkActiveDirty();
