@@ -1,7 +1,7 @@
 #include "../../Header Files/Core/SceneManager.h"
 #include "../../Header Files/Core/Physics/Constraint/PGSConstraint/Constraints.h"
 #include "../../Header Files/Core/Physics/PhysicsEngine.h"
-#include "../../Header Files/Core/Files/Export/PackageReader.h"
+#include "../../Header Files/Core/Files/Export/ExportPackageReader.h"
 #include "../../Header Files/Core/Scripting/ScriptManager.h"
 
 namespace fs = std::filesystem;
@@ -73,7 +73,7 @@ bool SceneManager::ParseSceneObjects(const std::string& path, std::vector<std::u
 			? path
 			: FileManager::getInstance().AbsoluteToVirtual(path);
 
-		const std::vector<uint8_t>* packed = PackageReader::getInstance().Get(virtualPath);
+		const std::vector<uint8_t>* packed = ExportPackageReader::getInstance().Get(virtualPath);
 		if (!packed) {
 			Console::PrintError("AddScene: scene not found in package: {}").Format(virtualPath);
 			return false;
@@ -324,7 +324,7 @@ void SceneManager::LoadSceneFromFile(const std::string& path) {
 	std::string packedBuffer;
 
 	if (EngineManager::getInstance().isPlayer) {
-		const std::vector<uint8_t>* packed = PackageReader::getInstance().Get(virtualPath);
+		const std::vector<uint8_t>* packed = ExportPackageReader::getInstance().Get(virtualPath);
 		if (!packed) {
 			Console::PrintError("LoadScene: scene not found in package: {}").Format(virtualPath);
 			return;
@@ -530,7 +530,7 @@ bool SceneManager::ParseTopLevelSceneObjects(const std::string& path, std::vecto
 			? path
 			: FileManager::getInstance().AbsoluteToVirtual(path);
 
-		const std::vector<uint8_t>* packed = PackageReader::getInstance().Get(virtualPath);
+		const std::vector<uint8_t>* packed = ExportPackageReader::getInstance().Get(virtualPath);
 		if (!packed) {
 			Console::PrintError("ParseTopLevelSceneObjects: scene not found in package: {}").Format(virtualPath);
 			return false;

@@ -13,24 +13,29 @@ HeadlessMonitor::~HeadlessMonitor() {
 		trainingThread.join();
 }
 
-void HeadlessMonitor::Start() {
+void HeadlessMonitor::SerializeTrainConfig(BinaryWriter& w) {
+	w.Write(config.totalTimesteps);
+	w.WriteString(config.algorithm);
+	w.WriteString(config.saveDir);
+}
+
+void HeadlessMonitor::DeserializeTrainConfig(BinaryReader& r) {
+	config.totalTimesteps = r.Read<long long>();
+	config.algorithm = r.ReadString();
+	config.saveDir = r.ReadString();
+}
+
+void HeadlessMonitor::Begin() {
 	projectDisplayName = std::filesystem::path(FileManager::getInstance().currentProjectFile).filename().string();
 
 	EngineManager::getInstance().editingScenePath = SceneManager::getInstance().GetCurrentSceneFile();
 	EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Simulate);
 	EngineManager::getInstance().isHeadless = true;
 
-	Console::Print("[Monitor] Headless run started for " + projectDisplayName + ".");
+	Console::Print("[Training] Training started for " + projectDisplayName + ".");
 }
 
-bool HeadlessMonitor::IsRunning() const {
-	return EngineManager::getInstance().isHeadless
-		&& EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate;
-}
-
-void HeadlessMonitor::Stop() {
-	if (!IsRunning()) return;
-
+void HeadlessMonitor::End() {
 	SceneManager& SM = SceneManager::getInstance();
 	const std::string& editingScene = EngineManager::getInstance().editingScenePath;
 
@@ -43,17 +48,17 @@ void HeadlessMonitor::Stop() {
 
 	EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Stop);
 
-	Console::Print("[Monitor] Headless run stopped.");
+	Console::Print("[Training] Training finished.");
 }
 
 void HeadlessMonitor::StartTraining(const TrainConfig& config) {
 	if (training.load()) {
-		Console::PrintError("[Monitor] Training is already running.");
+		Console::PrintError("[Training] Training is already running.");
 		return;
 	}
 
 	if (!ScriptManager::getInstance().IsReady()) {
-		Console::PrintError("[Monitor] Cannot start training: Python backend isn't ready yet "
+		Console::PrintError("[Training] Cannot start training: Python backend isn't ready yet "
 			"(still setting up the project's virtual environment).");
 		return;
 	}
@@ -61,7 +66,9 @@ void HeadlessMonitor::StartTraining(const TrainConfig& config) {
 	if (trainingThread.joinable())
 		trainingThread.join();
 
-	Start(); 
+	this->config = config;
+
+	Begin();
 	training.store(true);
 	{
 		std::lock_guard<std::mutex> lock(trainStatusMutex);
@@ -90,18 +97,18 @@ void HeadlessMonitor::StartTraining(const TrainConfig& config) {
 		}
 		catch (const py::error_already_set& e) {
 			std::string msg = e.what();
-			Console::PrintError("[Monitor] Training failed: {}").Format(msg);
+			Console::PrintError("[Training] Training failed: {}").Format(msg);
 			std::lock_guard<std::mutex> lock(trainStatusMutex);
 			trainError = msg;
 		}
 		catch (const std::exception& e) {
 			std::string msg = e.what();
-			Console::PrintError("[Monitor] Training failed: {}").Format(msg);
+			Console::PrintError("[Training] Training failed: {}").Format(msg);
 			std::lock_guard<std::mutex> lock(trainStatusMutex);
 			trainError = msg;
 		}
 
-		Stop();
+		pendingEnd.store(true);
 		training.store(false);
 		});
 }
@@ -117,6 +124,12 @@ std::string HeadlessMonitor::GetTrainingError() const {
 }
 
 void HeadlessMonitor::ProcessMonitorWindow() {
+	EngineManager::getInstance().ProcessPendingMainThreadTasks();
+
+	if (pendingEnd.exchange(false)) {
+		End();
+	}
+
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
 	ImGui::SetNextWindowPos(viewport->WorkPos);
 	ImGui::SetNextWindowSize(viewport->WorkSize);
@@ -128,25 +141,31 @@ void HeadlessMonitor::ProcessMonitorWindow() {
 
 	ImGui::Dummy(ImVec2(0, 6));
 	ImGui::Indent(8.0f);
-	ImGui::Text("Headless Run - %s", projectDisplayName.c_str());
+	ImGui::Text("Training - %s", projectDisplayName.c_str());
 	ImGui::Unindent(8.0f);
 	ImGui::Dummy(ImVec2(0, 4));
 	ImGui::Separator();
 	ImGui::Dummy(ImVec2(0, 6));
 	ImGui::Indent(8.0f);
 
-	bool isRunning = IsRunning();
 	bool isTraining = IsTraining();
 
-	ImGui::TextColored(isRunning ? ImVec4(0.35f, 0.85f, 0.4f, 1.0f) : ImVec4(0.85f, 0.35f, 0.35f, 1.0f),
-		isRunning ? "Running" : "Stopped");
-
-	ImGui::SameLine(0.0f, 16.0f);
-	ImGui::Text("%.0f steps/s", EngineManager::getInstance().headlessFps);
+	ImGui::TextColored(isTraining ? ImVec4(0.35f, 0.85f, 0.4f, 1.0f) : ImVec4(0.85f, 0.35f, 0.35f, 1.0f),
+		isTraining ? "Training" : "Finished");
 
 	if (isTraining) {
 		ImGui::SameLine(0.0f, 16.0f);
 		ImGui::TextColored(ImVec4(0.55f, 0.75f, 0.95f, 1.0f), "%s", GetTrainingStatus().c_str());
+	}
+
+	ImGui::SameLine(0.0f, 16.0f);
+	ImGui::Checkbox("Auto-scroll", &autoScroll);
+
+	if (!isTraining) {
+		ImGui::SameLine(0.0f, 12.0f);
+		if (ImGui::Button("Back to Editor")) {
+			EngineManager::getInstance().isHeadless = false;
+		}
 	}
 
 	std::string trainErr = GetTrainingError();
@@ -155,22 +174,6 @@ void HeadlessMonitor::ProcessMonitorWindow() {
 		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.35f, 0.35f, 1.0f));
 		ImGui::TextWrapped("Training failed: %s", trainErr.c_str());
 		ImGui::PopStyleColor();
-	}
-
-	ImGui::SameLine(0.0f, 16.0f);
-	ImGui::BeginDisabled(!isRunning || isTraining);
-	if (ImGui::Button("Stop"))
-		Stop();
-	ImGui::EndDisabled();
-
-	ImGui::SameLine(0.0f, 12.0f);
-	ImGui::Checkbox("Auto-scroll", &autoScroll);
-
-	if (!isRunning) {
-		ImGui::SameLine(0.0f, 12.0f);
-		if (ImGui::Button("Back to Editor")) {
-			EngineManager::getInstance().isHeadless = false;
-		}
 	}
 
 	ImGui::Unindent(8.0f);

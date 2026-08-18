@@ -11,7 +11,7 @@
 #include "../FusionCore/Header Files/Core/EngineManager.h"
 #include "../FusionCore/Header Files/Core/ObjectManager.h"
 #include "../FusionCore/Header Files/Core/Files/ProjectLauncher.h"
-#include "../FusionCore/Header Files/Core/Files/Export/PackageReader.h"
+#include "../FusionCore/Header Files/Core/Files/Export/ExportPackageReader.h"
 #include "../FusionCore/Header Files/Core/Rendering/Shader.h"
 #include "../FusionCore/Header Files/Core/Scripting/PyBindings.h"
 #include "../FusionCore/Header Files/Core/Scripting/ScriptManager.h"
@@ -95,8 +95,8 @@ bool LoadProjectForPlayer(const std::filesystem::path& exeDir, const std::string
 	std::filesystem::path packPath = exeDir / "data.pack";
 	std::error_code ec;
 
-	if (std::filesystem::exists(packPath, ec) && PackageReader::getInstance().Load(packPath)) {
-		const std::vector<uint8_t>* fusionBytes = PackageReader::getInstance().Get("__project__");
+	if (std::filesystem::exists(packPath, ec) && ExportPackageReader::getInstance().Load(packPath)) {
+		const std::vector<uint8_t>* fusionBytes = ExportPackageReader::getInstance().Get("__project__");
 		if (!fusionBytes) {
 			FatalError("data.pack is missing the project data entry.");
 			return false;

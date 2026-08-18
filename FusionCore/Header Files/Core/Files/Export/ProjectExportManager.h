@@ -5,7 +5,7 @@
 #include <thread>
 #include "../BinaryReader.h"
 #include "../BinaryWriter.h"
-#include "PackageCrypto.h"
+#include "ExportPackageCrypto.h"
 
 struct ExportConfiguration {
 	std::string exportFolder;

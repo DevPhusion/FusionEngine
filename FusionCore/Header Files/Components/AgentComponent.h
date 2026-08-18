@@ -26,6 +26,11 @@ public:
 	float ConsumeReward();
 	bool ConsumeDone();
 
+	void SetActionSpace(int size, float low = -1.0f, float high = 1.0f);
+	int GetActionSize() const { return actionSize; }
+	float GetActionLow() const { return actionLow; }
+	float GetActionHigh() const { return actionHigh; }
+
 	uint32_t AgentId() const { return agentId; }
 
 	virtual void Deactivate();
@@ -39,4 +44,8 @@ private:
 	float rewardAccumulator = 0.0f;
 	bool done = false;
 	uint32_t agentId = 0;
+
+	int actionSize = 2;
+	float actionLow = -1.0f;
+	float actionHigh = 1.0f;
 };

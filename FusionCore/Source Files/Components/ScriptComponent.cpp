@@ -299,7 +299,7 @@ void ScriptComponent::EnsureLoaded() {
 	std::filesystem::path absPath = FileManager::getInstance().VirtualToAbsolute(sourcePath);
 	std::error_code ec;
 	bool existsOnDisk = std::filesystem::exists(absPath, ec);
-	bool existsInPackage = PackageReader::getInstance().Get(sourcePath) != nullptr;
+	bool existsInPackage = ExportPackageReader::getInstance().Get(sourcePath) != nullptr;
 
 	if (!existsOnDisk && !existsInPackage) {
 		Console::PrintError("ScriptComponent: script file not found: {}").Format(sourcePath);

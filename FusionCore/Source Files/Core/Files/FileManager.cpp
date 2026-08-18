@@ -5,7 +5,8 @@
 #include "../../../Header Files/Core/Physics/Constraint/PGSConstraint/Constraints.h"
 #include "../../../Header Files/Core/Scripting/PyBindings.h"
 #include "../../../Header Files/Core/SceneManager.h"
-#include "../../../Header Files/Core/Files/Export/PackageReader.h"
+#include "../../../Header Files/Core/Files/Export/ExportPackageReader.h"
+#include "../../../Header Files/Core/Editor/HeadlessMonitor.h"
 
 namespace fs = std::filesystem;
 
@@ -428,6 +429,7 @@ void FileManager::SaveProjectToFile(const std::string& path) {
 
 	EngineManager::getInstance().SerializeEngineSettings(w);
 	ProjectExportManager::getInstance().SerializeExportConfiguration(w);
+	HeadlessMonitor::getInstance().SerializeTrainConfig(w);
 
 	if (!w.Good())
 		Console::Print("SaveProject: write failed, file may be incomplete: {}").Format(path);
@@ -472,6 +474,7 @@ void FileManager::LoadProjectFromStream(std::istream& in) {
 
 	EngineManager::getInstance().DeserializeEngineSettings(r);
 	ProjectExportManager::getInstance().DeserializeExportConfiguration(r);
+	HeadlessMonitor::getInstance().DeserializeTrainConfig(r);
 
 	const std::string& mainScenePath = EngineManager::getInstance().EngineSettings.mainScenePath;
 
@@ -482,7 +485,7 @@ void FileManager::LoadProjectFromStream(std::istream& in) {
 	if (!mainScenePath.empty()) {
 		if (EngineManager::getInstance().isPlayer) {
 			sceneToLoad = mainScenePath;
-			mainSceneAvailable = PackageReader::getInstance().Get(sceneToLoad) != nullptr;
+			mainSceneAvailable = ExportPackageReader::getInstance().Get(sceneToLoad) != nullptr;
 		}
 		else {
 			sceneToLoad = mainScenePath;

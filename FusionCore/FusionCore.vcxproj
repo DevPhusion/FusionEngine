@@ -160,7 +160,7 @@
     <ClCompile Include="Source Files\Core\Scripting\PackageManager.cpp" />
     <ClCompile Include="Source Files\Core\Editor\Windows\SceneTab.cpp" />
     <ClCompile Include="Source Files\Core\SceneManager.cpp" />
-    <ClCompile Include="Source Files\Core\Files\Export\PackageReader.cpp" />
+    <ClCompile Include="Source Files\Core\Files\Export\ExportPackageReader.cpp" />
     <ClCompile Include="Source Files\Core\Files\Export\ProjectExportManager.cpp" />
     <ClCompile Include="Source Files\Core\Editor\ConstraintEditGizmos.cpp" />
     <ClCompile Include="Source Files\Core\Editor\PolygonEditGizmos.cpp" />
@@ -271,7 +271,7 @@
     <ClInclude Include="Header Files\Core\EngineManager.h" />
     <ClInclude Include="Header Files\Core\Files\BinaryReader.h" />
     <ClInclude Include="Header Files\Core\Files\BinaryWriter.h" />
-    <ClInclude Include="Header Files\Core\Files\Export\PackageCrypto.h" />
+    <ClInclude Include="Header Files\Core\Files\Export\ExportPackageCrypto.h" />
     <ClInclude Include="Header Files\Core\Files\FileDialog.h" />
     <ClInclude Include="Header Files\Core\Files\FileManager.h" />
     <ClInclude Include="Header Files\Core\Files\ProjectLauncher.h" />
@@ -326,7 +326,7 @@
     <ClInclude Include="Header Files\Components\ScriptComponent.h" />
     <ClInclude Include="Header Files\Core\Editor\PolygonEditGizmos.h" />
     <ClInclude Include="Header Files\Core\Files\Export\ProjectExportManager.h" />
-    <ClInclude Include="Header Files\Core\Files\Export\PackageReader.h" />
+    <ClInclude Include="Header Files\Core\Files\Export\ExportPackageReader.h" />
     <ClInclude Include="Header Files\Core\SceneManager.h" />
     <ClInclude Include="Header Files\Core\Editor\Windows\SceneTab.h" />
     <ClInclude Include="Header Files\Core\Scripting\PackageManager.h" />

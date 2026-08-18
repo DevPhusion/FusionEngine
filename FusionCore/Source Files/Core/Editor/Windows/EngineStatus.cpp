@@ -246,12 +246,12 @@ void EngineStatus::ProcessWindow() {
 
 	ImGui::SameLine();
 	{
-		bool disableHeadless = HeadlessMonitor::getInstance().IsRunning()
+		bool disableHeadless = EngineManager::getInstance().isHeadless
 			|| FileManager::getInstance().currentProjectFile.empty()
 			|| !ScriptManager::getInstance().IsReady();
 
 		ImGui::BeginDisabled(disableHeadless);
-		if (ImGui::Button("Run Headless"))
+		if (ImGui::Button("Train"))
 			ImGui::OpenPopup("Train Settings");
 		ImGui::EndDisabled();
 
@@ -699,17 +699,20 @@ void EngineStatus::ProcessUnsavedChangesPopup() {
 }
 
 void EngineStatus::ProcessTrainSettingsPopup() {
-	static int steps = 100000;
-	static int algoIndex = 0;
-	static std::string saveDir;
-	static bool saveDirInitialized = false;
-	const char* algos[] = { "PPO", "SAC", "A2C", "DDPG", "TD3" };
+	TrainConfig& cfg = HeadlessMonitor::getInstance().config;
 
-	if (!saveDirInitialized && !FileManager::getInstance().currentProjectFile.empty()) {
+	static bool saveDirInitialized = false;
+	if (!saveDirInitialized && cfg.saveDir.empty() && !FileManager::getInstance().currentProjectFile.empty()) {
 		std::filesystem::path projectDir =
 			std::filesystem::path(FileManager::getInstance().currentProjectFile).parent_path();
-		saveDir = (projectDir / "TrainedModels").string();
+		cfg.saveDir = (projectDir / "TrainedModels").string();
 		saveDirInitialized = true;
+	}
+
+	const char* algos[] = { "PPO", "SAC", "A2C", "DDPG", "TD3" };
+	int algoIndex = 0;
+	for (int i = 0; i < IM_ARRAYSIZE(algos); i++) {
+		if (cfg.algorithm == algos[i]) { algoIndex = i; break; }
 	}
 
 	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
@@ -718,18 +721,24 @@ void EngineStatus::ProcessTrainSettingsPopup() {
 	if (ImGui::BeginPopupModal("Train Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
 		ImGui::Text("Algorithm");
 		ImGui::SetNextItemWidth(160.0f);
-		ImGui::Combo("##Algo", &algoIndex, algos, IM_ARRAYSIZE(algos));
+		if (ImGui::Combo("##Algo", &algoIndex, algos, IM_ARRAYSIZE(algos))) {
+			cfg.algorithm = algos[algoIndex];
+			EngineManager::getInstance().EngineChangeEvent();
+		}
 
 		ImGui::Text("Total timesteps");
 		ImGui::SetNextItemWidth(160.0f);
-		ImGui::InputInt("##Steps", &steps, 1000, 10000);
-		steps = std::max(1, steps);
+		int steps = (int)cfg.totalTimesteps;
+		if (ImGui::InputInt("##Steps", &steps, 1000, 10000)) {
+			cfg.totalTimesteps = std::max(1, steps);
+			EngineManager::getInstance().EngineChangeEvent();
+		}
 
 		ImGui::Dummy(ImVec2(0, 6));
 		ImGui::Text("Save folder");
 		{
 			char folderBuf[256];
-			std::string display = saveDir.empty() ? "(no folder selected)" : saveDir;
+			std::string display = cfg.saveDir.empty() ? "(no folder selected)" : cfg.saveDir;
 #if defined(_MSC_VER)
 			strcpy_s(folderBuf, display.c_str());
 #else
@@ -741,7 +750,8 @@ void EngineStatus::ProcessTrainSettingsPopup() {
 			ImGui::SameLine();
 			if (ImGui::Button("Browse##SaveDir")) {
 				if (auto folder = FileDialog::ShowFolderDialog("Choose Save Folder")) {
-					saveDir = *folder;
+					cfg.saveDir = *folder;
+					EngineManager::getInstance().EngineChangeEvent();
 				}
 			}
 		}
@@ -750,14 +760,10 @@ void EngineStatus::ProcessTrainSettingsPopup() {
 		ImGui::Separator();
 		ImGui::Dummy(ImVec2(0, 6));
 
-		bool canStart = !saveDir.empty();
+		bool canStart = !cfg.saveDir.empty();
 		ImGui::BeginDisabled(!canStart);
 		if (ImGui::Button("Start Training", ImVec2(140, 0))) {
 			if (SaveCurrentWork()) {
-				TrainConfig cfg;
-				cfg.totalTimesteps = steps;
-				cfg.algorithm = algos[algoIndex];
-				cfg.saveDir = saveDir;
 				HeadlessMonitor::getInstance().StartTraining(cfg);
 				ImGui::CloseCurrentPopup();
 			}

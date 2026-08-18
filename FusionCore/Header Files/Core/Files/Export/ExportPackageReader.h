@@ -4,14 +4,14 @@
 #include <unordered_map>
 #include <filesystem>
 
-class PackageReader {
+class ExportPackageReader {
 public:
-	static PackageReader& getInstance() {
-		static PackageReader instance;
+	static ExportPackageReader& getInstance() {
+		static ExportPackageReader instance;
 		return instance;
 	}
-	PackageReader(const PackageReader&) = delete;
-	void operator=(const PackageReader&) = delete;
+	ExportPackageReader(const ExportPackageReader&) = delete;
+	void operator=(const ExportPackageReader&) = delete;
 
 	bool Load(const std::filesystem::path& packPath);
 	const std::vector<uint8_t>* Get(const std::string& virtualPath) const;
@@ -21,6 +21,6 @@ public:
 	std::string GetSource(const std::string& moduleDotted) const;
 
 private:
-	PackageReader() = default;
+	ExportPackageReader() = default;
 	std::unordered_map<std::string, std::vector<uint8_t>> entries;
 };

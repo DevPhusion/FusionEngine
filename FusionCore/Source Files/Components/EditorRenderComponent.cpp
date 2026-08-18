@@ -223,6 +223,7 @@ void EditorRenderComponent::Deserialize(BinaryReader& r) {
 }
 
 void EditorRenderComponent::ProcessInspectorUI() {
+	
 }
 
 void EditorRenderComponent::OnDelete() {

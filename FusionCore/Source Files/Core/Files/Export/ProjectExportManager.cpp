@@ -87,9 +87,9 @@ namespace {
 		out.write(reinterpret_cast<const char*>(&version), sizeof(version));
 		out.write(reinterpret_cast<const char*>(&entryCount), sizeof(entryCount));
 
-		PackageCrypto::Salt salt = PackageCrypto::GenerateRandomSalt();
+		ExportPackageCrypto::Salt salt = ExportPackageCrypto::GenerateRandomSalt();
 		out.write(reinterpret_cast<const char*>(salt.data()), salt.size());
-		std::array<uint8_t, 16> key = PackageCrypto::DeriveKey(salt);
+		std::array<uint8_t, 16> key = ExportPackageCrypto::DeriveKey(salt);
 
 		uint64_t runningOffset = 0;
 		std::vector<uint64_t> offsets;
@@ -106,7 +106,7 @@ namespace {
 
 		for (auto& e : entries) {
 			std::vector<uint8_t> encrypted = e.data;
-			PackageCrypto::XorBuffer(encrypted, key);
+			ExportPackageCrypto::XorBuffer(encrypted, key);
 			out.write(reinterpret_cast<const char*>(encrypted.data()), encrypted.size());
 		}
 		return out.good();

@@ -106,7 +106,6 @@ int main(int argc, char* argv[]) {
 	bool enteredEditor = false;
 	bool enteredHeadlessMonitor = false;
 	double headlessMonitorLastDraw = 0.0;
-	double headlessPrevT = 0.0;
 
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
@@ -133,22 +132,6 @@ int main(int argc, char* argv[]) {
 				enteredHeadlessMonitor = true;
 				glfwSwapInterval(0);
 				headlessMonitorLastDraw = 0.0;
-				headlessPrevT = glfwGetTime();
-			}
-
-			if (HeadlessMonitor::getInstance().IsRunning() && !HeadlessMonitor::getInstance().IsTraining()) {
-				PhysicsEngine::getInstance().ProcessPhysics(PHYSICS_STEP);
-				SceneManager::getInstance().ProcessPendingSceneLoad();
-				ScriptManager::getInstance().Update();
-				InputManager::getInstance().ClearFrameState();
-
-				double now = glfwGetTime();
-				float realDelta = (float)(now - headlessPrevT);
-				headlessPrevT = now;
-				EngineManager::getInstance().ProcessEngineHeadless(realDelta);
-			}
-			else {
-				headlessPrevT = glfwGetTime();
 			}
 
 			const double MONITOR_REFRESH_INTERVAL = 1.0 / 30.0;

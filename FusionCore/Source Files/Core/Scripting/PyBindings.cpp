@@ -1,5 +1,5 @@
 #include "../../../Header Files/Core/Scripting/PyBindings.h"
-#include "../../../Header Files/Core/Files/Export/PackageReader.h"
+#include "../../../Header Files/Core/Files/Export/ExportPackageReader.h"
 #include "../../../Header Files/Core/Editor/Windows/Console.h"
 #include "../../../Header Files/Components/Components.h"
 #include "../../../Header Files/Core/Files/FileManager.h"
@@ -928,6 +928,23 @@ namespace {
 			py::arg("origin"), py::arg("direction"), py::arg("length"),
 			py::arg("collision_layer") = py::none(), py::arg("ignore_objects") = std::vector<Object*>{},
 			"Cast a ray and return every hit, sorted nearest-first.");
+	}
+
+	void RegisterFileBindings(py::module_& m) {
+		py::module_ fileMod = m.def_submodule("File", "File management");
+
+		fileMod.def("virtual_to_absolute", [](const std::string& virtualPath) {
+			return FileManager::getInstance().VirtualToAbsolute(virtualPath).string();
+			}, py::arg("virtual_path"),
+				"Resolve a res:// virtual path (as stored by export_file/export_scene) to a "
+				"real filesystem path, e.g.\n"
+				"  abs_path = File.virtual_to_absolute(self.model_path)");
+
+		fileMod.def("absolute_to_virtual", [](const std::string& absolutePath) {
+			return FileManager::getInstance().AbsoluteToVirtual(absolutePath);
+			}, py::arg("absolute_path"),
+				"Convert a real filesystem path back into a res:// virtual path, e.g.\n"
+				"  virtual_path = File.absolute_to_virtual(abs_path)");
 	}
 
 	void RegisterRendererBindings(py::module_& m) {
@@ -2339,6 +2356,16 @@ namespace {
 			.def("set_reward", &AgentComponent::SetReward, py::arg("value"))
 			.def("end_episode", &AgentComponent::EndEpisode)
 
+			.def("set_action_space", &AgentComponent::SetActionSpace,
+				py::arg("size"), py::arg("low") = -1.0f, py::arg("high") = 1.0f,
+				"Configure how many float values this agent's action vector holds, and the "
+				"[low, high] range each is bounded to when training. Call this once, e.g. "
+				"from OnStart, e.g.\n"
+				"  self.agent.set_action_space(3, -1.0, 1.0)  # move, jump, shoot")
+			.def_property_readonly("action_size", [](AgentComponent& self) { return self.GetActionSize(); })
+			.def_property_readonly("action_low", [](AgentComponent& self) { return self.GetActionLow(); })
+			.def_property_readonly("action_high", [](AgentComponent& self) { return self.GetActionHigh(); })
+
 			.def_property_readonly("action", [](AgentComponent& self) { return self.GetAction(); },
 				"The most recent action written by the training process, e.g.\n"
 				"  move_dir = self.get_component(AgentComponent).action[0]")
@@ -2452,6 +2479,30 @@ namespace {
 			RemoveObjectFromScene(obj);
 				}, py::arg("obj"),
 					"Remove an object from the scene");
+
+		m.def("get_all_objects", []() {
+			std::vector<Object*> result;
+			result.reserve(ObjectManager::getInstance().allObjects.size());
+			for (auto& obj : ObjectManager::getInstance().allObjects) {
+				result.push_back(obj.get());
+			}
+			return result;
+			}, py::return_value_policy::reference,
+			"Every Object currently in the scene. Useful for linear searches instead of "
+				"maintaining your own registry, e.g.\n"
+				"  enemies = [o for o in get_all_objects() if o.has_component(Enemy)]");
+
+		m.def("find_objects_with_component", [](py::object componentClass) {
+			std::vector<Object*> result;
+			for (auto& obj : ObjectManager::getInstance().allObjects) {
+				if (HasComponentOnObject(obj.get(), componentClass)) {
+					result.push_back(obj.get());
+				}
+			}
+			return result;
+			}, py::arg("component_class"), py::return_value_policy::reference,
+				"Every Object in the scene that has the given component type, e.g.\n"
+				"  enemies = find_objects_with_component(Enemy)");
 
 		py::class_<PointMass>(m, "PointMass")
 			.def_property_readonly("index", [](PointMass& self) { return self.index; })
@@ -2628,8 +2679,89 @@ namespace {
 		return nullptr;
 	}
 
+	constexpr const char* kFusionModelRunnerSource = R"PYCODE(
+import os
+import fusion
+from stable_baselines3 import PPO, SAC, A2C, DDPG, TD3
+import numpy as np
+
+_model_cache = {}
+
+is_training = False
+
+def _resolve_algo_class(algorithm):
+    algos = {"PPO": PPO, "SAC": SAC, "A2C": A2C, "DDPG": DDPG, "TD3": TD3}
+    if algorithm not in algos:
+        raise ValueError(f"fusion_model_runner: unknown algorithm '{algorithm}'")
+    return algos[algorithm]
+
+
+def _resolve_existing_path(abs_path):
+    """Returns the actual file path that exists on disk (path or path + '.zip'), or None."""
+    if os.path.exists(abs_path):
+        return abs_path
+    if os.path.exists(abs_path + ".zip"):
+        return abs_path + ".zip"
+    return None
+
+
+def load_model(path, algorithm="PPO"):
+    if not path:
+        return None
+
+    abs_path = fusion.File.virtual_to_absolute(path)
+
+    existing_path = _resolve_existing_path(abs_path)
+    if existing_path is None:
+        fusion.Console.PrintError(f"fusion_model_runner: model file not found: {path}")
+        return None
+
+    current_mtime = os.path.getmtime(existing_path)
+
+    key = (abs_path, algorithm)
+    cached = _model_cache.get(key)
+    if cached is not None:
+        cached_model, cached_mtime = cached
+        if cached_mtime == current_mtime:
+            return cached_model
+        fusion.Console.Print(f"fusion_model_runner: model file changed, reloading: {path}")
+
+    try:
+        algo_cls = _resolve_algo_class(algorithm)
+        model = algo_cls.load(existing_path)
+    except Exception as e:
+        fusion.Console.PrintError(f"fusion_model_runner: failed to load model '{path}': {e}")
+        return None
+
+    _model_cache[key] = (model, current_mtime)
+    return model
+
+
+def predict(model, observation, deterministic=True):
+    if model is None:
+        return None
+
+    try:
+        obs = np.array(observation, dtype=np.float32)
+        action, _ = model.predict(obs, deterministic=deterministic)
+        return [float(a) for a in np.atleast_1d(action)]
+    except Exception as e:
+        fusion.Console.PrintError(f"fusion_model_runner: prediction failed: {e}")
+        return None
+
+
+def clear_cache():
+    _model_cache.clear()
+)PYCODE";
+
 	void RegisterEnvironmentBindings(py::module_& m) {
 		py::module_ envMod = m.def_submodule("Environment", "Headless RL stepping API");
+		envMod.def("get_action_space", []() {
+			AgentComponent* agent = FindFirstAgent();
+			if (!agent) throw py::value_error("Environment.get_action_space: no AgentComponent in the scene");
+			return py::make_tuple(agent->GetActionSize(), agent->GetActionLow(), agent->GetActionHigh());
+			}, "Returns (size, low, high) as configured via AgentComponent.set_action_space() "
+			"on the scene's first AgentComponent.");
 
 		envMod.def("step", [](std::vector<float> action) {
 			AgentComponent* agent = FindFirstAgent();
@@ -2639,7 +2771,7 @@ namespace {
 
 			const float PHYSICS_STEP = 1.0f / 60.0f;
 			{
-				py::gil_scoped_release release;   // physics/scripts re-acquire the GIL internally as needed
+				py::gil_scoped_release release;   
 				PhysicsEngine::getInstance().ProcessPhysics(PHYSICS_STEP);
 				SceneManager::getInstance().ProcessPendingSceneLoad();
 				ScriptManager::getInstance().Update();
@@ -2656,22 +2788,28 @@ namespace {
 				"returning (observation, reward, done) for the scene's first AgentComponent.");
 
 		envMod.def("reset", []() -> py::list {
-			const std::string& editingScene = EngineManager::getInstance().editingScenePath;
-			if (!editingScene.empty())
-				SceneManager::getInstance().LoadSceneFromFile(editingScene);
-			else
-				SceneManager::getInstance().NewScene();
+			{
+				py::gil_scoped_release release; 
 
-			SceneManager::getInstance().ProcessPendingSceneLoad();
-			ScriptManager::getInstance().RunAllScriptsLoad();
-			ScriptManager::getInstance().RunAllScriptsStart();
+				EngineManager::getInstance().RunOnMainThread([]() {
+					const std::string& editingScene = EngineManager::getInstance().editingScenePath;
+					if (!editingScene.empty())
+						SceneManager::getInstance().LoadSceneFromFile(editingScene);
+					else
+						SceneManager::getInstance().NewScene();
+
+					SceneManager::getInstance().ProcessPendingSceneLoad();
+					ScriptManager::getInstance().RunAllScriptsLoad();
+					ScriptManager::getInstance().RunAllScriptsStart();
+					});
+			}
 
 			AgentComponent* agent = FindFirstAgent();
 			if (!agent) {
 				throw py::value_error("Environment.reset: no AgentComponent found in the scene.");
 			}
 
-			agent->SetAction(std::vector<float>(2, 0.0f)); 
+			agent->SetAction(std::vector<float>(2, 0.0f));
 			{
 				py::gil_scoped_release release;
 				PhysicsEngine::getInstance().ProcessPhysics(0.0f);
@@ -2687,6 +2825,12 @@ namespace {
 			return obs;
 			}, "Reload the editing scene, run one priming tick so the initial observation is "
 			"populated, and return it.");
+
+		py::dict envDict = envMod.attr("__dict__");
+		py::object builtins = py::module_::import("builtins");
+		py::object codeObj = builtins.attr("compile")(
+			kFusionModelRunnerSource, "<embedded fusion.Environment model runner>", "exec");
+		builtins.attr("exec")(codeObj, envDict);
 	}
 
 	void ResetDynamicComponentRegistriesImpl() {
@@ -2701,14 +2845,14 @@ namespace {
 		installed = true;
 
 		m.def("_pack_has_module", [](const std::string& name) {
-			return PackageReader::getInstance().HasModule(name);
+			return ExportPackageReader::getInstance().HasModule(name);
 			});
 		m.def("_pack_is_package", [](const std::string& name) {
-			return PackageReader::getInstance().IsPackage(name);
+			return ExportPackageReader::getInstance().IsPackage(name);
 			});
 		m.def("_pack_get_source", [](const std::string& name) -> py::object {
-			if (!PackageReader::getInstance().HasModule(name)) return py::none();
-			return py::cast(PackageReader::getInstance().GetSource(name));
+			if (!ExportPackageReader::getInstance().HasModule(name)) return py::none();
+			return py::cast(ExportPackageReader::getInstance().GetSource(name));
 			});
 
 		py::dict ns;
@@ -2759,20 +2903,33 @@ import fusion
 
 
 class FusionEnv(gym.Env):
-    def __init__(self, action_size: int = 2, obs_size: int | None = None):
+    def __init__(self, action_size: int | None = None, action_low: float | None = None,
+                 action_high: float | None = None, obs_size: int | None = None):
         super().__init__()
-        self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(action_size,), dtype=np.float32)
+
+        space_size, space_low, space_high = fusion.Environment.get_action_space()
+        size = action_size if action_size is not None else space_size
+        low = action_low if action_low is not None else space_low
+        high = action_high if action_high is not None else space_high
+
+        if size <= 0:
+            raise ValueError(
+                "FusionEnv: action size is 0. Call agent.set_action_space(size, low, high) "
+                "from the attached script's OnStart before training."
+            )
+
+        self.action_space = spaces.Box(low=low, high=high, shape=(size,), dtype=np.float32)
 
         initial_obs = fusion.Environment.reset()
-        size = obs_size or len(initial_obs)
-        if size == 0:
+        obs_len = obs_size or len(initial_obs)
+        if obs_len == 0:
             raise ValueError(
                 "FusionEnv: the agent's observation is empty (Inspector shows "
                 "'Observation size: 0'). Call agent.add_observation(...) from the "
                 "attached script's Process (or OnLoad) before training — SB3 cannot "
                 "learn from a zero-dimensional observation space."
             )
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(size,), dtype=np.float32)
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(obs_len,), dtype=np.float32)
         self._last_obs = np.array(initial_obs, dtype=np.float32)
 
     def reset(self, *, seed=None, options=None):
@@ -2831,17 +2988,21 @@ def train(algorithm: str, total_timesteps: int, save_dir: str, status_cb=None):
     if algorithm not in algos:
         raise ValueError(f"Unknown algorithm '{algorithm}'")
 
-    if status_cb: status_cb("Building environment")
-    env = FusionEnv()
+    fusion.Environment.is_training = True
+    try:
+        if status_cb: status_cb("Building environment")
+        env = FusionEnv()
 
-    if status_cb: status_cb(f"Training {algorithm} for {total_timesteps} steps...")
-    model = algos[algorithm]("MlpPolicy", env, verbose=1)
-    model.learn(total_timesteps=total_timesteps)
+        if status_cb: status_cb(f"Training {algorithm} for {total_timesteps} steps...")
+        model = algos[algorithm]("MlpPolicy", env, verbose=1)
+        model.learn(total_timesteps=total_timesteps)
 
-    os.makedirs(save_dir, exist_ok=True)
-    save_path = os.path.join(save_dir, "trained_model")
-    model.save(save_path)
-    if status_cb: status_cb(f"Done, model saved to {save_path}.zip")
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = os.path.join(save_dir, "trained_model")
+        model.save(save_path)
+        if status_cb: status_cb(f"Done, model saved to {save_path}.zip")
+    finally:
+        fusion.Environment.is_training = False
 )PYCODE";
 
 	void InstallFusionGymModule(py::module_& m) {
@@ -2852,7 +3013,7 @@ def train(algorithm: str, total_timesteps: int, save_dir: str, status_cb=None):
 		py::object sysModule = py::module_::import("sys");
 		py::dict sysModules = sysModule.attr("modules");
 
-		if (sysModules.contains("fusion_gym")) return; // already loaded this interpreter session
+		if (sysModules.contains("fusion_gym")) return; 
 
 		py::object typesModule = py::module_::import("types");
 		py::object moduleObj = typesModule.attr("ModuleType")("fusion_gym");
@@ -2900,7 +3061,7 @@ py::object ImportScriptClass(const std::string& virtualSourcePath) {
 	if (sysModules.contains(moduleName)) {
 		moduleObj = sysModules[moduleName.c_str()];
 	}
-	else if (const std::vector<uint8_t>* packedSource = PackageReader::getInstance().Get(virtualSourcePath)) {
+	else if (const std::vector<uint8_t>* packedSource = ExportPackageReader::getInstance().Get(virtualSourcePath)) {
 		std::string sourceCode(reinterpret_cast<const char*>(packedSource->data()), packedSource->size());
 
 		py::object typesModule = py::module_::import("types");
@@ -2977,6 +3138,7 @@ void RegisterEngineBindings(py::module_& m) {
 	m.doc() = "Fusion engine scripting API";
 	RegisterMathBindings(m);
 	RegisterPhysicsBindings(m);
+	RegisterFileBindings(m);
 	RegisterRendererBindings(m);
 	RegisterShapeBindings(m);
 	RegisterConstraintBindings(m);

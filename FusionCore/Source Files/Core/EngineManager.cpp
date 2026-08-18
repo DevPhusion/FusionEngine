@@ -12,12 +12,14 @@ void EngineManager::Setup(GLFWwindow* window) {
 	this->aspectRatio = this->windowWidth / this->windowHeight;
 	frameCount = 0;
 
-	this->Window = window;                                 
+	this->Window = window;
 	glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
 	glfwSetWindowCloseCallback(window, WindowCloseCallback);
 }
 
 void EngineManager::ProcessEngine(float delta) {
+	ProcessPendingMainThreadTasks();
+
 	frameCount++;
 	time += delta;
 
@@ -28,14 +30,16 @@ void EngineManager::ProcessEngine(float delta) {
 	}
 }
 
-void EngineManager::ProcessEngineHeadless(float delta) {
-	headlessFrameCount++;
-	headlessTime += delta;
+void EngineManager::ProcessPendingMainThreadTasks() {
+	std::queue<std::function<void()>> tasksToRun;
+	{
+		std::lock_guard<std::mutex> lock(mainThreadQueueMutex);
+		std::swap(tasksToRun, mainThreadTaskQueue);
+	}
 
-	if (headlessTime >= 1) {
-		headlessFps = headlessFrameCount / headlessTime;
-		headlessFrameCount = 0;
-		headlessTime = 0;
+	while (!tasksToRun.empty()) {
+		tasksToRun.front()();
+		tasksToRun.pop();
 	}
 }
 
@@ -60,7 +64,7 @@ void EngineManager::SetGameResolution(float width, float height) {
 
 	Viewport* gameViewport = EditorManager::getInstance().gameViewport;
 	if (gameViewport) {
-		gameViewport->Resize((int)resolutionWidth, (int)resolutionHeight); // NEW - see step 3
+		gameViewport->Resize((int)resolutionWidth, (int)resolutionHeight); 
 	}
 }
 
@@ -108,7 +112,7 @@ void EngineManager::SerializeEngineSettings(BinaryWriter& w) {
 	w.Write(s.drawVirtualSoftBodyProxies);
 	w.Write(s.drawFluidsAsParticles);
 	w.Write(s.drawFluidsVelocityField);
-	w.Write(static_cast<uint32_t>(s.fluidHeatmapMode)); 
+	w.Write(static_cast<uint32_t>(s.fluidHeatmapMode));
 }
 
 void EngineManager::DeserializeEngineSettings(BinaryReader& r) {
@@ -118,7 +122,7 @@ void EngineManager::DeserializeEngineSettings(BinaryReader& r) {
 
 	float resWidth = r.Read<float>();
 	float resHeight = r.Read<float>();
-	SetGameResolution(resWidth, resHeight); 
+	SetGameResolution(resWidth, resHeight);
 
 	s.backgroundColor = r.Read<glm::vec4>();
 	s.drawBackgroundGrid = r.Read<bool>();
@@ -173,7 +177,7 @@ void EngineManager::RemovePhysicsModeChangedEvent(int ID) {
 }
 
 void EngineManager::FramebufferSizeCallback(GLFWwindow* window, int width, int height) {
-	if (width == 0 || height == 0) return; 
+	if (width == 0 || height == 0) return;
 
 	EngineManager& eng = EngineManager::getInstance();
 	eng.windowWidth = (float)width;

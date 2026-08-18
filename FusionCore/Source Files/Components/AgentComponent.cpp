@@ -38,9 +38,16 @@ bool AgentComponent::ConsumeDone() {
 	return d;
 }
 
+void AgentComponent::SetActionSpace(int size, float low, float high) {
+	actionSize = size < 0 ? 0 : size;
+	actionLow = low;
+	actionHigh = high;
+}
+
 void AgentComponent::ProcessInspectorUI() {
 	ImGui::Text("Agent ID: %u", agentId);
 	ImGui::Text("Observation size: %d", (int)observation.size());
+	ImGui::Text("Action space: %d [%.2f, %.2f]", actionSize, actionLow, actionHigh);
 	ImGui::Text("Accumulated reward: %.3f", rewardAccumulator);
 }
 
@@ -51,4 +58,5 @@ void AgentComponent::CopyTo(Object* other) {
 		target = other->GetComponent<AgentComponent>();
 	}
 	target->SetEnabled(Enabled);
+	target->SetActionSpace(actionSize, actionLow, actionHigh);
 }

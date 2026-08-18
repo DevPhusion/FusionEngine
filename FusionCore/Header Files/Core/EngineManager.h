@@ -5,6 +5,9 @@
 #include <stdexcept>
 #include <memory>
 #include <functional>
+#include <mutex>
+#include <future>
+#include <queue>
 
 class Constraint;
 
@@ -100,7 +103,6 @@ public:
 
 	void Setup(GLFWwindow* window);
 	void ProcessEngine(float delta);
-	void ProcessEngineHeadless(float delta);
 	void SceneChangeEvent();
 	void EngineChangeEvent();
 	void SwitchInteractMode(InteractMode mode);
@@ -113,6 +115,31 @@ public:
 	int AddPhysicsModeChangedEvent(std::function<void()> func);
 	void RemovePhysicsModeChangedEvent(int ID);
 	void RemoveInteractModeChangedEvent(int ID);
+
+	template <typename F>
+	auto RunOnMainThread(F&& func) -> decltype(func()) {
+		using R = decltype(func());
+		auto taskPromise = std::make_shared<std::promise<R>>();
+		std::future<R> future = taskPromise->get_future();
+
+		{
+			std::lock_guard<std::mutex> lock(mainThreadQueueMutex);
+			mainThreadTaskQueue.push([taskPromise, func = std::forward<F>(func)]() mutable {
+				if constexpr (std::is_void_v<R>) {
+					func();
+					taskPromise->set_value();
+				}
+				else {
+					taskPromise->set_value(func());
+				}
+				});
+		}
+
+		return future.get(); 
+	}
+
+	void ProcessPendingMainThreadTasks();
+
 	static void FramebufferSizeCallback(GLFWwindow* window, int width, int height);
 	static void WindowCloseCallback(GLFWwindow* window);
 private:
@@ -120,8 +147,9 @@ private:
 	int CurrentPhysicsModeChangedID = -1;
 	float time;
 	float frameCount;
-	int headlessFrameCount = 0;
-	float headlessTime = 0.0f;
+
+	std::mutex mainThreadQueueMutex;
+	std::queue<std::function<void()>> mainThreadTaskQueue;
 
 	EngineManager() = default;
 

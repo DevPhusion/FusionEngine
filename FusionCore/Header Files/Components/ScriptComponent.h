@@ -3,7 +3,7 @@
 #include "../Objects/Object.h"
 #include "../Core/Files/FileManager.h"
 #include "../Core/Scripting/ExportedProperty.h"
-#include "../../Header Files/Core/Files/Export/PackageReader.h"
+#include "../../Header Files/Core/Files/Export/ExportPackageReader.h"
 #include <filesystem>
 #include <pybind11/pybind11.h>
 #include <pybind11/embed.h>
