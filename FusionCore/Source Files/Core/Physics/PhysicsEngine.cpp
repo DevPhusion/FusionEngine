@@ -3458,7 +3458,7 @@ std::vector<RayCastHit> PhysicsEngine::RayCastAll(const glm::vec3& origin, const
 
 		RayCastObject(origin, dir, length, obj, hits);
 	}
-
+	
 	std::sort(hits.begin(), hits.end(), [](const RayCastHit& a, const RayCastHit& b) {
 		return a.distance < b.distance;
 		});

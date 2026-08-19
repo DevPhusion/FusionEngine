@@ -116,6 +116,8 @@ public:
 	void RemovePhysicsModeChangedEvent(int ID);
 	void RemoveInteractModeChangedEvent(int ID);
 
+	std::mutex headlessSimMutex;
+
 	template <typename F>
 	auto RunOnMainThread(F&& func) -> decltype(func()) {
 		using R = decltype(func());

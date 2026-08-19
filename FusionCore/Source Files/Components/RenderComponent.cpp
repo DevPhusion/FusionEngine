@@ -5,8 +5,12 @@
 RenderComponent::RenderComponent(Object* parent, std::vector<float> vertices, Shader shader, std::string texture_path) : ComponentBase<RenderComponent>(parent) {
 	Name = "Render Component";
 
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	bool headless = EngineManager::getInstance().isHeadless;
+
+	if (!headless) {
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	}
 
 	Vertices = vertices;
 	Indices = Triangulate(vertices);
@@ -34,30 +38,32 @@ RenderComponent::RenderComponent(Object* parent, std::vector<float> vertices, Sh
 		edges.push_back(edge);
 	}
 
-	glGenVertexArrays(1, &this->VAO);
-	glBindVertexArray(this->VAO);
+	if (!headless) {
+		glGenVertexArrays(1, &this->VAO);
+		glBindVertexArray(this->VAO);
 
-	glGenBuffers(1, &this->VBO);
-	glBindBuffer(GL_ARRAY_BUFFER, this->VBO);
-	glBufferData(GL_ARRAY_BUFFER, Vertices.size() * sizeof(float), Vertices.data(), GL_STATIC_DRAW);
+		glGenBuffers(1, &this->VBO);
+		glBindBuffer(GL_ARRAY_BUFFER, this->VBO);
+		glBufferData(GL_ARRAY_BUFFER, Vertices.size() * sizeof(float), Vertices.data(), GL_STATIC_DRAW);
 
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-	glEnableVertexAttribArray(1);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+		glEnableVertexAttribArray(1);
 
-	glGenBuffers(1, &this->EBO);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->EBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, Indices.size() * sizeof(unsigned int), Indices.data(), GL_STATIC_DRAW);
+		glGenBuffers(1, &this->EBO);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->EBO);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, Indices.size() * sizeof(unsigned int), Indices.data(), GL_STATIC_DRAW);
 
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindVertexArray(0);
 
-	// Setup texture parameters
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		// Setup texture parameters
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	}
 
 	// Load textures
 	SetTexture(texture_path);
@@ -142,6 +148,12 @@ void RenderComponent::ApplyLiveShapeUpdate(const std::vector<glm::vec3>& verts) 
 }
 
 void RenderComponent::SetTexture(std::string texture_path) {
+	if (EngineManager::getInstance().isHeadless) {
+		this->texture_path = texture_path;
+		this->TextureID = 0;
+		return;
+	}
+
 	if (this->texture_path != "" && this->TextureID != 0) {
 		auto& cache = TextureCache();
 		auto oldIt = cache.find(this->texture_path);
@@ -213,6 +225,8 @@ std::unordered_map<std::string, std::pair<GLuint, int>>& RenderComponent::Textur
 }
 
 void RenderComponent::Draw() {
+	if (EngineManager::getInstance().isHeadless) return;
+
 	this->shader.use();
 	if (!Enabled)
 		return;
@@ -485,15 +499,15 @@ void RenderComponent::UpdateShape(std::vector<float> vertices, std::vector<unsig
 		}
 	}
 
-
-
-	glBindVertexArray(this->VAO);
-	glBindBuffer(GL_ARRAY_BUFFER, this->VBO);
-	glBufferData(GL_ARRAY_BUFFER, Vertices.size() * sizeof(float), Vertices.data(), GL_STATIC_DRAW);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->EBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, Indices.size() * sizeof(unsigned int), Indices.data(), GL_STATIC_DRAW);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
+	if (!EngineManager::getInstance().isHeadless) {
+		glBindVertexArray(this->VAO);
+		glBindBuffer(GL_ARRAY_BUFFER, this->VBO);
+		glBufferData(GL_ARRAY_BUFFER, Vertices.size() * sizeof(float), Vertices.data(), GL_STATIC_DRAW);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->EBO);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, Indices.size() * sizeof(unsigned int), Indices.data(), GL_STATIC_DRAW);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindVertexArray(0);
+	}
 }
 
 bool RenderComponent::IsInsideShape(glm::vec3 point) {
@@ -972,6 +986,7 @@ void RenderComponent::OnDelete() {
 		polygonEditCallbackID = -1;
 	}
 
+	if (EngineManager::getInstance().isHeadless) return;
 
 	glDeleteBuffers(1, &VBO);
 	glDeleteBuffers(1, &EBO);

@@ -10,8 +10,7 @@ EditorRenderComponent::EditorRenderComponent(Object* parent, Shader shader, std:
 	this->shader = shader;
 	this->halfSize = halfSize;
 
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	bool headless = EngineManager::getInstance().isHeadless;
 
 	Vertices = {
 		-0.5f, -0.5f, 0.0f, 0.0f, 0.0f,
@@ -21,29 +20,34 @@ EditorRenderComponent::EditorRenderComponent(Object* parent, Shader shader, std:
 	};
 	Indices = { 0, 1, 2, 2, 3, 0 };
 
-	glGenVertexArrays(1, &this->VAO);
-	glBindVertexArray(this->VAO);
+	if (!headless) {
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	glGenBuffers(1, &this->VBO);
-	glBindBuffer(GL_ARRAY_BUFFER, this->VBO);
-	glBufferData(GL_ARRAY_BUFFER, Vertices.size() * sizeof(float), Vertices.data(), GL_STATIC_DRAW);
+		glGenVertexArrays(1, &this->VAO);
+		glBindVertexArray(this->VAO);
 
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-	glEnableVertexAttribArray(1);
+		glGenBuffers(1, &this->VBO);
+		glBindBuffer(GL_ARRAY_BUFFER, this->VBO);
+		glBufferData(GL_ARRAY_BUFFER, Vertices.size() * sizeof(float), Vertices.data(), GL_STATIC_DRAW);
 
-	glGenBuffers(1, &this->EBO);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->EBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, Indices.size() * sizeof(unsigned int), Indices.data(), GL_STATIC_DRAW);
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+		glEnableVertexAttribArray(1);
 
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
-	glBindVertexArray(0);
+		glGenBuffers(1, &this->EBO);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->EBO);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, Indices.size() * sizeof(unsigned int), Indices.data(), GL_STATIC_DRAW);
 
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glBindBuffer(GL_ARRAY_BUFFER, 0);
+		glBindVertexArray(0);
+
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	}
 
 	SetTexture(texture_path);
 
@@ -54,6 +58,12 @@ EditorRenderComponent::EditorRenderComponent(Object* parent, Shader shader, std:
 }
 
 void EditorRenderComponent::SetTexture(std::string texture_path) {
+	if (EngineManager::getInstance().isHeadless) {
+		this->texture_path = texture_path;
+		this->TextureID = 0;
+		return;
+	}
+
 	if (this->texture_path != "" && this->TextureID != 0) {
 		auto& cache = TextureCache();
 		auto oldIt = cache.find(this->texture_path);
@@ -124,7 +134,7 @@ std::unordered_map<std::string, std::pair<GLuint, int>>& EditorRenderComponent::
 }
 
 void EditorRenderComponent::Draw() {
-	if (!Enabled)
+	if (!Enabled || EngineManager::getInstance().isHeadless)
 		return;
 
 	this->shader.use();
@@ -227,6 +237,8 @@ void EditorRenderComponent::ProcessInspectorUI() {
 }
 
 void EditorRenderComponent::OnDelete() {
+	if (EngineManager::getInstance().isHeadless) return;
+
 	glDeleteBuffers(1, &VBO);
 	glDeleteBuffers(1, &EBO);
 	glDeleteVertexArrays(1, &VAO);

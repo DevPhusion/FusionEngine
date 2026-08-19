@@ -2766,12 +2766,12 @@ def clear_cache():
 		envMod.def("step", [](std::vector<float> action) {
 			AgentComponent* agent = FindFirstAgent();
 			if (!agent) throw py::value_error("Environment.step: no AgentComponent in the scene");
-
 			agent->SetAction(action);
 
-			const float PHYSICS_STEP = 1.0f / 60.0f;
 			{
-				py::gil_scoped_release release;   
+				py::gil_scoped_release release;
+				std::lock_guard<std::mutex> lock(EngineManager::getInstance().headlessSimMutex);
+				const float PHYSICS_STEP = 1.0f / 60.0f;
 				PhysicsEngine::getInstance().ProcessPhysics(PHYSICS_STEP);
 				SceneManager::getInstance().ProcessPendingSceneLoad();
 				ScriptManager::getInstance().Update();
@@ -2779,7 +2779,6 @@ def clear_cache():
 
 			py::list obs;
 			for (float v : agent->GetObservation()) obs.append(v);
-
 			float reward = agent->ConsumeReward();
 			bool done = agent->ConsumeDone();
 			return py::make_tuple(obs, reward, done);
@@ -2789,33 +2788,28 @@ def clear_cache():
 
 		envMod.def("reset", []() -> py::list {
 			{
-				py::gil_scoped_release release; 
+				py::gil_scoped_release release;
+				std::lock_guard<std::mutex> lock(EngineManager::getInstance().headlessSimMutex);
 
-				EngineManager::getInstance().RunOnMainThread([]() {
-					const std::string& editingScene = EngineManager::getInstance().editingScenePath;
-					if (!editingScene.empty())
-						SceneManager::getInstance().LoadSceneFromFile(editingScene);
-					else
-						SceneManager::getInstance().NewScene();
+				const std::string& editingScene = EngineManager::getInstance().editingScenePath;
+				if (!editingScene.empty())
+					SceneManager::getInstance().LoadSceneFromFile(editingScene);
+				else
+					SceneManager::getInstance().NewScene();
 
-					SceneManager::getInstance().ProcessPendingSceneLoad();
-					ScriptManager::getInstance().RunAllScriptsLoad();
-					ScriptManager::getInstance().RunAllScriptsStart();
-					});
+				SceneManager::getInstance().ProcessPendingSceneLoad();
+				ScriptManager::getInstance().RunAllScriptsLoad();
+				ScriptManager::getInstance().RunAllScriptsStart();
+
+				AgentComponent* agent = FindFirstAgent();
+				if (agent) {
+					agent->SetAction(std::vector<float>(2, 0.0f));
+					PhysicsEngine::getInstance().ProcessPhysics(0.0f);
+				}
 			}
 
 			AgentComponent* agent = FindFirstAgent();
-			if (!agent) {
-				throw py::value_error("Environment.reset: no AgentComponent found in the scene.");
-			}
-
-			agent->SetAction(std::vector<float>(2, 0.0f));
-			{
-				py::gil_scoped_release release;
-				PhysicsEngine::getInstance().ProcessPhysics(0.0f);
-				SceneManager::getInstance().ProcessPendingSceneLoad();
-				ScriptManager::getInstance().Update();
-			}
+			if (!agent) throw py::value_error("Environment.reset: no AgentComponent found in the scene.");
 
 			agent->ConsumeReward();
 			agent->ConsumeDone();
