@@ -17,12 +17,14 @@ void HeadlessMonitor::SerializeTrainConfig(BinaryWriter& w) {
 	w.Write(config.totalTimesteps);
 	w.WriteString(config.algorithm);
 	w.WriteString(config.saveDir);
+	w.WriteString(config.startFromModelPath);
 }
 
 void HeadlessMonitor::DeserializeTrainConfig(BinaryReader& r) {
 	config.totalTimesteps = r.Read<long long>();
 	config.algorithm = r.ReadString();
 	config.saveDir = r.ReadString();
+	config.startFromModelPath = r.ReadString();
 }
 
 void HeadlessMonitor::Begin() {
@@ -32,10 +34,18 @@ void HeadlessMonitor::Begin() {
 	EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Simulate);
 	EngineManager::getInstance().isHeadless = true;
 
+	{
+		std::lock_guard<std::mutex> lock(metricsMutex);
+		metricSeries.clear();
+		metricStepCounter = 0;
+	}
+
 	Console::Print("[Training] Training started for " + projectDisplayName + ".");
 }
 
 void HeadlessMonitor::End() {
+	EngineManager::getInstance().isHeadless = false;
+
 	SceneManager& SM = SceneManager::getInstance();
 	const std::string& editingScene = EngineManager::getInstance().editingScenePath;
 
@@ -47,8 +57,6 @@ void HeadlessMonitor::End() {
 	}
 
 	EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Stop);
-
-	Console::Print("[Training] Training finished.");
 }
 
 void HeadlessMonitor::StartTraining(const TrainConfig& config) {
@@ -89,10 +97,34 @@ void HeadlessMonitor::StartTraining(const TrainConfig& config) {
 				saveDir = (projectDir / "TrainedModels").string();
 			}
 
-			trainFn(config.algorithm, config.totalTimesteps, saveDir,
+			std::string startFromAbsPath;
+			if (!config.startFromModelPath.empty()) {
+				startFromAbsPath = FileManager::getInstance()
+					.VirtualToAbsolute(config.startFromModelPath).string();
+			}
+
+			trainFn(config.algorithm, config.totalTimesteps, saveDir, startFromAbsPath,
 				py::cpp_function([this](std::string msg) {
 					std::lock_guard<std::mutex> lock(trainStatusMutex);
 					trainStatus = msg;
+					}),
+				py::cpp_function([this](py::dict data) {
+					double x = -1.0;
+					if (data.contains("time/total_timesteps")) {
+						try { x = py::float_(data["time/total_timesteps"]).cast<double>(); }
+						catch (...) {}
+					}
+
+					std::lock_guard<std::mutex> lock(metricsMutex);
+					if (x < 0.0) x = static_cast<double>(metricStepCounter++);
+
+					for (auto item : data) {
+						std::string key = py::str(item.first).cast<std::string>();
+						double value;
+						try { value = item.second.cast<double>(); }
+						catch (...) { continue; }
+						metricSeries[key].AddPoint((float)x, (float)value);
+					}
 					}));
 		}
 		catch (const py::error_already_set& e) {
@@ -108,6 +140,7 @@ void HeadlessMonitor::StartTraining(const TrainConfig& config) {
 			trainError = msg;
 		}
 
+		Console::Print("[Training] Training finished.");
 		pendingEnd.store(true);
 		training.store(false);
 		});
@@ -125,10 +158,7 @@ std::string HeadlessMonitor::GetTrainingError() const {
 
 void HeadlessMonitor::ProcessMonitorWindow() {
 	EngineManager::getInstance().ProcessPendingMainThreadTasks();
-
-	if (pendingEnd.exchange(false)) {
-		End();
-	}
+	pendingEnd.exchange(false);
 
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
 	ImGui::SetNextWindowPos(viewport->WorkPos);
@@ -145,11 +175,28 @@ void HeadlessMonitor::ProcessMonitorWindow() {
 	ImGui::Unindent(8.0f);
 	ImGui::Dummy(ImVec2(0, 4));
 	ImGui::Separator();
-	ImGui::Dummy(ImVec2(0, 6));
 	ImGui::Indent(8.0f);
 
+	if (ImGui::BeginTabBar("##HeadlessMonitorTabs")) {
+		if (ImGui::BeginTabItem("Training Monitor")) {
+			DrawTrainingMonitorTab();
+			ImGui::EndTabItem();
+		}
+		if (ImGui::BeginTabItem("Console")) {
+			headlessConsole.DrawContent();
+			ImGui::EndTabItem();
+		}
+		ImGui::EndTabBar();
+	}
+
+	ImGui::Unindent(8.0f);
+	ImGui::End();
+}
+
+void HeadlessMonitor::DrawTrainingMonitorTab() {
 	bool isTraining = IsTraining();
 
+	ImGui::Dummy(ImVec2(0, 6));
 	ImGui::TextColored(isTraining ? ImVec4(0.35f, 0.85f, 0.4f, 1.0f) : ImVec4(0.85f, 0.35f, 0.35f, 1.0f),
 		isTraining ? "Training" : "Finished");
 
@@ -157,14 +204,10 @@ void HeadlessMonitor::ProcessMonitorWindow() {
 		ImGui::SameLine(0.0f, 16.0f);
 		ImGui::TextColored(ImVec4(0.55f, 0.75f, 0.95f, 1.0f), "%s", GetTrainingStatus().c_str());
 	}
-
-	ImGui::SameLine(0.0f, 16.0f);
-	ImGui::Checkbox("Auto-scroll", &autoScroll);
-
-	if (!isTraining) {
+	else {
 		ImGui::SameLine(0.0f, 12.0f);
 		if (ImGui::Button("Back to Editor")) {
-			EngineManager::getInstance().isHeadless = false;
+			End();
 		}
 	}
 
@@ -176,10 +219,62 @@ void HeadlessMonitor::ProcessMonitorWindow() {
 		ImGui::PopStyleColor();
 	}
 
-	ImGui::Unindent(8.0f);
+	ImGui::Dummy(ImVec2(0, 8));
+	ImGui::Separator();
 	ImGui::Dummy(ImVec2(0, 8));
 
-	headlessConsole.DrawContent();
+	std::lock_guard<std::mutex> lock(metricsMutex);
 
-	ImGui::End();
+	if (metricSeries.empty()) {
+		ImGui::TextDisabled(isTraining ? "Waiting for first rollout..." : "No training metrics recorded.");
+		return;
+	}
+
+	std::map<std::string, std::vector<std::string>> sections;
+	for (auto& [key, buf] : metricSeries) {
+		size_t slash = key.find('/');
+		std::string section = (slash != std::string::npos) ? key.substr(0, slash) : "misc";
+		sections[section].push_back(key);
+	}
+
+	const float plotWidth = ImGui::GetContentRegionAvail().x * 0.48f;
+	const ImVec2 plotSize(plotWidth, 150.0f);
+
+	for (auto& [section, keys] : sections) {
+		std::string headerLabel = section + "/";
+		if (ImGui::CollapsingHeader(headerLabel.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+			int col = 0;
+			for (auto& key : keys) {
+				MetricBuffer& buf = metricSeries[key];
+				if (buf.data.empty()) continue;
+
+				std::string label = key;
+				size_t slash = key.find('/');
+				if (slash != std::string::npos) label = key.substr(slash + 1);
+
+				if (col % 2 != 0) ImGui::SameLine();
+				col++;
+
+				ImGui::BeginGroup();
+				ImGui::Text("%s: %.4g", label.c_str(), buf.data.back().y);
+
+				std::string plotId = "##plot_" + key;
+				if (ImPlot::BeginPlot(plotId.c_str(), plotSize,
+					ImPlotFlags_NoTitle | ImPlotFlags_NoLegend | ImPlotFlags_NoMenus)) {
+					ImPlot::SetupAxes("timesteps", nullptr, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
+
+					ImPlotSpec spec;
+					spec.Offset = buf.offset;
+					spec.Stride = sizeof(ImVec2);
+
+					ImPlot::PlotLine(label.c_str(),
+						&buf.data[0].x, &buf.data[0].y,
+						(int)buf.data.size(), spec);
+
+					ImPlot::EndPlot();
+				}
+				ImGui::EndGroup();
+			}
+		}
+	}
 }

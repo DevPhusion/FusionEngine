@@ -756,6 +756,36 @@ void EngineStatus::ProcessTrainSettingsPopup() {
 			}
 		}
 
+		ImGui::Dummy(ImVec2(0, 6));
+		ImGui::Text("Start from model (optional)");
+		{
+			char modelBuf[256];
+			std::string display = cfg.startFromModelPath.empty() ? "(train from scratch)" : cfg.startFromModelPath;
+#if defined(_MSC_VER)
+			strcpy_s(modelBuf, display.c_str());
+#else
+			strncpy(modelBuf, display.c_str(), sizeof(modelBuf) - 1);
+			modelBuf[sizeof(modelBuf) - 1] = '\0';
+#endif
+			ImGui::SetNextItemWidth(240.0f);
+			ImGui::InputText("##StartFromModel", modelBuf, IM_ARRAYSIZE(modelBuf), ImGuiInputTextFlags_ReadOnly);
+			ImGui::SameLine();
+			if (ImGui::Button("Browse##StartFromModel")) {
+				auto opts = FileDialogOptions::ForExtension("Trained Model", "zip", "Choose Trained Model");
+				if (auto path = FileDialog::ShowOpenDialog(opts)) {
+					cfg.startFromModelPath = FileManager::getInstance().AbsoluteToVirtual(*path);
+					EngineManager::getInstance().EngineChangeEvent();
+				}
+			}
+			if (!cfg.startFromModelPath.empty()) {
+				ImGui::SameLine();
+				if (ImGui::Button("Clear##StartFromModel")) {
+					cfg.startFromModelPath.clear();
+					EngineManager::getInstance().EngineChangeEvent();
+				}
+			}
+		}
+
 		ImGui::Dummy(ImVec2(0, 8));
 		ImGui::Separator();
 		ImGui::Dummy(ImVec2(0, 6));

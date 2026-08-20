@@ -27,14 +27,12 @@ std::string SceneManager::NormalizeToVirtualPath(const std::string& path) const 
 void SceneManager::ClearLiveScene() {
 	EditorManager::getInstance().SetSelectedObject(nullptr);
 
-	std::vector<Object*> toRemove;
-	toRemove.reserve(ObjectManager::getInstance().allObjects.size());
-	for (auto& obj : ObjectManager::getInstance().allObjects)
-		toRemove.push_back(obj.get());
-	for (Object* obj : toRemove)
-		ObjectManager::getInstance().RemoveObject(obj);
+	for (auto& obj : ObjectManager::getInstance().allObjects) {
+		obj->OnDelete();
+	}
 
 	ObjectManager::getInstance().allObjects.clear();
+	ObjectManager::getInstance().pendingRemovals.clear();  
 	PhysicsEngine::getInstance().registeredPGSConstraints.clear();
 }
 

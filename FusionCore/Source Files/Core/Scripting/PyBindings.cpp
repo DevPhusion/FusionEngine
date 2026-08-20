@@ -2356,19 +2356,24 @@ namespace {
 			.def("set_reward", &AgentComponent::SetReward, py::arg("value"))
 			.def("end_episode", &AgentComponent::EndEpisode)
 
-			.def("set_action_space", &AgentComponent::SetActionSpace,
-				py::arg("size"), py::arg("low") = -1.0f, py::arg("high") = 1.0f,
-				"Configure how many float values this agent's action vector holds, and the "
-				"[low, high] range each is bounded to when training. Call this once, e.g. "
-				"from OnStart, e.g.\n"
-				"  self.agent.set_action_space(3, -1.0, 1.0)  # move, jump, shoot")
-			.def_property_readonly("action_size", [](AgentComponent& self) { return self.GetActionSize(); })
-			.def_property_readonly("action_low", [](AgentComponent& self) { return self.GetActionLow(); })
-			.def_property_readonly("action_high", [](AgentComponent& self) { return self.GetActionHigh(); })
+			.def("set_action_space", &AgentComponent::SetActionSpace, py::arg("space"),
+				"Set this agent's action space to any gymnasium.spaces.Space instance "
+				"(Discrete, Box, MultiDiscrete, MultiBinary), e.g.\n"
+				"  from gymnasium import spaces\n"
+				"  self.agent.set_action_space(spaces.MultiDiscrete([3, 2, 2]))\n"
+				"Must be called (e.g. from OnStart) before training or inference.")
+			.def_property_readonly("action_space", &AgentComponent::GetActionSpace)
 
-			.def_property_readonly("action", [](AgentComponent& self) { return self.GetAction(); },
-				"The most recent action written by the training process, e.g.\n"
-				"  move_dir = self.get_component(AgentComponent).action[0]")
+			.def("set_observation_space", &AgentComponent::SetObservationSpace, py::arg("space"),
+				"Optional. Override the observation space with any gymnasium.spaces.Space. "
+				"If not set, a Box inferred from the length of accumulated add_observation() "
+				"values is used automatically (previous default behavior).")
+			.def_property_readonly("observation_space", &AgentComponent::GetObservationSpace)
+
+			.def_property_readonly("action", &AgentComponent::GetAction,
+				"The most recent action, in whatever type matches the configured action_space "
+				"(int for Discrete, list for Box/MultiDiscrete/MultiBinary), e.g.\n"
+				"  move_idx, jump, shoot = self.agent.action  # MultiDiscrete([3, 2, 2])")
 
 			.def_property_readonly("agent_id", [](AgentComponent& self) { return self.AgentId(); });
 
@@ -2740,11 +2745,12 @@ def load_model(path, algorithm="PPO"):
 def predict(model, observation, deterministic=True):
     if model is None:
         return None
-
     try:
         obs = np.array(observation, dtype=np.float32)
         action, _ = model.predict(obs, deterministic=deterministic)
-        return [float(a) for a in np.atleast_1d(action)]
+        if isinstance(action, np.ndarray):
+            return action.tolist()
+        return action.item() if hasattr(action, "item") else action
     except Exception as e:
         fusion.Console.PrintError(f"fusion_model_runner: prediction failed: {e}")
         return None
@@ -2756,14 +2762,30 @@ def clear_cache():
 
 	void RegisterEnvironmentBindings(py::module_& m) {
 		py::module_ envMod = m.def_submodule("Environment", "Headless RL stepping API");
-		envMod.def("get_action_space", []() {
+		envMod.def("get_action_space", []() -> py::object {
 			AgentComponent* agent = FindFirstAgent();
 			if (!agent) throw py::value_error("Environment.get_action_space: no AgentComponent in the scene");
-			return py::make_tuple(agent->GetActionSize(), agent->GetActionLow(), agent->GetActionHigh());
-			}, "Returns (size, low, high) as configured via AgentComponent.set_action_space() "
+			py::object space = agent->GetActionSpace();
+			if (space.is_none()) {
+				throw py::value_error(
+					"Environment.get_action_space: no action space configured. Call "
+					"agent.set_action_space(<a gymnasium.spaces.Space>) from the attached "
+					"script's OnStart before training, e.g.\n"
+					"  from gymnasium import spaces\n"
+					"  self.agent.set_action_space(spaces.MultiDiscrete([3, 2, 2]))");
+			}
+			return space;
+			}, "Returns the gymnasium.spaces.Space configured via AgentComponent.set_action_space() "
 			"on the scene's first AgentComponent.");
 
-		envMod.def("step", [](std::vector<float> action) {
+		envMod.def("get_observation_space", []() -> py::object {
+			AgentComponent* agent = FindFirstAgent();
+			if (!agent) throw py::value_error("Environment.get_observation_space: no AgentComponent in the scene");
+			return agent->GetObservationSpace();   // may be py::none(); caller falls back to a default Box
+			}, "Returns the gymnasium.spaces.Space configured via AgentComponent.set_observation_space(), "
+			"or None if unset (in which case a default Box inferred from observation length is used).");
+
+		envMod.def("step", [](py::object action) {
 			AgentComponent* agent = FindFirstAgent();
 			if (!agent) throw py::value_error("Environment.step: no AgentComponent in the scene");
 			agent->SetAction(action);
@@ -2783,29 +2805,33 @@ def clear_cache():
 			bool done = agent->ConsumeDone();
 			return py::make_tuple(obs, reward, done);
 			}, py::arg("action"),
-				"Advance the simulation by one physics tick with the given action applied, "
-				"returning (observation, reward, done) for the scene's first AgentComponent.");
+				"Advance the simulation by one physics tick with the given action applied "
+				"(type must match the configured action_space), returning (observation, reward, done).");
 
 		envMod.def("reset", []() -> py::list {
 			{
 				py::gil_scoped_release release;
-				std::lock_guard<std::mutex> lock(EngineManager::getInstance().headlessSimMutex);
+				EngineManager::getInstance().RunOnMainThread([]() {
+					const std::string& editingScene = EngineManager::getInstance().editingScenePath;
+					if (!editingScene.empty())
+						SceneManager::getInstance().LoadSceneFromFile(editingScene);
+					else
+						SceneManager::getInstance().NewScene();
 
-				const std::string& editingScene = EngineManager::getInstance().editingScenePath;
-				if (!editingScene.empty())
-					SceneManager::getInstance().LoadSceneFromFile(editingScene);
-				else
-					SceneManager::getInstance().NewScene();
+					SceneManager::getInstance().ProcessPendingSceneLoad();
+					ScriptManager::getInstance().RunAllScriptsLoad();
+					ScriptManager::getInstance().RunAllScriptsStart();
 
-				SceneManager::getInstance().ProcessPendingSceneLoad();
-				ScriptManager::getInstance().RunAllScriptsLoad();
-				ScriptManager::getInstance().RunAllScriptsStart();
-
-				AgentComponent* agent = FindFirstAgent();
-				if (agent) {
-					agent->SetAction(std::vector<float>(2, 0.0f));
-					PhysicsEngine::getInstance().ProcessPhysics(0.0f);
-				}
+					AgentComponent* agent = FindFirstAgent();
+					if (agent) {
+						py::gil_scoped_acquire gil;
+						py::object space = agent->GetActionSpace();
+						if (!space.is_none()) {
+							agent->SetAction(space.attr("sample")());   // valid-shaped placeholder; reward/done from this tick are discarded below
+						}
+						PhysicsEngine::getInstance().ProcessPhysics(0.0f);
+					}
+					});
 			}
 
 			AgentComponent* agent = FindFirstAgent();
@@ -2817,8 +2843,7 @@ def clear_cache():
 			py::list obs;
 			for (float v : agent->GetObservation()) obs.append(v);
 			return obs;
-			}, "Reload the editing scene, run one priming tick so the initial observation is "
-			"populated, and return it.");
+		}, "Reload the editing scene, run one priming tick, and return the initial observation.");
 
 		py::dict envDict = envMod.attr("__dict__");
 		py::object builtins = py::module_::import("builtins");
@@ -2897,33 +2922,26 @@ import fusion
 
 
 class FusionEnv(gym.Env):
-    def __init__(self, action_size: int | None = None, action_low: float | None = None,
-                 action_high: float | None = None, obs_size: int | None = None):
+    def __init__(self, obs_size: int | None = None):
         super().__init__()
 
-        space_size, space_low, space_high = fusion.Environment.get_action_space()
-        size = action_size if action_size is not None else space_size
-        low = action_low if action_low is not None else space_low
-        high = action_high if action_high is not None else space_high
+        self.action_space = fusion.Environment.get_action_space()
 
-        if size <= 0:
-            raise ValueError(
-                "FusionEnv: action size is 0. Call agent.set_action_space(size, low, high) "
-                "from the attached script's OnStart before training."
-            )
-
-        self.action_space = spaces.Box(low=low, high=high, shape=(size,), dtype=np.float32)
-
+        custom_obs_space = fusion.Environment.get_observation_space()
         initial_obs = fusion.Environment.reset()
-        obs_len = obs_size or len(initial_obs)
-        if obs_len == 0:
-            raise ValueError(
-                "FusionEnv: the agent's observation is empty (Inspector shows "
-                "'Observation size: 0'). Call agent.add_observation(...) from the "
-                "attached script's Process (or OnLoad) before training — SB3 cannot "
-                "learn from a zero-dimensional observation space."
-            )
-        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(obs_len,), dtype=np.float32)
+
+        if custom_obs_space is not None:
+            self.observation_space = custom_obs_space
+        else:
+            obs_len = obs_size or len(initial_obs)
+            if obs_len == 0:
+                raise ValueError(
+                    "FusionEnv: the agent's observation is empty. Call "
+                    "agent.add_observation(...) from the attached script's Process "
+                    "before training."
+                )
+            self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(obs_len,), dtype=np.float32)
+
         self._last_obs = np.array(initial_obs, dtype=np.float32)
 
     def reset(self, *, seed=None, options=None):
@@ -2933,7 +2951,7 @@ class FusionEnv(gym.Env):
         return self._last_obs, {}
 
     def step(self, action):
-        obs, reward, done = fusion.Environment.step(list(map(float, action)))
+        obs, reward, done = fusion.Environment.step(action)   # pass through as-is, no float coercion
         self._last_obs = np.array(obs, dtype=np.float32)
         return self._last_obs, float(reward), bool(done), False, {}
 
@@ -2969,7 +2987,8 @@ class _ConsoleWriter:
         return False
 
 
-def train(algorithm: str, total_timesteps: int, save_dir: str, status_cb=None):
+def train(algorithm: str, total_timesteps: int, save_dir: str, start_from_model_path: str = "",
+          status_cb=None, metrics_cb=None):
     import sys
     import os
 
@@ -2987,9 +3006,47 @@ def train(algorithm: str, total_timesteps: int, save_dir: str, status_cb=None):
         if status_cb: status_cb("Building environment")
         env = FusionEnv()
 
+        algo_cls = algos[algorithm]
+
+        if start_from_model_path:
+            existing_path = start_from_model_path
+            if not os.path.exists(existing_path) and os.path.exists(existing_path + ".zip"):
+                existing_path = existing_path + ".zip"
+            if not os.path.exists(existing_path):
+                raise ValueError(
+                    f"start_from_model_path: file not found: {start_from_model_path}"
+                )
+
+            if status_cb: status_cb(f"Loading existing model from {existing_path}")
+            model = algo_cls.load(existing_path, env=env)
+        else:
+            if status_cb: status_cb("Creating new model")
+            model = algo_cls("MlpPolicy", env, verbose=1)
+
         if status_cb: status_cb(f"Training {algorithm} for {total_timesteps} steps...")
-        model = algos[algorithm]("MlpPolicy", env, verbose=1)
-        model.learn(total_timesteps=total_timesteps)
+
+        if metrics_cb is not None:
+            from stable_baselines3.common.logger import configure, KVWriter
+
+            class _MetricsWriter(KVWriter):
+                def write(self, key_values, key_excluded=None, step=0):
+                    data = {}
+                    for key, value in key_values.items():
+                        try:
+                            data[key] = float(value)
+                        except (TypeError, ValueError):
+                            continue
+                    if data:
+                        metrics_cb(data)
+
+                def close(self):
+                    pass
+
+            sb_logger = configure(folder=None, format_strings=["stdout"])
+            sb_logger.output_formats.append(_MetricsWriter())
+            model.set_logger(sb_logger)
+
+        model.learn(total_timesteps=total_timesteps, reset_num_timesteps=(not start_from_model_path))
 
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, "trained_model")
