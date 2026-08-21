@@ -7,6 +7,28 @@
 #include <windows.h>
 #endif
 
+namespace {
+	void SyncFusionRLShimModule(const fs::path& sitePackages) {
+		if (sitePackages.empty()) return;
+
+		fs::path shimPath = sitePackages / "fusionRL.py";
+		bool wantShim = PackageManager::getInstance().IsPackageInstalled("rl");
+
+		std::error_code ec;
+		bool exists = fs::exists(shimPath, ec);
+
+		if (wantShim) {
+			if (!exists) {
+				std::ofstream out(shimPath);
+				if (out.is_open()) out << "from fusion.RL import *\n";
+			}
+		}
+		else if (exists) {
+			fs::remove(shimPath, ec);
+		}
+	}
+}
+
 int ScriptManager::RunHiddenCommand(const std::string& command, std::string* outOutput) {
 #ifdef _WIN32
 	SECURITY_ATTRIBUTES saAttr{};
@@ -144,6 +166,8 @@ void ScriptManager::RunBackgroundSetup() {
 			Console::PrintError("ScriptManager: one or more optional packages failed to sync for this project.");
 		}
 	}
+
+	SyncFusionRLShimModule(GetVenvSitePackages(venvRoot));
 
 	if (!EngineManager::getInstance().isPlayer) {
 		SetStatus(SetupStage::GeneratingStubs, "Generating editor stub files...");
@@ -311,6 +335,13 @@ void ScriptManager::GenerateStubFiles(const fs::path& projectDirectory, const fs
 
 	SetStatus(SetupStage::GeneratingStubs, "Generating .pyi stubs...");
 	fs::path venvPython = GetVenvPythonExecutable(venvPath);
+
+#if defined(_WIN32)
+	_putenv_s("FUSION_PROJECT_DIR", projectDirectory.string().c_str());
+#else
+	setenv("FUSION_PROJECT_DIR", projectDirectory.string().c_str(), 1);
+#endif
+
 	std::ostringstream cmd;
 	cmd << "\"" << venvPython.string() << "\" -m pybind11_stubgen "
 		<< kEngineModuleName << " -o \"" << stubDir.string() << "\" --ignore-all-errors";
@@ -324,6 +355,13 @@ void ScriptManager::GenerateStubFiles(const fs::path& projectDirectory, const fs
 	}
 	else if (moduleChanged && cachedModuleExisted) {
 		Console::Print("ScriptManager: updated python API found, updated automatically");
+	}
+
+	if (result == 0 && PackageManager::getInstance().IsPackageInstalled("rl")) {
+		std::ofstream shim(stubDir / "fusionRL.pyi");
+		if (shim.is_open()) {
+			shim << "from fusion.RL import *\n";
+		}
 	}
 
 	WriteVsCodeSettings(projectDirectory, venvPath, stubDir);

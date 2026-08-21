@@ -266,7 +266,9 @@ void Inspector::ProcessWindow() {
                     m_SearchBuffer[0] = '\0';
                     ImGui::CloseCurrentPopup();
                 }
-            if (!selected->HasComponent<AgentComponent>() && std::string("Agent Component").find(search) != std::string::npos)
+            if (PackageManager::getInstance().IsPackageInstalled("rl")
+                && !selected->HasComponent<AgentComponent>()
+                && std::string("Agent Component").find(search) != std::string::npos)
                 if (ImGui::MenuItem("Agent Component")) {
                     EditorManager::getInstance().BeginEdit({ selected });
                     selected->AddComponent(std::make_unique<AgentComponent>(selected));

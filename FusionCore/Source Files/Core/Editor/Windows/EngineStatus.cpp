@@ -116,6 +116,28 @@ namespace {
 		if (start == std::string::npos) return "";
 		return s.substr(start, end - start + 1);
 	}
+
+	void DrawFloatSetting(const char* label, float* value, float step = 0.0f, const char* fmt = "%.5f") {
+		ImGui::PushID(label);
+		ImGui::Text("%s", label);
+		ImGui::SameLine(220.0f);
+		ImGui::SetNextItemWidth(160.0f);
+		if (ImGui::InputFloat("##val", value, 0.0f, 0.0f, fmt)) {
+			EngineManager::getInstance().EngineChangeEvent();
+		}
+		ImGui::PopID();
+	}
+
+	void DrawIntSetting(const char* label, int* value, int step = 1) {
+		ImGui::PushID(label);
+		ImGui::Text("%s", label);
+		ImGui::SameLine(220.0f);
+		ImGui::SetNextItemWidth(160.0f);
+		if (ImGui::InputInt("##val", value, 0, 0)) {
+			EngineManager::getInstance().EngineChangeEvent();
+		}
+		ImGui::PopID();
+	}
 }
 
 EngineStatus::EngineStatus(std::string name) : EditorWindow(name) {
@@ -160,10 +182,12 @@ void EngineStatus::ProcessWindow() {
 
 	const float projectNameWidth = 160.0f;
 
+	const bool rlPackageInstalled = PackageManager::getInstance().IsPackageInstalled("rl");
+
 	const float rightGroupW = ButtonWidth("Settings") + style.ItemSpacing.x
 		+ projectNameWidth + style.ItemSpacing.x
 		+ ButtonWidth("Save") + style.ItemSpacing.x
-		+ ButtonWidth("Export") + style.ItemSpacing.x + ButtonWidth("Run Headless");
+		+ ButtonWidth("Export") + (rlPackageInstalled ? (style.ItemSpacing.x + ButtonWidth("Train")) : 0.0f);
 	const float rightStartX = rowStartX + fullWidth - rightGroupW;
 
 	std::string fpsText = std::to_string(EngineManager::getInstance().fps) + " FPS";
@@ -244,25 +268,27 @@ void EngineStatus::ProcessWindow() {
 		ImGui::OpenPopup("Export Project");
 	ProcessExportPopup();
 
-	ImGui::SameLine();
-	{
-		bool disableHeadless = EngineManager::getInstance().isHeadless
-			|| FileManager::getInstance().currentProjectFile.empty()
-			|| !ScriptManager::getInstance().IsReady();
+	if (rlPackageInstalled) {
+		ImGui::SameLine();
+		{
+			bool disableHeadless = EngineManager::getInstance().isHeadless
+				|| FileManager::getInstance().currentProjectFile.empty()
+				|| !ScriptManager::getInstance().IsReady();
 
-		ImGui::BeginDisabled(disableHeadless);
-		if (ImGui::Button("Train"))
-			ImGui::OpenPopup("Train Settings");
-		ImGui::EndDisabled();
+			ImGui::BeginDisabled(disableHeadless);
+			if (ImGui::Button("Train"))
+				ImGui::OpenPopup("Train Settings");
+			ImGui::EndDisabled();
 
-		if (!ScriptManager::getInstance().IsReady()
-			&& !FileManager::getInstance().currentProjectFile.empty()
-			&& ImGui::IsItemHovered()) {
-			ImGui::SetTooltip("Python backend is still setting up (%s)",
-				ScriptManager::getInstance().GetStatusMessage().c_str());
+			if (!ScriptManager::getInstance().IsReady()
+				&& !FileManager::getInstance().currentProjectFile.empty()
+				&& ImGui::IsItemHovered()) {
+				ImGui::SetTooltip("Python backend is still setting up (%s)",
+					ScriptManager::getInstance().GetStatusMessage().c_str());
+			}
 		}
+		ProcessTrainSettingsPopup();
 	}
-	ProcessTrainSettingsPopup();
 
 	ImGui::SameLine();
 	{
@@ -716,7 +742,7 @@ void EngineStatus::ProcessTrainSettingsPopup() {
 	}
 
 	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 
 	if (ImGui::BeginPopupModal("Train Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
 		ImGui::Text("Algorithm");
@@ -732,6 +758,27 @@ void EngineStatus::ProcessTrainSettingsPopup() {
 		if (ImGui::InputInt("##Steps", &steps, 1000, 10000)) {
 			cfg.totalTimesteps = std::max(1, steps);
 			EngineManager::getInstance().EngineChangeEvent();
+		}
+
+		ImGui::Dummy(ImVec2(0, 6));
+		ImGui::Text("Model name");
+		{
+			char nameBuf[96];
+			std::string display = cfg.modelName.empty() ? "trained_model" : cfg.modelName;
+#if defined(_MSC_VER)
+			strcpy_s(nameBuf, display.c_str());
+#else
+			strncpy(nameBuf, display.c_str(), sizeof(nameBuf) - 1);
+			nameBuf[sizeof(nameBuf) - 1] = '\0';
+#endif
+			ImGui::SetNextItemWidth(200.0f);
+			if (ImGui::InputText("##ModelName", nameBuf, IM_ARRAYSIZE(nameBuf))) {
+				cfg.modelName = nameBuf;
+				EngineManager::getInstance().EngineChangeEvent();
+			}
+			ImGui::SameLine(0.0f, 4.0f);
+			ImGui::AlignTextToFramePadding();
+			ImGui::TextDisabled(".zip");
 		}
 
 		ImGui::Dummy(ImVec2(0, 6));
@@ -787,6 +834,24 @@ void EngineStatus::ProcessTrainSettingsPopup() {
 		}
 
 		ImGui::Dummy(ImVec2(0, 8));
+
+		bool trainingFromModel = !cfg.startFromModelPath.empty();
+
+		if (trainingFromModel) {
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.90f, 0.70f, 0.25f, 1.0f));
+			ImGui::TextWrapped("Advanced settings are not available when training from an existing model.");
+			ImGui::PopStyleColor();
+			ImGui::Dummy(ImVec2(0, 4));
+		}
+
+		ImGui::BeginDisabled(trainingFromModel);
+		if (ImGui::Button("Advanced Settings", ImVec2(160, 0))) {
+			ImGui::OpenPopup("Advanced Training Settings");
+		}
+		ImGui::EndDisabled();
+		ProcessAdvancedTrainSettingsPopup();
+
+		ImGui::Dummy(ImVec2(0, 8));
 		ImGui::Separator();
 		ImGui::Dummy(ImVec2(0, 6));
 
@@ -802,6 +867,91 @@ void EngineStatus::ProcessTrainSettingsPopup() {
 		ImGui::SameLine();
 		if (ImGui::Button("Cancel", ImVec2(120, 0)))
 			ImGui::CloseCurrentPopup();
+
+		ImGui::EndPopup();
+	}
+}
+
+void EngineStatus::ProcessAdvancedTrainSettingsPopup() {
+	TrainConfig& cfg = HeadlessMonitor::getInstance().config;
+	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+	if (ImGui::BeginPopupModal("Advanced Training Settings", nullptr,
+		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
+
+		ImGui::TextDisabled("%s hyperparameters", cfg.algorithm.c_str());
+		ImGui::Dummy(ImVec2(0, 6));
+		ImGui::Separator();
+		ImGui::Dummy(ImVec2(0, 6));
+
+		if (cfg.algorithm == "PPO") {
+			auto& s = cfg.ppoSettings;
+			DrawFloatSetting("Learning rate", &s.learningRate, 0.0001f);
+			DrawIntSetting("N steps", &s.nSteps, 64);
+			DrawIntSetting("Batch size", &s.batchSize, 8);
+			DrawIntSetting("N epochs", &s.nEpochs, 1);
+			DrawFloatSetting("Gamma", &s.gamma, 0.001f, "%.4f");
+			DrawFloatSetting("GAE lambda", &s.gaeLambda, 0.001f, "%.4f");
+			DrawFloatSetting("Clip range", &s.clipRange, 0.01f, "%.3f");
+			DrawFloatSetting("Entropy coef", &s.entCoef, 0.001f, "%.4f");
+			DrawFloatSetting("Value fn coef", &s.vfCoef, 0.01f, "%.3f");
+			DrawFloatSetting("Max grad norm", &s.maxGradNorm, 0.01f, "%.3f");
+		}
+		else if (cfg.algorithm == "A2C") {
+			auto& s = cfg.a2cSettings;
+			DrawFloatSetting("Learning rate", &s.learningRate, 0.0001f);
+			DrawIntSetting("N steps", &s.nSteps, 1);
+			DrawFloatSetting("Gamma", &s.gamma, 0.001f, "%.4f");
+			DrawFloatSetting("GAE lambda", &s.gaeLambda, 0.001f, "%.4f");
+			DrawFloatSetting("Entropy coef", &s.entCoef, 0.001f, "%.4f");
+			DrawFloatSetting("Value fn coef", &s.vfCoef, 0.01f, "%.3f");
+			DrawFloatSetting("Max grad norm", &s.maxGradNorm, 0.01f, "%.3f");
+		}
+		else if (cfg.algorithm == "SAC") {
+			auto& s = cfg.sacSettings;
+			DrawFloatSetting("Learning rate", &s.learningRate, 0.0001f);
+			DrawIntSetting("Buffer size", &s.bufferSize, 10000);
+			DrawIntSetting("Learning starts", &s.learningStarts, 100);
+			DrawIntSetting("Batch size", &s.batchSize, 16);
+			DrawFloatSetting("Tau", &s.tau, 0.001f, "%.4f");
+			DrawFloatSetting("Gamma", &s.gamma, 0.001f, "%.4f");
+			DrawIntSetting("Train freq", &s.trainFreq, 1);
+			DrawIntSetting("Gradient steps", &s.gradientSteps, 1);
+		}
+		else if (cfg.algorithm == "DDPG") {
+			auto& s = cfg.ddpgSettings;
+			DrawFloatSetting("Learning rate", &s.learningRate, 0.0001f);
+			DrawIntSetting("Buffer size", &s.bufferSize, 10000);
+			DrawIntSetting("Learning starts", &s.learningStarts, 100);
+			DrawIntSetting("Batch size", &s.batchSize, 16);
+			DrawFloatSetting("Tau", &s.tau, 0.001f, "%.4f");
+			DrawFloatSetting("Gamma", &s.gamma, 0.001f, "%.4f");
+			DrawIntSetting("Train freq", &s.trainFreq, 1);
+			DrawIntSetting("Gradient steps", &s.gradientSteps, 1);
+		}
+		else if (cfg.algorithm == "TD3") {
+			auto& s = cfg.td3Settings;
+			DrawFloatSetting("Learning rate", &s.learningRate, 0.0001f);
+			DrawIntSetting("Buffer size", &s.bufferSize, 10000);
+			DrawIntSetting("Learning starts", &s.learningStarts, 100);
+			DrawIntSetting("Batch size", &s.batchSize, 16);
+			DrawFloatSetting("Tau", &s.tau, 0.001f, "%.4f");
+			DrawFloatSetting("Gamma", &s.gamma, 0.001f, "%.4f");
+			DrawIntSetting("Train freq", &s.trainFreq, 1);
+			DrawIntSetting("Gradient steps", &s.gradientSteps, 1);
+			DrawIntSetting("Policy delay", &s.policyDelay, 1);
+			DrawFloatSetting("Target policy noise", &s.targetPolicyNoise, 0.01f, "%.3f");
+			DrawFloatSetting("Target noise clip", &s.targetNoiseClip, 0.01f, "%.3f");
+		}
+
+		ImGui::Dummy(ImVec2(0, 10));
+		ImGui::Separator();
+		ImGui::Dummy(ImVec2(0, 6));
+
+		if (ImGui::Button("Close", ImVec2(120, 0))) {
+			ImGui::CloseCurrentPopup();
+		}
 
 		ImGui::EndPopup();
 	}

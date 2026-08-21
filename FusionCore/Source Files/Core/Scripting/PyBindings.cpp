@@ -2339,56 +2339,6 @@ namespace {
 		EnableAddObject<CameraComponent>(cameraClass);
 		EnableAddChild<CameraComponent>(cameraClass);
 		EnableRemoveObject<CameraComponent>(cameraClass);
-
-		auto agentClass = py::class_<AgentComponent>(m, "AgentComponent")
-			.def_property("enable",
-				[](AgentComponent& self) { return self.Enabled; },
-				[](AgentComponent& self, bool e) { self.SetEnabled(e); })
-
-			.def("add_observation", py::overload_cast<float>(&AgentComponent::AddObservation), py::arg("value"))
-			.def("add_observation", [](AgentComponent& self, std::vector<float> values) {
-			self.AddObservationVec(values);
-				}, py::arg("values"))
-			.def("set_observation", &AgentComponent::SetObservation, py::arg("values"))
-			.def("clear_observation", &AgentComponent::ClearObservation)
-
-			.def("add_reward", &AgentComponent::AddReward, py::arg("delta"))
-			.def("set_reward", &AgentComponent::SetReward, py::arg("value"))
-			.def("end_episode", &AgentComponent::EndEpisode)
-
-			.def("set_action_space", &AgentComponent::SetActionSpace, py::arg("space"),
-				"Set this agent's action space to any gymnasium.spaces.Space instance "
-				"(Discrete, Box, MultiDiscrete, MultiBinary), e.g.\n"
-				"  from gymnasium import spaces\n"
-				"  self.agent.set_action_space(spaces.MultiDiscrete([3, 2, 2]))\n"
-				"Must be called (e.g. from OnStart) before training or inference.")
-			.def_property_readonly("action_space", &AgentComponent::GetActionSpace)
-
-			.def("set_observation_space", &AgentComponent::SetObservationSpace, py::arg("space"),
-				"Optional. Override the observation space with any gymnasium.spaces.Space. "
-				"If not set, a Box inferred from the length of accumulated add_observation() "
-				"values is used automatically (previous default behavior).")
-			.def_property_readonly("observation_space", &AgentComponent::GetObservationSpace)
-
-			.def_property_readonly("action", &AgentComponent::GetAction,
-				"The most recent action, in whatever type matches the configured action_space "
-				"(int for Discrete, list for Box/MultiDiscrete/MultiBinary), e.g.\n"
-				"  move_idx, jump, shoot = self.agent.action  # MultiDiscrete([3, 2, 2])")
-
-			.def_property_readonly("agent_id", [](AgentComponent& self) { return self.AgentId(); });
-
-		EnableGetComponent<AgentComponent>(agentClass);
-		EnableHasComponent<AgentComponent>(agentClass);
-		RegisterComponentGetter<AgentComponent>(agentClass);
-		EnableGetOwner<AgentComponent>(agentClass);
-		RegisterComponentRemover<AgentComponent>(agentClass);
-		RegisterComponentAdder<AgentComponent>(agentClass,
-			[](Object& obj) { return std::make_unique<AgentComponent>(&obj); });
-		EnableAddComponent<AgentComponent>(agentClass);
-		EnableRemoveComponent<AgentComponent>(agentClass);
-		EnableAddObject<AgentComponent>(agentClass);
-		EnableAddChild<AgentComponent>(agentClass);
-		EnableRemoveObject<AgentComponent>(agentClass);
 	}
 
 	Object* CreateDefaultObject() {
@@ -2760,8 +2710,8 @@ def clear_cache():
     _model_cache.clear()
 )PYCODE";
 
-	void RegisterEnvironmentBindings(py::module_& m) {
-		py::module_ envMod = m.def_submodule("Environment", "Headless RL stepping API");
+	void RegisterEnvironmentBindings(py::module_& rlModule) {
+		py::module_ envMod = rlModule.def_submodule("Environment", "Headless RL stepping API");
 		envMod.def("get_action_space", []() -> py::object {
 			AgentComponent* agent = FindFirstAgent();
 			if (!agent) throw py::value_error("Environment.get_action_space: no AgentComponent in the scene");
@@ -2919,16 +2869,17 @@ import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 import fusion
+import fusionRL
 
 
 class FusionEnv(gym.Env):
     def __init__(self, obs_size: int | None = None):
         super().__init__()
 
-        self.action_space = fusion.Environment.get_action_space()
+        self.action_space = fusionRL.Environment.get_action_space()
 
-        custom_obs_space = fusion.Environment.get_observation_space()
-        initial_obs = fusion.Environment.reset()
+        custom_obs_space = fusionRL.Environment.get_observation_space()
+        initial_obs = fusionRL.Environment.reset()
 
         if custom_obs_space is not None:
             self.observation_space = custom_obs_space
@@ -2946,12 +2897,12 @@ class FusionEnv(gym.Env):
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
-        obs = fusion.Environment.reset()
+        obs = fusionRL.Environment.reset()
         self._last_obs = np.array(obs, dtype=np.float32)
         return self._last_obs, {}
 
     def step(self, action):
-        obs, reward, done = fusion.Environment.step(action)   # pass through as-is, no float coercion
+        obs, reward, done = fusionRL.Environment.step(action)
         self._last_obs = np.array(obs, dtype=np.float32)
         return self._last_obs, float(reward), bool(done), False, {}
 
@@ -2988,6 +2939,7 @@ class _ConsoleWriter:
 
 
 def train(algorithm: str, total_timesteps: int, save_dir: str, start_from_model_path: str = "",
+          model_name: str = "trained_model", hyperparams: dict | None = None,
           status_cb=None, metrics_cb=None):
     import sys
     import os
@@ -3001,7 +2953,9 @@ def train(algorithm: str, total_timesteps: int, save_dir: str, start_from_model_
     if algorithm not in algos:
         raise ValueError(f"Unknown algorithm '{algorithm}'")
 
-    fusion.Environment.is_training = True
+    hyperparams = hyperparams or {}
+
+    fusionRL.Environment.is_training = True
     try:
         if status_cb: status_cb("Building environment")
         env = FusionEnv()
@@ -3021,7 +2975,10 @@ def train(algorithm: str, total_timesteps: int, save_dir: str, start_from_model_
             model = algo_cls.load(existing_path, env=env)
         else:
             if status_cb: status_cb("Creating new model")
-            model = algo_cls("MlpPolicy", env, verbose=1)
+            try:
+                model = algo_cls("MlpPolicy", env, verbose=1, **hyperparams)
+            except TypeError as e:
+                raise ValueError(f"Invalid hyperparameter for {algorithm}: {e}") from e
 
         if status_cb: status_cb(f"Training {algorithm} for {total_timesteps} steps...")
 
@@ -3049,14 +3006,14 @@ def train(algorithm: str, total_timesteps: int, save_dir: str, start_from_model_
         model.learn(total_timesteps=total_timesteps, reset_num_timesteps=(not start_from_model_path))
 
         os.makedirs(save_dir, exist_ok=True)
-        save_path = os.path.join(save_dir, "trained_model")
+        save_path = os.path.join(save_dir, model_name)
         model.save(save_path)
         if status_cb: status_cb(f"Done, model saved to {save_path}.zip")
     finally:
-        fusion.Environment.is_training = False
+        fusionRL.Environment.is_training = False
 )PYCODE";
 
-	void InstallFusionGymModule(py::module_& m) {
+	void InstallFusionGymModule() {
 		static bool installed = false;
 		if (installed) return;
 		installed = true;
@@ -3082,6 +3039,64 @@ def train(algorithm: str, total_timesteps: int, save_dir: str, start_from_model_
 			Console::PrintError("PyBindings: failed to install embedded fusion_gym module: {}");
 			throw;
 		}
+	}
+	
+	void RegisterRLBindings(py::module_& m) {
+		py::module_ fusionRL = m.def_submodule("RL",
+			"Fusion Reinforcement Learning bindings (requires the 'rl' package)");
+
+		auto agentClass = py::class_<AgentComponent>(m, "AgentComponent")
+			.def_property("enable",
+				[](AgentComponent& self) { return self.Enabled; },
+				[](AgentComponent& self, bool e) { self.SetEnabled(e); })
+
+			.def("add_observation", py::overload_cast<float>(&AgentComponent::AddObservation), py::arg("value"))
+			.def("add_observation", [](AgentComponent& self, std::vector<float> values) {
+			self.AddObservationVec(values);
+				}, py::arg("values"))
+			.def("set_observation", &AgentComponent::SetObservation, py::arg("values"))
+			.def("clear_observation", &AgentComponent::ClearObservation)
+
+			.def("add_reward", &AgentComponent::AddReward, py::arg("delta"))
+			.def("set_reward", &AgentComponent::SetReward, py::arg("value"))
+			.def("end_episode", &AgentComponent::EndEpisode)
+
+			.def("set_action_space", &AgentComponent::SetActionSpace, py::arg("space"),
+				"Set this agent's action space to any gymnasium.spaces.Space instance "
+				"(Discrete, Box, MultiDiscrete, MultiBinary), e.g.\n"
+				"  from gymnasium import spaces\n"
+				"  self.agent.set_action_space(spaces.MultiDiscrete([3, 2, 2]))\n"
+				"Must be called (e.g. from OnStart) before training or inference.")
+			.def_property_readonly("action_space", &AgentComponent::GetActionSpace)
+
+			.def("set_observation_space", &AgentComponent::SetObservationSpace, py::arg("space"),
+				"Optional. Override the observation space with any gymnasium.spaces.Space. "
+				"If not set, a Box inferred from the length of accumulated add_observation() "
+				"values is used automatically (previous default behavior).")
+			.def_property_readonly("observation_space", &AgentComponent::GetObservationSpace)
+
+			.def_property_readonly("action", &AgentComponent::GetAction,
+				"The most recent action, in whatever type matches the configured action_space "
+				"(int for Discrete, list for Box/MultiDiscrete/MultiBinary), e.g.\n"
+				"  move_idx, jump, shoot = self.agent.action  # MultiDiscrete([3, 2, 2])")
+
+			.def_property_readonly("agent_id", [](AgentComponent& self) { return self.AgentId(); });
+
+		EnableGetComponent<AgentComponent>(agentClass);
+		EnableHasComponent<AgentComponent>(agentClass);
+		RegisterComponentGetter<AgentComponent>(agentClass);
+		EnableGetOwner<AgentComponent>(agentClass);
+		RegisterComponentRemover<AgentComponent>(agentClass);
+		RegisterComponentAdder<AgentComponent>(agentClass,
+			[](Object& obj) { return std::make_unique<AgentComponent>(&obj); });
+		EnableAddComponent<AgentComponent>(agentClass);
+		EnableRemoveComponent<AgentComponent>(agentClass);
+		EnableAddObject<AgentComponent>(agentClass);
+		EnableAddChild<AgentComponent>(agentClass);
+		EnableRemoveObject<AgentComponent>(agentClass);
+
+		RegisterEnvironmentBindings(fusionRL);
+		InstallFusionGymModule();
 	}
 }
 
@@ -3196,10 +3211,12 @@ void RegisterEngineBindings(py::module_& m) {
 	RegisterScriptBindings(m);
 	RegisterInputBindings(m);
 	RegisterConsoleBindings(m);
-	RegisterComponentBindings(m);
-	RegisterEnvironmentBindings(m);
+	RegisterComponentBindings(m);      
 	RegisterSceneBindings(m);
 	RegisterObjectBindings(m);
 	InstallPackageImportHook(m);
-	InstallFusionGymModule(m);
+
+	if (PackageManager::getInstance().IsPackageInstalled("rl")) {
+		RegisterRLBindings(m);
+	}
 }

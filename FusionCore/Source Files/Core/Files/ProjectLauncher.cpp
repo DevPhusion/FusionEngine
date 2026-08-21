@@ -214,6 +214,9 @@ void ProjectLauncher::CreateProjectFromPopup() {
 	FileManager::getInstance().SetupResourcesFolder();
 
 	AddProjectFolder(newProjectFolder, displayName);
+
+	PackageManager::getInstance().LoadForProject(newProjectFolder);
+
 	errorMessage.clear();
 	pendingEnterProject = true;
 }
@@ -227,6 +230,8 @@ bool ProjectLauncher::OpenProjectFile(const std::string& fusionFilePath) {
 		FileManager::getInstance().currentProjectDirectory = folder.string();
 		FileManager::getInstance().SetupResourcesFolder();
 		AddProjectFolder(folder.string(), "");
+
+		PackageManager::getInstance().LoadForProject(folder.string());
 
 		pendingEnterProject = true;
 		return true;
