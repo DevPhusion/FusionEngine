@@ -1,5 +1,6 @@
 #include "../../../Header Files/Core/Files/FileDialog.h"
 
+#define NOMINMAX
 #include <windows.h>
 #include <shobjidl.h>
 

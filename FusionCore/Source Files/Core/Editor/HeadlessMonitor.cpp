@@ -3,8 +3,11 @@
 #include "../../../Header Files/Core/SceneManager.h"
 #include "../../../Header Files/Core/Files/FileManager.h"
 #include "../../../Header Files/Core/Scripting/ScriptManager.h"
+#include "../../../Header Files/Core/Rendering/Renderer.h"
+#include "../../../Header Files/Core/Camera.h"
 #include <filesystem>
 #include <pybind11/embed.h>
+#include <GLFW/glfw3.h>
 
 namespace py = pybind11;
 
@@ -19,6 +22,8 @@ void HeadlessMonitor::SerializeTrainConfig(BinaryWriter& w) {
 	w.WriteString(config.modelName);
 	w.WriteString(config.saveDir);
 	w.WriteString(config.startFromModelPath);
+	w.Write(config.shardIntervalSteps);
+	w.WriteString(config.shardDir);
 
 	auto& ppo = config.ppoSettings;
 	w.Write(ppo.learningRate); w.Write(ppo.nSteps); w.Write(ppo.batchSize);
@@ -54,6 +59,8 @@ void HeadlessMonitor::DeserializeTrainConfig(BinaryReader& r) {
 	config.modelName = r.ReadString();
 	config.saveDir = r.ReadString();
 	config.startFromModelPath = r.ReadString();
+	config.shardIntervalSteps = r.Read<int>();
+	config.shardDir = r.ReadString();
 
 	auto& ppo = config.ppoSettings;
 	ppo.learningRate = r.Read<float>(); ppo.nSteps = r.Read<int>(); ppo.batchSize = r.Read<int>();
@@ -200,6 +207,7 @@ void HeadlessMonitor::StartTraining(const TrainConfig& config) {
 
 	Begin();
 	training.store(true);
+	stopRequested.store(false);
 	{
 		std::lock_guard<std::mutex> lock(trainStatusMutex);
 		trainStatus = "Starting...";
@@ -217,6 +225,11 @@ void HeadlessMonitor::StartTraining(const TrainConfig& config) {
 				std::filesystem::path projectDir =
 					std::filesystem::path(FileManager::getInstance().currentProjectFile).parent_path();
 				saveDir = (projectDir / "TrainedModels").string();
+			}
+
+			std::string shardDir = config.shardDir;
+			if (config.shardIntervalSteps > 0 && shardDir.empty()) {
+				shardDir = (std::filesystem::path(saveDir) / "Shards").string();
 			}
 
 			std::string startFromAbsPath;
@@ -250,7 +263,10 @@ void HeadlessMonitor::StartTraining(const TrainConfig& config) {
 						catch (...) { continue; }
 						metricSeries[key].AddPoint((float)x, (float)value);
 					}
-					}));
+					}),
+				py::cpp_function([this]() { return stopRequested.load(); }),
+				config.shardIntervalSteps,
+				shardDir);
 		}
 		catch (const py::error_already_set& e) {
 			std::string msg = e.what();
@@ -268,7 +284,18 @@ void HeadlessMonitor::StartTraining(const TrainConfig& config) {
 		Console::Print("[Training] Training finished.");
 		pendingEnd.store(true);
 		training.store(false);
+		stopRequested.store(false);
 		});
+}
+
+void HeadlessMonitor::RequestStop() {
+	if (!training.load()) return;
+	stopRequested.store(true);
+	{
+		std::lock_guard<std::mutex> lock(trainStatusMutex);
+		trainStatus = "Stop requested — finishing current step and saving...";
+	}
+	Console::Print("[Training] Stop requested by user.");
 }
 
 std::string HeadlessMonitor::GetTrainingStatus() const {
@@ -315,6 +342,10 @@ void HeadlessMonitor::ProcessMonitorWindow() {
 			DrawTrainingMonitorTab();
 			ImGui::EndTabItem();
 		}
+		if (ImGui::BeginTabItem("Live Training View")) {          
+			DrawLiveTrainingViewTab();                           
+			ImGui::EndTabItem();                                 
+		}
 		if (ImGui::BeginTabItem("Console")) {
 			headlessConsole.DrawContent();
 			ImGui::EndTabItem();
@@ -340,6 +371,17 @@ void HeadlessMonitor::DrawTrainingMonitorTab() {
 	if (isTraining) {
 		ImGui::SameLine(0.0f, 14.0f);
 		ImGui::TextColored(ImVec4(0.55f, 0.75f, 0.95f, 1.0f), "%s", GetTrainingStatus().c_str());
+
+		ImGui::SameLine(0.0f, 14.0f);
+		bool stopping = IsStopRequested();
+		ImGui::BeginDisabled(stopping);
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.22f, 0.22f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.65f, 0.28f, 0.28f, 1.0f));
+		if (ImGui::Button(stopping ? "Stopping..." : "Stop && Save")) {
+			RequestStop();
+		}
+		ImGui::PopStyleColor(2);
+		ImGui::EndDisabled();
 	}
 	else {
 		ImGui::SameLine(0.0f, 14.0f);
@@ -470,4 +512,64 @@ void HeadlessMonitor::DrawTrainingMonitorTab() {
 			ImGui::Dummy(ImVec2(0, 8));
 		}
 	}
+}
+
+void HeadlessMonitor::DrawLiveTrainingViewTab() {
+	ImGui::Dummy(ImVec2(0, 8));
+
+	ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.35f, 0.28f, 0.10f, 0.35f));
+	ImGui::BeginChild("##liveViewWarning", ImVec2(0, 56), true, ImGuiWindowFlags_NoScrollbar);
+	ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.80f, 0.45f, 1.0f));
+	ImGui::TextWrapped(
+		"Live rendering pauses the training thread for the duration of every frame drawn here. "
+		"Use this to visually sanity-check what the agent is doing -- leave this tab for actual "
+		"training runs; headless mode (no tab open) is still the fastest and recommended way to train.");
+	ImGui::PopStyleColor();
+	ImGui::EndChild();
+	ImGui::PopStyleColor();
+
+	ImGui::Dummy(ImVec2(0, 8));
+
+	ImGui::Text("Quality");
+	ImGui::SameLine();
+	ImGui::SetNextItemWidth(160.0f);
+	const char* qualityLabels[] = { "Low", "Medium", "High" };
+	ImGui::Combo("##LiveViewQuality", &liveViewQualityIndex, qualityLabels, 3);
+
+	if (!IsTraining()) {
+		ImGui::Dummy(ImVec2(0, 8));
+		ImGui::TextDisabled("Training isn't running -- nothing to display.");
+		return;
+	}
+
+	double now = glfwGetTime();
+	float camDelta = (liveViewCameraLastTime > 0.0) ? (float)(now - liveViewCameraLastTime) : 0.0f;
+	if (camDelta > 0.1f) camDelta = 0.1f;
+	liveViewCameraLastTime = now;
+
+	float aspect = EngineManager::getInstance().gameAspectRatio;
+	if (aspect <= 0.0f) aspect = 16.0f / 9.0f;
+
+	static const int kQualityWidths[3] = { 240, 480, 800 };
+	int targetWidth = kQualityWidths[liveViewQualityIndex];
+	int targetHeight = std::max(1, (int)(targetWidth / aspect));
+
+	GLuint tex;
+	{
+		std::lock_guard<std::mutex> lock(EngineManager::getInstance().headlessSimMutex);
+		Camera::getInstance().ProcessCamera(camDelta);
+		tex = Renderer::getInstance().RenderLiveViewFrame(targetWidth, targetHeight);
+	}
+
+	ImGui::Dummy(ImVec2(0, 8));
+
+	ImVec2 avail = ImGui::GetContentRegionAvail();
+	float displayWidth = avail.x;
+	float displayHeight = displayWidth / aspect;
+	if (displayHeight > avail.y) {
+		displayHeight = avail.y;
+		displayWidth = displayHeight * aspect;
+	}
+
+	ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(displayWidth, displayHeight), ImVec2(0, 1), ImVec2(1, 0));
 }

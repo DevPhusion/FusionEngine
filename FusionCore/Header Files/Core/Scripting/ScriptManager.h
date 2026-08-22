@@ -92,7 +92,8 @@ private:
 	void StartEmbeddedInterpreter();
 	void LinkInterpreterToVenv(const std::filesystem::path& venvPath);
 
-	void GenerateStubFiles(const std::filesystem::path& projectDirectory, const std::filesystem::path& venvPath);
+	void GenerateStubFiles(const std::filesystem::path& projectDirectory, const std::filesystem::path& venvPath,
+		bool forceRegenerate);
 	bool EnsureStubgenInstalled(const std::filesystem::path& venvPath);
 	std::filesystem::path FindCompiledModule() const;
 	bool ModulesDiffer(const fs::path& lhs, const fs::path& rhs) const;
@@ -103,6 +104,9 @@ private:
 	std::string FindSystemPythonCommand() const;
 	std::filesystem::path GetVenvPythonExecutable(const std::filesystem::path& venvPath) const;
 	std::filesystem::path GetVenvSitePackages(const std::filesystem::path& venvPath) const;
+
+	bool pendingPackageRestart = false;
+	void RestartEmbeddedInterpreter();
 
 	std::unique_ptr<pybind11::scoped_interpreter> interpreter;
 	std::unique_ptr<pybind11::gil_scoped_release> mainThreadGilRelease;

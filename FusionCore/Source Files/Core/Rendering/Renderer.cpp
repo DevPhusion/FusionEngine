@@ -395,3 +395,140 @@ void Renderer::DrawFilledPolygon(const std::vector<glm::vec3>& worldPoints, glm:
         DrawLine(worldPoints[i], worldPoints[(i + 1) % worldPoints.size()], outlineColor, outlineThickness);
     }
 }
+
+void Renderer::EnsureAllRenderResourcesLoaded() {
+    for (auto& obj : *allObjects) {
+        if (auto* rc = obj->GetComponent<RenderComponent>())
+            rc->EnsureGLResources();
+    }
+}
+
+void Renderer::EnsureHeadlessFramebuffer(int width, int height) {
+    if (headlessFBO != 0 && headlessFBOWidth == width && headlessFBOHeight == height) return;
+
+    if (headlessFBO != 0) {
+        glDeleteFramebuffers(1, &headlessFBO);
+        glDeleteTextures(1, &headlessColorTex);
+        glDeleteRenderbuffers(1, &headlessDepthRBO);
+    }
+    headlessFBOWidth = width;
+    headlessFBOHeight = height;
+
+    glGenFramebuffers(1, &headlessFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, headlessFBO);
+
+    glGenTextures(1, &headlessColorTex);
+    glBindTexture(GL_TEXTURE_2D, headlessColorTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, headlessColorTex, 0);
+
+    glGenRenderbuffers(1, &headlessDepthRBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, headlessDepthRBO);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, headlessDepthRBO);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        Console::PrintError("Renderer: snapshot framebuffer incomplete");
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+std::vector<unsigned char> Renderer::CaptureSnapshot(int width, int height) {
+    EnsureAllRenderResourcesLoaded();
+    EnsureHeadlessFramebuffer(width, height);
+
+    float prevAspect = EngineManager::getInstance().gameAspectRatio;
+    EngineManager::getInstance().gameAspectRatio = (float)width / (float)height;
+
+    GLint prevViewport[4];
+    glGetIntegerv(GL_VIEWPORT, prevViewport);
+    GLint prevFBO = 0;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, headlessFBO);
+    glViewport(0, 0, width, height);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+    glm::vec4& bg = EngineManager::getInstance().EngineSettings.backgroundColor;
+    glClearColor(bg.r, bg.g, bg.b, bg.a);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    Draw();
+
+    std::vector<unsigned char> rows(width * height * 3);
+    glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, rows.data());
+
+    std::vector<unsigned char> flipped(rows.size());
+    int rowSize = width * 3;
+    for (int y = 0; y < height; y++)
+        memcpy(&flipped[y * rowSize], &rows[(height - 1 - y) * rowSize], rowSize);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)prevFBO);
+    glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+    EngineManager::getInstance().gameAspectRatio = prevAspect;
+
+    return flipped;
+}
+
+void Renderer::EnsureLiveViewFramebuffer(int width, int height) {
+    if (liveViewFBO != 0 && liveViewFBOWidth == width && liveViewFBOHeight == height) return;
+
+    if (liveViewFBO != 0) {
+        glDeleteFramebuffers(1, &liveViewFBO);
+        glDeleteTextures(1, &liveViewColorTex);
+        glDeleteRenderbuffers(1, &liveViewDepthRBO);
+    }
+    liveViewFBOWidth = width;
+    liveViewFBOHeight = height;
+
+    glGenFramebuffers(1, &liveViewFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, liveViewFBO);
+
+    glGenTextures(1, &liveViewColorTex);
+    glBindTexture(GL_TEXTURE_2D, liveViewColorTex);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, liveViewColorTex, 0);
+
+    glGenRenderbuffers(1, &liveViewDepthRBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, liveViewDepthRBO);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, liveViewDepthRBO);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        Console::PrintError("Renderer: live view framebuffer incomplete");
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+GLuint Renderer::RenderLiveViewFrame(int width, int height) {
+    EnsureAllRenderResourcesLoaded();
+    EnsureLiveViewFramebuffer(width, height);
+
+    float prevAspect = EngineManager::getInstance().gameAspectRatio;
+    EngineManager::getInstance().gameAspectRatio = (float)width / (float)height;
+
+    GLint prevViewport[4];
+    glGetIntegerv(GL_VIEWPORT, prevViewport);
+    GLint prevFBO = 0;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, liveViewFBO);
+    glViewport(0, 0, width, height);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+    glm::vec4& bg = EngineManager::getInstance().EngineSettings.backgroundColor;
+    glClearColor(bg.r, bg.g, bg.b, bg.a);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    Draw();
+
+    glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)prevFBO);
+    glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
+    EngineManager::getInstance().gameAspectRatio = prevAspect;
+
+    return liveViewColorTex;
+}

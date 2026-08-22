@@ -4,6 +4,7 @@
 #include "../../../Header Files/Core/Scripting/PyBindings.h"
 
 #ifdef _WIN32
+#define NOMINMAX
 #include <windows.h>
 #endif
 
@@ -169,9 +170,11 @@ void ScriptManager::RunBackgroundSetup() {
 
 	SyncFusionRLShimModule(GetVenvSitePackages(venvRoot));
 
+	pendingPackageRestart = PackageManager::getInstance().NeedsBindingsRebuild();
+
 	if (!EngineManager::getInstance().isPlayer) {
 		SetStatus(SetupStage::GeneratingStubs, "Generating editor stub files...");
-		GenerateStubFiles(projectRoot, venvRoot);
+		GenerateStubFiles(projectRoot, venvRoot, pendingPackageRestart);
 	}
 
 	backgroundSucceeded = true;
@@ -183,7 +186,14 @@ void ScriptManager::Update() {
 		workerThread.join();
 
 		if (backgroundSucceeded) {
-			if (!interpreter) StartEmbeddedInterpreter();
+			if (!interpreter) {
+				StartEmbeddedInterpreter();
+			}
+			else if (pendingPackageRestart) {
+				RestartEmbeddedInterpreter();
+			}
+			PackageManager::getInstance().MarkBindingsUpToDate();
+
 			LinkInterpreterToVenv(venvRoot);
 			ReloadAllRegisteredScripts();
 			SetStatus(SetupStage::Done, "Python backend ready.");
@@ -192,6 +202,20 @@ void ScriptManager::Update() {
 			SetStatus(SetupStage::Failed, "Python backend setup failed.");
 		}
 	}
+}
+
+void ScriptManager::RestartEmbeddedInterpreter() {
+	Console::Print(
+		"ScriptManager: project's optional package selection changed the scripting API "
+		"surface; restarting the Python backend to rebuild bindings.");
+
+	RunAllScriptsStop();
+	ResetDynamicComponentRegistries();
+
+	mainThreadGilRelease.reset();
+	interpreter.reset();
+
+	StartEmbeddedInterpreter();
 }
 
 void ScriptManager::StartEmbeddedInterpreter() {
@@ -286,7 +310,8 @@ void ScriptManager::LinkInterpreterToVenv(const fs::path& venvPath) {
 	path.attr("insert")(0, spStr);
 }
 
-void ScriptManager::GenerateStubFiles(const fs::path& projectDirectory, const fs::path& venvPath) {
+void ScriptManager::GenerateStubFiles(const fs::path& projectDirectory, const fs::path& venvPath,
+	bool forceRegenerate) {
 	fs::path stubDir = projectDirectory / "typings";
 	std::error_code ec;
 	fs::create_directories(stubDir, ec);
@@ -313,7 +338,7 @@ void ScriptManager::GenerateStubFiles(const fs::path& projectDirectory, const fs
 
 	bool stubsMissing = !fs::exists(stubDir, ec) || fs::is_empty(stubDir, ec);
 
-	if (!moduleChanged && !stubsMissing) {
+	if (!moduleChanged && !stubsMissing && !forceRegenerate) {
 		WriteVsCodeSettings(projectDirectory, venvPath, stubDir);
 		return;
 	}
@@ -353,20 +378,23 @@ void ScriptManager::GenerateStubFiles(const fs::path& projectDirectory, const fs
 			"ScriptManager: pybind11-stubgen exited with code {} : {}. Stubs may be incomplete"
 		).Format(result, stubgenOutput);
 	}
-	else if (moduleChanged && cachedModuleExisted) {
+	else if ((moduleChanged && cachedModuleExisted) || forceRegenerate) {
 		Console::Print("ScriptManager: updated python API found, updated automatically");
 	}
 
+	fs::path rlStubPath = stubDir / "fusionRL.pyi";
 	if (result == 0 && PackageManager::getInstance().IsPackageInstalled("rl")) {
-		std::ofstream shim(stubDir / "fusionRL.pyi");
+		std::ofstream shim(rlStubPath);
 		if (shim.is_open()) {
 			shim << "from fusion.RL import *\n";
 		}
 	}
+	else if (fs::exists(rlStubPath, ec)) {
+		fs::remove(rlStubPath, ec);
+	}
 
 	WriteVsCodeSettings(projectDirectory, venvPath, stubDir);
 }
-
 
 bool ScriptManager::EnsureStubgenInstalled(const fs::path& venvPath) {
 	fs::path venvPython = GetVenvPythonExecutable(venvPath);

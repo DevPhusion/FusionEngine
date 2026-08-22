@@ -3,6 +3,7 @@
 #include<glm/glm.hpp>
 #include<iostream>
 #include<fstream>
+#define NOMINMAX
 #include <windows.h>
 #include <filesystem>
 #include "../FusionCore/Header Files/Core/InputManager.h"

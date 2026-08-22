@@ -147,7 +147,7 @@ void CameraComponent::OnDelete() {
 void CameraComponent::SetEnabled(bool enabled) {
 	Component::SetEnabled(enabled);
 
-	if (!isActive) return;   // background scene — Activate() will apply this when it becomes live
+	if (!isActive) return;
 
 	if (enabled) {
 		RegisterCallbacks();
@@ -157,6 +157,7 @@ void CameraComponent::SetEnabled(bool enabled) {
 			}
 			Camera::getInstance().mainCam = this;
 		}
+		OnPhysicsModeChanged();  
 	}
 	else {
 		UnregisterCallbacks();

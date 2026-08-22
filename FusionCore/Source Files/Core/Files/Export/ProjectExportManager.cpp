@@ -6,6 +6,7 @@
 #include <sstream>
 #include <vector>
 #include <algorithm>
+#define NOMINMAX
 #include <windows.h>
 
 namespace fs = std::filesystem;

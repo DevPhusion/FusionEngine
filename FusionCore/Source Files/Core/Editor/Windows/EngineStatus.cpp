@@ -833,6 +833,54 @@ void EngineStatus::ProcessTrainSettingsPopup() {
 			}
 		}
 
+		ImGui::Dummy(ImVec2(0, 6));
+		ImGui::SeparatorText("Periodic Shards");
+
+		ImGui::Text("Shard interval (steps)");
+		ImGui::SameLine(220.0f);
+		ImGui::SetNextItemWidth(160.0f);
+		{
+			int interval = cfg.shardIntervalSteps;
+			if (ImGui::InputInt("##ShardInterval", &interval, 1000, 10000)) {
+				cfg.shardIntervalSteps = std::max(0, interval);
+				EngineManager::getInstance().EngineChangeEvent();
+			}
+		}
+		if (ImGui::IsItemHovered()) {
+			ImGui::SetTooltip("0 disables periodic shard saving. Otherwise a checkpoint "
+				"(plus its normalization stats) is saved every N steps during this run.");
+		}
+
+		ImGui::BeginDisabled(cfg.shardIntervalSteps <= 0);
+		ImGui::Text("Shards folder");
+		{
+			char shardBuf[256];
+			std::string display = cfg.shardDir.empty() ? "(defaults to <save folder>/Shards)" : cfg.shardDir;
+#if defined(_MSC_VER)
+			strcpy_s(shardBuf, display.c_str());
+#else
+			strncpy(shardBuf, display.c_str(), sizeof(shardBuf) - 1);
+			shardBuf[sizeof(shardBuf) - 1] = '\0';
+#endif
+			ImGui::SetNextItemWidth(280.0f);
+			ImGui::InputText("##ShardDir", shardBuf, IM_ARRAYSIZE(shardBuf), ImGuiInputTextFlags_ReadOnly);
+			ImGui::SameLine();
+			if (ImGui::Button("Browse##ShardDir")) {
+				if (auto folder = FileDialog::ShowFolderDialog("Choose Shards Folder")) {
+					cfg.shardDir = *folder;
+					EngineManager::getInstance().EngineChangeEvent();
+				}
+			}
+			if (!cfg.shardDir.empty()) {
+				ImGui::SameLine();
+				if (ImGui::Button("Clear##ShardDir")) {
+					cfg.shardDir.clear();
+					EngineManager::getInstance().EngineChangeEvent();
+				}
+			}
+		}
+		ImGui::EndDisabled();
+
 		ImGui::Dummy(ImVec2(0, 8));
 
 		bool trainingFromModel = !cfg.startFromModelPath.empty();

@@ -45,10 +45,14 @@ public:
 
 	bool IsPackageSelected(const std::string& id) const;
 	bool IsPackageInstalled(const std::string& id) const;
+	std::vector<std::string> GetInstalledPackageIds() const;
 	void SelectPackage(const std::string& id);     
 	void DeselectPackage(const std::string& id);    
 
 	bool NeedsSync() const;
+	bool NeedsBindingsRebuild() const;
+	void MarkBindingsUpToDate();
+
 
 	bool SyncInstalledPackages(const std::filesystem::path& venvPython);
 
@@ -67,4 +71,6 @@ private:
 	std::atomic<PackageSyncStatus> syncStatus{ PackageSyncStatus::Idle };
 	mutable std::mutex statusMutex;
 	std::string syncMessage;
+
+	std::vector<std::string> boundPackageIds; 
 };

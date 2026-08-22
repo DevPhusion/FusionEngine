@@ -2637,12 +2637,15 @@ namespace {
 	constexpr const char* kFusionModelRunnerSource = R"PYCODE(
 import os
 import fusion
+import gymnasium as gym
 from stable_baselines3 import PPO, SAC, A2C, DDPG, TD3
+from stable_baselines3.common.vec_env import DummyVecEnv
 import numpy as np
 
 _model_cache = {}
 
 is_training = False
+
 
 def _resolve_algo_class(algorithm):
     algos = {"PPO": PPO, "SAC": SAC, "A2C": A2C, "DDPG": DDPG, "TD3": TD3}
@@ -2660,6 +2663,50 @@ def _resolve_existing_path(abs_path):
     return None
 
 
+class _SpaceOnlyEnv(gym.Env):
+    """Placeholder env exposing only the spaces set_venv() needs to attach to — never reset
+    or stepped, just used to construct a matching DummyVecEnv for the restored wrapper."""
+    def __init__(self, observation_space, action_space):
+        super().__init__()
+        self.observation_space = observation_space
+        self.action_space = action_space
+
+    def reset(self, *, seed=None, options=None):
+        return self.observation_space.sample(), {}
+
+    def step(self, action):
+        return self.observation_space.sample(), 0.0, False, False, {}
+
+
+class _LoadedModel:
+    __slots__ = ("model", "vecnorm", "mtime")
+
+    def __init__(self, model, vecnorm, mtime):
+        self.model = model
+        self.vecnorm = vecnorm
+        self.mtime = mtime
+
+
+def _try_load_vecnormalize(existing_model_path, model, display_path):
+    try:
+        from fusion_gym import _extract_vecnormalize
+        restored = _extract_vecnormalize(existing_model_path)
+    except Exception as e:
+        fusion.Console.PrintError(
+            f"fusion_model_runner: failed to read bundled normalization stats for "
+            f"'{display_path}' ({e}); predicting with raw observations, which may reduce accuracy.")
+        return None
+
+    if restored is None:
+        return None
+
+    dummy_env = DummyVecEnv([lambda: _SpaceOnlyEnv(model.observation_space, model.action_space)])
+    restored.set_venv(dummy_env)
+    restored.training = False     # never update stats from live gameplay observations
+    restored.norm_reward = False  # reward normalization is meaningless at inference time
+    return restored
+
+
 def load_model(path, algorithm="PPO"):
     if not path:
         return None
@@ -2675,10 +2722,9 @@ def load_model(path, algorithm="PPO"):
 
     key = (abs_path, algorithm)
     cached = _model_cache.get(key)
+    if cached is not None and cached.mtime == current_mtime:
+        return cached
     if cached is not None:
-        cached_model, cached_mtime = cached
-        if cached_mtime == current_mtime:
-            return cached_model
         fusion.Console.Print(f"fusion_model_runner: model file changed, reloading: {path}")
 
     try:
@@ -2688,16 +2734,21 @@ def load_model(path, algorithm="PPO"):
         fusion.Console.PrintError(f"fusion_model_runner: failed to load model '{path}': {e}")
         return None
 
-    _model_cache[key] = (model, current_mtime)
-    return model
+    vecnorm = _try_load_vecnormalize(existing_path, model, path)
+
+    loaded = _LoadedModel(model, vecnorm, current_mtime)
+    _model_cache[key] = loaded
+    return loaded
 
 
-def predict(model, observation, deterministic=True):
-    if model is None:
+def predict(loaded, observation, deterministic=True):
+    if loaded is None:
         return None
     try:
         obs = np.array(observation, dtype=np.float32)
-        action, _ = model.predict(obs, deterministic=deterministic)
+        if loaded.vecnorm is not None:
+            obs = loaded.vecnorm.normalize_obs(obs)
+        action, _ = loaded.model.predict(obs, deterministic=deterministic)
         if isinstance(action, np.ndarray):
             return action.tolist()
         return action.item() if hasattr(action, "item") else action
@@ -2731,10 +2782,29 @@ def clear_cache():
 		envMod.def("get_observation_space", []() -> py::object {
 			AgentComponent* agent = FindFirstAgent();
 			if (!agent) throw py::value_error("Environment.get_observation_space: no AgentComponent in the scene");
-			return agent->GetObservationSpace();   // may be py::none(); caller falls back to a default Box
+			return agent->GetObservationSpace();  
 			}, "Returns the gymnasium.spaces.Space configured via AgentComponent.set_observation_space(), "
 			"or None if unset (in which case a default Box inferred from observation length is used).");
+		envMod.def("get_snapshot", [](int width, int height) -> py::array_t<uint8_t> {
+			if (width <= 0 || height <= 0)
+				throw py::value_error("Environment.get_snapshot: width and height must be positive");
 
+			std::vector<unsigned char> pixels;
+			{
+				py::gil_scoped_release release;
+				EngineManager::getInstance().RunOnMainThread([&pixels, width, height]() {
+					pixels = Renderer::getInstance().CaptureSnapshot(width, height);
+					});
+			}
+
+			py::array_t<uint8_t> result({ height, width, 3 });
+			std::memcpy(result.mutable_data(), pixels.data(), pixels.size());
+			return result;
+			}, py::arg("width") = 128, py::arg("height") = 128,
+				"Render the scene off-screen (works even during headless training) and return it as "
+				"an (height, width, 3) uint8 RGB array, e.g.\n"
+				"  frame = fusionRL.Environment.get_snapshot(84, 84)\n"
+				"  self.agent.add_observation((frame.astype('float32') / 255.0).flatten().tolist())");
 		envMod.def("step", [](py::object action) {
 			AgentComponent* agent = FindFirstAgent();
 			if (!agent) throw py::value_error("Environment.step: no AgentComponent in the scene");
@@ -2865,11 +2935,17 @@ if not any(type(f).__name__ == "_FusionPackFinder" for f in sys.meta_path):
 	}
 
 	constexpr const char* kFusionGymSource = R"PYCODE(
+import os
+import io
+import zipfile
+import pickle
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
 import fusion
 import fusionRL
+
+_VECNORM_ZIP_ENTRY = "fusion_vecnormalize.pkl"
 
 
 class FusionEnv(gym.Env):
@@ -2938,9 +3014,35 @@ class _ConsoleWriter:
         return False
 
 
+def _ensure_zip_ext(path: str) -> str:
+    """Matches SB3's own save() behavior: appends .zip if not already present."""
+    return path if path.endswith(".zip") else path + ".zip"
+
+
+def _embed_vecnormalize(model_zip_path: str, vec_normalize) -> None:
+    """Pickle the VecNormalize wrapper's running stats (env-less, via its own
+    __getstate__) and append them as a second entry inside the model's own zip,
+    so exactly one file represents 'this trained model + its environment'."""
+    buf = io.BytesIO()
+    pickle.dump(vec_normalize, buf)
+    with zipfile.ZipFile(model_zip_path, "a", compression=zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(_VECNORM_ZIP_ENTRY, buf.getvalue())
+
+
+def _extract_vecnormalize(model_zip_path: str):
+    """Returns the unpickled (env-less) VecNormalize object embedded in a model's zip,
+    or None if this model has no bundled normalization stats."""
+    with zipfile.ZipFile(model_zip_path, "r") as zf:
+        if _VECNORM_ZIP_ENTRY not in zf.namelist():
+            return None
+        data = zf.read(_VECNORM_ZIP_ENTRY)
+    return pickle.loads(data)
+
+
 def train(algorithm: str, total_timesteps: int, save_dir: str, start_from_model_path: str = "",
           model_name: str = "trained_model", hyperparams: dict | None = None,
-          status_cb=None, metrics_cb=None):
+          status_cb=None, metrics_cb=None, should_stop_cb=None,
+          shard_interval: int = 0, shard_dir: str = ""):
     import sys
     import os
 
@@ -2948,6 +3050,9 @@ def train(algorithm: str, total_timesteps: int, save_dir: str, start_from_model_
     sys.stderr = _ConsoleWriter(is_error=True)
 
     from stable_baselines3 import PPO, SAC, A2C, DDPG, TD3
+    from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
+    from stable_baselines3.common.monitor import Monitor
+    from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback
 
     algos = {"PPO": PPO, "SAC": SAC, "A2C": A2C, "DDPG": DDPG, "TD3": TD3}
     if algorithm not in algos:
@@ -2958,10 +3063,15 @@ def train(algorithm: str, total_timesteps: int, save_dir: str, start_from_model_
     fusionRL.Environment.is_training = True
     try:
         if status_cb: status_cb("Building environment")
-        env = FusionEnv()
+        base_env = FusionEnv()
+        monitored_env = Monitor(base_env)
+        vec_env = DummyVecEnv([lambda: monitored_env])
+
+        can_norm_obs = isinstance(base_env.observation_space, spaces.Box)
 
         algo_cls = algos[algorithm]
 
+        existing_path = None
         if start_from_model_path:
             existing_path = start_from_model_path
             if not os.path.exists(existing_path) and os.path.exists(existing_path + ".zip"):
@@ -2971,6 +3081,31 @@ def train(algorithm: str, total_timesteps: int, save_dir: str, start_from_model_
                     f"start_from_model_path: file not found: {start_from_model_path}"
                 )
 
+        env = None
+        if existing_path:
+            try:
+                restored = _extract_vecnormalize(existing_path)
+            except Exception as e:
+                fusion.Console.PrintError(
+                    f"fusion_gym: failed to read bundled normalization stats from "
+                    f"'{existing_path}' ({e}); starting with fresh statistics instead.")
+                restored = None
+
+            if restored is not None:
+                if status_cb: status_cb("Restoring environment normalization stats")
+                restored.set_venv(vec_env)
+                restored.training = True
+                env = restored
+            else:
+                fusion.Console.PrintWarning(
+                    f"fusion_gym: '{existing_path}' has no bundled environment normalization "
+                    "stats (older model, or trained without normalization). Resuming without "
+                    "them may cause a temporary drop in performance while statistics re-stabilize.")
+
+        if env is None:
+            env = VecNormalize(vec_env, norm_obs=can_norm_obs, norm_reward=True)
+
+        if existing_path:
             if status_cb: status_cb(f"Loading existing model from {existing_path}")
             model = algo_cls.load(existing_path, env=env)
         else:
@@ -2981,6 +3116,41 @@ def train(algorithm: str, total_timesteps: int, save_dir: str, start_from_model_
                 raise ValueError(f"Invalid hyperparameter for {algorithm}: {e}") from e
 
         if status_cb: status_cb(f"Training {algorithm} for {total_timesteps} steps...")
+
+        callbacks = []
+
+        if should_stop_cb is not None:
+            class _StopCallback(BaseCallback):
+                def _on_step(self) -> bool:
+                    if should_stop_cb():
+                        if status_cb:
+                            status_cb("Stop requested — saving model...")
+                        return False
+                    return True
+            callbacks.append(_StopCallback())
+
+        if shard_interval and shard_interval > 0:
+            os.makedirs(shard_dir, exist_ok=True)
+
+            class _ShardCallback(BaseCallback):
+                def __init__(self, freq, out_dir, prefix, vec_env):
+                    super().__init__()
+                    self._freq = freq
+                    self._out_dir = out_dir
+                    self._prefix = prefix
+                    self._vec_env = vec_env  # the VecNormalize wrapper, same object learn() is training
+
+                def _on_step(self) -> bool:
+                    if self.num_timesteps % self._freq == 0:
+                        shard_path = os.path.join(
+                            self._out_dir, f"{self._prefix}_{self.num_timesteps}_steps")
+                        self.model.save(shard_path)
+                        _embed_vecnormalize(_ensure_zip_ext(shard_path), self._vec_env)
+                        if status_cb:
+                            status_cb(f"Saved shard at {self.num_timesteps} steps")
+                    return True
+
+            callbacks.append(_ShardCallback(shard_interval, shard_dir, model_name, env))
 
         if metrics_cb is not None:
             from stable_baselines3.common.logger import configure, KVWriter
@@ -3003,11 +3173,14 @@ def train(algorithm: str, total_timesteps: int, save_dir: str, start_from_model_
             sb_logger.output_formats.append(_MetricsWriter())
             model.set_logger(sb_logger)
 
-        model.learn(total_timesteps=total_timesteps, reset_num_timesteps=(not start_from_model_path))
+        model.learn(total_timesteps=total_timesteps,
+                    reset_num_timesteps=(not start_from_model_path),
+                    callback=callbacks or None)
 
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, model_name)
         model.save(save_path)
+        _embed_vecnormalize(_ensure_zip_ext(save_path), env)
         if status_cb: status_cb(f"Done, model saved to {save_path}.zip")
     finally:
         fusionRL.Environment.is_training = False

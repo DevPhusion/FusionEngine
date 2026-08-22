@@ -3,6 +3,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <algorithm>
 
 namespace fs = std::filesystem;
 
@@ -142,7 +143,7 @@ void PackageManager::SelectPackage(const std::string& id) {
 void PackageManager::DeselectPackage(const std::string& id) {
 	for (auto& e : entries) {
 		if (e.id == id) {
-			e.selected = false; 
+			e.selected = false;
 			SaveManifest();
 			return;
 		}
@@ -151,6 +152,22 @@ void PackageManager::DeselectPackage(const std::string& id) {
 
 bool PackageManager::NeedsSync() const {
 	return !entries.empty();
+}
+
+std::vector<std::string> PackageManager::GetInstalledPackageIds() const {
+	std::vector<std::string> ids;
+	for (auto& e : entries)
+		if (e.confirmedInstalled) ids.push_back(e.id);
+	std::sort(ids.begin(), ids.end());
+	return ids;
+}
+
+bool PackageManager::NeedsBindingsRebuild() const {
+	return GetInstalledPackageIds() != boundPackageIds;
+}
+
+void PackageManager::MarkBindingsUpToDate() {
+	boundPackageIds = GetInstalledPackageIds();
 }
 
 void PackageManager::SetSyncStatus(PackageSyncStatus status, const std::string& message) {

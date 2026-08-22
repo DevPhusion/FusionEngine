@@ -72,6 +72,8 @@ struct TrainConfig {
 	std::string modelName = "trained_model"; 
 	std::string saveDir;
 	std::string startFromModelPath;
+	int shardIntervalSteps = 0;   
+	std::string shardDir;
 
 	PPOAdvancedSettings  ppoSettings;
 	A2CAdvancedSettings  a2cSettings;
@@ -113,6 +115,9 @@ public:
 	std::string GetTrainingStatus() const;
 	std::string GetTrainingError() const;
 
+	void RequestStop();
+	bool IsStopRequested() const { return stopRequested.load(); }
+
 	void ProcessMonitorWindow();
 
 	void SerializeTrainConfig(BinaryWriter& w);
@@ -123,16 +128,21 @@ private:
 	HeadlessMonitor() = default;
 	~HeadlessMonitor();   
 
+	double liveViewCameraLastTime = 0.0;
+
 	std::mutex metricsMutex;
 	std::map<std::string, MetricBuffer> metricSeries;
 	uint64_t metricStepCounter = 0;
 
 	Console headlessConsole{ "Headless Console" };
 
+	int liveViewQualityIndex = 1; // Quality for live view render 0=Low, 1=Medium, 2=High
+
 	std::string projectDisplayName;
 
 	std::atomic<bool> training{ false };
 	std::atomic<bool> pendingEnd{ false };
+	std::atomic<bool> stopRequested{ false };
 	std::thread trainingThread;
 
 	mutable std::mutex trainStatusMutex;
@@ -142,4 +152,5 @@ private:
 	void Begin();
 	void End();
 	void DrawTrainingMonitorTab();
+	void DrawLiveTrainingViewTab();
 };

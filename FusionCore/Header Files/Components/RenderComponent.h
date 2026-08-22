@@ -31,12 +31,16 @@ public:
 
 	bool isAddVertex = false; // only for polygon (for adding vertex when doing reset shape)
 
+	bool glResourcesReady = false;
+
 	virtual void OnDelete();
 	virtual void ProcessInspectorUI();
 	virtual void CopyTo(Object* other);
 	virtual void Serialize(BinaryWriter& w);
 	virtual void Deserialize(BinaryReader& r);
 	virtual void PostLoad();
+	
+	void EnsureGLResources();
 
 	int AddOnShapeSetCallback(std::function<void()> func);
 	void RemoveOnShapeSetCallback(int ID);
