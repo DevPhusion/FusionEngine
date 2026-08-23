@@ -108,6 +108,8 @@ int main(int argc, char* argv[]) {
 	bool enteredHeadlessMonitor = false;
 	double headlessMonitorLastDraw = 0.0;
 
+	bool prevWantRealtime = false;
+
 	while (!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 
@@ -129,13 +131,19 @@ int main(int argc, char* argv[]) {
 		}
 
 		if (EngineManager::getInstance().isHeadless) {
+			bool wantRealtime = EngineManager::getInstance().liveTrainingRenderActive.load();
+
 			if (!enteredHeadlessMonitor) {
 				enteredHeadlessMonitor = true;
-				glfwSwapInterval(0);
+				glfwSwapInterval(wantRealtime ? 1 : 0);
 				headlessMonitorLastDraw = 0.0;
 			}
+			else if (wantRealtime != prevWantRealtime) {
+				glfwSwapInterval(wantRealtime ? 1 : 0);   
+			}
+			prevWantRealtime = wantRealtime;
 
-			const double MONITOR_REFRESH_INTERVAL = 1.0 / 30.0;
+			const double MONITOR_REFRESH_INTERVAL = wantRealtime ? 0.0 : (1.0 / 30.0);
 			double drawNow = glfwGetTime();
 			if (drawNow - headlessMonitorLastDraw >= MONITOR_REFRESH_INTERVAL) {
 				headlessMonitorLastDraw = drawNow;

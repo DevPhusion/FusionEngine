@@ -85,7 +85,6 @@ RenderComponent::RenderComponent(Object* parent, std::vector<float> vertices, Sh
 
 void RenderComponent::EnsureGLResources() {
 	if (glResourcesReady) return;
-	if (!EngineManager::getInstance().isHeadless) { glResourcesReady = true; return; }
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

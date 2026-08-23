@@ -311,6 +311,7 @@ std::string HeadlessMonitor::GetTrainingError() const {
 void HeadlessMonitor::ProcessMonitorWindow() {
 	EngineManager::getInstance().ProcessPendingMainThreadTasks();
 	pendingEnd.exchange(false);
+	EngineManager::getInstance().liveTrainingRenderActive = false;
 
 	ImGuiViewport* viewport = ImGui::GetMainViewport();
 	ImGui::SetNextWindowPos(viewport->WorkPos);
@@ -342,9 +343,10 @@ void HeadlessMonitor::ProcessMonitorWindow() {
 			DrawTrainingMonitorTab();
 			ImGui::EndTabItem();
 		}
-		if (ImGui::BeginTabItem("Live Training View")) {          
-			DrawLiveTrainingViewTab();                           
-			ImGui::EndTabItem();                                 
+		if (ImGui::BeginTabItem("Live Training View")) {
+			EngineManager::getInstance().liveTrainingRenderActive = IsTraining();
+			DrawLiveTrainingViewTab();
+			ImGui::EndTabItem();
 		}
 		if (ImGui::BeginTabItem("Console")) {
 			headlessConsole.DrawContent();
@@ -515,61 +517,25 @@ void HeadlessMonitor::DrawTrainingMonitorTab() {
 }
 
 void HeadlessMonitor::DrawLiveTrainingViewTab() {
-	ImGui::Dummy(ImVec2(0, 8));
-
-	ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.35f, 0.28f, 0.10f, 0.35f));
-	ImGui::BeginChild("##liveViewWarning", ImVec2(0, 56), true, ImGuiWindowFlags_NoScrollbar);
-	ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.80f, 0.45f, 1.0f));
-	ImGui::TextWrapped(
-		"Live rendering pauses the training thread for the duration of every frame drawn here. "
-		"Use this to visually sanity-check what the agent is doing -- leave this tab for actual "
-		"training runs; headless mode (no tab open) is still the fastest and recommended way to train.");
-	ImGui::PopStyleColor();
-	ImGui::EndChild();
-	ImGui::PopStyleColor();
-
-	ImGui::Dummy(ImVec2(0, 8));
-
-	ImGui::Text("Quality");
-	ImGui::SameLine();
-	ImGui::SetNextItemWidth(160.0f);
-	const char* qualityLabels[] = { "Low", "Medium", "High" };
-	ImGui::Combo("##LiveViewQuality", &liveViewQualityIndex, qualityLabels, 3);
-
 	if (!IsTraining()) {
-		ImGui::Dummy(ImVec2(0, 8));
 		ImGui::TextDisabled("Training isn't running -- nothing to display.");
 		return;
 	}
 
-	double now = glfwGetTime();
-	float camDelta = (liveViewCameraLastTime > 0.0) ? (float)(now - liveViewCameraLastTime) : 0.0f;
-	if (camDelta > 0.1f) camDelta = 0.1f;
-	liveViewCameraLastTime = now;
+	Viewport* gameViewport = EditorManager::getInstance().gameViewport;
+	GLuint tex = gameViewport->colorTexture;
 
-	float aspect = EngineManager::getInstance().gameAspectRatio;
-	if (aspect <= 0.0f) aspect = 16.0f / 9.0f;
-
-	static const int kQualityWidths[3] = { 240, 480, 800 };
-	int targetWidth = kQualityWidths[liveViewQualityIndex];
-	int targetHeight = std::max(1, (int)(targetWidth / aspect));
-
-	GLuint tex;
-	{
-		std::lock_guard<std::mutex> lock(EngineManager::getInstance().headlessSimMutex);
-		Camera::getInstance().ProcessCamera(camDelta);
-		tex = Renderer::getInstance().RenderLiveViewFrame(targetWidth, targetHeight);
-	}
-
-	ImGui::Dummy(ImVec2(0, 8));
-
+	float aspect = (float)gameViewport->textureWidth / (float)gameViewport->textureHeight;
 	ImVec2 avail = ImGui::GetContentRegionAvail();
 	float displayWidth = avail.x;
 	float displayHeight = displayWidth / aspect;
-	if (displayHeight > avail.y) {
-		displayHeight = avail.y;
-		displayWidth = displayHeight * aspect;
-	}
+	if (displayHeight > avail.y) { displayHeight = avail.y; displayWidth = displayHeight * aspect; }
+
+	ImVec2 cursor = ImGui::GetCursorPos();
+	ImGui::SetCursorPos(ImVec2(
+		cursor.x + (avail.x - displayWidth) * 0.5f,
+		cursor.y + (avail.y - displayHeight) * 0.5f
+	));
 
 	ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(displayWidth, displayHeight), ImVec2(0, 1), ImVec2(1, 0));
 }

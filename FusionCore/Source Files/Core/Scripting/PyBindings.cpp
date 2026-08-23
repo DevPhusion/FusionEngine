@@ -2810,10 +2810,37 @@ def clear_cache():
 			if (!agent) throw py::value_error("Environment.step: no AgentComponent in the scene");
 			agent->SetAction(action);
 
-			{
+			const float PHYSICS_STEP = 1.0f / 60.0f;
+
+			if (EngineManager::getInstance().liveTrainingRenderActive.load()) {
+				py::gil_scoped_release release;
+				EngineManager::getInstance().RunOnMainThread([PHYSICS_STEP]() {
+					std::lock_guard<std::mutex> lock(EngineManager::getInstance().headlessSimMutex);
+
+					PhysicsEngine::getInstance().ProcessPhysics(PHYSICS_STEP);
+					SceneManager::getInstance().ProcessPendingSceneLoad();
+
+					bool wasHeadless = EngineManager::getInstance().isHeadless;
+					EngineManager::getInstance().isHeadless = false;   
+
+					ScriptManager::getInstance().Update();              
+					Camera::getInstance().ProcessCamera(PHYSICS_STEP);
+
+					Viewport* gameViewport = EditorManager::getInstance().gameViewport;
+					gameViewport->BeginRenderGame();
+					Renderer::getInstance().EnsureAllRenderResourcesLoaded();  
+					glm::vec4& bg = EngineManager::getInstance().EngineSettings.backgroundColor;
+					glClearColor(bg.r, bg.g, bg.b, bg.a);
+					glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+					Renderer::getInstance().Draw();
+					gameViewport->EndRenderGame();
+
+					EngineManager::getInstance().isHeadless = wasHeadless;   
+					});
+			}
+			else {
 				py::gil_scoped_release release;
 				std::lock_guard<std::mutex> lock(EngineManager::getInstance().headlessSimMutex);
-				const float PHYSICS_STEP = 1.0f / 60.0f;
 				PhysicsEngine::getInstance().ProcessPhysics(PHYSICS_STEP);
 				SceneManager::getInstance().ProcessPendingSceneLoad();
 				ScriptManager::getInstance().Update();

@@ -116,6 +116,8 @@ public:
 	void RemovePhysicsModeChangedEvent(int ID);
 	void RemoveInteractModeChangedEvent(int ID);
 
+	std::atomic<bool> liveTrainingRenderActive{ false };
+
 	std::mutex headlessSimMutex;
 
 	template <typename F>
