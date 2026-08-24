@@ -15,6 +15,7 @@ enum class ResourceIconType {
 	Image,
 	Script,
 	Scene,
+	Archive,
 	Unknown
 };
 

@@ -69,6 +69,7 @@ struct TD3AdvancedSettings {
 struct TrainConfig {
 	long long totalTimesteps = 100000;
 	std::string algorithm = "PPO"; // PPO | SAC | A2C | DDPG | TD3
+	std::string policy = "MlpPolicy"; //MlpPolicy | CnnPolicy | MultiInputPolicy
 	std::string modelName = "trained_model"; 
 	std::string saveDir;
 	std::string startFromModelPath;
@@ -109,6 +110,7 @@ public:
 	HeadlessMonitor& operator=(const HeadlessMonitor&) = delete;
 
 	TrainConfig config;
+	std::string trainingScenePath;
 
 	void StartTraining(const TrainConfig& config);
 	bool IsTraining() const { return training.load(); }
@@ -136,8 +138,6 @@ private:
 
 	Console headlessConsole{ "Headless Console" };
 
-	int liveViewQualityIndex = 1; // Quality for live view render 0=Low, 1=Medium, 2=High
-
 	std::string projectDisplayName;
 
 	std::atomic<bool> training{ false };
@@ -148,6 +148,9 @@ private:
 	mutable std::mutex trainStatusMutex;
 	std::string trainStatus;
 	std::string trainError;
+
+	bool liveTabActiveLastFrame = false;
+	void RefreshLiveViewScene();
 
 	void Begin();
 	void End();

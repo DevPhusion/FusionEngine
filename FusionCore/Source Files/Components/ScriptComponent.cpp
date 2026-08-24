@@ -128,9 +128,22 @@ void ScriptComponent::Serialize(BinaryWriter& w) {
 	Component::Serialize(w);
 	w.WriteString(sourcePath);
 
-	const std::vector<ExportedProperty>& values = loaded ? exportedProperties : pendingExportedValues;
-	w.Write(static_cast<int>(values.size()));
-	for (auto& prop : values) {
+	const std::vector<ExportedProperty>& values =
+		loaded ? exportedProperties : pendingExportedValues;
+
+	int serializedCount = 0;
+
+	for (const auto& prop : values) {
+		if (prop.displayType != ExportType::Section && prop.displayType != ExportType::SubSection)
+			serializedCount++;
+	}
+
+	w.Write(serializedCount);
+
+	for (const auto& prop : values) {
+		if (prop.displayType == ExportType::Section || prop.displayType == ExportType::SubSection)
+			continue;
+
 		w.WriteString(prop.name);
 		WriteExportedValue(w, prop.value);
 	}
@@ -271,6 +284,9 @@ void ScriptComponent::Reload() {
 	}
 
 	for (auto& prop : exportedProperties) {
+		if (prop.displayType == ExportType::Section || prop.displayType == ExportType::SubSection)
+			continue;
+
 		auto it = std::find_if(previousValues.begin(), previousValues.end(),
 			[&](const ExportedProperty& p) { return p.name == prop.name; });
 
@@ -350,9 +366,12 @@ void ScriptComponent::ScanExportedProperties() {
 	py::object cls = scriptInstance.attr("__class__");
 	py::dict classDict = cls.attr("__dict__");
 
+	std::unordered_set<PyObject*> seenMarkers;
+
 	for (auto item : classDict) {
 		py::object attrValue = py::reinterpret_borrow<py::object>(item.second);
 		if (!py::isinstance<ExportMarker>(attrValue)) continue;
+		if (!seenMarkers.insert(attrValue.ptr()).second) continue; 
 
 		std::string attrName = py::str(item.first);
 		ExportMarker marker = attrValue.cast<ExportMarker>();
@@ -366,6 +385,14 @@ void ScriptComponent::ScanExportedProperties() {
 		prop.min = marker.min;
 		prop.max = marker.max;
 		prop.fileFilter = marker.fileFilter;
+
+		if (marker.type == ExportType::Section || marker.type == ExportType::SubSection) {
+			std::string sectionTitle = marker.value.cast<std::string>();
+			prop.name = sectionTitle;
+			prop.value = sectionTitle;
+			exportedProperties.push_back(std::move(prop));
+			continue;
+		}
 
 		if (py::isinstance<py::bool_>(defaultValue)) {
 			prop.value = defaultValue.cast<bool>();
@@ -412,6 +439,9 @@ void ScriptComponent::ApplyPendingExportedValues() {
 	if (pendingExportedValues.empty()) return;
 
 	for (auto& prop : exportedProperties) {
+		if (prop.displayType == ExportType::Section || prop.displayType == ExportType::SubSection)
+			continue;
+
 		auto it = std::find_if(pendingExportedValues.begin(), pendingExportedValues.end(),
 			[&](const ExportedProperty& p) { return p.name == prop.name; });
 
@@ -431,7 +461,11 @@ void ScriptComponent::RefreshExportedPropertiesFromInstance() {
 	py::gil_scoped_acquire gil;
 
 	for (auto& prop : exportedProperties) {
-		if (!py::hasattr(scriptInstance, prop.name.c_str())) continue;
+		if (prop.displayType == ExportType::Section)
+			continue;
+
+		if (!py::hasattr(scriptInstance, prop.name.c_str()))
+			continue;
 		py::object current = scriptInstance.attr(prop.name.c_str());
 
 		std::visit([&](auto&& stored) {
@@ -475,7 +509,70 @@ void ScriptComponent::ProcessInspectorUI() {
 
 	RefreshExportedPropertiesFromInstance();
 
+	bool sectionOpen = false;
+	bool hasSection = false;
+	bool subSectionOpen = false;
+	bool hasSubSection = false;
+
+	auto subSectionVisible = [&]() { return !hasSection || sectionOpen; };
+
 	for (auto& prop : exportedProperties) {
+
+		if (prop.displayType == ExportType::Section) {
+			if (hasSubSection && subSectionOpen && subSectionVisible()) {
+				ImGui::TreePop();
+			}
+			hasSubSection = false;
+			subSectionOpen = false;
+
+			if (hasSection && sectionOpen) {
+				ImGui::TreePop();
+			}
+
+			ImGui::PushID(prop.name.c_str());
+			sectionOpen = ImGui::TreeNodeEx(
+				"##Section",
+				ImGuiTreeNodeFlags_DefaultOpen |
+				ImGuiTreeNodeFlags_SpanAvailWidth,
+				"%s",
+				prop.name.c_str()
+			);
+			ImGui::PopID();
+
+			hasSection = true;
+			continue;
+		}
+
+		if (prop.displayType == ExportType::SubSection) {
+			if (hasSubSection && subSectionOpen && subSectionVisible()) {
+				ImGui::TreePop();
+			}
+
+			if (!subSectionVisible()) {
+				hasSubSection = true;
+				subSectionOpen = false;
+				continue;
+			}
+
+			ImGui::PushID(prop.name.c_str());
+			subSectionOpen = ImGui::TreeNodeEx(
+				"##SubSection",
+				ImGuiTreeNodeFlags_DefaultOpen |
+				ImGuiTreeNodeFlags_SpanAvailWidth,
+				"%s",
+				prop.name.c_str()
+			);
+			ImGui::PopID();
+
+			hasSubSection = true;
+			continue;
+		}
+
+		if (hasSection && !sectionOpen)
+			continue;
+		if (hasSubSection && !subSectionOpen)
+			continue;
+
 		ImGui::PushID(prop.name.c_str());
 
 		std::visit([&](auto&& value) {
@@ -689,6 +786,13 @@ void ScriptComponent::ProcessInspectorUI() {
 			}, prop.value);
 
 		ImGui::PopID();
+	}
+
+	if (hasSubSection && subSectionOpen && subSectionVisible()) {
+		ImGui::TreePop();
+	}
+	if (hasSection && sectionOpen) {
+		ImGui::TreePop();
 	}
 }
 

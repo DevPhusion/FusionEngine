@@ -738,63 +738,109 @@ void EngineStatus::ProcessTrainSettingsPopup() {
 	const char* algos[] = { "PPO", "SAC", "A2C", "DDPG", "TD3" };
 	int algoIndex = 0;
 	for (int i = 0; i < IM_ARRAYSIZE(algos); i++) {
-		if (cfg.algorithm == algos[i]) { algoIndex = i; break; }
+		if (cfg.algorithm == algos[i]) {
+			algoIndex = i;
+			break;
+		}
+	}
+
+	const char* policies[] = {
+		"MlpPolicy",
+		"CnnPolicy",
+		"MultiInputPolicy"
+	};
+
+	int policyIndex = 0;
+	for (int i = 0; i < IM_ARRAYSIZE(policies); i++) {
+		if (cfg.policy == policies[i]) {
+			policyIndex = i;
+			break;
+		}
 	}
 
 	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
 	ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 
-	if (ImGui::BeginPopupModal("Train Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
+	if (ImGui::BeginPopupModal(
+		"Train Settings",
+		nullptr,
+		ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
+
+		ImGui::SeparatorText("Train Settings");
+
 		ImGui::Text("Algorithm");
-		ImGui::SetNextItemWidth(160.0f);
+		ImGui::SetNextItemWidth(200.0f);
 		if (ImGui::Combo("##Algo", &algoIndex, algos, IM_ARRAYSIZE(algos))) {
 			cfg.algorithm = algos[algoIndex];
 			EngineManager::getInstance().EngineChangeEvent();
 		}
 
+		ImGui::Text("Policy");
+		ImGui::SetNextItemWidth(200.0f);
+		if (ImGui::Combo("##Policy", &policyIndex, policies, IM_ARRAYSIZE(policies))) {
+			cfg.policy = policies[policyIndex];
+			EngineManager::getInstance().EngineChangeEvent();
+		}
+
 		ImGui::Text("Total timesteps");
-		ImGui::SetNextItemWidth(160.0f);
+		ImGui::SetNextItemWidth(200.0f);
 		int steps = (int)cfg.totalTimesteps;
 		if (ImGui::InputInt("##Steps", &steps, 1000, 10000)) {
 			cfg.totalTimesteps = std::max(1, steps);
 			EngineManager::getInstance().EngineChangeEvent();
 		}
 
-		ImGui::Dummy(ImVec2(0, 6));
+		ImGui::Dummy(ImVec2(0, 8));
+
+		ImGui::SeparatorText("File Settings");
+
 		ImGui::Text("Model name");
 		{
 			char nameBuf[96];
 			std::string display = cfg.modelName.empty() ? "trained_model" : cfg.modelName;
+
 #if defined(_MSC_VER)
 			strcpy_s(nameBuf, display.c_str());
 #else
 			strncpy(nameBuf, display.c_str(), sizeof(nameBuf) - 1);
 			nameBuf[sizeof(nameBuf) - 1] = '\0';
 #endif
+
 			ImGui::SetNextItemWidth(200.0f);
 			if (ImGui::InputText("##ModelName", nameBuf, IM_ARRAYSIZE(nameBuf))) {
 				cfg.modelName = nameBuf;
 				EngineManager::getInstance().EngineChangeEvent();
 			}
+
 			ImGui::SameLine(0.0f, 4.0f);
 			ImGui::AlignTextToFramePadding();
 			ImGui::TextDisabled(".zip");
 		}
 
-		ImGui::Dummy(ImVec2(0, 6));
 		ImGui::Text("Save folder");
 		{
 			char folderBuf[256];
-			std::string display = cfg.saveDir.empty() ? "(no folder selected)" : cfg.saveDir;
+			std::string display = cfg.saveDir.empty()
+				? "(no folder selected)"
+				: cfg.saveDir;
+
 #if defined(_MSC_VER)
 			strcpy_s(folderBuf, display.c_str());
 #else
 			strncpy(folderBuf, display.c_str(), sizeof(folderBuf) - 1);
 			folderBuf[sizeof(folderBuf) - 1] = '\0';
 #endif
+
 			ImGui::SetNextItemWidth(280.0f);
-			ImGui::InputText("##SaveDir", folderBuf, IM_ARRAYSIZE(folderBuf), ImGuiInputTextFlags_ReadOnly);
+			ImGui::InputText(
+				"##SaveDir",
+				folderBuf,
+				IM_ARRAYSIZE(folderBuf),
+				ImGuiInputTextFlags_ReadOnly
+			);
+
 			ImGui::SameLine();
+
 			if (ImGui::Button("Browse##SaveDir")) {
 				if (auto folder = FileDialog::ShowFolderDialog("Choose Save Folder")) {
 					cfg.saveDir = *folder;
@@ -803,29 +849,48 @@ void EngineStatus::ProcessTrainSettingsPopup() {
 			}
 		}
 
-		ImGui::Dummy(ImVec2(0, 6));
 		ImGui::Text("Start from model (optional)");
 		{
 			char modelBuf[256];
-			std::string display = cfg.startFromModelPath.empty() ? "(train from scratch)" : cfg.startFromModelPath;
+			std::string display = cfg.startFromModelPath.empty()
+				? "(train from scratch)"
+				: cfg.startFromModelPath;
+
 #if defined(_MSC_VER)
 			strcpy_s(modelBuf, display.c_str());
 #else
 			strncpy(modelBuf, display.c_str(), sizeof(modelBuf) - 1);
 			modelBuf[sizeof(modelBuf) - 1] = '\0';
 #endif
-			ImGui::SetNextItemWidth(240.0f);
-			ImGui::InputText("##StartFromModel", modelBuf, IM_ARRAYSIZE(modelBuf), ImGuiInputTextFlags_ReadOnly);
+
+			ImGui::SetNextItemWidth(280.0f);
+			ImGui::InputText(
+				"##StartFromModel",
+				modelBuf,
+				IM_ARRAYSIZE(modelBuf),
+				ImGuiInputTextFlags_ReadOnly
+			);
+
 			ImGui::SameLine();
+
 			if (ImGui::Button("Browse##StartFromModel")) {
-				auto opts = FileDialogOptions::ForExtension("Trained Model", "zip", "Choose Trained Model");
+				auto opts = FileDialogOptions::ForExtension(
+					"Trained Model",
+					"zip",
+					"Choose Trained Model"
+				);
+
 				if (auto path = FileDialog::ShowOpenDialog(opts)) {
-					cfg.startFromModelPath = FileManager::getInstance().AbsoluteToVirtual(*path);
+					cfg.startFromModelPath =
+						FileManager::getInstance().AbsoluteToVirtual(*path);
+
 					EngineManager::getInstance().EngineChangeEvent();
 				}
 			}
+
 			if (!cfg.startFromModelPath.empty()) {
 				ImGui::SameLine();
+
 				if (ImGui::Button("Clear##StartFromModel")) {
 					cfg.startFromModelPath.clear();
 					EngineManager::getInstance().EngineChangeEvent();
@@ -833,52 +898,73 @@ void EngineStatus::ProcessTrainSettingsPopup() {
 			}
 		}
 
-		ImGui::Dummy(ImVec2(0, 6));
+		ImGui::Dummy(ImVec2(0, 8));
+
 		ImGui::SeparatorText("Periodic Shards");
 
 		ImGui::Text("Shard interval (steps)");
 		ImGui::SameLine(220.0f);
 		ImGui::SetNextItemWidth(160.0f);
+
 		{
 			int interval = cfg.shardIntervalSteps;
+
 			if (ImGui::InputInt("##ShardInterval", &interval, 1000, 10000)) {
 				cfg.shardIntervalSteps = std::max(0, interval);
 				EngineManager::getInstance().EngineChangeEvent();
 			}
 		}
+
 		if (ImGui::IsItemHovered()) {
-			ImGui::SetTooltip("0 disables periodic shard saving. Otherwise a checkpoint "
-				"(plus its normalization stats) is saved every N steps during this run.");
+			ImGui::SetTooltip(
+				"0 disables periodic shard saving. Otherwise a checkpoint "
+				"(plus its normalization stats) is saved every N steps during this run."
+			);
 		}
 
 		ImGui::BeginDisabled(cfg.shardIntervalSteps <= 0);
+
 		ImGui::Text("Shards folder");
 		{
 			char shardBuf[256];
-			std::string display = cfg.shardDir.empty() ? "(defaults to <save folder>/Shards)" : cfg.shardDir;
+			std::string display = cfg.shardDir.empty()
+				? "(defaults to <save folder>/Shards)"
+				: cfg.shardDir;
+
 #if defined(_MSC_VER)
 			strcpy_s(shardBuf, display.c_str());
 #else
 			strncpy(shardBuf, display.c_str(), sizeof(shardBuf) - 1);
 			shardBuf[sizeof(shardBuf) - 1] = '\0';
 #endif
+
 			ImGui::SetNextItemWidth(280.0f);
-			ImGui::InputText("##ShardDir", shardBuf, IM_ARRAYSIZE(shardBuf), ImGuiInputTextFlags_ReadOnly);
+			ImGui::InputText(
+				"##ShardDir",
+				shardBuf,
+				IM_ARRAYSIZE(shardBuf),
+				ImGuiInputTextFlags_ReadOnly
+			);
+
 			ImGui::SameLine();
+
 			if (ImGui::Button("Browse##ShardDir")) {
 				if (auto folder = FileDialog::ShowFolderDialog("Choose Shards Folder")) {
 					cfg.shardDir = *folder;
 					EngineManager::getInstance().EngineChangeEvent();
 				}
 			}
+
 			if (!cfg.shardDir.empty()) {
 				ImGui::SameLine();
+
 				if (ImGui::Button("Clear##ShardDir")) {
 					cfg.shardDir.clear();
 					EngineManager::getInstance().EngineChangeEvent();
 				}
 			}
 		}
+
 		ImGui::EndDisabled();
 
 		ImGui::Dummy(ImVec2(0, 8));
@@ -886,17 +972,27 @@ void EngineStatus::ProcessTrainSettingsPopup() {
 		bool trainingFromModel = !cfg.startFromModelPath.empty();
 
 		if (trainingFromModel) {
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.90f, 0.70f, 0.25f, 1.0f));
-			ImGui::TextWrapped("Advanced settings are not available when training from an existing model.");
+			ImGui::PushStyleColor(
+				ImGuiCol_Text,
+				ImVec4(0.90f, 0.70f, 0.25f, 1.0f)
+			);
+
+			ImGui::TextWrapped(
+				"Advanced settings are not available when training from an existing model."
+			);
+
 			ImGui::PopStyleColor();
 			ImGui::Dummy(ImVec2(0, 4));
 		}
 
 		ImGui::BeginDisabled(trainingFromModel);
+
 		if (ImGui::Button("Advanced Settings", ImVec2(160, 0))) {
 			ImGui::OpenPopup("Advanced Training Settings");
 		}
+
 		ImGui::EndDisabled();
+
 		ProcessAdvancedTrainSettingsPopup();
 
 		ImGui::Dummy(ImVec2(0, 8));
@@ -904,17 +1000,23 @@ void EngineStatus::ProcessTrainSettingsPopup() {
 		ImGui::Dummy(ImVec2(0, 6));
 
 		bool canStart = !cfg.saveDir.empty();
+
 		ImGui::BeginDisabled(!canStart);
+
 		if (ImGui::Button("Start Training", ImVec2(140, 0))) {
 			if (SaveCurrentWork()) {
 				HeadlessMonitor::getInstance().StartTraining(cfg);
 				ImGui::CloseCurrentPopup();
 			}
 		}
+
 		ImGui::EndDisabled();
+
 		ImGui::SameLine();
-		if (ImGui::Button("Cancel", ImVec2(120, 0)))
+
+		if (ImGui::Button("Cancel", ImVec2(120, 0))) {
 			ImGui::CloseCurrentPopup();
+		}
 
 		ImGui::EndPopup();
 	}

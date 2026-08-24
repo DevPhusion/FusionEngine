@@ -19,6 +19,7 @@ HeadlessMonitor::~HeadlessMonitor() {
 void HeadlessMonitor::SerializeTrainConfig(BinaryWriter& w) {
 	w.Write(config.totalTimesteps);
 	w.WriteString(config.algorithm);
+	w.WriteString(config.policy);
 	w.WriteString(config.modelName);
 	w.WriteString(config.saveDir);
 	w.WriteString(config.startFromModelPath);
@@ -56,6 +57,7 @@ void HeadlessMonitor::SerializeTrainConfig(BinaryWriter& w) {
 void HeadlessMonitor::DeserializeTrainConfig(BinaryReader& r) {
 	config.totalTimesteps = r.Read<long long>();
 	config.algorithm = r.ReadString();
+	config.policy = r.ReadString();
 	config.modelName = r.ReadString();
 	config.saveDir = r.ReadString();
 	config.startFromModelPath = r.ReadString();
@@ -159,9 +161,25 @@ py::dict HeadlessMonitor::BuildHyperparams() {
 void HeadlessMonitor::Begin() {
 	projectDisplayName = std::filesystem::path(FileManager::getInstance().currentProjectFile).filename().string();
 
-	EngineManager::getInstance().editingScenePath = SceneManager::getInstance().GetCurrentSceneFile();
+	SceneManager& SM = SceneManager::getInstance();
+
+	EngineManager::getInstance().editingScenePath = SM.GetCurrentSceneFile();
+
+	const std::string& mainScene = EngineManager::getInstance().EngineSettings.mainScenePath;
+	std::error_code ec;
+	if (!mainScene.empty() && std::filesystem::exists(mainScene, ec) && !ec) {
+		trainingScenePath = mainScene;
+	}
+	else {
+		Console::PrintWarning("[Training] No valid main scene set in Settings; training on the currently open scene instead.");
+		trainingScenePath = SM.GetCurrentSceneFile();
+	}
+
+	SM.LoadSceneFromFile(trainingScenePath);
+
 	EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Simulate);
 	EngineManager::getInstance().isHeadless = true;
+	liveTabActiveLastFrame = false;
 
 	{
 		std::lock_guard<std::mutex> lock(metricsMutex);
@@ -241,7 +259,7 @@ void HeadlessMonitor::StartTraining(const TrainConfig& config) {
 			std::string modelName = config.modelName.empty() ? "trained_model" : config.modelName;
 			py::dict hyperparams = BuildHyperparams();
 
-			trainFn(config.algorithm, config.totalTimesteps, saveDir, startFromAbsPath, modelName, hyperparams,
+			trainFn(config.algorithm, config.policy, config.totalTimesteps, saveDir, startFromAbsPath, modelName, hyperparams,
 				py::cpp_function([this](std::string msg) {
 					std::lock_guard<std::mutex> lock(trainStatusMutex);
 					trainStatus = msg;
@@ -324,7 +342,7 @@ void HeadlessMonitor::ProcessMonitorWindow() {
 	ImGui::Begin("##HeadlessMonitor", nullptr, flags);
 	ImGui::PopStyleVar();
 
-	ImGui::PushFont(ImGui::GetIO().Fonts->Fonts.Size > 1 ? ImGui::GetIO().Fonts->Fonts[1] : ImGui::GetFont()); // swap for a bold/larger font if you have one loaded
+	ImGui::PushFont(ImGui::GetIO().Fonts->Fonts.Size > 1 ? ImGui::GetIO().Fonts->Fonts[1] : ImGui::GetFont());
 	ImGui::TextColored(ImVec4(0.92f, 0.92f, 0.95f, 1.0f), "Training");
 	ImGui::PopFont();
 	ImGui::SameLine();
@@ -338,13 +356,21 @@ void HeadlessMonitor::ProcessMonitorWindow() {
 	ImGui::PushStyleColor(ImGuiCol_TabHovered, ImVec4(0.20f, 0.35f, 0.50f, 1.0f));
 	ImGui::PushStyleColor(ImGuiCol_TabActive, ImVec4(0.18f, 0.30f, 0.44f, 1.0f));
 
+	bool liveTabActiveThisFrame = false;
+
 	if (ImGui::BeginTabBar("##HeadlessMonitorTabs")) {
 		if (ImGui::BeginTabItem("Training Monitor")) {
 			DrawTrainingMonitorTab();
 			ImGui::EndTabItem();
 		}
 		if (ImGui::BeginTabItem("Live Training View")) {
+			liveTabActiveThisFrame = true;
 			EngineManager::getInstance().liveTrainingRenderActive = IsTraining();
+
+			if (!liveTabActiveLastFrame && IsTraining()) {
+				RefreshLiveViewScene();
+			}
+
 			DrawLiveTrainingViewTab();
 			ImGui::EndTabItem();
 		}
@@ -355,6 +381,8 @@ void HeadlessMonitor::ProcessMonitorWindow() {
 		ImGui::EndTabBar();
 	}
 	ImGui::PopStyleColor(3);
+
+	liveTabActiveLastFrame = liveTabActiveThisFrame;
 
 	ImGui::End();
 }
@@ -517,6 +545,48 @@ void HeadlessMonitor::DrawTrainingMonitorTab() {
 }
 
 void HeadlessMonitor::DrawLiveTrainingViewTab() {
+	ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
+	ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.04f));
+	ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(1.0f, 1.0f, 1.0f, 0.06f));
+	ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.80f, 0.25f, 1.0f));
+
+	bool warningOpen = ImGui::CollapsingHeader("Warning##LiveViewWarningHeader");
+
+	ImGui::PopStyleColor(4);
+
+	if (warningOpen) {
+		const char* warningText =
+			"This view renders the agent's training in real time so you can watch its behavior. "
+			"Rendering every step can slow down training and, because timing/state differs slightly "
+			"from headless stepping, may also affect training results. For fastest and most consistent "
+			"training, prefer running headless (stay on the Training Monitor or Console tab) and only "
+			"check in here occasionally.";
+
+		const float horizontalPadding = 24.0f;
+		const float verticalPadding = 16.0f;
+		float wrapWidth = ImGui::GetContentRegionAvail().x - horizontalPadding;
+		ImVec2 textSize = ImGui::CalcTextSize(warningText, nullptr, false, wrapWidth);
+		float boxHeight = textSize.y + verticalPadding;
+
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.45f, 0.34f, 0.05f, 0.18f));
+		ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.85f, 0.65f, 0.15f, 0.55f));
+		ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.5f);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12, 10));
+
+		ImGui::BeginChild("##LiveViewWarningBox", ImVec2(0, boxHeight), true, ImGuiWindowFlags_NoScrollbar);
+
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.80f, 0.25f, 1.0f));
+		ImGui::TextWrapped("%s", warningText);
+		ImGui::PopStyleColor();
+
+		ImGui::EndChild();
+
+		ImGui::PopStyleVar(2);
+		ImGui::PopStyleColor(2);
+	}
+
+	ImGui::Dummy(ImVec2(0, 8));
+
 	if (!IsTraining()) {
 		ImGui::TextDisabled("Training isn't running -- nothing to display.");
 		return;
@@ -538,4 +608,18 @@ void HeadlessMonitor::DrawLiveTrainingViewTab() {
 	));
 
 	ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(displayWidth, displayHeight), ImVec2(0, 1), ImVec2(1, 0));
+}
+
+void HeadlessMonitor::RefreshLiveViewScene() {
+	std::lock_guard<std::mutex> lock(EngineManager::getInstance().headlessSimMutex);
+
+	if (!trainingScenePath.empty()) {
+		SceneManager::getInstance().LoadSceneFromFile(trainingScenePath);
+	}
+	else {
+		SceneManager::getInstance().NewScene();
+	}
+
+	ScriptManager::getInstance().RunAllScriptsLoad();
+	ScriptManager::getInstance().RunAllScriptsStart();
 }

@@ -71,6 +71,29 @@ namespace {
 		dl->AddTriangleFilled(ImVec2(pos.x + bodyW * 0.36f, baseY), peak2, ImVec2(rightX, baseY), glyphColor);
 	}
 
+	void DrawArchiveIcon(ImDrawList* dl, ImVec2 pos, float size, ImU32 bodyColor, ImU32 glyphColor) {
+		DrawFileIcon(dl, pos, size, bodyColor);
+
+		float bodyW = size * 0.78f;
+		float cx = pos.x + bodyW * 0.5f;
+
+		float zipTop = pos.y + size * 0.14f;
+		float zipBottom = pos.y + size * 0.92f;
+		float zipW = size * 0.14f;
+
+		dl->AddLine(ImVec2(cx, zipTop), ImVec2(cx, zipBottom), glyphColor, std::max(1.0f, size * 0.05f));
+
+		int teeth = 4;
+		float step = (zipBottom - zipTop) / (teeth * 2.0f);
+		for (int i = 0; i < teeth; i++) {
+			float y = zipTop + step * (i * 2 + 1);
+			bool left = (i % 2) == 0;
+			float x0 = left ? cx - zipW : cx;
+			float x1 = left ? cx : cx + zipW;
+			dl->AddRectFilled(ImVec2(x0, y - step * 0.35f), ImVec2(x1, y + step * 0.35f), glyphColor, 1.0f);
+		}
+	}
+
 	void OpenPathInVSCode(const std::filesystem::path& projectDir, const std::filesystem::path& fileAbsPath) {
 		std::string args = "\"" + projectDir.string() + "\" -g \"" + fileAbsPath.string() + "\"";
 
@@ -337,8 +360,11 @@ void FileSystem::DrawNode(const FileSystemEntry& entry, int depth) {
 	else if (entry.iconType == ResourceIconType::Script) {
 		DrawScriptIcon(dl, iconPos, iconSize, IM_COL32(90, 160, 110, 255), IM_COL32(235, 235, 235, 255));
 	}
-	else if (entry.iconType == ResourceIconType::Scene) {                              // NEW
+	else if (entry.iconType == ResourceIconType::Scene) {                             
 		DrawSceneIcon(dl, iconPos, iconSize, IM_COL32(150, 110, 200, 255), IM_COL32(235, 235, 235, 255));
+	}
+	else if (entry.iconType == ResourceIconType::Archive) {
+		DrawArchiveIcon(dl, iconPos, iconSize, IM_COL32(200, 170, 90, 255), IM_COL32(35, 30, 15, 255));
 	}
 	else {
 		DrawFileIcon(dl, iconPos, iconSize, IM_COL32(160, 160, 160, 255));

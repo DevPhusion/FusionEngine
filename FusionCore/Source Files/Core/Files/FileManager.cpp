@@ -23,8 +23,11 @@ ResourceIconType FileManager::ClassifyExtension(const std::string& extLower) {
 	if (extLower == ".py") {
 		return ResourceIconType::Script;
 	}
-	if (extLower == ".fscene") {          
+	if (extLower == ".fscene") {
 		return ResourceIconType::Scene;
+	}
+	if (extLower == ".zip") {
+		return ResourceIconType::Archive;
 	}
 
 	return ResourceIconType::Unknown;

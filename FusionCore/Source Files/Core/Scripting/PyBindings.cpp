@@ -5,6 +5,7 @@
 #include "../../../Header Files/Core/Files/FileManager.h"
 #include "../../../Header Files/Core/ObjectManager.h"
 #include "../../../Header Files/Core/Physics/Constraint/PGSConstraint/Constraints.h"
+#include "../../../Header Files/Core/Editor/HeadlessMonitor.h"
 #include <pybind11/stl.h>
 #include <pybind11/operators.h>  
 #include <glm/glm.hpp>
@@ -618,6 +619,19 @@ namespace {
 			};
 	}
 
+	void InjectAnonymousMarker(py::object& marker, const char* keyPrefix) {
+		if (PyFrameObject* rawFrame = PyEval_GetFrame()) {
+			py::object frame = py::reinterpret_borrow<py::object>(reinterpret_cast<PyObject*>(rawFrame));
+			py::object locals = frame.attr("f_locals");
+			py::object globals = frame.attr("f_globals");
+			if (!locals.is(globals)) {
+				static std::atomic<uint64_t> counter{ 0 };
+				std::string key = std::string(keyPrefix) + std::to_string(counter++) + "__";
+				locals[py::str(key)] = marker;
+			}
+		}
+	}
+
 	void RegisterScriptBindings(py::module_& m) {
 		auto scriptClass = py::class_<ScriptBase, std::shared_ptr<ScriptBase>>(m, "Script")
 			.def(py::init<>());
@@ -728,6 +742,39 @@ namespace {
 				"Mark a str script attribute as editable with a file picker restricted to "
 				".fscene files, storing a res:// virtual path, e.g.\n"
 				"  next_level = export_scene(\"res://levels/level_2.fscene\")");
+
+		m.def("export_section", [](std::string name) {
+			if (name.empty()) {
+				throw py::value_error("export_section: section name cannot be empty");
+			}
+
+			py::object marker = py::cast(ExportMarker{ py::str(name), ExportType::Section, "", "", 0.0f, 1.0f });
+			InjectAnonymousMarker(marker, "__fusion_anon_section_");
+			return marker;
+			}, py::arg("name"),
+				"Create a collapsible inspector section. All exported properties "
+				"following this marker are displayed inside the section until another "
+				"section marker is encountered. Can be used as a bare statement, e.g.\n"
+				"  export_section(\"Visuals\")\n"
+				"  color = export_color_edit(Vector4(1, 1, 1, 1))\n");
+		m.def("export_sub_section", [](std::string name) {
+			if (name.empty()) {
+				throw py::value_error("export_sub_section: sub-section name cannot be empty");
+			}
+
+			py::object marker = py::cast(ExportMarker{ py::str(name), ExportType::SubSection, "", "", 0.0f, 1.0f });
+			InjectAnonymousMarker(marker, "__fusion_anon_subsection_");
+			return marker;
+			}, py::arg("name"),
+				"Create a collapsible inspector sub-section, nested inside whichever "
+				"export_section is currently open (or at the top level if none is). "
+				"Properties following this marker are displayed inside it until another "
+				"section or sub-section marker is encountered. Can be used as a bare "
+				"statement, e.g.\n"
+				"  export_section(\"Movement\")\n"
+				"  speed = export(5.0)\n"
+				"  export_sub_section(\"Advanced\")\n"
+				"  acceleration_curve = export(1.0)");
 
 		m.def("get_script", &ImportScriptClass, py::arg("path"),
 			"Import and return the Script subclass at the given res:// path. Only needed "
@@ -2806,50 +2853,67 @@ def clear_cache():
 				"  frame = fusionRL.Environment.get_snapshot(84, 84)\n"
 				"  self.agent.add_observation((frame.astype('float32') / 255.0).flatten().tolist())");
 		envMod.def("step", [](py::object action) {
-			AgentComponent* agent = FindFirstAgent();
-			if (!agent) throw py::value_error("Environment.step: no AgentComponent in the scene");
-			agent->SetAction(action);
+			EngineManager& eng = EngineManager::getInstance();
+
+			AgentComponent* agent = nullptr;
+			{
+				py::gil_scoped_release release;                  
+				std::lock_guard<std::mutex> lock(eng.headlessSimMutex);
+				py::gil_scoped_acquire gil;                       
+				agent = FindFirstAgent();
+				if (!agent) throw py::value_error("Environment.step: no AgentComponent in the scene");
+				agent->SetAction(action);
+			}
 
 			const float PHYSICS_STEP = 1.0f / 60.0f;
 
-			if (EngineManager::getInstance().liveTrainingRenderActive.load()) {
+			if (eng.liveTrainingRenderActive.load()) {
 				py::gil_scoped_release release;
-				EngineManager::getInstance().RunOnMainThread([PHYSICS_STEP]() {
+				eng.RunOnMainThread([PHYSICS_STEP]() {
 					std::lock_guard<std::mutex> lock(EngineManager::getInstance().headlessSimMutex);
 
 					PhysicsEngine::getInstance().ProcessPhysics(PHYSICS_STEP);
 					SceneManager::getInstance().ProcessPendingSceneLoad();
 
 					bool wasHeadless = EngineManager::getInstance().isHeadless;
-					EngineManager::getInstance().isHeadless = false;   
+					EngineManager::getInstance().isHeadless = false;
 
-					ScriptManager::getInstance().Update();              
+					ScriptManager::getInstance().Update();
 					Camera::getInstance().ProcessCamera(PHYSICS_STEP);
 
 					Viewport* gameViewport = EditorManager::getInstance().gameViewport;
 					gameViewport->BeginRenderGame();
-					Renderer::getInstance().EnsureAllRenderResourcesLoaded();  
+					Renderer::getInstance().EnsureAllRenderResourcesLoaded();
 					glm::vec4& bg = EngineManager::getInstance().EngineSettings.backgroundColor;
 					glClearColor(bg.r, bg.g, bg.b, bg.a);
 					glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 					Renderer::getInstance().Draw();
 					gameViewport->EndRenderGame();
 
-					EngineManager::getInstance().isHeadless = wasHeadless;   
+					EngineManager::getInstance().isHeadless = wasHeadless;
 					});
 			}
 			else {
 				py::gil_scoped_release release;
-				std::lock_guard<std::mutex> lock(EngineManager::getInstance().headlessSimMutex);
+				std::lock_guard<std::mutex> lock(eng.headlessSimMutex);
 				PhysicsEngine::getInstance().ProcessPhysics(PHYSICS_STEP);
 				SceneManager::getInstance().ProcessPendingSceneLoad();
 				ScriptManager::getInstance().Update();
 			}
 
 			py::list obs;
-			for (float v : agent->GetObservation()) obs.append(v);
-			float reward = agent->ConsumeReward();
-			bool done = agent->ConsumeDone();
+			float reward = 0.0f;
+			bool done = false;
+			{
+				py::gil_scoped_release release;                    
+				std::lock_guard<std::mutex> lock(eng.headlessSimMutex);
+				py::gil_scoped_acquire gil;
+				agent = FindFirstAgent();                           
+				if (!agent) throw py::value_error("Environment.step: no AgentComponent in the scene");
+				for (float v : agent->GetObservation()) obs.append(v);
+				reward = agent->ConsumeReward();
+				done = agent->ConsumeDone();
+			}
 			return py::make_tuple(obs, reward, done);
 			}, py::arg("action"),
 				"Advance the simulation by one physics tick with the given action applied "
@@ -2859,9 +2923,9 @@ def clear_cache():
 			{
 				py::gil_scoped_release release;
 				EngineManager::getInstance().RunOnMainThread([]() {
-					const std::string& editingScene = EngineManager::getInstance().editingScenePath;
-					if (!editingScene.empty())
-						SceneManager::getInstance().LoadSceneFromFile(editingScene);
+					const std::string& sceneToLoad = HeadlessMonitor::getInstance().trainingScenePath;
+					if (!sceneToLoad.empty())
+						SceneManager::getInstance().LoadSceneFromFile(sceneToLoad);
 					else
 						SceneManager::getInstance().NewScene();
 
@@ -2874,7 +2938,7 @@ def clear_cache():
 						py::gil_scoped_acquire gil;
 						py::object space = agent->GetActionSpace();
 						if (!space.is_none()) {
-							agent->SetAction(space.attr("sample")());   // valid-shaped placeholder; reward/done from this tick are discarded below
+							agent->SetAction(space.attr("sample")());
 						}
 						PhysicsEngine::getInstance().ProcessPhysics(0.0f);
 					}
@@ -3066,7 +3130,7 @@ def _extract_vecnormalize(model_zip_path: str):
     return pickle.loads(data)
 
 
-def train(algorithm: str, total_timesteps: int, save_dir: str, start_from_model_path: str = "",
+def train(algorithm: str, policy: str, total_timesteps: int, save_dir: str, start_from_model_path: str = "",
           model_name: str = "trained_model", hyperparams: dict | None = None,
           status_cb=None, metrics_cb=None, should_stop_cb=None,
           shard_interval: int = 0, shard_dir: str = ""):
@@ -3137,8 +3201,9 @@ def train(algorithm: str, total_timesteps: int, save_dir: str, start_from_model_
             model = algo_cls.load(existing_path, env=env)
         else:
             if status_cb: status_cb("Creating new model")
+
             try:
-                model = algo_cls("MlpPolicy", env, verbose=1, **hyperparams)
+                model = algo_cls(policy, env, verbose=1, **hyperparams)
             except TypeError as e:
                 raise ValueError(f"Invalid hyperparameter for {algorithm}: {e}") from e
 
