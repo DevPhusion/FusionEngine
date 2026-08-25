@@ -1,6 +1,7 @@
 #include "../../Header Files/Components/RenderComponent.h"
 #include "../../Header Files/Core/ObjectManager.h"
 #include "../../Header Files/Core/Files/FileDialog.h"
+#include "../../Header Files/Core/Editor/EditorField.h"
 
 RenderComponent::RenderComponent(Object* parent, std::vector<float> vertices, Shader shader, std::string texture_path) : ComponentBase<RenderComponent>(parent) {
 	Name = "Render Component";
@@ -699,19 +700,12 @@ void RenderComponent::ProcessInspectorUI() {
 
 	ImGui::Separator();
 
-	ImGui::Text("Color");
-	ImGui::SameLine();
 	float displayColor[4] = { color.x, color.y, color.z, color.a };
-	if (ImGui::ColorEdit4("##Color", displayColor)) {
+	EditorField::ColorEdit4Scene(parent, "Color", "##Color", displayColor, [&] {
 		this->color = glm::vec4(displayColor[0], displayColor[1], displayColor[2], displayColor[3]);
 		EngineManager::getInstance().SceneChangeEvent();
-	}
-	if (ImGui::IsItemActivated()) {
-		EditorManager::getInstance().BeginEdit({ parent });
-	}
-	if (ImGui::IsItemDeactivatedAfterEdit()) {
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+		});
+
 
 	ImGui::Separator();
 
@@ -785,21 +779,13 @@ void RenderComponent::ProcessInspectorUI() {
 
 		if constexpr (std::is_same_v<T, RectangleShape>) {
 			float dims[2] = { s.width, s.height };
-			ImGui::Text("  Size");
-			ImGui::SameLine();
-			if (ImGui::InputFloat2("##RectSize", dims, "%.3f m")) {
+			EditorField::InputFloat2Scene(parent, "  Size", "##RectSize", dims, [&] {
 				s.width = std::max(0.01f, dims[0]);
 				s.height = std::max(0.01f, dims[1]);
 				TransformComponent* tc = parent->GetComponent<TransformComponent>();
 				s.center = tc ? tc->GetWorldPosition() : GetCenter();
 				SetShape(s);
-			}
-			if (ImGui::IsItemActivated()) {
-				EditorManager::getInstance().BeginEdit({ parent });
-			}
-			if (ImGui::IsItemDeactivatedAfterEdit()) {
-				EditorManager::getInstance().EndEdit({ parent });
-			}
+				}, "%.3f m");
 		}
 		else if constexpr (std::is_same_v<T, CircleShape>) {
 			auto updateCenter = [&]() {
@@ -808,30 +794,14 @@ void RenderComponent::ProcessInspectorUI() {
 				};
 
 			float r = s.radius;
-			ImGui::Text("  Radius");
-			ImGui::SameLine();
-			if (ImGui::InputFloat("##CircleRadius", &r, 0.0f, 0.0f, "%.3f m")) {
+			EditorField::InputFloatScene(parent, "  Radius", "##CircleRadius", &r, [&] {
 				s.radius = std::max(0.01f, r); updateCenter(); SetShape(s);
-			}
-			if (ImGui::IsItemActivated()) {
-				EditorManager::getInstance().BeginEdit({ parent });
-			}
-			if (ImGui::IsItemDeactivatedAfterEdit()) {
-				EditorManager::getInstance().EndEdit({ parent });
-			}
+				}, "%.3f m");
 
 			int seg = s.segments;
-			ImGui::Text("  Segments");
-			ImGui::SameLine();
-			if (ImGui::InputInt("##CircleSeg", &seg)) {
+			EditorField::InputIntScene(parent, "  Segments", "##CircleSeg", &seg, [&] {
 				s.segments = std::max(3, seg); updateCenter(); SetShape(s);
-			}
-			if (ImGui::IsItemActivated()) {
-				EditorManager::getInstance().BeginEdit({ parent });
-			}
-			if (ImGui::IsItemDeactivatedAfterEdit()) {
-				EditorManager::getInstance().EndEdit({ parent });
-			}
+				});
 		}
 		else if constexpr (std::is_same_v<T, PolygonShape>) {
 			if (!isAddVertex) {
@@ -1001,17 +971,9 @@ void RenderComponent::ProcessInspectorUI() {
 
 	ImGui::Separator();
 
-	ImGui::Text("Z index");
-	ImGui::SameLine();
-	if (ImGui::InputInt("##ZIndex", &z_index)) {
+	EditorField::InputIntScene(parent, "Z index", "##ZIndex", &z_index, [] {
 		EngineManager::getInstance().SceneChangeEvent();
-	}
-	if (ImGui::IsItemActivated()) {
-		EditorManager::getInstance().BeginEdit({ parent });
-	}
-	if (ImGui::IsItemDeactivatedAfterEdit()) {
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+		});
 }
 
 void RenderComponent::OnDelete() {

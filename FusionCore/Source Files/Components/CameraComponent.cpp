@@ -1,5 +1,6 @@
 #include "../../Header Files/Components/CameraComponent.h"
 #include "../../Header Files/Core/Rendering/Renderer.h"
+#include "../../Header Files/Core/Editor/EditorField.h"
 
 CameraComponent::CameraComponent(Object* parent) : ComponentBase<CameraComponent>(parent) {
 	Name = "Camera Component";
@@ -98,46 +99,29 @@ void CameraComponent::SetRange(float range) {
 }
 
 void CameraComponent::ProcessInspectorUI() {
-	ImGui::Text("Is Main ");
-	ImGui::SameLine();
+	CameraComponent* previousMain = Camera::getInstance().mainCam;
+	Object* previousMainOwner = (previousMain && previousMain != this) ? previousMain->parent : nullptr;
+	std::vector<Object*> mainEditRoots = { parent };
+	if (previousMainOwner) mainEditRoots.push_back(previousMainOwner);
+
 	bool mainFlag = isMain;
-	if (ImGui::Checkbox("##IsMain", &mainFlag)) {
-		CameraComponent* previousMain = Camera::getInstance().mainCam;
-		Object* previousMainOwner = (previousMain && previousMain != this) ? previousMain->parent : nullptr;
-
-		std::vector<Object*> editRoots = { parent };
-		if (previousMainOwner) editRoots.push_back(previousMainOwner);
-
-		EditorManager::getInstance().BeginEdit(editRoots);
-
+	EditorField::CheckboxScene(mainEditRoots, "Is Main ", "##IsMain", &mainFlag, [&] {
 		isMain = mainFlag;
 		EngineManager::getInstance().SceneChangeEvent();
 		if (isMain) {
-			if (previousMain && previousMain != this) {
-				previousMain->isMain = false;
-			}
+			if (previousMain && previousMain != this) previousMain->isMain = false;
 			Camera::getInstance().mainCam = this;
 		}
 		else if (Camera::getInstance().mainCam == this) {
 			Camera::getInstance().mainCam = nullptr;
 		}
+		});
 
-		EditorManager::getInstance().EndEdit(editRoots);
-	}
-
-	ImGui::Text("Range ");
-	ImGui::SameLine();
 	float r = range;
-	if (ImGui::InputFloat("## Range", &r)) {
+	EditorField::InputFloatScene(parent, "Range ", "## Range", &r, [&] {
 		SetRange(r < 0.0f ? 0.01f : r);
 		EngineManager::getInstance().SceneChangeEvent();
-	}
-	if (ImGui::IsItemActivated()) {
-		EditorManager::getInstance().BeginEdit({ parent });
-	}
-	if (ImGui::IsItemDeactivatedAfterEdit()) {
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+		});
 }
 
 void CameraComponent::OnDelete() {

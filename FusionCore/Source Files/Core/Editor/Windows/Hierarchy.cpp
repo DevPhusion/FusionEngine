@@ -104,6 +104,8 @@ void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* re
 	if (currentObj->hideInHierarchy) return;
 	if (filter_buffer[0] != '\0' && currentObj->name.find(filter_buffer) == std::string::npos) return;
 
+	bool isRoot = (currentObj->parent == nullptr);
+
 	float availWidth = ImGui::GetContentRegionAvail().x;
 
 	std::vector<std::unique_ptr<Object>>* allObjects = &(ObjectManager::getInstance().allObjects);
@@ -181,16 +183,11 @@ void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* re
 			renameBuffer[255] = '\0';
 #endif
 		}
-		if (ImGui::MenuItem("Delete")) {
+		if (!isRoot && ImGui::MenuItem("Delete")) {
 			if (EditorManager::getInstance().selectedObject == currentObj) {
 				EditorManager::getInstance().SetSelectedObject(nullptr);
 			}
-			if (currentObj->isSceneRoot) {
-				SceneManager::getInstance().RemoveScene(currentObj);
-			}
-			else {
-				ObjectManager::getInstance().RemoveObject(currentObj);
-			}
+			ObjectManager::getInstance().RemoveObject(currentObj);
 			EngineManager::getInstance().SceneChangeEvent();
 			nodeDeleted = true;
 		}
@@ -198,13 +195,11 @@ void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* re
 	}
 
 	if (nodeDeleted) {
-		if (nodeOpen && !children.empty()) {
-			ImGui::TreePop();
-		}
+		if (nodeOpen && !children.empty()) ImGui::TreePop();
 		return;
 	}
 
-	if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
+	if (!isRoot && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceAllowNullID)) {
 		ImGui::SetDragDropPayload("HIERARCHY_OBJECT", &currentObj, sizeof(Object*));
 		ImGui::Text("%s", currentObj->name.c_str());
 		ImGui::EndDragDropSource();
@@ -324,15 +319,9 @@ void Hierarchy::ProcessWindow() {
 
 	ImGui::Begin(name.c_str());
 
-	ImGuiTreeNodeFlags root_flags = ImGuiTreeNodeFlags_OpenOnArrow |
-		ImGuiTreeNodeFlags_OpenOnDoubleClick |
-		ImGuiTreeNodeFlags_SpanAvailWidth |
-		ImGuiTreeNodeFlags_DefaultOpen;
-
 	ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
 	ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.1f));
 	ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 1.0f, 1.0f, 0.18f));
-
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 0.0f));
 
 	if (ImGui::Button("+", ImVec2(24, 24))) {
@@ -342,12 +331,11 @@ void Hierarchy::ProcessWindow() {
 		}
 		else {
 			addObjectWindow->Show();
-			addObjectWindow->parent = nullptr;
+			addObjectWindow->parent = nullptr; 
 		}
 	}
 
 	ImGui::PopStyleColor(3);
-
 	ImGui::SameLine();
 
 	float search_bar_width = ImGui::GetContentRegionAvail().x - 28.0f;
@@ -355,51 +343,26 @@ void Hierarchy::ProcessWindow() {
 
 	static char filter_buffer[256] = "";
 	static char renameBuffer[256] = "";
-
 	ImGui::InputTextWithHint("##FilterBar", "Filter..", filter_buffer, IM_ARRAYSIZE(filter_buffer));
 
-	if (ImGui::TreeNodeEx("Root", root_flags)) {
-		std::vector<std::unique_ptr<Object>>* obj = &(ObjectManager::getInstance().allObjects);
-
-		if (ImGui::BeginDragDropTarget()) {
-			if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("HIERARCHY_OBJECT")) {
-				Object* dragged = *(Object**)payload->Data;
-				if (dragged != nullptr) {
-					dragged->SetParent(nullptr);
-					EngineManager::getInstance().SceneChangeEvent();
-				}
-			}
-			ImGui::EndDragDropTarget();
-		}
-
-		for (int i = 0; i < obj->size(); i++)
-		{
-			Object* currentObj = (*obj)[i].get();
-
-			if (currentObj == nullptr) continue;
-			if (currentObj->parent != nullptr) continue; 
-
-			DrawObjectNode(currentObj, filter_buffer, renameBuffer);
-		}
-		ImGui::TreePop();
+	Object* sceneRoot = ObjectManager::getInstance().GetSceneRoot();
+	if (sceneRoot) {
+		DrawObjectNode(sceneRoot, filter_buffer, renameBuffer);
+	}
+	else {
+		ImGui::TextDisabled("Empty scene — use + to add a root object");
 	}
 
 	ImGui::PopStyleVar();
-
 	ImGui::End();
 }
 
 void Hierarchy::OnKeyPressed(int key, int scancode, int action, int mods) {
 	if (key == GLFW_KEY_DELETE && action == GLFW_PRESS) {
-		if (EditorManager::getInstance().selectedObject != nullptr) {
-			Object* obj = EditorManager::getInstance().selectedObject;
+		Object* obj = EditorManager::getInstance().selectedObject;
+		if (obj != nullptr && obj->parent != nullptr) {
 			EditorManager::getInstance().SetSelectedObject(nullptr);
-			if (obj->isSceneRoot) {
-				SceneManager::getInstance().RemoveScene(obj);
-			}
-			else {
-				ObjectManager::getInstance().RemoveObject(obj);
-			}
+			ObjectManager::getInstance().RemoveObject(obj);
 		}
 	}
 	if (InputManager::getInstance().keys[GLFW_KEY_LEFT_CONTROL] && InputManager::getInstance().keys[GLFW_KEY_D]) {

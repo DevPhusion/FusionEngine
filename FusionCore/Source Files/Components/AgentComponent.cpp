@@ -1,4 +1,5 @@
 #include "../../Header Files/Components/AgentComponent.h"
+#include "../../Header Files/Core/Editor/EditorField.h"
 
 namespace {
 	const char* SpaceLabel(const AgentSpace& space) {
@@ -123,30 +124,18 @@ void AgentComponent::ProcessSpaceConfigUI(const char* idPrefix, AgentSpace& spac
 	ImGui::SameLine();
 
 	if (ImGui::BeginCombo("##SpaceType", SpaceLabel(space))) {
-		if (ImGui::Selectable("Discrete", std::holds_alternative<DiscreteSpace>(space))) {
-			EditorManager::getInstance().BeginEdit({ parent });
-			space = DiscreteSpace{};
-			onChanged();
-			EditorManager::getInstance().EndEdit({ parent });
-		}
-		if (ImGui::Selectable("Box", std::holds_alternative<BoxSpace>(space))) {
-			EditorManager::getInstance().BeginEdit({ parent });
-			space = BoxSpace{};
-			onChanged();
-			EditorManager::getInstance().EndEdit({ parent });
-		}
-		if (ImGui::Selectable("MultiDiscrete", std::holds_alternative<MultiDiscreteSpace>(space))) {
-			EditorManager::getInstance().BeginEdit({ parent });
-			space = MultiDiscreteSpace{};
-			onChanged();
-			EditorManager::getInstance().EndEdit({ parent });
-		}
-		if (ImGui::Selectable("MultiBinary", std::holds_alternative<MultiBinarySpace>(space))) {
-			EditorManager::getInstance().BeginEdit({ parent });
-			space = MultiBinarySpace{};
-			onChanged();
-			EditorManager::getInstance().EndEdit({ parent });
-		}
+		EditorField::ActionScene(parent, ImGui::Selectable("Discrete", std::holds_alternative<DiscreteSpace>(space)), [&] {
+			space = DiscreteSpace{}; onChanged();
+			});
+		EditorField::ActionScene(parent, ImGui::Selectable("Box", std::holds_alternative<BoxSpace>(space)), [&] {
+			space = BoxSpace{}; onChanged();
+			});
+		EditorField::ActionScene(parent, ImGui::Selectable("MultiDiscrete", std::holds_alternative<MultiDiscreteSpace>(space)), [&] {
+			space = MultiDiscreteSpace{}; onChanged();
+			});
+		EditorField::ActionScene(parent, ImGui::Selectable("MultiBinary", std::holds_alternative<MultiBinarySpace>(space)), [&] {
+			space = MultiBinarySpace{}; onChanged();
+			});
 		ImGui::EndCombo();
 	}
 
@@ -154,37 +143,23 @@ void AgentComponent::ProcessSpaceConfigUI(const char* idPrefix, AgentSpace& spac
 		using T = std::decay_t<decltype(s)>;
 
 		if constexpr (std::is_same_v<T, DiscreteSpace>) {
-			ImGui::Text("  n");
-			ImGui::SameLine();
 			int n = s.n;
-			if (ImGui::InputInt("##DiscreteN", &n)) {
-				s.n = std::max(1, n);
-				onChanged();
-			}
-			if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
-			if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
+			EditorField::InputIntScene(parent, "  n", "##DiscreteN", &n, [&] {
+				s.n = std::max(1, n); onChanged();
+				});
 		}
 		else if constexpr (std::is_same_v<T, BoxSpace>) {
 			float bounds[2] = { s.low, s.high };
-			ImGui::Text("  Low / High");
-			ImGui::SameLine();
-			if (ImGui::InputFloat2("##BoxBounds", bounds)) {
+			EditorField::InputFloat2Scene(parent, "  Low / High", "##BoxBounds", bounds, [&] {
 				s.low = bounds[0];
 				s.high = std::max(bounds[0], bounds[1]);
 				onChanged();
-			}
-			if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
-			if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
+				});
 
-			ImGui::Text("  Size");
-			ImGui::SameLine();
 			int size = s.size;
-			if (ImGui::InputInt("##BoxSize", &size)) {
-				s.size = std::max(1, size);
-				onChanged();
-			}
-			if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
-			if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
+			EditorField::InputIntScene(parent, "  Size", "##BoxSize", &size, [&] {
+				s.size = std::max(1, size); onChanged();
+				});
 		}
 		else if constexpr (std::is_same_v<T, MultiDiscreteSpace>) {
 			ImGui::Text("  Values (n per dimension)");
@@ -193,42 +168,28 @@ void AgentComponent::ProcessSpaceConfigUI(const char* idPrefix, AgentSpace& spac
 				ImGui::PushID(i);
 				int v = s.nvec[i];
 				ImGui::SetNextItemWidth(200.0f);
-				if (ImGui::InputInt("##NVecEntry", &v)) {
-					s.nvec[i] = std::max(1, v);
-					onChanged();
-				}
-				if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
-				if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
+				EditorField::InputIntScene(parent, nullptr, "##NVecEntry", &v, [&] {
+					s.nvec[i] = std::max(1, v); onChanged();
+					});
 
 				ImGui::SameLine();
-				if (ImGui::SmallButton("x")) {
-					removeIndex = i;
-				}
+				if (ImGui::SmallButton("x")) removeIndex = i;
 				ImGui::PopID();
 			}
-			if (removeIndex != -1 && s.nvec.size() > 1) {
-				EditorManager::getInstance().BeginEdit({ parent });
-				s.nvec.erase(s.nvec.begin() + removeIndex);
-				onChanged();
-				EditorManager::getInstance().EndEdit({ parent });
-			}
-			if (ImGui::SmallButton("+ Add dimension")) {
-				EditorManager::getInstance().BeginEdit({ parent });
-				s.nvec.push_back(2);
-				onChanged();
-				EditorManager::getInstance().EndEdit({ parent });
-			}
+
+			EditorField::ActionScene(parent, removeIndex != -1 && s.nvec.size() > 1, [&] {
+				s.nvec.erase(s.nvec.begin() + removeIndex); onChanged();
+				});
+
+			EditorField::ActionScene(parent, ImGui::SmallButton("+ Add dimension"), [&] {
+				s.nvec.push_back(2); onChanged();
+				});
 		}
 		else { 
-			ImGui::Text("  n");
-			ImGui::SameLine();
 			int n = s.n;
-			if (ImGui::InputInt("##MultiBinaryN", &n)) {
-				s.n = std::max(1, n);
-				onChanged();
-			}
-			if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
-			if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
+			EditorField::InputIntScene(parent, "  n", "##MultiBinaryN", &n, [&] {
+				s.n = std::max(1, n); onChanged();
+				});
 		}
 		}, space);
 
@@ -263,15 +224,13 @@ void AgentComponent::ProcessInspectorUI() {
 	ImGui::Text("Observation");
 	ImGui::SameLine();
 	bool useCustom = useCustomObservationSpace;
-	if (ImGui::Checkbox("##ObsSpaceCustom", &useCustom)) {
-		EditorManager::getInstance().BeginEdit({ parent });
+	EditorField::CheckboxScene(parent, "Observation", "##ObsSpaceCustom", &useCustom, [&] {
 		useCustomObservationSpace = useCustom;
 		SetObservationSpace(useCustomObservationSpace
 			? BuildSpaceObject(observationSpaceConfig)
 			: py::none());
 		EngineManager::getInstance().SceneChangeEvent();
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+		});
 	if (ImGui::IsItemHovered()) {
 		ImGui::SetTooltip("Inferred from observation length if unchecked, otherwise use a custom space below");
 	}

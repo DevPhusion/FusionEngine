@@ -48,7 +48,6 @@ public:
 
 	Object* AddScene(const std::string& path, Object* parent = nullptr);
 	Object* AddScene(const std::string& path, Object* parent, std::vector<Object*>& outNewObjects);
-	void RemoveScene(Object* root);
 
 	void RequestLoadScene(const std::string& path);
 	void ProcessPendingSceneLoad();
@@ -74,7 +73,11 @@ private:
 	bool ParseTopLevelSceneObjects(const std::string& path, std::vector<std::unique_ptr<Object>>& outObjects,
 		std::vector<Constraint*>& outConstraints, uint32_t& outObjectCount);
 
-	bool ExpandSceneRoot(Object* root, std::vector<std::unique_ptr<Object>>& ownerObjects,
+	Object* InstantiateScene(const std::string& path, Object* parent,
+		std::vector<std::unique_ptr<Object>>& ownerObjects, std::vector<Constraint*>& ownerConstraints,
+		bool activateNow, std::vector<std::string>& expansionStack);
+
+	bool PopulateInstanceChildren(Object* root, std::vector<std::unique_ptr<Object>>& ownerObjects,
 		std::vector<Constraint*>& ownerConstraints, bool activateNow, std::vector<std::string>& expansionStack);
 
 	bool IsInsideSceneInstance(Object* obj) const;

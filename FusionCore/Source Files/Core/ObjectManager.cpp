@@ -11,7 +11,7 @@ void ObjectManager::AddObject(Object* parent) {
 		c->Activate();
 	}
 	obj->addedToScene = true;
-	obj->SetParent(parent);
+	AttachNewObject(obj.get(), parent);
 	EditorManager::getInstance().RegisterObjectCreated(obj.get());
 	allObjects.push_back(std::move(obj));
 }
@@ -29,7 +29,7 @@ void ObjectManager::AddCamera(Object* parent) {
 	}
 
 	obj->addedToScene = true;
-	obj->SetParent(parent);
+	AttachNewObject(obj.get(), parent);
 	EditorManager::getInstance().RegisterObjectCreated(obj.get());
 	allObjects.push_back(std::move(obj));
 }
@@ -56,7 +56,7 @@ void ObjectManager::AddBox(Object* parent) {
 	}
 
 	obj->addedToScene = true;
-	obj->SetParent(parent);
+	AttachNewObject(obj.get(), parent);
 	EditorManager::getInstance().RegisterObjectCreated(obj.get());
 	allObjects.push_back(std::move(obj));
 }
@@ -82,7 +82,7 @@ void ObjectManager::AddCircle(Object* parent) {
 	}
 
 	obj->addedToScene = true;
-	obj->SetParent(parent);
+	AttachNewObject(obj.get(), parent);
 	EditorManager::getInstance().RegisterObjectCreated(obj.get());
 	allObjects.push_back(std::move(obj));
 }
@@ -134,7 +134,7 @@ void ObjectManager::AddPolygon(Object* parent) {
 	}
 
 	obj->addedToScene = true;
-	obj->SetParent(parent);
+	AttachNewObject(obj.get(), parent);
 	EditorManager::getInstance().RegisterObjectCreated(obj.get());
 	allObjects.push_back(std::move(obj));
 
@@ -163,7 +163,7 @@ void ObjectManager::AddSoftBox(Object* parent) {
 	}
 
 	obj->addedToScene = true;
-	obj->SetParent(parent);
+	AttachNewObject(obj.get(), parent);
 	EditorManager::getInstance().RegisterObjectCreated(obj.get());
 	allObjects.push_back(std::move(obj));
 }
@@ -189,7 +189,7 @@ void ObjectManager::AddSoftCircle(Object* parent) {
 	}
 
 	obj->addedToScene = true;
-	obj->SetParent(parent);
+	AttachNewObject(obj.get(), parent);
 	EditorManager::getInstance().RegisterObjectCreated(obj.get());
 	allObjects.push_back(std::move(obj));
 }
@@ -241,7 +241,7 @@ void ObjectManager::AddSoftPolygon(Object* parent) {
 	}
 
 	obj->addedToScene = true;
-	obj->SetParent(parent);
+	AttachNewObject(obj.get(), parent);
 	EditorManager::getInstance().RegisterObjectCreated(obj.get());
 	allObjects.push_back(std::move(obj));
 
@@ -270,7 +270,7 @@ void ObjectManager::AddFluid(Object* parent) {
 	}
 
 	obj->addedToScene = true;
-	obj->SetParent(parent);
+	AttachNewObject(obj.get(), parent);
 	EditorManager::getInstance().RegisterObjectCreated(obj.get());
 	allObjects.push_back(std::move(obj));
 }
@@ -283,10 +283,7 @@ Object* ObjectManager::AddExistingObject(std::unique_ptr<Object> obj, Object* pa
 	Object* raw = obj.get();
 	raw->name = GenerateUniqueName(raw->name.empty() ? "Object" : raw->name, nullptr);
 
-	if (parent) {
-		raw->SetParent(parent);
-	}
-
+	AttachNewObject(raw, parent);
 	raw->addedToScene = true;
 
 	pendingObjects.push_back(std::move(obj));
@@ -336,26 +333,26 @@ Object* ObjectManager::FindObjectById(uint64_t id) {
 }
 
 Object* ObjectManager::CopyObject(Object* obj) {
+	if (obj->parent == nullptr) {
+		Console::PrintError("CopyObject: cannot duplicate the scene root");
+		return nullptr;
+	}
+
 	std::unique_ptr<Object> newObj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
 
 	for (int i = 0; i < obj->components.size(); i++)
-	{
 		obj->components[i]->CopyTo(newObj.get());
-	}
 
 	for (int i = 0; i < newObj->components.size(); i++)
-	{
 		newObj->components[i]->PostLoad();
-	}
 
-	for (auto& c : newObj->components) {
+	for (auto& c : newObj->components)
 		c->Activate();
-	}
 
 	std::string baseName = obj->name.empty() ? "Object" : obj->name;
 	newObj->name = GenerateUniqueName(baseName, nullptr);
 
-	newObj->SetParent(obj->parent);
+	newObj->SetParent(obj->parent); 
 	Object* returnObj = newObj.get();
 	newObj->addedToScene = true;
 	allObjects.push_back(std::move(newObj));
@@ -363,6 +360,11 @@ Object* ObjectManager::CopyObject(Object* obj) {
 }
 
 void ObjectManager::RemoveObject(Object* obj) {
+	if (obj->parent == nullptr && !obj->children.empty()) {
+		Console::PrintError("RemoveObject: cannot delete the scene root while it has children");
+		return;
+	}
+
 	bool tracking = !FileManager::getInstance().IsRestoring();
 	std::vector<uint64_t> subtreeIds;
 	std::vector<uint8_t> before;
@@ -376,35 +378,41 @@ void ObjectManager::RemoveObject(Object* obj) {
 	}
 
 	EngineManager::getInstance().SceneChangeEvent();
-	if (EditorManager::getInstance().selectedObject == obj) EditorManager::getInstance().SetSelectedObject(nullptr);
 
-	if (obj->parent != nullptr) {
-		for (int i = 0; i < obj->parent->children.size(); i++)
-		{
-			if (obj->parent->children[i] == obj) {
-				obj->parent->children.erase(obj->parent->children.begin() + i);
+	if (Object* sel = EditorManager::getInstance().selectedObject) {
+		for (Object* p = sel; p != nullptr; p = p->parent) {
+			if (p == obj) {
+				EditorManager::getInstance().SetSelectedObject(nullptr);
+				break;
 			}
 		}
+	}
 
-		if (obj->parent->isSceneRoot && obj->parent->children.size() == 0) {
+	if (obj->parent != nullptr) {
+		auto& siblings = obj->parent->children;
+		siblings.erase(std::remove(siblings.begin(), siblings.end(), obj), siblings.end());
+
+		if (obj->parent->isSceneRoot && obj->parent->children.empty()) {
 			RemoveObject(obj->parent);
 		}
 	}
 
-	std::vector<Object*> reparentedChildren;
-	for (int i = 0; i < allObjects.size(); i++) {
-		if (allObjects[i].get() == obj) {
-			obj->OnDelete();
-			for (auto* child : allObjects[i]->children) {
-				child->SetParent(allObjects[i]->parent);
-				reparentedChildren.push_back(child);
-			}
-			allObjects.erase(allObjects.begin() + i);
-			break;
+	std::function<void(Object*)> destroySubtree = [&](Object* o) {
+		std::vector<Object*> kids = o->children; 
+		for (Object* child : kids) {
+			destroySubtree(child);
 		}
-	}
+		o->OnDelete();
+		for (size_t i = 0; i < allObjects.size(); i++) {
+			if (allObjects[i].get() == o) {
+				allObjects.erase(allObjects.begin() + i);
+				break;
+			}
+		}
+		};
+	destroySubtree(obj);
 
-	if (tracking) EditorManager::getInstance().RegisterObjectDeleted(before, subtreeIds, reparentedChildren);
+	if (tracking) EditorManager::getInstance().RegisterObjectDeleted(before, subtreeIds, {});
 }
 
 void ObjectManager::RemoveObjectById(uint64_t id) {
@@ -452,4 +460,21 @@ std::vector<float> ObjectManager::BuildInterleavedVertices(const std::vector<glm
 		out.insert(out.end(), { v.x, v.y, 0.0f, u, uvY });
 	}
 	return out;
+}
+
+Object* ObjectManager::GetSceneRoot() {
+	for (auto& obj : allObjects) {
+		if (obj && obj->parent == nullptr) return obj.get();
+	}
+	return nullptr;
+}
+
+Object* ObjectManager::ResolveAttachParent(Object* requestedParent) {
+	if (requestedParent) return requestedParent;
+	return GetSceneRoot(); 
+}
+
+void ObjectManager::AttachNewObject(Object* obj, Object* requestedParent) {
+	Object* effectiveParent = ResolveAttachParent(requestedParent);
+	obj->SetParent(effectiveParent);
 }

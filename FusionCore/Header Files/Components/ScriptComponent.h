@@ -29,6 +29,8 @@ public:
 	void SetSourcePath(std::string path);
 	const std::string& GetSourcePath() const { return sourcePath; }
 
+	void RemapObjectReferences(const std::unordered_map<uint64_t, uint64_t>& idRemap);
+
 	bool IsLoaded() const { return loaded; }
 	bool HasInstance() const { return loaded && static_cast<bool>(scriptInstance); }
 	py::object GetInstance() { return scriptInstance; }

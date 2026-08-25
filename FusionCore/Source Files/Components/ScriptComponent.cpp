@@ -2,6 +2,7 @@
 #include "../../Header Files/Core/Scripting/PyBindings.h"
 #include "../../Header Files/Core/EngineManager.h"
 #include "../../Header Files/Core/ObjectManager.h"
+#include "../../Header Files/Core/Editor/EditorField.h"
 
 #include <algorithm>
 #include <cctype>
@@ -77,6 +78,19 @@ namespace {
 		default: return std::string();
 		}
 	}
+
+	void RemapExportedValueIds(std::vector<ExportedProperty>& props,
+		const std::unordered_map<uint64_t, uint64_t>& idRemap) {
+		for (auto& prop : props) {
+			if (!std::holds_alternative<ObjectRef>(prop.value)) continue;
+			ObjectRef& ref = std::get<ObjectRef>(prop.value);
+			auto it = idRemap.find(ref.id);
+			if (it != idRemap.end()) {
+				ref.id = it->second;
+				ref.ptr = nullptr; 
+			}
+		}
+	}
 }
 
 ScriptComponent::ScriptComponent(Object* parent, std::string sourcePath) : ComponentBase<ScriptComponent>(parent) {
@@ -106,6 +120,11 @@ void ScriptComponent::SetSourcePath(std::string path) {
 		ScriptManager::getInstance().NotifyScriptAttached(sourcePath);
 	}
 	Unload();
+}
+
+void ScriptComponent::RemapObjectReferences(const std::unordered_map<uint64_t, uint64_t>& idRemap) {
+	RemapExportedValueIds(pendingExportedValues, idRemap);
+	if (loaded) RemapExportedValueIds(exportedProperties, idRemap);
 }
 
 void ScriptComponent::OnDelete() {
@@ -640,103 +659,75 @@ void ScriptComponent::ProcessInspectorUI() {
 					std::size_t len = std::min(value.size(), sizeof(buf) - 1);
 					std::memcpy(buf, value.data(), len);
 
-					if (ImGui::InputText("##val", buf, sizeof(buf))) {
-						if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
+					EditorField::InputTextScene(parent, nullptr, "##val", buf, sizeof(buf), [&] {
 						value = std::string(buf);
 						SetInstanceAttrFromVariant(prop.name, prop.value);
 						EngineManager::getInstance().SceneChangeEvent();
-					}
-					if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
+						});
 				}
 			}
 			else if constexpr (std::is_same_v<T, int>) {
-				bool changed = false;
 				std::string format = prop.prefix + "%d" + prop.suffix;
-				switch (prop.displayType) {
-				case ExportType::Slider:
-					changed = ImGui::SliderInt("##val", &value, (int)prop.min, (int)prop.max, format.c_str());
-					break;
-				case ExportType::Drag:
-					changed = ImGui::DragInt("##val", &value, 1.0f, (int)prop.min, (int)prop.max, format.c_str());
-					break;
-				default:
-					changed = ImGui::InputInt("##val", &value);
-					break;
-				}
-				if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
-				if (changed) {
-					SetInstanceAttrFromVariant(prop.name, prop.value);
-					EngineManager::getInstance().SceneChangeEvent();
-				}
-				if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
+				EditorField::Wrap(parent, nullptr, [&] {
+					switch (prop.displayType) {
+					case ExportType::Slider: return ImGui::SliderInt("##val", &value, (int)prop.min, (int)prop.max, format.c_str());
+					case ExportType::Drag:   return ImGui::DragInt("##val", &value, 1.0f, (int)prop.min, (int)prop.max, format.c_str());
+					default:                 return ImGui::InputInt("##val", &value);
+					}
+					}, [&] {
+						SetInstanceAttrFromVariant(prop.name, prop.value);
+						EngineManager::getInstance().SceneChangeEvent();
+						});
 			}
 			else if constexpr (std::is_same_v<T, float>) {
-				bool changed = false;
 				std::string format = prop.prefix + "%.3f" + prop.suffix;
-				switch (prop.displayType) {
-				case ExportType::Slider:
-					changed = ImGui::SliderFloat("##val", &value, prop.min, prop.max, format.c_str());
-					break;
-				case ExportType::AngleSlider:
-					changed = ImGui::SliderAngle("##val", &value, prop.min, prop.max);
-					break;
-				case ExportType::Drag:
-					changed = ImGui::DragFloat("##val", &value, 1.0f, prop.min, prop.max, format.c_str());
-					break;
-				default:
-					changed = ImGui::InputFloat("##val", &value, 0.0f, 0.0f, format.c_str());
-					break;
-				}
-				if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
-				if (changed) {
-					SetInstanceAttrFromVariant(prop.name, prop.value);
-					EngineManager::getInstance().SceneChangeEvent();
-				}
-				if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
+				EditorField::Wrap(parent, nullptr, [&] {
+					switch (prop.displayType) {
+					case ExportType::Slider:      return ImGui::SliderFloat("##val", &value, prop.min, prop.max, format.c_str());
+					case ExportType::AngleSlider: return ImGui::SliderAngle("##val", &value, prop.min, prop.max);
+					case ExportType::Drag:        return ImGui::DragFloat("##val", &value, 1.0f, prop.min, prop.max, format.c_str());
+					default:                      return ImGui::InputFloat("##val", &value, 0.0f, 0.0f, format.c_str());
+					}
+					}, [&] {
+						SetInstanceAttrFromVariant(prop.name, prop.value);
+						EngineManager::getInstance().SceneChangeEvent();
+						});
 			}
 			else if constexpr (std::is_same_v<T, bool>) {
-				if (ImGui::Checkbox("##val", &value)) {
-					EditorManager::getInstance().BeginEdit({ parent });
+				EditorField::CheckboxScene(parent, nullptr, "##val", &value, [&] {
 					SetInstanceAttrFromVariant(prop.name, prop.value);
-					EditorManager::getInstance().EndEdit({ parent });
 					EngineManager::getInstance().SceneChangeEvent();
-				}
+					});
 			}
 			else if constexpr (std::is_same_v<T, glm::vec2>) {
-				if (ImGui::InputFloat2("##val", &value.x)) {
-					if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
+				EditorField::InputFloat2Scene(parent, nullptr, "##val", &value.x, [&] {
 					SetInstanceAttrFromVariant(prop.name, prop.value);
 					EngineManager::getInstance().SceneChangeEvent();
-				}
-				if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
+					});
 			}
 			else if constexpr (std::is_same_v<T, glm::vec3>) {
-				bool changed = false;
-				switch (prop.displayType) {
-				case ExportType::ColorEdit:   changed = ImGui::ColorEdit3("##val", &value.x); break;
-				case ExportType::ColorPicker: changed = ImGui::ColorPicker3("##val", &value.x); break;
-				default:                      changed = ImGui::InputFloat3("##val", &value.x); break;
-				}
-				if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
-				if (changed) {
-					SetInstanceAttrFromVariant(prop.name, prop.value);
-					EngineManager::getInstance().SceneChangeEvent();
-				}
-				if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
+				EditorField::Wrap(parent, nullptr, [&] {
+					switch (prop.displayType) {
+					case ExportType::ColorEdit:   return ImGui::ColorEdit3("##val", &value.x);
+					case ExportType::ColorPicker: return ImGui::ColorPicker3("##val", &value.x);
+					default:                      return ImGui::InputFloat3("##val", &value.x);
+					}
+					}, [&] {
+						SetInstanceAttrFromVariant(prop.name, prop.value);
+						EngineManager::getInstance().SceneChangeEvent();
+						});
 			}
 			else if constexpr (std::is_same_v<T, glm::vec4>) {
-				bool changed = false;
-				switch (prop.displayType) {
-				case ExportType::ColorEdit:   changed = ImGui::ColorEdit4("##val", &value.x); break;
-				case ExportType::ColorPicker: changed = ImGui::ColorPicker4("##val", &value.x); break;
-				default:                      changed = ImGui::InputFloat4("##val", &value.x); break;
-				}
-				if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent });
-				if (changed) {
-					SetInstanceAttrFromVariant(prop.name, prop.value);
-					EngineManager::getInstance().SceneChangeEvent();
-				}
-				if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
+				EditorField::Wrap(parent, nullptr, [&] {
+					switch (prop.displayType) {
+					case ExportType::ColorEdit:   return ImGui::ColorEdit4("##val", &value.x);
+					case ExportType::ColorPicker: return ImGui::ColorPicker4("##val", &value.x);
+					default:                      return ImGui::InputFloat4("##val", &value.x);
+					}
+					}, [&] {
+						SetInstanceAttrFromVariant(prop.name, prop.value);
+						EngineManager::getInstance().SceneChangeEvent();
+						});
 			}
 			else if constexpr (std::is_same_v<T, ObjectRef>) {
 				char nameBuf[128];
@@ -751,36 +742,30 @@ void ScriptComponent::ProcessInspectorUI() {
 					ImGui::TextDisabled("Select Object");
 					ImGui::Separator();
 
-					bool changed = false;
-
 					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.65f, 0.65f, 0.65f, 1.0f));
-					if (ImGui::Selectable("None")) {
-						EditorManager::getInstance().BeginEdit({ parent });
+					EditorField::ActionScene(parent, ImGui::Selectable("None"), [&] {
 						UnregisterObjectDeleteCallback(prop);
 						value.ptr = nullptr;
 						value.id = 0;
-						changed = true;
-					}
+						SetInstanceAttrFromVariant(prop.name, prop.value);
+						EngineManager::getInstance().SceneChangeEvent();
+						});
 					ImGui::PopStyleColor();
 					ImGui::Separator();
 
 					for (auto& objPtr : ObjectManager::getInstance().allObjects) {
 						Object* candidate = objPtr.get();
-						if (ImGui::Selectable(candidate->name.c_str(), candidate == value.ptr)) {
-							EditorManager::getInstance().BeginEdit({ parent });
-							UnregisterObjectDeleteCallback(prop);
-							value.ptr = candidate;
-							value.id = candidate->id;
-							RegisterObjectDeleteCallback(prop);
-							changed = true;
-						}
+						EditorField::ActionScene(parent,
+							ImGui::Selectable(candidate->name.c_str(), candidate == value.ptr), [&] {
+								UnregisterObjectDeleteCallback(prop);
+								value.ptr = candidate;
+								value.id = candidate->id;
+								RegisterObjectDeleteCallback(prop);
+								SetInstanceAttrFromVariant(prop.name, prop.value);
+								EngineManager::getInstance().SceneChangeEvent();
+							});
 					}
 					ImGui::EndPopup();
-					if (changed) {
-						SetInstanceAttrFromVariant(prop.name, prop.value);
-						EngineManager::getInstance().SceneChangeEvent();
-						EditorManager::getInstance().EndEdit({ parent });
-					}
 				}
 			}
 			}, prop.value);

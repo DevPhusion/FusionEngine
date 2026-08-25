@@ -6,6 +6,7 @@
 #include "../../Header Files/Core/Physics/Constraint/PGSConstraint/WeldConstraint.h"
 #include "../../Header Files/Core/Physics/Constraint/PGSConstraint/SpringConstraint.h"
 #include "../../Header Files/Core/Physics/Constraint/PGSConstraint/PrismaticConstraint.h"
+#include "../../Header Files/Core/Editor/EditorField.h"
 
 ConstraintComponent::ConstraintComponent(Object* parent)
     : ComponentBase<ConstraintComponent>(parent)
@@ -130,43 +131,38 @@ void ConstraintComponent::ProcessInspectorUI()
         }
 
         if (ImGui::MenuItem("Distance Constraint")) {
-            EditorManager::getInstance().BeginEdit({ parent }, true);
-            AddConstraint(std::make_shared<DistanceConstraint>(body, PhysicsBody(),
-                parent->GetComponent<RenderComponent>()->GetCenter(), glm::vec3(0.0f), 5.0f));
-            EditorManager::getInstance().EndEdit({ parent });
+            EditorField::ActionScene(parent, true, [&] {
+                AddConstraint(std::make_shared<DistanceConstraint>(body, PhysicsBody(),
+                    parent->GetComponent<RenderComponent>()->GetCenter(), glm::vec3(0.0f), 5.0f));
+                }, true);
             ImGui::CloseCurrentPopup();
         }
-
-        if (ImGui::MenuItem("Spring Constraint"))
-        {
-            EditorManager::getInstance().BeginEdit({ parent }, true);
-            AddConstraint(std::make_shared<SpringConstraint>(body, PhysicsBody(),
-                parent->GetComponent<RenderComponent>()->GetCenter(), glm::vec3(0.0f), 5.0f, 15.0f, 7.0f));
-            EditorManager::getInstance().EndEdit({ parent });
+        if (ImGui::MenuItem("Spring Constraint")) {
+            EditorField::ActionScene(parent, true, [&] {
+                AddConstraint(std::make_shared<SpringConstraint>(body, PhysicsBody(),
+                    parent->GetComponent<RenderComponent>()->GetCenter(), glm::vec3(0.0f), 5.0f, 15.0f, 7.0f));
+                }, true);
             ImGui::CloseCurrentPopup();
         }
-        if (ImGui::MenuItem("Revolute Constraint"))
-        {
-            EditorManager::getInstance().BeginEdit({ parent }, true);
-            AddConstraint(std::make_shared<RevoluteConstraint>(body, PhysicsBody(),
-                parent->GetComponent<RenderComponent>()->GetCenter(), glm::vec3(0.0f)));
-            EditorManager::getInstance().EndEdit({ parent });
+        if (ImGui::MenuItem("Revolute Constraint")) {
+            EditorField::ActionScene(parent, true, [&] {
+                AddConstraint(std::make_shared<RevoluteConstraint>(body, PhysicsBody(),
+                    parent->GetComponent<RenderComponent>()->GetCenter(), glm::vec3(0.0f)));
+                }, true);
             ImGui::CloseCurrentPopup();
-
         }
-        if (ImGui::MenuItem("Weld Constraint"))
-        {
-            EditorManager::getInstance().BeginEdit({ parent }, true);
-            AddConstraint(std::make_shared<WeldConstraint>(body, PhysicsBody(),
-                parent->GetComponent<RenderComponent>()->GetCenter(), glm::vec3(0.0f), 0.0f));
-            EditorManager::getInstance().EndEdit({ parent });
+        if (ImGui::MenuItem("Weld Constraint")) {
+            EditorField::ActionScene(parent, true, [&] {
+                AddConstraint(std::make_shared<WeldConstraint>(body, PhysicsBody(),
+                    parent->GetComponent<RenderComponent>()->GetCenter(), glm::vec3(0.0f), 0.0f));
+                }, true);
             ImGui::CloseCurrentPopup();
         }
         if (ImGui::MenuItem("Prismatic Constraint")) {
-            EditorManager::getInstance().BeginEdit({ parent }, true);
-            AddConstraint(std::make_shared<PrismaticConstraint>(body, PhysicsBody(),
-                parent->GetComponent<RenderComponent>()->GetCenter(), glm::vec3(0.0f), glm::vec3(0.0f)));
-            EditorManager::getInstance().EndEdit({ parent });
+            EditorField::ActionScene(parent, true, [&] {
+                AddConstraint(std::make_shared<PrismaticConstraint>(body, PhysicsBody(),
+                    parent->GetComponent<RenderComponent>()->GetCenter(), glm::vec3(0.0f), glm::vec3(0.0f)));
+                }, true);
             ImGui::CloseCurrentPopup();
         }
 
@@ -249,9 +245,7 @@ void ConstraintComponent::ProcessInspectorUI()
         ImGui::PopID();
     }
 
-    if (pendingRemoval != -1) {
-        EditorManager::getInstance().BeginEdit({ parent }, true);
+    EditorField::ActionScene(parent, pendingRemoval != -1, [&] {
         RemoveConstraint(static_cast<std::size_t>(pendingRemoval));
-        EditorManager::getInstance().EndEdit({ parent });
-    }
+        }, true);
 }

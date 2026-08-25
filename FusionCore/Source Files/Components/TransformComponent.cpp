@@ -1,6 +1,7 @@
 #include "../../Header Files/Components/TransformComponent.h"
 #include "../../Header Files/Components/RigidBodyComponent.h"
 #include "../../Header Files/Core/ObjectManager.h"
+#include "../../Header Files/Core/Editor/EditorField.h"
 
 TransformComponent::TransformComponent(Object* parent, Shader shader, glm::vec3 rotation_center) : ComponentBase<TransformComponent>(parent) {
 	Name = "Transform Component";
@@ -48,44 +49,20 @@ void TransformComponent::Deserialize(BinaryReader& r) {
 }
 
 void TransformComponent::ProcessInspectorUI() {
-	ImGui::Text("Position ");
-	ImGui::SameLine();
 	float position[] = { worldPosition.x, worldPosition.y };
-	if (ImGui::InputFloat2("## Position", position)) {
+	EditorField::InputFloat2Scene(parent, "Position ", "## Position", position, [&] {
 		UpdateWorldPosition(glm::vec3(position[0], position[1], 0));
-	}
-	if (ImGui::IsItemActivated()) {
-		EditorManager::getInstance().BeginEdit({ parent });
-	}
-	if (ImGui::IsItemDeactivatedAfterEdit()) {
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+		});
 
-	ImGui::Text("Rotation ");
-	ImGui::SameLine();
-	float rotation = this->rotation;
-	if (ImGui::SliderAngle("## Rotation", &rotation, -180.0f, 180.0f)) {
-		Rotate(rotation);
-	}
-	if (ImGui::IsItemActivated()) {
-		EditorManager::getInstance().BeginEdit({ parent });
-	}
-	if (ImGui::IsItemDeactivatedAfterEdit()) {
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+	float rotationRad = this->rotation;
+	EditorField::SliderAngleScene(parent, "Rotation ", "## Rotation", &rotationRad, -180.0f, 180.0f, [&] {
+		Rotate(rotationRad);
+		});
 
-	ImGui::Text("Scale ");
-	ImGui::SameLine();
 	float size[] = { this->size.x, this->size.y };
-	if (ImGui::InputFloat2("## Scale", size)) {
+	EditorField::InputFloat2Scene(parent, "Scale ", "## Scale", size, [&] {
 		Scale(glm::vec3(size[0], size[1], 1));
-	}
-	if (ImGui::IsItemActivated()) {
-		EditorManager::getInstance().BeginEdit({ parent });
-	}
-	if (ImGui::IsItemDeactivatedAfterEdit()) {
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+		});
 }
 
 void TransformComponent::OnDelete() {

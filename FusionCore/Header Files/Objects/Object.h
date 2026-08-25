@@ -18,6 +18,10 @@ public:
 		if (usedId >= counter) counter = usedId + 1;
 	}
 
+	static uint64_t AllocateID() {
+		return NextID();
+	}
+
 	Object(Shader shader);
 	Object() = default;
 

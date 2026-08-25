@@ -1,6 +1,7 @@
 #include "../../Header Files/Components/CollisionComponent.h"
 #include "../../Header Files/Core/Physics/PhysicsEngine.h"
 #include "../../Header Files/Core/ObjectManager.h"
+#include "../../Header Files/Core/Editor/EditorField.h"
 #include <glm/gtc/constants.hpp>
 #include <array>
 #include <algorithm>
@@ -579,29 +580,18 @@ void CollisionComponent::ProcessShapeEntryUI(CollisionShapeEntry& entry) {
 	strncpy(nameBuf, entry.name.c_str(), sizeof(nameBuf) - 1);
 	nameBuf[sizeof(nameBuf) - 1] = '\0';
 #endif
-	ImGui::Text("Name");
-	ImGui::SameLine();
-	if (ImGui::InputText("##ShapeName", nameBuf, IM_ARRAYSIZE(nameBuf))) {
+	EditorField::InputTextScene(parent, "Name", "##ShapeName", nameBuf, IM_ARRAYSIZE(nameBuf), [&] {
 		entry.name = nameBuf;
-	}
-	if (ImGui::IsItemActivated()) {
-		EditorManager::getInstance().BeginEdit({ parent });
-	}
-	if (ImGui::IsItemDeactivatedAfterEdit()) {
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+		});
 
 	RenderComponent* rc = parent->GetComponent<RenderComponent>();
 	if (rc) {
 		bool sync = entry.syncWithRenderComponent;
-		if (ImGui::Checkbox("Sync with Render Component", &sync)) {
-			EditorManager::getInstance().BeginEdit({ parent });
+		EditorField::CheckboxScene(parent, nullptr, "Sync with Render Component", &sync, [&] {
 			SetSyncWithRenderComponent(entry, sync);
-			EditorManager::getInstance().EndEdit({ parent });
-		}
+			});
 		ImGui::Separator();
 	}
-
 	if (entry.syncWithRenderComponent) {
 		ImGui::BeginDisabled();
 	}
@@ -674,53 +664,29 @@ void CollisionComponent::ProcessShapeEntryUI(CollisionShapeEntry& entry) {
 
 		if constexpr (std::is_same_v<T, RectangleShape>) {
 			float dims[2] = { s.width, s.height };
-			ImGui::Text("  Size");
-			ImGui::SameLine();
-			if (ImGui::InputFloat2("##CollisionRectSize", dims, "%.3f m")) {
+			EditorField::InputFloat2Scene(parent, "  Size", "##RectSize", dims, [&] {
 				s.width = std::max(0.01f, dims[0]);
 				s.height = std::max(0.01f, dims[1]);
 				TransformComponent* tc = parent->GetComponent<TransformComponent>();
-				s.center = tc ? tc->GetWorldPosition() : GetCenter(entry);
-				SetShape(entry, s);
-			}
-			if (ImGui::IsItemActivated()) {
-				EditorManager::getInstance().BeginEdit({ parent });
-			}
-			if (ImGui::IsItemDeactivatedAfterEdit()) {
-				EditorManager::getInstance().EndEdit({ parent });
-			}
+				s.center = tc ? tc->GetWorldPosition() : GetCenter();
+				SetShape(s);
+				}, "%.3f m");
 		}
 		else if constexpr (std::is_same_v<T, CircleShape>) {
 			auto updateCenter = [&]() {
 				TransformComponent* tc = parent->GetComponent<TransformComponent>();
-				s.center = tc ? tc->GetWorldPosition() : GetCenter(entry);
+				s.center = tc ? tc->GetWorldPosition() : GetCenter();
 				};
 
 			float r = s.radius;
-			ImGui::Text("  Radius");
-			ImGui::SameLine();
-			if (ImGui::InputFloat("##CollisionCircleRadius", &r, 0.0f, 0.0f, "%.3f m")) {
-				s.radius = std::max(0.01f, r); updateCenter(); SetShape(entry, s);
-			}
-			if (ImGui::IsItemActivated()) {
-				EditorManager::getInstance().BeginEdit({ parent });
-			}
-			if (ImGui::IsItemDeactivatedAfterEdit()) {
-				EditorManager::getInstance().EndEdit({ parent });
-			}
+			EditorField::InputFloatScene(parent, "  Radius", "##CircleRadius", &r, [&] {
+				s.radius = std::max(0.01f, r); updateCenter(); SetShape(s);
+				}, "%.3f m");
 
 			int seg = s.segments;
-			ImGui::Text("  Segments");
-			ImGui::SameLine();
-			if (ImGui::InputInt("##CollisionCircleSeg", &seg)) {
-				s.segments = std::max(3, seg); updateCenter(); SetShape(entry, s);
-			}
-			if (ImGui::IsItemActivated()) {
-				EditorManager::getInstance().BeginEdit({ parent });
-			}
-			if (ImGui::IsItemDeactivatedAfterEdit()) {
-				EditorManager::getInstance().EndEdit({ parent });
-			}
+			EditorField::InputIntScene(parent, "  Segments", "##CircleSeg", &seg, [&] {
+				s.segments = std::max(3, seg); updateCenter(); SetShape(s);
+				});
 		}
 		else if constexpr (std::is_same_v<T, PolygonShape>) {
 			if (!entry.isAddVertex) {

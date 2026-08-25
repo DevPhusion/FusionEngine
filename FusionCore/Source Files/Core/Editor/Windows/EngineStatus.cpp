@@ -2,6 +2,7 @@
 #include "../../../../Header Files/Core/Rendering/Renderer.h"
 #include "../../../../Header Files/Core/Files/FileDialog.h"
 #include "../../../../Header Files/Core/Editor/HeadlessMonitor.h"
+#include "../../../../Header Files/Core/Editor/EditorField.h"
 #include <filesystem>
 
 namespace {
@@ -115,28 +116,6 @@ namespace {
 		size_t end = s.find_last_not_of(" \t");
 		if (start == std::string::npos) return "";
 		return s.substr(start, end - start + 1);
-	}
-
-	void DrawFloatSetting(const char* label, float* value, float step = 0.0f, const char* fmt = "%.5f") {
-		ImGui::PushID(label);
-		ImGui::Text("%s", label);
-		ImGui::SameLine(220.0f);
-		ImGui::SetNextItemWidth(160.0f);
-		if (ImGui::InputFloat("##val", value, 0.0f, 0.0f, fmt)) {
-			EngineManager::getInstance().EngineChangeEvent();
-		}
-		ImGui::PopID();
-	}
-
-	void DrawIntSetting(const char* label, int* value, int step = 1) {
-		ImGui::PushID(label);
-		ImGui::Text("%s", label);
-		ImGui::SameLine(220.0f);
-		ImGui::SetNextItemWidth(160.0f);
-		if (ImGui::InputInt("##val", value, 0, 0)) {
-			EngineManager::getInstance().EngineChangeEvent();
-		}
-		ImGui::PopID();
 	}
 }
 
@@ -349,17 +328,9 @@ void EngineStatus::ProcessSettingsPopup() {
 
 		ImGui::SeparatorText("General");
 
-		ImGui::Text("Draw background grid: ");
-		ImGui::SameLine();
-		if (ImGui::Checkbox("##Draw background grid", &settings.drawBackgroundGrid)) {
-			EngineManager::getInstance().EngineChangeEvent();
-		}
+		EditorField::CheckboxEngine("Draw background grid: ", "##Draw background grid", &settings.drawBackgroundGrid);
 
-		ImGui::Text("Background color: ");
-		ImGui::SameLine();
-		if (ImGui::ColorEdit4("##Background color", &settings.backgroundColor.x)) {
-			EngineManager::getInstance().EngineChangeEvent();
-		}
+		EditorField::ColorEdit4Engine("Background color: ", "##Background color", &settings.backgroundColor.x);
 
 		ImGui::Text("Main scene: ");
 		ImGui::SameLine();
@@ -384,98 +355,50 @@ void EngineStatus::ProcessSettingsPopup() {
 			}
 		}
 
-		ImGui::Text("Game resolution: ");                                  
-		ImGui::SameLine();                                                  
-		{                                                                    
-			int res[2] = {                                                  
-				(int)EngineManager::getInstance().resolutionWidth,          
-				(int)EngineManager::getInstance().resolutionHeight         
-			};                                                               
-			ImGui::SetNextItemWidth(160.0f);                                
-			if (ImGui::InputInt2("##Game resolution", res)) {              
-				EngineManager::getInstance().SetGameResolution(            
-					(float)std::max(1, res[0]),                             
-					(float)std::max(1, res[1]));    
+		ImGui::Text("Game resolution: ");
+		ImGui::SameLine();
+		{
+			int res[2] = {
+				(int)EngineManager::getInstance().resolutionWidth,
+				(int)EngineManager::getInstance().resolutionHeight
+			};
+			ImGui::SetNextItemWidth(160.0f);
+			if (ImGui::InputInt2("##Game resolution", res)) {
+				EngineManager::getInstance().SetGameResolution(
+					(float)std::max(1, res[0]),
+					(float)std::max(1, res[1]));
 				EngineManager::getInstance().EngineChangeEvent();
-			}                                                                
+			}
 		}
 
 		ImGui::Spacing();
 		ImGui::SeparatorText("Debug");
 
-		ImGui::Text("Draw object wire frame: ");
-		ImGui::SameLine();
-		if (ImGui::Checkbox("##Draw object wire frame", &settings.drawObjectWireframe)) {
-			EngineManager::getInstance().EngineChangeEvent();
-		}
-
-		ImGui::Text("Draw broad phase bounding area: ");
-		ImGui::SameLine();
-		if (ImGui::Checkbox("##Draw broad phase bounding area", &settings.drawBroadPhaseBounds)) {
-			EngineManager::getInstance().EngineChangeEvent();
-		}
-
-		ImGui::Text("Draw collision shapes: ");
-		ImGui::SameLine();
-		if (ImGui::Checkbox("##Draw collision shapes", &settings.drawCollisionShapes)) {
-			EngineManager::getInstance().EngineChangeEvent();
-		}
-
-		ImGui::Text("Draw collision normals: ");
-		ImGui::SameLine();
-		if (ImGui::Checkbox("##Draw collision normals", &settings.drawCollisionNormals)) {
-			EngineManager::getInstance().EngineChangeEvent();
-		}
-
-		ImGui::Text("Draw contact points: ");
-		ImGui::SameLine();
-		if (ImGui::Checkbox("##Draw contact points", &settings.drawContactPoints)) {
-			EngineManager::getInstance().EngineChangeEvent();
-		}
-
-		ImGui::Text("Draw soft body point masses: ");
-		ImGui::SameLine();
-		if (ImGui::Checkbox("##Draw soft body point masses", &settings.drawSoftBodyPointMasses)) {
-			EngineManager::getInstance().EngineChangeEvent();
-		}
-
-		ImGui::Text("Draw soft body springs: ");
-		ImGui::SameLine();
-		if (ImGui::Checkbox("##Draw soft body springs", &settings.drawSoftBodySprings)) {
-			EngineManager::getInstance().EngineChangeEvent();
-		}
-
-		ImGui::Text("Draw virtual soft body proxies: ");
-		ImGui::SameLine();
-		if (ImGui::Checkbox("##Draw virtual soft body proxies", &settings.drawVirtualSoftBodyProxies)) {
-			EngineManager::getInstance().EngineChangeEvent();
-		}
-
-		ImGui::Text("Draw fluids as particles: ");
-		ImGui::SameLine();
-		if (ImGui::Checkbox("##Draw fluids as particles", &settings.drawFluidsAsParticles)) {
-			EngineManager::getInstance().EngineChangeEvent();
-		}
+		EditorField::CheckboxEngine("Draw object wire frame: ", "##Draw object wire frame", &settings.drawObjectWireframe);
+		EditorField::CheckboxEngine("Draw broad phase bounding area: ", "##Draw broad phase bounding area", &settings.drawBroadPhaseBounds);
+		EditorField::CheckboxEngine("Draw collision shapes: ", "##Draw collision shapes", &settings.drawCollisionShapes);
+		EditorField::CheckboxEngine("Draw collision normals: ", "##Draw collision normals", &settings.drawCollisionNormals);
+		EditorField::CheckboxEngine("Draw contact points: ", "##Draw contact points", &settings.drawContactPoints);
+		EditorField::CheckboxEngine("Draw soft body point masses: ", "##Draw soft body point masses", &settings.drawSoftBodyPointMasses);
+		EditorField::CheckboxEngine("Draw soft body springs: ", "##Draw soft body springs", &settings.drawSoftBodySprings);
+		EditorField::CheckboxEngine("Draw virtual soft body proxies: ", "##Draw virtual soft body proxies", &settings.drawVirtualSoftBodyProxies);
+		EditorField::CheckboxEngine("Draw fluids as particles: ", "##Draw fluids as particles", &settings.drawFluidsAsParticles);
 
 		ImGui::BeginDisabled(!settings.drawFluidsAsParticles);
 		ImGui::Indent();
+
 		ImGui::Text("Fluid heatmap: ");
 		ImGui::SameLine();
 		{
 			const char* heatmapLabels[] = { "None", "Velocity", "Density" };
 			int current = static_cast<int>(settings.fluidHeatmapMode);
 			ImGui::SetNextItemWidth(140.0f);
-			if (ImGui::Combo("##Fluid heatmap", &current, heatmapLabels, IM_ARRAYSIZE(heatmapLabels))) {
+			if (EditorField::ComboEngine(nullptr, "##Fluid heatmap", &current, heatmapLabels, IM_ARRAYSIZE(heatmapLabels))) {
 				settings.fluidHeatmapMode = static_cast<FluidHeatmapMode>(current);
-				EngineManager::getInstance().EngineChangeEvent();
 			}
 		}
 
-		ImGui::Text("Draw velocity vector field: ");
-		ImGui::SameLine();
-		if (ImGui::Checkbox("##Draw velocity vector field", &settings.drawFluidsVelocityField)) {
-			EngineManager::getInstance().EngineChangeEvent();
-		}
+		EditorField::CheckboxEngine("Draw velocity vector field: ", "##Draw velocity vector field", &settings.drawFluidsVelocityField);
 
 		ImGui::Unindent();
 		ImGui::EndDisabled();
@@ -524,54 +447,56 @@ void EngineStatus::ProcessExportPopup() {
 
 		ImGui::Dummy(ImVec2(0, 6));
 
-		char nameBuf[128];
-		strncpy_s(nameBuf, sizeof(nameBuf), config.name.c_str(), _TRUNCATE);
-		ImGui::Text("Name");
-		ImGui::SetNextItemWidth(320.0f);
-		if (ImGui::InputText("##ExportName", nameBuf, IM_ARRAYSIZE(nameBuf))) {
-			config.name = nameBuf;
-			EngineManager::getInstance().EngineChangeEvent();
-		}
-
-		char versionBuf[32];
-		strncpy_s(versionBuf, sizeof(versionBuf), config.version.c_str(), _TRUNCATE);
-		ImGui::Text("Version");
-		ImGui::SetNextItemWidth(160.0f);
-		if (ImGui::InputText("##ExportVersion", versionBuf, IM_ARRAYSIZE(versionBuf))) {
-			config.version = versionBuf;
-			EngineManager::getInstance().EngineChangeEvent();
-		}
-
-		char iconBuf[256];
-		strncpy_s(iconBuf, sizeof(iconBuf), config.iconPath.c_str(), _TRUNCATE);
-		ImGui::Text("Icon");
-		ImGui::SetNextItemWidth(280.0f);
-		if (ImGui::InputText("##ExportIcon", iconBuf, IM_ARRAYSIZE(iconBuf))) {
-			config.iconPath = iconBuf;
-			EngineManager::getInstance().EngineChangeEvent();
-		}
-		ImGui::SameLine();
-		if (ImGui::Button("Browse##Icon")) {
-			auto opts = FileDialogOptions::ForExtension("Image", "png", "Choose Icon");
-			if (auto path = FileDialog::ShowOpenDialog(opts)) {
-				config.iconPath = *path;
-				EngineManager::getInstance().EngineChangeEvent();
+		{
+			char nameBuf[128];
+			strncpy_s(nameBuf, sizeof(nameBuf), config.name.c_str(), _TRUNCATE);
+			ImGui::Text("Name");
+			ImGui::SetNextItemWidth(320.0f);
+			if (EditorField::InputTextEngine(nullptr, "##ExportName", nameBuf, IM_ARRAYSIZE(nameBuf))) {
+				config.name = nameBuf;
 			}
 		}
 
-		char authorBuf[128];
-		strncpy_s(authorBuf, sizeof(authorBuf), config.author.c_str(), _TRUNCATE);
-		ImGui::Text("Author");
-		ImGui::SetNextItemWidth(280.0f);
-		if (ImGui::InputText("##ExportAuthor", authorBuf, IM_ARRAYSIZE(authorBuf))) {
-			config.author = authorBuf;
-			EngineManager::getInstance().EngineChangeEvent();
+		{
+			char versionBuf[32];
+			strncpy_s(versionBuf, sizeof(versionBuf), config.version.c_str(), _TRUNCATE);
+			ImGui::Text("Version");
+			ImGui::SetNextItemWidth(160.0f);
+			if (EditorField::InputTextEngine(nullptr, "##ExportVersion", versionBuf, IM_ARRAYSIZE(versionBuf))) {
+				config.version = versionBuf;
+			}
+		}
+
+		{
+			char iconBuf[256];
+			strncpy_s(iconBuf, sizeof(iconBuf), config.iconPath.c_str(), _TRUNCATE);
+			ImGui::Text("Icon");
+			ImGui::SetNextItemWidth(280.0f);
+			if (EditorField::InputTextEngine(nullptr, "##ExportIcon", iconBuf, IM_ARRAYSIZE(iconBuf))) {
+				config.iconPath = iconBuf;
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Browse##Icon")) {
+				auto opts = FileDialogOptions::ForExtension("Image", "png", "Choose Icon");
+				if (auto path = FileDialog::ShowOpenDialog(opts)) {
+					config.iconPath = *path;
+					EngineManager::getInstance().EngineChangeEvent();
+				}
+			}
+		}
+
+		{
+			char authorBuf[128];
+			strncpy_s(authorBuf, sizeof(authorBuf), config.author.c_str(), _TRUNCATE);
+			ImGui::Text("Author");
+			ImGui::SetNextItemWidth(280.0f);
+			if (EditorField::InputTextEngine(nullptr, "##ExportAuthor", authorBuf, IM_ARRAYSIZE(authorBuf))) {
+				config.author = authorBuf;
+			}
 		}
 
 		ImGui::Dummy(ImVec2(0, 6));
-		if (ImGui::Checkbox("Auto zip export", &config.autoZipExport)) {
-			EngineManager::getInstance().EngineChangeEvent();
-		}
+		EditorField::CheckboxEngine("Auto zip export", "##AutoZipExport", &config.autoZipExport);
 
 		if (!exportErrorMessage.empty()) {
 			ImGui::Dummy(ImVec2(0, 6));
@@ -770,24 +695,23 @@ void EngineStatus::ProcessTrainSettingsPopup() {
 
 		ImGui::Text("Algorithm");
 		ImGui::SetNextItemWidth(200.0f);
-		if (ImGui::Combo("##Algo", &algoIndex, algos, IM_ARRAYSIZE(algos))) {
+		if (EditorField::ComboEngine(nullptr, "##Algo", &algoIndex, algos, IM_ARRAYSIZE(algos))) {
 			cfg.algorithm = algos[algoIndex];
-			EngineManager::getInstance().EngineChangeEvent();
 		}
 
 		ImGui::Text("Policy");
 		ImGui::SetNextItemWidth(200.0f);
-		if (ImGui::Combo("##Policy", &policyIndex, policies, IM_ARRAYSIZE(policies))) {
+		if (EditorField::ComboEngine(nullptr, "##Policy", &policyIndex, policies, IM_ARRAYSIZE(policies))) {
 			cfg.policy = policies[policyIndex];
-			EngineManager::getInstance().EngineChangeEvent();
 		}
 
 		ImGui::Text("Total timesteps");
 		ImGui::SetNextItemWidth(200.0f);
-		int steps = (int)cfg.totalTimesteps;
-		if (ImGui::InputInt("##Steps", &steps, 1000, 10000)) {
-			cfg.totalTimesteps = std::max(1, steps);
-			EngineManager::getInstance().EngineChangeEvent();
+		{
+			int steps = (int)cfg.totalTimesteps;
+			if (EditorField::InputIntEngine(nullptr, "##Steps", &steps)) {
+				cfg.totalTimesteps = std::max(1, steps);
+			}
 		}
 
 		ImGui::Dummy(ImVec2(0, 8));
@@ -807,9 +731,8 @@ void EngineStatus::ProcessTrainSettingsPopup() {
 #endif
 
 			ImGui::SetNextItemWidth(200.0f);
-			if (ImGui::InputText("##ModelName", nameBuf, IM_ARRAYSIZE(nameBuf))) {
+			if (EditorField::InputTextEngine(nullptr, "##ModelName", nameBuf, IM_ARRAYSIZE(nameBuf))) {
 				cfg.modelName = nameBuf;
-				EngineManager::getInstance().EngineChangeEvent();
 			}
 
 			ImGui::SameLine(0.0f, 4.0f);
@@ -905,13 +828,10 @@ void EngineStatus::ProcessTrainSettingsPopup() {
 		ImGui::Text("Shard interval (steps)");
 		ImGui::SameLine(220.0f);
 		ImGui::SetNextItemWidth(160.0f);
-
 		{
 			int interval = cfg.shardIntervalSteps;
-
-			if (ImGui::InputInt("##ShardInterval", &interval, 1000, 10000)) {
+			if (EditorField::InputIntEngine(nullptr, "##ShardInterval", &interval)) {
 				cfg.shardIntervalSteps = std::max(0, interval);
-				EngineManager::getInstance().EngineChangeEvent();
 			}
 		}
 
@@ -1037,62 +957,326 @@ void EngineStatus::ProcessAdvancedTrainSettingsPopup() {
 
 		if (cfg.algorithm == "PPO") {
 			auto& s = cfg.ppoSettings;
-			DrawFloatSetting("Learning rate", &s.learningRate, 0.0001f);
-			DrawIntSetting("N steps", &s.nSteps, 64);
-			DrawIntSetting("Batch size", &s.batchSize, 8);
-			DrawIntSetting("N epochs", &s.nEpochs, 1);
-			DrawFloatSetting("Gamma", &s.gamma, 0.001f, "%.4f");
-			DrawFloatSetting("GAE lambda", &s.gaeLambda, 0.001f, "%.4f");
-			DrawFloatSetting("Clip range", &s.clipRange, 0.01f, "%.3f");
-			DrawFloatSetting("Entropy coef", &s.entCoef, 0.001f, "%.4f");
-			DrawFloatSetting("Value fn coef", &s.vfCoef, 0.01f, "%.3f");
-			DrawFloatSetting("Max grad norm", &s.maxGradNorm, 0.01f, "%.3f");
+
+			ImGui::PushID("Learning rate");
+			ImGui::Text("Learning rate");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.learningRate, "%.5f");
+			ImGui::PopID();
+
+			ImGui::PushID("N steps");
+			ImGui::Text("N steps");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputIntEngine(nullptr, "##val", &s.nSteps);
+			ImGui::PopID();
+
+			ImGui::PushID("Batch size");
+			ImGui::Text("Batch size");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputIntEngine(nullptr, "##val", &s.batchSize);
+			ImGui::PopID();
+
+			ImGui::PushID("N epochs");
+			ImGui::Text("N epochs");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputIntEngine(nullptr, "##val", &s.nEpochs);
+			ImGui::PopID();
+
+			ImGui::PushID("Gamma");
+			ImGui::Text("Gamma");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.gamma, "%.4f");
+			ImGui::PopID();
+
+			ImGui::PushID("GAE lambda");
+			ImGui::Text("GAE lambda");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.gaeLambda, "%.4f");
+			ImGui::PopID();
+
+			ImGui::PushID("Clip range");
+			ImGui::Text("Clip range");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.clipRange, "%.3f");
+			ImGui::PopID();
+
+			ImGui::PushID("Entropy coef");
+			ImGui::Text("Entropy coef");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.entCoef, "%.4f");
+			ImGui::PopID();
+
+			ImGui::PushID("Value fn coef");
+			ImGui::Text("Value fn coef");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.vfCoef, "%.3f");
+			ImGui::PopID();
+
+			ImGui::PushID("Max grad norm");
+			ImGui::Text("Max grad norm");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.maxGradNorm, "%.3f");
+			ImGui::PopID();
 		}
 		else if (cfg.algorithm == "A2C") {
 			auto& s = cfg.a2cSettings;
-			DrawFloatSetting("Learning rate", &s.learningRate, 0.0001f);
-			DrawIntSetting("N steps", &s.nSteps, 1);
-			DrawFloatSetting("Gamma", &s.gamma, 0.001f, "%.4f");
-			DrawFloatSetting("GAE lambda", &s.gaeLambda, 0.001f, "%.4f");
-			DrawFloatSetting("Entropy coef", &s.entCoef, 0.001f, "%.4f");
-			DrawFloatSetting("Value fn coef", &s.vfCoef, 0.01f, "%.3f");
-			DrawFloatSetting("Max grad norm", &s.maxGradNorm, 0.01f, "%.3f");
+
+			ImGui::PushID("Learning rate");
+			ImGui::Text("Learning rate");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.learningRate, "%.5f");
+			ImGui::PopID();
+
+			ImGui::PushID("N steps");
+			ImGui::Text("N steps");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputIntEngine(nullptr, "##val", &s.nSteps);
+			ImGui::PopID();
+
+			ImGui::PushID("Gamma");
+			ImGui::Text("Gamma");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.gamma, "%.4f");
+			ImGui::PopID();
+
+			ImGui::PushID("GAE lambda");
+			ImGui::Text("GAE lambda");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.gaeLambda, "%.4f");
+			ImGui::PopID();
+
+			ImGui::PushID("Entropy coef");
+			ImGui::Text("Entropy coef");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.entCoef, "%.4f");
+			ImGui::PopID();
+
+			ImGui::PushID("Value fn coef");
+			ImGui::Text("Value fn coef");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.vfCoef, "%.3f");
+			ImGui::PopID();
+
+			ImGui::PushID("Max grad norm");
+			ImGui::Text("Max grad norm");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.maxGradNorm, "%.3f");
+			ImGui::PopID();
 		}
 		else if (cfg.algorithm == "SAC") {
 			auto& s = cfg.sacSettings;
-			DrawFloatSetting("Learning rate", &s.learningRate, 0.0001f);
-			DrawIntSetting("Buffer size", &s.bufferSize, 10000);
-			DrawIntSetting("Learning starts", &s.learningStarts, 100);
-			DrawIntSetting("Batch size", &s.batchSize, 16);
-			DrawFloatSetting("Tau", &s.tau, 0.001f, "%.4f");
-			DrawFloatSetting("Gamma", &s.gamma, 0.001f, "%.4f");
-			DrawIntSetting("Train freq", &s.trainFreq, 1);
-			DrawIntSetting("Gradient steps", &s.gradientSteps, 1);
+
+			ImGui::PushID("Learning rate");
+			ImGui::Text("Learning rate");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.learningRate, "%.5f");
+			ImGui::PopID();
+
+			ImGui::PushID("Buffer size");
+			ImGui::Text("Buffer size");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputIntEngine(nullptr, "##val", &s.bufferSize);
+			ImGui::PopID();
+
+			ImGui::PushID("Learning starts");
+			ImGui::Text("Learning starts");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputIntEngine(nullptr, "##val", &s.learningStarts);
+			ImGui::PopID();
+
+			ImGui::PushID("Batch size");
+			ImGui::Text("Batch size");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputIntEngine(nullptr, "##val", &s.batchSize);
+			ImGui::PopID();
+
+			ImGui::PushID("Tau");
+			ImGui::Text("Tau");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.tau, "%.4f");
+			ImGui::PopID();
+
+			ImGui::PushID("Gamma");
+			ImGui::Text("Gamma");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.gamma, "%.4f");
+			ImGui::PopID();
+
+			ImGui::PushID("Train freq");
+			ImGui::Text("Train freq");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputIntEngine(nullptr, "##val", &s.trainFreq);
+			ImGui::PopID();
+
+			ImGui::PushID("Gradient steps");
+			ImGui::Text("Gradient steps");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputIntEngine(nullptr, "##val", &s.gradientSteps);
+			ImGui::PopID();
 		}
 		else if (cfg.algorithm == "DDPG") {
 			auto& s = cfg.ddpgSettings;
-			DrawFloatSetting("Learning rate", &s.learningRate, 0.0001f);
-			DrawIntSetting("Buffer size", &s.bufferSize, 10000);
-			DrawIntSetting("Learning starts", &s.learningStarts, 100);
-			DrawIntSetting("Batch size", &s.batchSize, 16);
-			DrawFloatSetting("Tau", &s.tau, 0.001f, "%.4f");
-			DrawFloatSetting("Gamma", &s.gamma, 0.001f, "%.4f");
-			DrawIntSetting("Train freq", &s.trainFreq, 1);
-			DrawIntSetting("Gradient steps", &s.gradientSteps, 1);
+
+			ImGui::PushID("Learning rate");
+			ImGui::Text("Learning rate");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.learningRate, "%.5f");
+			ImGui::PopID();
+
+			ImGui::PushID("Buffer size");
+			ImGui::Text("Buffer size");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputIntEngine(nullptr, "##val", &s.bufferSize);
+			ImGui::PopID();
+
+			ImGui::PushID("Learning starts");
+			ImGui::Text("Learning starts");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputIntEngine(nullptr, "##val", &s.learningStarts);
+			ImGui::PopID();
+
+			ImGui::PushID("Batch size");
+			ImGui::Text("Batch size");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputIntEngine(nullptr, "##val", &s.batchSize);
+			ImGui::PopID();
+
+			ImGui::PushID("Tau");
+			ImGui::Text("Tau");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.tau, "%.4f");
+			ImGui::PopID();
+
+			ImGui::PushID("Gamma");
+			ImGui::Text("Gamma");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.gamma, "%.4f");
+			ImGui::PopID();
+
+			ImGui::PushID("Train freq");
+			ImGui::Text("Train freq");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputIntEngine(nullptr, "##val", &s.trainFreq);
+			ImGui::PopID();
+
+			ImGui::PushID("Gradient steps");
+			ImGui::Text("Gradient steps");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputIntEngine(nullptr, "##val", &s.gradientSteps);
+			ImGui::PopID();
 		}
 		else if (cfg.algorithm == "TD3") {
 			auto& s = cfg.td3Settings;
-			DrawFloatSetting("Learning rate", &s.learningRate, 0.0001f);
-			DrawIntSetting("Buffer size", &s.bufferSize, 10000);
-			DrawIntSetting("Learning starts", &s.learningStarts, 100);
-			DrawIntSetting("Batch size", &s.batchSize, 16);
-			DrawFloatSetting("Tau", &s.tau, 0.001f, "%.4f");
-			DrawFloatSetting("Gamma", &s.gamma, 0.001f, "%.4f");
-			DrawIntSetting("Train freq", &s.trainFreq, 1);
-			DrawIntSetting("Gradient steps", &s.gradientSteps, 1);
-			DrawIntSetting("Policy delay", &s.policyDelay, 1);
-			DrawFloatSetting("Target policy noise", &s.targetPolicyNoise, 0.01f, "%.3f");
-			DrawFloatSetting("Target noise clip", &s.targetNoiseClip, 0.01f, "%.3f");
+
+			ImGui::PushID("Learning rate");
+			ImGui::Text("Learning rate");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.learningRate, "%.5f");
+			ImGui::PopID();
+
+			ImGui::PushID("Buffer size");
+			ImGui::Text("Buffer size");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputIntEngine(nullptr, "##val", &s.bufferSize);
+			ImGui::PopID();
+
+			ImGui::PushID("Learning starts");
+			ImGui::Text("Learning starts");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputIntEngine(nullptr, "##val", &s.learningStarts);
+			ImGui::PopID();
+
+			ImGui::PushID("Batch size");
+			ImGui::Text("Batch size");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputIntEngine(nullptr, "##val", &s.batchSize);
+			ImGui::PopID();
+
+			ImGui::PushID("Tau");
+			ImGui::Text("Tau");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.tau, "%.4f");
+			ImGui::PopID();
+
+			ImGui::PushID("Gamma");
+			ImGui::Text("Gamma");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.gamma, "%.4f");
+			ImGui::PopID();
+
+			ImGui::PushID("Train freq");
+			ImGui::Text("Train freq");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputIntEngine(nullptr, "##val", &s.trainFreq);
+			ImGui::PopID();
+
+			ImGui::PushID("Gradient steps");
+			ImGui::Text("Gradient steps");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputIntEngine(nullptr, "##val", &s.gradientSteps);
+			ImGui::PopID();
+
+			ImGui::PushID("Policy delay");
+			ImGui::Text("Policy delay");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputIntEngine(nullptr, "##val", &s.policyDelay);
+			ImGui::PopID();
+
+			ImGui::PushID("Target policy noise");
+			ImGui::Text("Target policy noise");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.targetPolicyNoise, "%.3f");
+			ImGui::PopID();
+
+			ImGui::PushID("Target noise clip");
+			ImGui::Text("Target noise clip");
+			ImGui::SameLine(220.0f);
+			ImGui::SetNextItemWidth(160.0f);
+			EditorField::InputFloatEngine(nullptr, "##val", &s.targetNoiseClip, "%.3f");
+			ImGui::PopID();
 		}
 
 		ImGui::Dummy(ImVec2(0, 10));

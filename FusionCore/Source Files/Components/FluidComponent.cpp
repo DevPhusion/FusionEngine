@@ -1,5 +1,6 @@
 #include "../../Header Files/Components/FluidComponent.h"
 #include "../../Header Files/Core/Physics/PhysicsEngine.h"
+#include "../../Header Files/Core/Editor/EditorField.h"
 
 FluidComponent::FluidComponent(Object* parent) : ComponentBase<FluidComponent>(parent) {
 	Name = "Fluid Component";
@@ -195,192 +196,81 @@ void FluidComponent::SeedParticles() {
 
 void FluidComponent::ProcessInspectorUI() {
 	if (ImGui::TreeNodeEx("Visuals", ImGuiTreeNodeFlags_DefaultOpen)) {
-		ImGui::Text("Color");
-		ImGui::SameLine();
 		float displayColor[4] = { color.x, color.y, color.z, color.a };
-		if (ImGui::ColorEdit4("##Color", displayColor)) {
+		EditorField::ColorEdit4Scene(parent, "Color", "##Color", displayColor, [&] {
 			this->color = glm::vec4(displayColor[0], displayColor[1], displayColor[2], displayColor[3]);
 			EngineManager::getInstance().SceneChangeEvent();
-		}
-		if (ImGui::IsItemActivated()) {
-			EditorManager::getInstance().BeginEdit({ parent });
-		}
-		if (ImGui::IsItemDeactivatedAfterEdit()) {
-			EditorManager::getInstance().EndEdit({ parent });
-		}
+			});
 
-		ImGui::Text("Outline Color");
-		ImGui::SameLine();
 		float displayOutline[4] = { outlineColor.x, outlineColor.y, outlineColor.z, outlineColor.a };
-		if (ImGui::ColorEdit4("##OutlineColor", displayOutline)) {
+		EditorField::ColorEdit4Scene(parent, "Outline Color", "##OutlineColor", displayOutline, [&] {
 			this->outlineColor = glm::vec4(displayOutline[0], displayOutline[1], displayOutline[2], displayOutline[3]);
 			EngineManager::getInstance().SceneChangeEvent();
-		}
-		if (ImGui::IsItemActivated()) {
-			EditorManager::getInstance().BeginEdit({ parent });
-		}
-		if (ImGui::IsItemDeactivatedAfterEdit()) {
-			EditorManager::getInstance().EndEdit({ parent });
-		}
+			});
 
-		ImGui::Text("Particle Radius");
-		ImGui::SameLine();
-		if (ImGui::InputFloat("##ParticleRadius", &particleRadius)) {
+		EditorField::InputFloatScene(parent, "Particle Radius", "##ParticleRadius", &particleRadius, [&] {
 			particleRadius = std::max(0.0001f, particleRadius);
 			RebuildDensityQuadGeometry();
 			EngineManager::getInstance().SceneChangeEvent();
-		}
-		if (ImGui::IsItemActivated()) {
-			EditorManager::getInstance().BeginEdit({ parent });
-		}
-		if (ImGui::IsItemDeactivatedAfterEdit()) {
-			EditorManager::getInstance().EndEdit({ parent });
-		}
+			});
 
-		ImGui::Text("Metaball Threshold");
-		ImGui::SameLine();
-		ImGui::InputFloat("##MetaballThreshold", &metaballThreshold);
-		if (ImGui::IsItemActivated()) {
-			EditorManager::getInstance().BeginEdit({ parent });
-		}
-		if (ImGui::IsItemDeactivatedAfterEdit()) {
-			EditorManager::getInstance().EndEdit({ parent });
-		}
+		EditorField::InputFloatScene(parent, "Metaball Threshold", "##MetaballThreshold", &metaballThreshold, [] {});
 
 		ImGui::TreePop();
 	}
 
 	if (ImGui::TreeNodeEx("Fluid Properties", ImGuiTreeNodeFlags_DefaultOpen)) {
-		ImGui::Text("Particles Count");
-		ImGui::SameLine();
-		if (ImGui::InputInt("##ParticlesCount", &desiredParticleCount)) {
+		EditorField::InputIntScene(parent, "Particles Count", "##ParticlesCount", &desiredParticleCount, [&] {
 			desiredParticleCount = std::max(1, desiredParticleCount);
 			SeedParticles();
 			ResizeInstanceBuffer();
 			EngineManager::getInstance().SceneChangeEvent();
-		}
-		if (ImGui::IsItemActivated()) {
-			EditorManager::getInstance().BeginEdit({ parent });
-		}
-		if (ImGui::IsItemDeactivatedAfterEdit()) {
-			EditorManager::getInstance().EndEdit({ parent });
-		}
+			});
 
-		ImGui::Text("Collision Radius");
-		ImGui::SameLine();
-		if (ImGui::InputFloat("##CollisionRadius", &collisionRadius)) {
+		EditorField::InputFloatScene(parent, "Collision Radius", "##CollisionRadius", &collisionRadius, [&] {
 			collisionRadius = std::max(0.0001f, collisionRadius);
-			for (int i = 0; i < particles.size(); i++)
-				particles[i]->collisionRadius = collisionRadius;
+			for (int i = 0; i < particles.size(); i++) particles[i]->collisionRadius = collisionRadius;
 			EngineManager::getInstance().SceneChangeEvent();
-		}
-		if (ImGui::IsItemActivated()) {
-			EditorManager::getInstance().BeginEdit({ parent });
-		}
-		if (ImGui::IsItemDeactivatedAfterEdit()) {
-			EditorManager::getInstance().EndEdit({ parent });
-		}
+			});
 
-		ImGui::Text("Smoothing Radius");
-		ImGui::SameLine();
-		if (ImGui::InputFloat("##SmoothingRadius", &smoothingRadius)) {
+		EditorField::InputFloatScene(parent, "Smoothing Radius", "##SmoothingRadius", &smoothingRadius, [&] {
 			smoothingRadius = std::max(0.0001f, smoothingRadius);
-			for (int i = 0; i < particles.size(); i++)
-			{
+			for (int i = 0; i < particles.size(); i++) {
 				particles[i]->smoothingRadius = smoothingRadius;
 				particles[i]->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(smoothingRadius);
 				particles[i]->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(smoothingRadius);
 			}
 			EngineManager::getInstance().SceneChangeEvent();
-		}
-		if (ImGui::IsItemActivated()) {
-			EditorManager::getInstance().BeginEdit({ parent });
-		}
-		if (ImGui::IsItemDeactivatedAfterEdit()) {
-			EditorManager::getInstance().EndEdit({ parent });
-		}
+			});
 
-		ImGui::Text("Epsilon");
-		ImGui::SameLine();
-		if (ImGui::InputFloat("##Epsilon", &epsilon)) {
+		EditorField::InputFloatScene(parent, "Epsilon", "##Epsilon", &epsilon, [&] {
 			epsilon = std::max(0.0001f, epsilon);
-			for (int i = 0; i < particles.size(); i++)
-			{
-				particles[i]->epsilon = epsilon;
-			}
+			for (int i = 0; i < particles.size(); i++) particles[i]->epsilon = epsilon;
 			EngineManager::getInstance().SceneChangeEvent();
-		}
-		if (ImGui::IsItemActivated()) {
-			EditorManager::getInstance().BeginEdit({ parent });
-		}
-		if (ImGui::IsItemDeactivatedAfterEdit()) {
-			EditorManager::getInstance().EndEdit({ parent });
-		}
+			});
 
-		ImGui::Text("Particle Mass");
-		ImGui::SameLine();
-		if (ImGui::InputFloat("##ParticleMass", &particleMass, 0.0f, 0.0f, "%.3f kg")) {
-			for (int i = 0; i < particles.size(); i++)
-			{
-				if (particleMass <= 0) particleMass = 0.01f;
+		EditorField::InputFloatScene(parent, "Particle Mass", "##ParticleMass", &particleMass, [&] {
+			if (particleMass <= 0) particleMass = 0.01f;
+			for (int i = 0; i < particles.size(); i++) {
 				particles[i]->mass = particleMass;
 				particles[i]->invMass = 1.0f / particleMass;
 			}
-		}
-		if (ImGui::IsItemActivated()) {
-			EditorManager::getInstance().BeginEdit({ parent });
-		}
-		if (ImGui::IsItemDeactivatedAfterEdit()) {
-			EditorManager::getInstance().EndEdit({ parent });
-		}
+			}, "%.3f kg");
 
-		ImGui::Text("Density");
-		ImGui::SameLine();
-		if (ImGui::InputFloat("##Density", &restDensity, 0.0f, 0.0f, "%.3f kg/m³")) {
-			for (int i = 0; i < particles.size(); i++)
-			{
-				if (restDensity <= 0) restDensity = 0.01f;
-				particles[i]->restDensity = restDensity;
-			}
-		}
-		if (ImGui::IsItemActivated()) {
-			EditorManager::getInstance().BeginEdit({ parent });
-		}
-		if (ImGui::IsItemDeactivatedAfterEdit()) {
-			EditorManager::getInstance().EndEdit({ parent });
-		}
+		EditorField::InputFloatScene(parent, "Density", "##Density", &restDensity, [&] {
+			if (restDensity <= 0) restDensity = 0.01f;
+			for (int i = 0; i < particles.size(); i++) particles[i]->restDensity = restDensity;
+			}, "%.3f kg/m³");
 
-		ImGui::Text("Viscosity");
-		ImGui::SameLine();
-		if (ImGui::InputFloat("##Viscosity", &viscosity)) {
-			for (int i = 0; i < particles.size(); i++)
-			{
-				if (viscosity <= 0) viscosity = 0.01f;
-				particles[i]->viscosity = viscosity;
-			}
-		}
-		if (ImGui::IsItemActivated()) {
-			EditorManager::getInstance().BeginEdit({ parent });
-		}
-		if (ImGui::IsItemDeactivatedAfterEdit()) {
-			EditorManager::getInstance().EndEdit({ parent });
-		}
+		EditorField::InputFloatScene(parent, "Viscosity", "##Viscosity", &viscosity, [&] {
+			if (viscosity <= 0) viscosity = 0.01f;
+			for (int i = 0; i < particles.size(); i++) particles[i]->viscosity = viscosity;
+			});
 
-		ImGui::Text("Vorticity Strength");
-		ImGui::SameLine();
-		if (ImGui::InputFloat("##Vorticity Strength", &vorticityStrength)) {
-			for (int i = 0; i < particles.size(); i++)
-			{
-				if (vorticityStrength <= 0) vorticityStrength = 0.0f;
-				particles[i]->vorticityEps = vorticityStrength;
-			}
-		}
-		if (ImGui::IsItemActivated()) {
-			EditorManager::getInstance().BeginEdit({ parent });
-		}
-		if (ImGui::IsItemDeactivatedAfterEdit()) {
-			EditorManager::getInstance().EndEdit({ parent });
-		}
+		EditorField::InputFloatScene(parent, "Vorticity Strength", "##Vorticity Strength", &vorticityStrength, [&] {
+			if (vorticityStrength <= 0) vorticityStrength = 0.0f;
+			for (int i = 0; i < particles.size(); i++) particles[i]->vorticityEps = vorticityStrength;
+			});
 
 		ImGui::TreePop();
 	}

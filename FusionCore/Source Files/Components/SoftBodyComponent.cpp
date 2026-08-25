@@ -1,5 +1,6 @@
 #include "../../Header Files/Components/SoftBodyComponent.h"
 #include "../../Header Files/Core/ObjectManager.h"
+#include "../../Header Files/Core/Editor/EditorField.h"
 
 SoftBodyComponent::SoftBodyComponent(Object* parent) : ComponentBase<SoftBodyComponent>(parent) {
 	Name = "Soft Body Component";
@@ -192,43 +193,24 @@ void SoftBodyComponent::ApplyGasPressure() {
 }
 
 void SoftBodyComponent::ProcessInspectorUI() {
-	ImGui::Text("Mass ");
-	ImGui::SameLine();
 	float mass = 1.0f / inverseMass;
-	if (ImGui::InputFloat("##Mass", &mass, 0.0f, 0.0f, "%.3f kg")) {
+	EditorField::InputFloatScene(parent, "Mass ", "##Mass", &mass, [&] {
 		if (mass <= 0.0f) mass = 1 / inverseMass;
 		else {
 			inverseMass = 1.0f / mass;
 			float unitInvMass = MassAggregate.size() / mass;
-
 			for (int i = 0; i < MassAggregate.size(); i++)
-			{
 				MassAggregate[i]->inverseMass = unitInvMass;
-			}
 		}
-	}
-	if (ImGui::IsItemActivated()) {
-		EditorManager::getInstance().BeginEdit({ parent });
-	}
-	if (ImGui::IsItemDeactivatedAfterEdit()) {
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+		}, "%.3f kg");
 
-	ImGui::Text("Velocity ");
-	ImGui::SameLine();
 	float vel[2] = { CenterPM->velocity.x, CenterPM->velocity.y };
-	if (ImGui::InputFloat2("##Velocity", vel, "%.3f m/s")) {
+	EditorField::InputFloat2Scene(parent, "Velocity ", "##Velocity", vel, [&] {
 		EngineManager::getInstance().SceneChangeEvent();
 		velocity.x = vel[0];
 		velocity.y = vel[1];
 		CenterPM->velocity = velocity;
-	}
-	if (ImGui::IsItemActivated()) {
-		EditorManager::getInstance().BeginEdit({ parent });
-	}
-	if (ImGui::IsItemDeactivatedAfterEdit()) {
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+		}, "%.3f m/s");
 
 	ImGui::Text("Acceleration ");
 	ImGui::SameLine();
@@ -236,69 +218,36 @@ void SoftBodyComponent::ProcessInspectorUI() {
 	float accel[2] = { finalAccel.x, finalAccel.y };
 	ImGui::InputFloat2("##Acceleration", accel, "%.3f m/s", ImGuiInputTextFlags_ReadOnly);
 
-	ImGui::Text("Stiffness ");
-	ImGui::SameLine();
-	if (ImGui::InputFloat("##Stiffness ", &stiffness, 0.0f, 0.0f, "%.3f N/m")) {
+	EditorField::InputFloatScene(parent, "Stiffness ", "##Stiffness ", &stiffness, [&] {
 		float compliance = (stiffness > 0.0f) ? (1.0f / stiffness) : 0.0f;
 		EngineManager::getInstance().SceneChangeEvent();
-		for (int i = 0; i < springs.size(); i++)
-		{
-			springs[i]->compliance = compliance;
-		}
-	}
-	if (ImGui::IsItemActivated()) {
-		EditorManager::getInstance().BeginEdit({ parent });
-	}
-	if (ImGui::IsItemDeactivatedAfterEdit()) {
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+		for (int i = 0; i < springs.size(); i++) springs[i]->compliance = compliance;
+		}, "%.3f N/m");
 
-	ImGui::Text("Damping ");
-	ImGui::SameLine();
-	if (ImGui::InputFloat("##Damping ", &damping, 0.0f, 0.0f, "%.3f Ns/m")) {
+	EditorField::InputFloatScene(parent, "Damping ", "##Damping ", &damping, [&] {
 		EngineManager::getInstance().SceneChangeEvent();
-		for (int i = 0; i < springs.size(); i++)
-		{
-			springs[i]->damping = damping;
-		}
-	}
-	if (ImGui::IsItemActivated()) {
-		EditorManager::getInstance().BeginEdit({ parent });
-	}
-	if (ImGui::IsItemDeactivatedAfterEdit()) {
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+		for (int i = 0; i < springs.size(); i++) springs[i]->damping = damping;
+		}, "%.3f Ns/m");
 
 	ImGui::Separator();
 	bool gasMode = useGasPressure;
-	if (ImGui::Checkbox("Gas Pressure Mode", &gasMode)) {
-		EditorManager::getInstance().BeginEdit({ parent });
+	EditorField::CheckboxScene(parent, nullptr, "Gas Pressure Mode", &gasMode, [&] {
 		useGasPressure = gasMode;
 		EngineManager::getInstance().SceneChangeEvent();
 		RebuildMassAggregate();
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+		});
+
 	if (useGasPressure) {
-		ImGui::Text("Gas Amount");
-		ImGui::SameLine();
-		if (ImGui::InputFloat("##GasAmount", &gasAmount, 0.0f, 0.0f, "%.3f")) {
+		EditorField::InputFloatScene(parent, "Gas Amount", "##GasAmount", &gasAmount, [] {
 			EngineManager::getInstance().SceneChangeEvent();
-		}
-		if (ImGui::IsItemActivated()) {
-			EditorManager::getInstance().BeginEdit({ parent });
-		}
-		if (ImGui::IsItemDeactivatedAfterEdit()) {
-			EditorManager::getInstance().EndEdit({ parent });
-		}
+			});
 	}
 
-	if (ImGui::Button("Reset shape")) {
-		EditorManager::getInstance().BeginEdit({ parent });
+	EditorField::ActionScene(parent, ImGui::Button("Reset shape"), [&] {
 		parent->GetComponent<RenderComponent>()->SetShape(parent->GetComponent<RenderComponent>()->currentShape);
 		parent->GetComponent<TransformComponent>()->SetRotationCenter(parent->GetComponent<RenderComponent>()->GetCenter());
 		RebuildMassAggregate();
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+		});
 }
 
 void SoftBodyComponent::CopyTo(Object* other) {

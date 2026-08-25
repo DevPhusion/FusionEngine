@@ -3,6 +3,7 @@
 #include "../../Header Files/Core/Physics/PhysicsEngine.h"
 #include "../../Header Files/Core/Files/Export/ExportPackageReader.h"
 #include "../../Header Files/Core/Scripting/ScriptManager.h"
+#include "../../Header Files/Components/ScriptComponent.h"
 
 namespace fs = std::filesystem;
 
@@ -411,9 +412,9 @@ void SceneManager::LoadSceneFromFile(const std::string& path) {
 	}
 
 	std::vector<std::string> expansionStack;
-	expansionStack.push_back(virtualPath);   
+	expansionStack.push_back(virtualPath);
 	for (Object* root : rootsToExpand) {
-		ExpandSceneRoot(root, ObjectManager::getInstance().allObjects,
+		PopulateInstanceChildren(root, ObjectManager::getInstance().allObjects,
 			PhysicsEngine::getInstance().registeredPGSConstraints, false, expansionStack);
 	}
 
@@ -437,33 +438,16 @@ void SceneManager::NewScene() {
 Object* SceneManager::AddScene(const std::string& path, Object* parent, std::vector<Object*>& outNewObjects) {
 	EngineManager::getInstance().SceneChangeEvent();
 
-	std::string virtualPath = NormalizeToVirtualPath(path);
-
-	std::unique_ptr<Object> rootObj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
-	rootObj->AddComponent(std::make_unique<EditorRenderComponent>(rootObj.get(), rootObj->shader, "Resources/Images/Scene.png", 0.075f));
-	rootObj->AddComponent(std::make_unique<TransformComponent>(rootObj.get(), rootObj->shader, rootObj->GetComponent<EditorRenderComponent>()->GetCenter()));
-	rootObj->AddComponent(std::make_unique<MouseInteractComponent>(rootObj.get(), false));
-
-	rootObj->name = ObjectManager::getInstance().GenerateUniqueName(std::filesystem::path(virtualPath).stem().string(), nullptr);
-	rootObj->isSceneRoot = true;
-	rootObj->sourceScenePath = virtualPath;
-
-	for (auto& c : rootObj->components)
-		c->Activate();
-
-	Object* rootRaw = rootObj.get();
-
-	rootRaw->addedToScene = true;
-	rootRaw->SetParent(parent);
-	EditorManager::getInstance().RegisterObjectCreated(rootRaw);
+	Object* effectiveParent = ObjectManager::getInstance().ResolveAttachParent(parent);
 
 	size_t newObjectsStartIndex = ObjectManager::getInstance().allObjects.size();
-	ObjectManager::getInstance().allObjects.push_back(std::move(rootObj));
 
 	std::vector<std::string> expansionStack;
-	if (!ExpandSceneRoot(rootRaw, ObjectManager::getInstance().allObjects,
-		PhysicsEngine::getInstance().registeredPGSConstraints, true, expansionStack)) {
-		Console::PrintError("AddScene: failed to expand {}").Format(virtualPath);
+	Object* rootRaw = InstantiateScene(path, effectiveParent, ObjectManager::getInstance().allObjects,
+		PhysicsEngine::getInstance().registeredPGSConstraints, true, expansionStack);
+
+	if (!rootRaw) {
+		Console::PrintError("AddScene: failed to instantiate {}").Format(path);
 	}
 
 	outNewObjects.clear();
@@ -478,21 +462,6 @@ Object* SceneManager::AddScene(const std::string& path, Object* parent, std::vec
 Object* SceneManager::AddScene(const std::string& path, Object* parent) {
 	std::vector<Object*> discard;
 	return AddScene(path, parent, discard);
-}
-
-void SceneManager::RemoveScene(Object* root) {
-	if (!root) return;
-
-	std::vector<Object*> subtree;
-	std::function<void(Object*)> collect = [&](Object* o) {
-		subtree.push_back(o);
-		for (Object* child : o->children) collect(child);
-		};
-	collect(root);
-
-	for (auto it = subtree.rbegin(); it != subtree.rend(); ++it) {
-		ObjectManager::getInstance().RemoveObject(*it);
-	}
 }
 
 bool SceneManager::IsInsideSceneInstance(Object* obj) const {
@@ -617,7 +586,114 @@ bool SceneManager::ParseTopLevelSceneObjects(const std::string& path, std::vecto
 	return true;
 }
 
-bool SceneManager::ExpandSceneRoot(Object* root, std::vector<std::unique_ptr<Object>>& ownerObjects,
+Object* SceneManager::InstantiateScene(const std::string& path, Object* parent,
+	std::vector<std::unique_ptr<Object>>& ownerObjects, std::vector<Constraint*>& ownerConstraints,
+	bool activateNow, std::vector<std::string>& expansionStack) {
+
+	std::string virtualPath = NormalizeToVirtualPath(path);
+
+	for (auto& p : expansionStack) {
+		if (p == virtualPath) {
+			Console::PrintError("InstantiateScene: cyclic scene reference detected, skipping {}").Format(virtualPath);
+			return nullptr;
+		}
+	}
+	expansionStack.push_back(virtualPath);
+
+	std::vector<std::unique_ptr<Object>> loadedObjects;
+	std::vector<Constraint*> loadedConstraints;
+	uint32_t objectCount = 0;
+	if (!ParseTopLevelSceneObjects(virtualPath, loadedObjects, loadedConstraints, objectCount)) {
+		Console::PrintError("InstantiateScene: failed to load {}").Format(virtualPath);
+		expansionStack.pop_back();
+		return nullptr;
+	}
+
+	std::unordered_map<uint64_t, uint64_t> idRemap;
+	for (auto& obj : loadedObjects) {
+		uint64_t oldId = obj->id;
+		uint64_t newId = Object::AllocateID();
+		idRemap[oldId] = newId;
+		obj->id = newId;
+	}
+	for (auto& obj : loadedObjects) {
+		if (obj->parentID != -1) {
+			auto it = idRemap.find(static_cast<uint64_t>(obj->parentID));
+			if (it != idRemap.end())
+				obj->parentID = static_cast<decltype(obj->parentID)>(it->second);
+		}
+		for (auto& c : obj->components) {
+			if (auto* script = dynamic_cast<ScriptComponent*>(c.get()))
+				script->RemapObjectReferences(idRemap);
+		}
+	}
+
+	Object* fileRoot = nullptr;
+	for (auto& obj : loadedObjects) {
+		if (obj->parent == nullptr) {
+			if (fileRoot) {
+				Console::PrintError("InstantiateScene: {} has more than one root object, using the first").Format(virtualPath);
+				continue;
+			}
+			fileRoot = obj.get();
+		}
+	}
+	if (!fileRoot) {
+		Console::PrintError("InstantiateScene: {} has no root object").Format(virtualPath);
+		expansionStack.pop_back();
+		return nullptr;
+	}
+
+	fileRoot->isSceneRoot = true;
+	fileRoot->sourceScenePath = virtualPath;
+	fileRoot->name = ObjectManager::getInstance().GenerateUniqueName(
+		fileRoot->name.empty() ? fs::path(virtualPath).stem().string() : fileRoot->name, nullptr);
+
+	for (auto& obj : loadedObjects) {
+		if (obj.get() == fileRoot) continue;
+		obj->hideInHierarchy = true;
+		if (auto* mic = obj->GetComponent<MouseInteractComponent>())
+			mic->SetEnabled(false);
+	}
+
+	std::vector<Object*> newObjectPtrs;
+	newObjectPtrs.reserve(loadedObjects.size());
+	for (auto& obj : loadedObjects) {
+		newObjectPtrs.push_back(obj.get());
+		ownerObjects.push_back(std::move(obj));
+	}
+	loadedObjects.clear();
+
+	for (Object* obj : newObjectPtrs)
+		for (auto& c : obj->components)
+			c->PostLoad();
+
+	std::vector<Object*> nestedRoots;
+	for (Object* obj : newObjectPtrs) {
+		if (obj != fileRoot && obj->isSceneRoot) nestedRoots.push_back(obj);
+	}
+	for (Object* nestedRoot : nestedRoots) {
+		PopulateInstanceChildren(nestedRoot, ownerObjects, ownerConstraints, activateNow, expansionStack);
+	}
+
+	fileRoot->addedToScene = true;
+	fileRoot->SetParent(parent);
+	EditorManager::getInstance().RegisterObjectCreated(fileRoot);
+
+	if (activateNow) {
+		for (Object* obj : newObjectPtrs)
+			for (auto& c : obj->components)
+				c->Activate();
+	}
+
+	for (Constraint* c : loadedConstraints)
+		ownerConstraints.push_back(c);
+
+	expansionStack.pop_back();
+	return fileRoot;
+}
+
+bool SceneManager::PopulateInstanceChildren(Object* root, std::vector<std::unique_ptr<Object>>& ownerObjects,
 	std::vector<Constraint*>& ownerConstraints, bool activateNow, std::vector<std::string>& expansionStack) {
 
 	if (!root || !root->isSceneRoot || root->sourceScenePath.empty()) return true;
@@ -632,7 +708,7 @@ bool SceneManager::ExpandSceneRoot(Object* root, std::vector<std::unique_ptr<Obj
 
 	for (auto& p : expansionStack) {
 		if (p == root->sourceScenePath) {
-			Console::PrintError("ExpandSceneRoot: cyclic scene reference detected, skipping {}").Format(root->sourceScenePath);
+			Console::PrintError("PopulateInstanceChildren: cyclic scene reference detected, skipping {}").Format(root->sourceScenePath);
 			return false;
 		}
 	}
@@ -642,36 +718,83 @@ bool SceneManager::ExpandSceneRoot(Object* root, std::vector<std::unique_ptr<Obj
 	std::vector<Constraint*> loadedConstraints;
 	uint32_t objectCount = 0;
 	if (!ParseTopLevelSceneObjects(root->sourceScenePath, loadedObjects, loadedConstraints, objectCount)) {
-		Console::PrintError("ExpandSceneRoot: failed to load {}").Format(root->sourceScenePath);
+		Console::PrintError("PopulateInstanceChildren: failed to load {}").Format(root->sourceScenePath);
 		expansionStack.pop_back();
 		return false;
 	}
 
+	std::unordered_map<uint64_t, uint64_t> idRemap;
+	Object* fileRoot = nullptr;
 	for (auto& obj : loadedObjects) {
 		if (obj->parent == nullptr) {
-			obj->SetParent(root);
+			fileRoot = obj.get();
+			idRemap[obj->id] = root->id;
 		}
-		obj->hideInHierarchy = true;
-		if (auto* mic = obj->GetComponent<MouseInteractComponent>()) {
-			mic->SetEnabled(false);
+	}
+	if (!fileRoot) {
+		Console::PrintError("PopulateInstanceChildren: {} has no root object").Format(root->sourceScenePath);
+		expansionStack.pop_back();
+		return false;
+	}
+	for (auto& obj : loadedObjects) {
+		if (obj.get() == fileRoot) continue;
+		uint64_t oldId = obj->id;
+		uint64_t newId = Object::AllocateID();
+		idRemap[oldId] = newId;
+		obj->id = newId;
+	}
+	for (auto& obj : loadedObjects) {
+		if (obj->parentID != -1) {
+			auto it = idRemap.find(static_cast<uint64_t>(obj->parentID));
+			if (it != idRemap.end())
+				obj->parentID = static_cast<decltype(obj->parentID)>(it->second);
+		}
+		if (obj.get() == fileRoot) continue;
+		for (auto& c : obj->components) {
+			if (auto* script = dynamic_cast<ScriptComponent*>(c.get()))
+				script->RemapObjectReferences(idRemap);
 		}
 	}
 
-	for (auto& obj : loadedObjects)
+	std::vector<std::unique_ptr<Object>> childObjects;
+	childObjects.reserve(loadedObjects.size() > 0 ? loadedObjects.size() - 1 : 0);
+	for (auto& obj : loadedObjects) {
+		if (obj.get() == fileRoot) continue;
+		if (obj->parent == fileRoot) obj->parent = nullptr; 
+		childObjects.push_back(std::move(obj));
+	}
+	loadedObjects.clear();
+
+	for (auto& obj : childObjects) {
+		if (obj->parent == nullptr) obj->SetParent(root);
+		obj->hideInHierarchy = true;
+		if (auto* mic = obj->GetComponent<MouseInteractComponent>())
+			mic->SetEnabled(false);
+	}
+
+	std::vector<Object*> newObjectPtrs;
+	newObjectPtrs.reserve(childObjects.size());
+	for (auto& obj : childObjects) {
+		newObjectPtrs.push_back(obj.get());
+		ownerObjects.push_back(std::move(obj));
+	}
+	childObjects.clear();
+
+	for (Object* obj : newObjectPtrs)
 		for (auto& c : obj->components)
 			c->PostLoad();
 
 	std::vector<Object*> nestedRoots;
-	for (auto& obj : loadedObjects) {
-		if (obj->isSceneRoot) nestedRoots.push_back(obj.get());
+	for (Object* obj : newObjectPtrs) {
+		if (obj->isSceneRoot) nestedRoots.push_back(obj);
 	}
 	for (Object* nestedRoot : nestedRoots) {
-		ExpandSceneRoot(nestedRoot, loadedObjects, loadedConstraints, activateNow, expansionStack);
+		PopulateInstanceChildren(nestedRoot, ownerObjects, ownerConstraints, activateNow, expansionStack);
 	}
 
 	if (TransformComponent* rootTransform = root->GetComponent<TransformComponent>()) {
 		glm::vec3 rootWorldPos = rootTransform->GetWorldPosition();
-		for (auto& obj : loadedObjects) {
+		for (Object* obj : newObjectPtrs) {
 			if (obj->parent != root) continue;
 			TransformComponent* childTransform = obj->GetComponent<TransformComponent>();
 			if (!childTransform) continue;
@@ -680,18 +803,13 @@ bool SceneManager::ExpandSceneRoot(Object* root, std::vector<std::unique_ptr<Obj
 	}
 
 	if (activateNow) {
-		for (auto& obj : loadedObjects)
+		for (Object* obj : newObjectPtrs)
 			for (auto& c : obj->components)
 				c->Activate();
 	}
 
-	for (Constraint* c : loadedConstraints) {
+	for (Constraint* c : loadedConstraints)
 		ownerConstraints.push_back(c);
-	}
-
-	for (auto& obj : loadedObjects) {
-		ownerObjects.push_back(std::move(obj));
-	}
 
 	expansionStack.pop_back();
 	return true;
@@ -730,7 +848,7 @@ void SceneManager::RefreshSceneRootInstance(Object* root, std::vector<std::uniqu
 
 	if (oldSubtree.empty()) {
 		std::vector<std::string> expansionStack;
-		ExpandSceneRoot(root, objects, constraints, false, expansionStack);
+		PopulateInstanceChildren(root, objects, constraints, false, expansionStack);
 		return;
 	}
 
@@ -757,7 +875,7 @@ void SceneManager::RefreshSceneRootInstance(Object* root, std::vector<std::uniqu
 		[&](std::unique_ptr<Object>& o) { return oldSet.count(o.get()) != 0; }), objects.end());
 
 	std::vector<std::string> expansionStack;
-	ExpandSceneRoot(root, objects, constraints, false, expansionStack);
+	PopulateInstanceChildren(root, objects, constraints, false, expansionStack);
 }
 
 void SceneManager::RequestLoadScene(const std::string& path) {

@@ -37,6 +37,7 @@ public:
 	void AddFluid(Object* parent = nullptr);
 	Object* AddExistingObject(std::unique_ptr<Object> obj, Object* parent = nullptr);
 	void FlushPendingObjects();
+
 	std::string GenerateUniqueName(const std::string& baseName, Object* exclude = nullptr);
 	Object* FindObjectById(uint64_t id);
 	Object* CopyObject(Object* obj);
@@ -44,6 +45,10 @@ public:
 	void RemoveObjectById(uint64_t id);
 	void QueueRemoveObject(Object* obj);
 	void FlushPendingRemovals();
+
+	Object* GetSceneRoot();
+	Object* ResolveAttachParent(Object* requestedParent);
+	void AttachNewObject(Object* obj, Object* requestedParent);
 
 private:
 	ObjectManager() = default;

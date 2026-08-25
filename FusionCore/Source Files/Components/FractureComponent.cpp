@@ -1,82 +1,35 @@
 #include "../../Header Files/Components/FractureComponent.h"
+#include "../../Header Files/Core/Editor/EditorField.h"
 
 FractureComponent::FractureComponent(Object* parent) : ComponentBase<FractureComponent>(parent) {
 	Name = "Fracture Component";
 }
 
 void FractureComponent::ProcessInspectorUI() {
-	ImGui::Text("Fracturable");
-	ImGui::SameLine();
-	if (ImGui::Checkbox("##Fracturable", &fracturable)) {
+	EditorField::CheckboxScene(parent, "Fracturable", "##Fracturable", &fracturable, [] {
 		EngineManager::getInstance().SceneChangeEvent();
-	}
-	if (ImGui::IsItemActivated()) {
-		EditorManager::getInstance().BeginEdit({ parent });
-	}
-	if (ImGui::IsItemDeactivatedAfterEdit()) {
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+		});
 
-	ImGui::Text("Threshold");
-	ImGui::SameLine();
-	if (ImGui::InputFloat("##Threshold", &impulseThreshold, 0.0f, 0.0f, "%.3f Ns")) {
+	EditorField::InputFloatScene(parent, "Threshold", "##Threshold", &impulseThreshold, [] {
 		EngineManager::getInstance().SceneChangeEvent();
-	}
-	if (ImGui::IsItemActivated()) {
-		EditorManager::getInstance().BeginEdit({ parent });
-	}
-	if (ImGui::IsItemDeactivatedAfterEdit()) {
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+		}, "%.3f Ns");
 
-	ImGui::Text("Shard Count");
-	ImGui::SameLine();
-	if (ImGui::InputInt("##ShardCount", &shardCount)) {
+	EditorField::InputIntScene(parent, "Shard Count", "##ShardCount", &shardCount, [] {
 		EngineManager::getInstance().SceneChangeEvent();
-	}
-	if (ImGui::IsItemActivated()) {
-		EditorManager::getInstance().BeginEdit({ parent });
-	}
-	if (ImGui::IsItemDeactivatedAfterEdit()) {
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+		});
 
-	ImGui::Text("Min Area");
-	ImGui::SameLine();
-	if (ImGui::InputFloat("##MinArea", &minFragmentArea)) {
+	EditorField::InputFloatScene(parent, "Min Area", "##MinArea", &minFragmentArea, [] {
 		EngineManager::getInstance().SceneChangeEvent();
-	}
-	if (ImGui::IsItemActivated()) {
-		EditorManager::getInstance().BeginEdit({ parent });
-	}
-	if (ImGui::IsItemDeactivatedAfterEdit()) {
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+		});
 
-	ImGui::Text("Max Generation");
-	ImGui::SameLine();
-	if (ImGui::InputInt("##MaxGen", &maxFractureGenerations)) {
+	EditorField::InputIntScene(parent, "Max Generation", "##MaxGen", &maxFractureGenerations, [] {
 		EngineManager::getInstance().SceneChangeEvent();
-	}
-	if (ImGui::IsItemActivated()) {
-		EditorManager::getInstance().BeginEdit({ parent });
-	}
-	if (ImGui::IsItemDeactivatedAfterEdit()) {
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+		});
 
 	if (!parent->HasComponent<RigidBodyComponent>()) {
-		ImGui::Text("Density");
-		ImGui::SameLine();
-		if (ImGui::InputFloat("##Density", &restDensity)) {
+		EditorField::InputFloatScene(parent, "Density", "##Density", &restDensity, [] {
 			EngineManager::getInstance().SceneChangeEvent();
-		}
-		if (ImGui::IsItemActivated()) {
-			EditorManager::getInstance().BeginEdit({ parent });
-		}
-		if (ImGui::IsItemDeactivatedAfterEdit()) {
-			EditorManager::getInstance().EndEdit({ parent });
-		}
+			});
 	}
 }
 

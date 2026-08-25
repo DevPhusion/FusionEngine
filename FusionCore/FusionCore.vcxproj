@@ -257,6 +257,7 @@
     <ClInclude Include="Header Files\Components\TransformComponent.h" />
     <ClInclude Include="Header Files\Core\Camera.h" />
     <ClInclude Include="Header Files\Core\DebugTimer.h" />
+    <ClInclude Include="Header Files\Core\Editor\EditorField.h" />
     <ClInclude Include="Header Files\Core\Editor\EditorManager.h" />
     <ClInclude Include="Header Files\Core\Editor\EditorWindow.h" />
     <ClInclude Include="Header Files\Core\Editor\Gizmos.h" />
