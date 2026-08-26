@@ -10,6 +10,15 @@
 
 namespace fs = std::filesystem;
 
+namespace {
+	bool IsExcludedFromScriptScan(const std::string& dirName) {
+		static const std::vector<std::string> excluded = {
+			".venv", "venv", "__pycache__", ".git", ".vs", ".vscode", "typings", "site-packages"
+		};
+		return std::find(excluded.begin(), excluded.end(), dirName) != excluded.end();
+	}
+}
+
 FileManager::~FileManager() {
 	ClearThumbnailCache();
 }
@@ -40,6 +49,18 @@ void FileManager::ProcessScriptInSubtree(const std::string& virtualPath, const s
 		if (ClassifyExtension(ext) == ResourceIconType::Script)
 			callback(virtualPath);
 		return;
+	}
+
+	fs::path absDir = VirtualToAbsolute(virtualPath);
+	if (IsExcludedFromScriptScan(absDir.filename().string()))
+		return;
+
+	std::error_code ec;
+	fs::path exportRoot = ProjectExportManager::getInstance().exportConfig.exportFolder;
+	if (!exportRoot.empty()) {
+		fs::path exportCanon = fs::weakly_canonical(exportRoot, ec);
+		fs::path hereCanon = fs::weakly_canonical(absDir, ec);
+		if (!ec && hereCanon == exportCanon) return;
 	}
 
 	for (auto& child : GetDirectoryContents(virtualPath))
@@ -92,6 +113,11 @@ void FileManager::ScanForScripts(const std::string& virtualDir) {
 }
 
 void FileManager::SetupResourcesFolder() {
+	if (currentProjectDirectory.empty()) {
+		Console::PrintError("FileManager: no project directory set — refusing to set up resources.");
+		return;
+	}
+
 	fs::path projectDir = currentProjectDirectory;
 	fs::path resDir = projectDir / "resources";
 
@@ -441,16 +467,22 @@ void FileManager::SaveProjectToFile(const std::string& path) {
 }
 
 void FileManager::LoadProjectFromFile(const std::string& path) {
+	std::error_code ec;
+	fs::path p(path);
+	if (path.empty() || p.parent_path().empty() || !fs::exists(p, ec) || ec) {
+		Console::PrintError("LoadProject: '{}' is not a valid .fusion project file path.").Format(path);
+		return;
+	}
+
 	currentProjectFile = path;
-	currentProjectDirectory = fs::path(path).parent_path().string();
+	currentProjectDirectory = p.parent_path().string();
 	SetupResourcesFolder();
 
 	std::ifstream in(path, std::ios::binary);
 	if (!in.is_open()) {
 		Console::PrintError("LoadProject: failed to open file for reading {}").Format(path);
-		return;   
+		return;
 	}
-
 	LoadProjectFromStream(in);
 }
 

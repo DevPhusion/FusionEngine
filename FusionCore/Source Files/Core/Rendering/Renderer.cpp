@@ -400,6 +400,8 @@ void Renderer::EnsureAllRenderResourcesLoaded() {
     for (auto& obj : *allObjects) {
         if (auto* rc = obj->GetComponent<RenderComponent>())
             rc->EnsureGLResources();
+        if (auto* fc = obj->GetComponent<FluidComponent>())
+            fc->EnsureGLResources();
     }
 }
 

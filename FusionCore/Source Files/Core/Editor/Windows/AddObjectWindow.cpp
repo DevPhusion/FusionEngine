@@ -2,6 +2,14 @@
 #include "../../../../Header Files/Core/ObjectManager.h"
 #include "../../../../Header Files/Core/SceneManager.h"
 
+namespace {
+	bool IsDevOnlyScanDirectory(const std::string& dirName) {
+		return dirName == ".venv" || dirName == ".vs" || dirName == "obj" || dirName == "x64" ||
+			dirName == "Debug" || dirName == "PythonStubs" || dirName == ".vscode" ||
+			dirName == "typings" || dirName == "__pycache__" || dirName == "node_modules";
+	}
+}
+
 AddObjectWindow::AddObjectWindow(std::string name) {
 	this->name = name;
 	RefreshSceneList();
@@ -13,10 +21,12 @@ void AddObjectWindow::RefreshSceneList() {
 	std::function<void(const std::string&)> scan = [&](const std::string& virtualPath) {
 		for (auto& entry : FileManager::getInstance().GetDirectoryContents(virtualPath)) {
 			if (entry.isDirectory) {
+				std::string dirName = std::filesystem::path(entry.virtualPath).filename().string();
+				if (IsDevOnlyScanDirectory(dirName)) continue;
 				scan(entry.virtualPath);
 			}
 			else if (entry.iconType == ResourceIconType::Scene) {
-				sceneFiles.push_back(entry.absolutePath.string());
+				sceneFiles.push_back(entry.virtualPath);   
 			}
 		}
 		};

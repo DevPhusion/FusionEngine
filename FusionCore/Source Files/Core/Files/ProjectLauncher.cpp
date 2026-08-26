@@ -222,15 +222,18 @@ void ProjectLauncher::CreateProjectFromPopup() {
 }
 
 bool ProjectLauncher::OpenProjectFile(const std::string& fusionFilePath) {
+	std::error_code ec;
+	if (fusionFilePath.empty() || fs::path(fusionFilePath).parent_path().empty() ||
+		!fs::exists(fusionFilePath, ec) || ec) {
+		errorMessage = "Could not open project: '" + fusionFilePath + "' is not a valid project file.";
+		return false;
+	}
+
 	try {
-		FileManager::getInstance().currentProjectFile = fusionFilePath;
-		FileManager::getInstance().LoadProjectFromFile(fusionFilePath);
+		FileManager::getInstance().LoadProjectFromFile(fusionFilePath);   
 
 		fs::path folder = fs::path(fusionFilePath).parent_path();
-		FileManager::getInstance().currentProjectDirectory = folder.string();
-		FileManager::getInstance().SetupResourcesFolder();
 		AddProjectFolder(folder.string(), "");
-
 		PackageManager::getInstance().LoadForProject(folder.string());
 
 		pendingEnterProject = true;

@@ -104,9 +104,9 @@ bool LoadProjectForPlayer(const std::filesystem::path& exeDir, const std::string
 		}
 
 		FileManager::getInstance().currentProjectDirectory = exeDir.string();
-		FileManager::getInstance().currentProjectFile = (exeDir / "project.fusion").string(); // display-only, not read from disk
+		FileManager::getInstance().currentProjectFile = (exeDir / "project.fusion").string();
 		FileManager::getInstance().LoadProjectFromMemory(*fusionBytes);
-		FileManager::getInstance().SetupResourcesFolder();
+		FileManager::getInstance().SetupResourcesFolder(); 
 		return true;
 	}
 

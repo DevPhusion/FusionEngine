@@ -5,7 +5,14 @@
 FluidComponent::FluidComponent(Object* parent) : ComponentBase<FluidComponent>(parent) {
 	Name = "Fluid Component";
 
-	InitRenderResources();
+	if (!EngineManager::getInstance().isHeadless) {
+		InitRenderResources();
+	}
+}
+
+void FluidComponent::EnsureGLResources() {
+	if (renderInitialized) return;   
+	InitRenderResources();          
 }
 
 void FluidComponent::Activate() {

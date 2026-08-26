@@ -66,6 +66,7 @@ public:
     virtual void Deserialize(BinaryReader& r);
     virtual void SetEnabled(bool enabled);
 
+    void EnsureGLResources();
     void ClearParticles();
     void SeedParticles();
     void InitRenderResources();

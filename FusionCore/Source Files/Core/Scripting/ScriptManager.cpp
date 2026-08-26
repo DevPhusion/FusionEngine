@@ -162,7 +162,7 @@ void ScriptManager::RunBackgroundSetup() {
 
 	SetStatus(SetupStage::SyncingPackages, "Syncing project packages...");
 	PackageManager::getInstance().LoadForProject(projectRoot.string());
-	if (PackageManager::getInstance().NeedsSync()) {
+	if (!EngineManager::getInstance().isPlayer && PackageManager::getInstance().NeedsSync()) {
 		if (!PackageManager::getInstance().SyncInstalledPackages(GetVenvPythonExecutable(venvRoot))) {
 			Console::PrintError("ScriptManager: one or more optional packages failed to sync for this project.");
 		}

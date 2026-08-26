@@ -112,6 +112,39 @@ namespace {
 		}
 		return out.good();
 	}
+
+	bool IsPathWithinOrEqual(const fs::path& path, const fs::path& base) {
+		std::string p = path.generic_string();
+		std::string b = base.generic_string();
+		std::transform(p.begin(), p.end(), p.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+		std::transform(b.begin(), b.end(), b.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+		if (!b.empty() && b.back() != '/') b += '/';
+		if (!p.empty() && p.back() != '/') p += '/';
+		return p.rfind(b, 0) == 0; 
+	}
+
+	bool WriteExportInfoFile(const fs::path& exportRoot, const ExportConfiguration& config, std::string& outError) {
+		std::ofstream out(exportRoot / "export_info.json", std::ios::binary);
+		if (!out.is_open()) {
+			outError = "Failed to write export_info.json to: " + (exportRoot / "export_info.json").string();
+			return false;
+		}
+
+		std::time_t now = std::time(nullptr);
+		char timeBuf[32] = {};
+		struct tm tmBuf {};
+		localtime_s(&tmBuf, &now);
+		std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%d %H:%M:%S", &tmBuf);
+
+		out << "{\n"
+			<< "  \"name\": \"" << config.name << "\",\n"
+			<< "  \"version\": \"" << config.version << "\",\n"
+			<< "  \"author\": \"" << config.author << "\",\n"
+			<< "  \"exportedAt\": \"" << timeBuf << "\"\n"
+			<< "}\n";
+
+		return out.good();
+	}
 }
 
 bool ProjectExportManager::StartExport(const ExportConfiguration& config) {
@@ -293,9 +326,26 @@ bool ProjectExportManager::DoExport(const ExportConfiguration& config, std::stri
 		fs::path resourcesDst = exportRoot / "resources";
 		fs::create_directories(resourcesDst, ec);
 
+		fs::path exportRootCanonical = fs::weakly_canonical(exportRoot, ec);
+		if (ec) { exportRootCanonical = exportRoot; ec.clear(); }
+
 		if (fs::exists(resourcesSrc, ec)) {
-			for (auto& entry : fs::recursive_directory_iterator(resourcesSrc, ec)) {
-				if (ec) break;
+			auto rdi = fs::recursive_directory_iterator(resourcesSrc, ec);
+			auto rdiEnd = fs::recursive_directory_iterator();
+
+			for (; !ec && rdi != rdiEnd; rdi.increment(ec)) {
+				const fs::directory_entry& entry = *rdi;
+
+				std::error_code canonEc;
+				fs::path entryCanonical = fs::weakly_canonical(entry.path(), canonEc);
+				bool isExportFolder = !canonEc && IsPathWithinOrEqual(entryCanonical, exportRootCanonical);
+				if (isExportFolder) {
+					std::error_code isDirEc;
+					if (entry.is_directory(isDirEc)) {
+						rdi.disable_recursion_pending(); 
+					}
+					continue;
+				}
 
 				bool inPycache = false;
 				for (auto& part : entry.path()) {
@@ -335,6 +385,17 @@ bool ProjectExportManager::DoExport(const ExportConfiguration& config, std::stri
 				return false;
 			}
 		}
+
+		fs::path manifestSrc = projectDir / "fusion_packages.cfg";
+		if (fs::exists(manifestSrc, ec)) {
+			fs::copy_file(manifestSrc, exportRoot / "fusion_packages.cfg",
+				fs::copy_options::overwrite_existing, ec);
+			if (ec) {
+				Console::PrintError(
+					"ProjectExportManager: failed to copy package manifest: {}"
+				).Format(ec.message());
+			}
+		}
 	}
 
 	SetStatus(ExportStage::SavingProject, "Packaging project file...");
@@ -361,6 +422,15 @@ bool ProjectExportManager::DoExport(const ExportConfiguration& config, std::stri
 	{
 		std::string err;
 		if (!WritePackageFile(exportRoot / "data.pack", packEntries, err)) {
+			outError = err;
+			Console::PrintError("ProjectExportManager: {}").Format(outError);
+			return false;
+		}
+	}
+
+	{
+		std::string err;
+		if (!WriteExportInfoFile(exportRoot, config, err)) {
 			outError = err;
 			Console::PrintError("ProjectExportManager: {}").Format(outError);
 			return false;

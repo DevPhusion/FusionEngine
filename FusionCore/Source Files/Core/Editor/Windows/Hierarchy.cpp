@@ -92,6 +92,18 @@ namespace {
 
 		return clicked;
 	}
+
+	bool ObjectMatchesFilterRecursive(Object* obj, const char* filter) {
+		if (filter[0] == '\0') return true;
+		if (obj->name.find(filter) != std::string::npos) return true;
+
+		for (auto& o : ObjectManager::getInstance().allObjects) {
+			if (o && o.get() != obj && o->parent == obj && !o->hideInHierarchy) {
+				if (ObjectMatchesFilterRecursive(o.get(), filter)) return true;
+			}
+		}
+		return false;
+	}
 }
 
 Hierarchy::Hierarchy(std::string name) {
@@ -102,7 +114,7 @@ Hierarchy::Hierarchy(std::string name) {
 void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* renameBuffer) {
 	if (currentObj == nullptr) return;
 	if (currentObj->hideInHierarchy) return;
-	if (filter_buffer[0] != '\0' && currentObj->name.find(filter_buffer) == std::string::npos) return;
+	if (!ObjectMatchesFilterRecursive(currentObj, filter_buffer)) return;
 
 	bool isRoot = (currentObj->parent == nullptr);
 
@@ -136,6 +148,13 @@ void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* re
 	}
 
 	bool isRenamingThisNode = IsRenaming && EditorManager::getInstance().selectedObject == currentObj;
+
+	bool filtering = filter_buffer[0] != '\0';
+	bool selfMatches = !filtering || currentObj->name.find(filter_buffer) != std::string::npos;
+
+	if (filtering && !selfMatches) {
+		ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+	}
 
 	std::string hiddenId = "##node_row_" + std::to_string(currentObj->id);
 	ImGui::SetNextItemAllowOverlap();

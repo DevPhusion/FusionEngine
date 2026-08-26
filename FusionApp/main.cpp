@@ -97,8 +97,19 @@ int main(int argc, char* argv[]) {
 	glfwPollEvents();
 
 	if (!launchArgs.projectPath.empty()) {
-		if (!ProjectLauncher::getInstance().OpenProjectFile(launchArgs.projectPath))
-			std::cerr << "Failed to load project from launch args: " << launchArgs.projectPath << std::endl;
+		std::error_code ec;
+		bool looksValid = std::filesystem::exists(launchArgs.projectPath, ec) && !ec &&
+			launchArgs.projectPath.size() > 7 &&
+			launchArgs.projectPath.compare(launchArgs.projectPath.size() - 7, 7, ".fusion") == 0;
+
+		if (looksValid) {
+			if (!ProjectLauncher::getInstance().OpenProjectFile(launchArgs.projectPath))
+				std::cerr << "Failed to load project from launch args: " << launchArgs.projectPath << std::endl;
+		}
+		else if (!launchArgs.projectPath.empty()) {
+			std::cerr << "Ignoring invalid launch argument (expected a .fusion file path): "
+				<< launchArgs.projectPath << std::endl;
+		}
 	}
 
 	float prev_t = glfwGetTime();
