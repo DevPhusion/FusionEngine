@@ -1,4 +1,5 @@
 #include "../../../Header Files/Core/Rendering/Renderer.h"
+#include "../../../Header Files/Core/Editor/HeadlessMonitor.h" 
 
 void Renderer::Setup(std::vector<std::unique_ptr<Object>>* objects) {
     this->allObjects = objects;
@@ -438,16 +439,28 @@ void Renderer::EnsureHeadlessFramebuffer(int width, int height) {
 }
 
 std::vector<unsigned char> Renderer::CaptureSnapshot(int width, int height) {
+    if (EngineManager::getInstance().isHeadless && !snapshotSceneReloaded) {
+        snapshotSceneReloaded = true;
+        HeadlessMonitor::getInstance().ReloadTrainingScene();
+    }
+
     EnsureAllRenderResourcesLoaded();
     EnsureHeadlessFramebuffer(width, height);
 
-    float prevAspect = EngineManager::getInstance().gameAspectRatio;
-    EngineManager::getInstance().gameAspectRatio = (float)width / (float)height;
+    bool wasHeadless = EngineManager::getInstance().isHeadless;
+    EngineManager::getInstance().isHeadless = false;
+    Camera::getInstance().ProcessCamera(1.0f / 60.0f);
+    EngineManager::getInstance().isHeadless = wasHeadless;
 
     GLint prevViewport[4];
     glGetIntegerv(GL_VIEWPORT, prevViewport);
     GLint prevFBO = 0;
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO);
+
+    GLboolean prevScissorEnabled = glIsEnabled(GL_SCISSOR_TEST);
+    GLint prevScissorBox[4];
+    glGetIntegerv(GL_SCISSOR_BOX, prevScissorBox);
+    glDisable(GL_SCISSOR_TEST);
 
     glBindFramebuffer(GL_FRAMEBUFFER, headlessFBO);
     glViewport(0, 0, width, height);
@@ -469,7 +482,11 @@ std::vector<unsigned char> Renderer::CaptureSnapshot(int width, int height) {
 
     glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)prevFBO);
     glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
-    EngineManager::getInstance().gameAspectRatio = prevAspect;
+
+    if (prevScissorEnabled) {
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(prevScissorBox[0], prevScissorBox[1], prevScissorBox[2], prevScissorBox[3]);
+    }
 
     return flipped;
 }

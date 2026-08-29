@@ -181,6 +181,10 @@ void HeadlessMonitor::Begin() {
 	EngineManager::getInstance().isHeadless = true;
 	liveTabActiveLastFrame = false;
 
+	Renderer::getInstance().ResetSnapshotSceneReloadFlag();
+
+	Renderer::getInstance().CaptureSnapshot(4, 4);
+
 	{
 		std::lock_guard<std::mutex> lock(metricsMutex);
 		metricSeries.clear();
@@ -612,7 +616,10 @@ void HeadlessMonitor::DrawLiveTrainingViewTab() {
 
 void HeadlessMonitor::RefreshLiveViewScene() {
 	std::lock_guard<std::mutex> lock(EngineManager::getInstance().headlessSimMutex);
+	ReloadTrainingScene();
+}
 
+void HeadlessMonitor::ReloadTrainingScene() {
 	if (!trainingScenePath.empty()) {
 		SceneManager::getInstance().LoadSceneFromFile(trainingScenePath);
 	}

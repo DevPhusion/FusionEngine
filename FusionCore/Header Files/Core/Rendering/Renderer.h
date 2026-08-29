@@ -43,6 +43,8 @@ public:
 	void DrawCircle(glm::vec3 center, float radius, glm::vec4 color, int segments = 32, float thickness = 1.0f, bool screenSpace = false);
 	void DrawFilledPolygon(const std::vector<glm::vec3>& worldPoints, glm::vec4 fillColor, glm::vec4 outlineColor, float outlineThickness = 1.5f);
 	
+	bool snapshotSceneReloaded = false;
+	void ResetSnapshotSceneReloadFlag() { snapshotSceneReloaded = false; }
 	std::vector<unsigned char> CaptureSnapshot(int width, int height);
 
 private:

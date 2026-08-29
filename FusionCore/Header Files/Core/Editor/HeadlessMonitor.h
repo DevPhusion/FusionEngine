@@ -126,6 +126,8 @@ public:
 	void DeserializeTrainConfig(BinaryReader& r);
 	pybind11::dict BuildHyperparams();
 
+	void ReloadTrainingScene();
+
 private:
 	HeadlessMonitor() = default;
 	~HeadlessMonitor();   
