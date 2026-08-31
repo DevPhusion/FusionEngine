@@ -60,6 +60,8 @@ public:
 	bool AnySceneDirty() const;
 	const std::string& GetCurrentSceneFile() const;
 
+	bool ParseSceneObjects(const std::string& path, std::vector<std::unique_ptr<Object>>& outObjects, uint32_t& outObjectCount);
+
 private:
 	SceneManager();
 	~SceneManager() = default;
@@ -67,8 +69,6 @@ private:
 	void ClearLiveScene();        
 	void SwapActiveWithLive();   
 	void SwapLiveWithScene(int index); 
-
-	bool ParseSceneObjects(const std::string& path, std::vector<std::unique_ptr<Object>>& outObjects, uint32_t& outObjectCount);
 
 	bool ParseTopLevelSceneObjects(const std::string& path, std::vector<std::unique_ptr<Object>>& outObjects,
 		std::vector<Constraint*>& outConstraints, uint32_t& outObjectCount);

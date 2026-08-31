@@ -1,5 +1,6 @@
 #include "../../../Header Files/Core/Rendering/Renderer.h"
 #include "../../../Header Files/Core/Editor/HeadlessMonitor.h" 
+#include "../../../Header Files/Components/ScriptComponent.h"
 
 void Renderer::Setup(std::vector<std::unique_ptr<Object>>* objects) {
     this->allObjects = objects;
@@ -8,6 +9,14 @@ void Renderer::Setup(std::vector<std::unique_ptr<Object>>* objects) {
 	polygonEditGizmos = new PolygonEditGizmos();
     constraintEditGizmos = new ConstraintEditGizmos();
 }
+
+#define CHECK_GL(label) \
+    do { \
+        GLenum _err; \
+        while ((_err = glGetError()) != GL_NO_ERROR) { \
+            Console::PrintError("GL error {} after: {}").Format((int)_err, label); \
+        } \
+    } while (0)
 
 void Renderer::Draw() {
     TIME_BLOCK("Rendering");
@@ -24,6 +33,7 @@ void Renderer::Draw() {
             TIME_BLOCK("Draw background grid");
             backgroundGrid.Draw(camPos, screenSize, zoom);
         }
+        CHECK_GL("Draw background grid");
     }
 
     if (debug.drawObjectWireframe) {
@@ -32,11 +42,13 @@ void Renderer::Draw() {
     else {
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     }
+    CHECK_GL("Set polygon mode");
 
     {
         TIME_BLOCK("Draw constraint display");
         constraintEditGizmos->DrawConstraintDisplays();
     }
+    CHECK_GL("Draw constraint display");
 
     std::vector<Object*> renderQueue;
 
@@ -73,7 +85,8 @@ void Renderer::Draw() {
 
             return zA < zB;
             });
-    }  
+    }
+    // no GL calls in queue construction, skip CHECK_GL here
 
     for (Object* obj : renderQueue) {
         if (obj->HasComponent<FluidComponent>()) {
@@ -81,6 +94,7 @@ void Renderer::Draw() {
                 TIME_BLOCK("Draw fluids");
                 obj->GetComponent<FluidComponent>()->Draw();
             }
+            CHECK_GL("Draw fluids");
         }
         else {
             {
@@ -92,8 +106,9 @@ void Renderer::Draw() {
                     obj->GetComponent<EditorRenderComponent>()->Draw();
                 }
             }
+            CHECK_GL("Draw objects");
         }
-        
+
         if (obj->HasComponent<TransformComponent>()) {
             obj->GetComponent<TransformComponent>()->ProcessTransform();
         }
@@ -116,25 +131,28 @@ void Renderer::Draw() {
                 }
             }
         }
+        CHECK_GL("Draw camera bounds");
     }
 
     if (EngineManager::getInstance().EnginePhysicsMode != EngineManager::PhysicsMode::Simulate ||
         debug.drawCollisionShapes) {
-        {
-            TIME_BLOCK("Draw collision shapes");
-            for (size_t i = 0; i < (*allObjects).size(); i++) {
-                CollisionComponent* cc = (*allObjects)[i]->GetComponent<CollisionComponent>();
-                if (cc) {
-                    cc->Draw();
+            {
+                TIME_BLOCK("Draw collision shapes");
+                for (size_t i = 0; i < (*allObjects).size(); i++) {
+                    CollisionComponent* cc = (*allObjects)[i]->GetComponent<CollisionComponent>();
+                    if (cc) {
+                        cc->Draw();
+                    }
                 }
             }
-        }
+            CHECK_GL("Draw collision shapes");
     }
 
     if (debug.AnyDebugGizmoEnabled()) {
         {
             TIME_BLOCK("Draw debug");
             glLineWidth(2.0f);
+            CHECK_GL("glLineWidth(2.0f) debug block");
 
             if (debug.drawBroadPhaseBounds) {
                 {
@@ -142,6 +160,7 @@ void Renderer::Draw() {
                     BAHNode<BoundingCircle>* bvhRoot = &PhysicsEngine::getInstance().root;
                     bvhRoot->DrawBoundingArea();
                 }
+                CHECK_GL("Draw bounding area");
             }
 
             if (debug.drawContactPoints || debug.drawCollisionNormals) {
@@ -155,6 +174,7 @@ void Renderer::Draw() {
                             DebugPoint point = DebugPoint();
                             point.DrawPoint(cp.point, 15, Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
                         }
+                        CHECK_GL("Draw contact points");
                     }
 
                     if (debug.drawCollisionNormals) {
@@ -163,7 +183,8 @@ void Renderer::Draw() {
                             glm::vec4 normalColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
                             float arrowLength = 0.5f;
                             DrawArrow(cp.point, cp.normal, arrowLength, normalColor);
-                        }         
+                        }
+                        CHECK_GL("Draw collision normal");
                     }
                 }
             }
@@ -172,12 +193,13 @@ void Renderer::Draw() {
                 for (int i = 0; i < (*allObjects).size(); i++)
                 {
                     SoftBodyComponent* sb = (*allObjects)[i]->GetComponent<SoftBodyComponent>();
-                    if (sb) {                        
+                    if (sb) {
                         if (debug.drawSoftBodySprings) {
                             {
                                 TIME_BLOCK("Draw soft body springs");
                                 sb->DrawSprings();
                             }
+                            CHECK_GL("Draw soft body springs");
                         }
                         if (debug.drawSoftBodyPointMasses) {
                             {
@@ -187,6 +209,7 @@ void Renderer::Draw() {
                                     sb->MassAggregate[j]->DrawDebug();
                                 }
                             }
+                            CHECK_GL("Draw soft body point masses");
                         }
                         if (debug.drawVirtualSoftBodyProxies) {
                             {
@@ -196,11 +219,13 @@ void Renderer::Draw() {
                                     sb->VirtualProxies[j]->DrawDebug();
                                 }
                             }
+                            CHECK_GL("Draw soft body proxies");
                         }
                     }
                 }
             }
             glLineWidth(1.0f);
+            CHECK_GL("glLineWidth(1.0f) end debug block");
         }
     }
 
@@ -210,6 +235,7 @@ void Renderer::Draw() {
         polygonEditGizmos->UpdateGizmos();
         constraintEditGizmos->DrawPivotHandles();
     }
+    CHECK_GL("Draw gizmos");
 }
 
 void Renderer::DrawLine(glm::vec3 p1, glm::vec3 p2, glm::vec4 color, float thickness, bool screenSpace) {
@@ -398,9 +424,12 @@ void Renderer::DrawFilledPolygon(const std::vector<glm::vec3>& worldPoints, glm:
 }
 
 void Renderer::EnsureAllRenderResourcesLoaded() {
+    bool forceRecreate = EngineManager::getInstance().isHeadless; 
     for (auto& obj : *allObjects) {
-        if (auto* rc = obj->GetComponent<RenderComponent>())
-            rc->EnsureGLResources();
+        if (auto* rc = obj->GetComponent<RenderComponent>()) {
+            if (forceRecreate) rc->ForceRecreateGLResources();
+            else rc->EnsureGLResources();
+        }
         if (auto* fc = obj->GetComponent<FluidComponent>())
             fc->EnsureGLResources();
     }
@@ -439,11 +468,6 @@ void Renderer::EnsureHeadlessFramebuffer(int width, int height) {
 }
 
 std::vector<unsigned char> Renderer::CaptureSnapshot(int width, int height) {
-    if (EngineManager::getInstance().isHeadless && !snapshotSceneReloaded) {
-        snapshotSceneReloaded = true;
-        HeadlessMonitor::getInstance().ReloadTrainingScene();
-    }
-
     EnsureAllRenderResourcesLoaded();
     EnsureHeadlessFramebuffer(width, height);
 
@@ -471,6 +495,10 @@ std::vector<unsigned char> Renderer::CaptureSnapshot(int width, int height) {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     Draw();
+    GLenum err;
+    while ((err = glGetError()) != GL_NO_ERROR) {
+        Console::PrintError("CaptureSnapshot GL error: {}").Format((int)err);
+    }
 
     std::vector<unsigned char> rows(width * height * 3);
     glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE, rows.data());
@@ -487,6 +515,5 @@ std::vector<unsigned char> Renderer::CaptureSnapshot(int width, int height) {
         glEnable(GL_SCISSOR_TEST);
         glScissor(prevScissorBox[0], prevScissorBox[1], prevScissorBox[2], prevScissorBox[3]);
     }
-
     return flipped;
 }

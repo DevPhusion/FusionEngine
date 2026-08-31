@@ -630,3 +630,11 @@ void HeadlessMonitor::ReloadTrainingScene() {
 	ScriptManager::getInstance().RunAllScriptsLoad();
 	ScriptManager::getInstance().RunAllScriptsStart();
 }
+
+void HeadlessMonitor::RequestSceneReload() {
+	if (trainingScenePath.empty()) {
+		Console::PrintWarning("[Training] RequestSceneReload: no training scene path set, skipping.");
+		return;
+	}
+	SceneManager::getInstance().RequestLoadScene(trainingScenePath);
+}

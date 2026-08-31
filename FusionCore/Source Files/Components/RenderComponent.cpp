@@ -119,6 +119,33 @@ void RenderComponent::EnsureGLResources() {
 	SetTexture(pendingTexPath);
 }
 
+void RenderComponent::ForceRecreateGLResources() {
+	if (glResourcesReady) {
+		glDeleteBuffers(1, &VBO);
+		glDeleteBuffers(1, &EBO);
+		glDeleteVertexArrays(1, &VAO);
+		VAO = VBO = EBO = 0;
+
+		if (TextureID != 0) {
+			if (texture_path != "") {
+				auto& cache = TextureCache();
+				auto it = cache.find(texture_path);
+				if (it != cache.end() && --it->second.second <= 0) {
+					glDeleteTextures(1, &it->second.first);
+					cache.erase(it);
+				}
+			}
+			else {
+				glDeleteTextures(1, &TextureID);
+			}
+		}
+		TextureID = 0;
+	}
+
+	glResourcesReady = false;
+	EnsureGLResources();   
+}
+
 int RenderComponent::AddOnShapeSetCallback(std::function<void()> func) {
 	shapeCallbackID += 1;
 	OnShapeSetCallbacks[shapeCallbackID] = func;

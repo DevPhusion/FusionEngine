@@ -29,60 +29,84 @@ const std::string& Shader::LoadOrGetCachedSource(const std::string& path) {
 Shader::Shader(const char* vertexPath, const char* fragmentPath) {
     this->vertexPath = vertexPath;
     this->fragmentPath = fragmentPath;
+    Compile();
+}
 
-    const std::string& vertexCode = LoadOrGetCachedSource(this->vertexPath);
-    const std::string& fragmentCode = LoadOrGetCachedSource(this->fragmentPath);
-
+void Shader::Compile() {
+    const std::string& vertexCode = LoadOrGetCachedSource(vertexPath);
+    const std::string& fragmentCode = LoadOrGetCachedSource(fragmentPath);
     const char* vertexSrc = vertexCode.c_str();
     const char* fragmentSrc = fragmentCode.c_str();
 
-    unsigned int vertexShader;
-    vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertexShader, 1, &vertexSrc, NULL);
     glCompileShader(vertexShader);
 
-    unsigned int fragmentShader;
-    fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragmentShader, 1, &fragmentSrc, NULL);
     glCompileShader(fragmentShader);
 
-    this->ID = glCreateProgram();
-    glAttachShader(this->ID, vertexShader);
-    glAttachShader(this->ID, fragmentShader);
-    glLinkProgram(this->ID);
+    unsigned int program = glCreateProgram();
+    glAttachShader(program, vertexShader);
+    glAttachShader(program, fragmentShader);
+    glLinkProgram(program);
 
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
+
+    GLint linkStatus = GL_FALSE;
+    glGetProgramiv(program, GL_LINK_STATUS, &linkStatus);
+
+    if (program == 0 || linkStatus == GL_FALSE) {
+        Console::PrintError("Shader::Compile failed (thread {}): vertex='{}' fragment='{}'")
+            .Format((int)std::hash<std::thread::id>{}(std::this_thread::get_id()), vertexPath, fragmentPath);
+        if (program != 0) glDeleteProgram(program);
+        this->ID = 0;
+        hasBuiltThread = false;
+        return;
+    }
+
+    this->ID = program;
+    builtThreadId = std::this_thread::get_id();
+    hasBuiltThread = true;
 }
 
 void Shader::use() {
-	glUseProgram(this->ID);
+    bool validForThisThread = (ID != 0) && hasBuiltThread && (builtThreadId == std::this_thread::get_id());
+
+    if (!validForThisThread) {
+        if (!vertexPath.empty() && !fragmentPath.empty()) {
+            Compile();
+        }
+    }
+
+    glUseProgram(this->ID);
 }
 
 void Shader::setBool(const std::string& name, bool value) const {
-	glUniform1i(glGetUniformLocation(this->ID, name.c_str()), (int)value);
+    glUniform1i(glGetUniformLocation(this->ID, name.c_str()), (int)value);
 }
 
 void Shader::setInt(const std::string& name, int value) const {
-	glUniform1i(glGetUniformLocation(this->ID, name.c_str()), value);
+    glUniform1i(glGetUniformLocation(this->ID, name.c_str()), value);
 }
 
 void Shader::setFloat(const std::string& name, float value) const {
-	glUniform1f(glGetUniformLocation(this->ID, name.c_str()), value);
+    glUniform1f(glGetUniformLocation(this->ID, name.c_str()), value);
 }
 
 void Shader::setSampler2D(const std::string& name, int value) const {
-	glUniform1i(glGetUniformLocation(this->ID, name.c_str()), value);
+    glUniform1i(glGetUniformLocation(this->ID, name.c_str()), value);
 }
 
 void Shader::setMat4D(const std::string& name, glm::mat4 value) const {
-	glUniformMatrix4fv(glGetUniformLocation(this->ID, name.c_str()), 1, GL_FALSE, glm::value_ptr(value));
+    glUniformMatrix4fv(glGetUniformLocation(this->ID, name.c_str()), 1, GL_FALSE, glm::value_ptr(value));
 }
 
 void Shader::setVec2D(const std::string& name, glm::vec2 value) const {
-	glUniform2f(glGetUniformLocation(this->ID, name.c_str()), value.x, value.y);
+    glUniform2f(glGetUniformLocation(this->ID, name.c_str()), value.x, value.y);
 }
 
 void Shader::setVec4D(const std::string& name, glm::vec4 value) const {
-	glad_glUniform4f(glGetUniformLocation(this->ID, name.c_str()), value.x, value.y, value.z, value.a);
+    glad_glUniform4f(glGetUniformLocation(this->ID, name.c_str()), value.x, value.y, value.z, value.a);
 }

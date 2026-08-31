@@ -127,6 +127,7 @@ public:
 	pybind11::dict BuildHyperparams();
 
 	void ReloadTrainingScene();
+	void RequestSceneReload();
 
 private:
 	HeadlessMonitor() = default;

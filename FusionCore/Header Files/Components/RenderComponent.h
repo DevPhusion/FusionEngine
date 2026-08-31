@@ -41,6 +41,7 @@ public:
 	virtual void PostLoad();
 	
 	void EnsureGLResources();
+	void ForceRecreateGLResources();
 
 	int AddOnShapeSetCallback(std::function<void()> func);
 	void RemoveOnShapeSetCallback(int ID);
