@@ -1,4 +1,5 @@
 #include "../../../Header Files/Core/Rendering/Shader.h"
+#include "../../../Header Files/Core/EngineManager.h"
 
 std::unordered_map<std::string, std::string>& Shader::SourceCache() {
     static std::unordered_map<std::string, std::string> cache;
@@ -33,6 +34,14 @@ Shader::Shader(const char* vertexPath, const char* fragmentPath) {
 }
 
 void Shader::Compile() {
+    if (!EngineManager::getInstance().IsMainThread()) {
+        EngineManager::getInstance().RunOnMainThread([this]() { CompileOnCurrentThread(); });
+        return;
+    }
+    CompileOnCurrentThread();
+}
+
+void Shader::CompileOnCurrentThread() {
     const std::string& vertexCode = LoadOrGetCachedSource(vertexPath);
     const std::string& fragmentCode = LoadOrGetCachedSource(fragmentPath);
     const char* vertexSrc = vertexCode.c_str();

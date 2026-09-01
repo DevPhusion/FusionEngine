@@ -179,7 +179,6 @@ void HeadlessMonitor::Begin() {
 
 	EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Simulate);
 	EngineManager::getInstance().isHeadless = true;
-	liveTabActiveLastFrame = false;
 
 	Renderer::getInstance().ResetSnapshotSceneReloadFlag();
 
@@ -371,10 +370,6 @@ void HeadlessMonitor::ProcessMonitorWindow() {
 			liveTabActiveThisFrame = true;
 			EngineManager::getInstance().liveTrainingRenderActive = IsTraining();
 
-			if (!liveTabActiveLastFrame && IsTraining()) {
-				RefreshLiveViewScene();
-			}
-
 			DrawLiveTrainingViewTab();
 			ImGui::EndTabItem();
 		}
@@ -385,8 +380,6 @@ void HeadlessMonitor::ProcessMonitorWindow() {
 		ImGui::EndTabBar();
 	}
 	ImGui::PopStyleColor(3);
-
-	liveTabActiveLastFrame = liveTabActiveThisFrame;
 
 	ImGui::End();
 }
@@ -612,29 +605,4 @@ void HeadlessMonitor::DrawLiveTrainingViewTab() {
 	));
 
 	ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(displayWidth, displayHeight), ImVec2(0, 1), ImVec2(1, 0));
-}
-
-void HeadlessMonitor::RefreshLiveViewScene() {
-	std::lock_guard<std::mutex> lock(EngineManager::getInstance().headlessSimMutex);
-	ReloadTrainingScene();
-}
-
-void HeadlessMonitor::ReloadTrainingScene() {
-	if (!trainingScenePath.empty()) {
-		SceneManager::getInstance().LoadSceneFromFile(trainingScenePath);
-	}
-	else {
-		SceneManager::getInstance().NewScene();
-	}
-
-	ScriptManager::getInstance().RunAllScriptsLoad();
-	ScriptManager::getInstance().RunAllScriptsStart();
-}
-
-void HeadlessMonitor::RequestSceneReload() {
-	if (trainingScenePath.empty()) {
-		Console::PrintWarning("[Training] RequestSceneReload: no training scene path set, skipping.");
-		return;
-	}
-	SceneManager::getInstance().RequestLoadScene(trainingScenePath);
 }

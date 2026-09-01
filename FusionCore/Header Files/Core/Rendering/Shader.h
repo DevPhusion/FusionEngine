@@ -39,6 +39,8 @@ private:
 
     void Compile();
 
+    void CompileOnCurrentThread();
+
     bool hasBuiltThread = false;
     std::thread::id builtThreadId{};
 };

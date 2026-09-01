@@ -5,6 +5,8 @@
 #include "../../Header Files/Core/SceneManager.h"
 
 void EngineManager::Setup(GLFWwindow* window) {
+	mainThreadId = std::this_thread::get_id();
+
 	int windowWidth, windowHeight;
 	glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
 	this->windowWidth = (float)windowWidth;
@@ -64,7 +66,7 @@ void EngineManager::SetGameResolution(float width, float height) {
 
 	Viewport* gameViewport = EditorManager::getInstance().gameViewport;
 	if (gameViewport) {
-		gameViewport->Resize((int)resolutionWidth, (int)resolutionHeight); 
+		gameViewport->Resize((int)resolutionWidth, (int)resolutionHeight);
 	}
 }
 

@@ -8,6 +8,7 @@
 #include <mutex>
 #include <future>
 #include <queue>
+#include <thread>
 
 class Constraint;
 
@@ -82,7 +83,7 @@ public:
 	bool pendingClose = false;
 
 	Settings EngineSettings;
-	
+
 	EngineState SavedState;
 	std::vector<std::unique_ptr<Object>> cachedSaveObjects;
 
@@ -99,7 +100,7 @@ public:
 	std::unordered_map<int, std::function<void()>> InteractModeChangedEvents;
 	std::unordered_map<int, std::function<void()>> PhysicsModeChangedEvents;
 
-	std::string editingScenePath = ""; 
+	std::string editingScenePath = "";
 
 	void Setup(GLFWwindow* window);
 	void ProcessEngine(float delta);
@@ -116,6 +117,8 @@ public:
 	void RemovePhysicsModeChangedEvent(int ID);
 	void RemoveInteractModeChangedEvent(int ID);
 
+	bool IsMainThread() const { return std::this_thread::get_id() == mainThreadId; }
+
 	std::atomic<bool> liveTrainingRenderActive{ false };
 
 	std::mutex headlessSimMutex;
@@ -123,6 +126,11 @@ public:
 	template <typename F>
 	auto RunOnMainThread(F&& func) -> decltype(func()) {
 		using R = decltype(func());
+
+		if (IsMainThread()) {
+			return func();
+		}
+
 		auto taskPromise = std::make_shared<std::promise<R>>();
 		std::future<R> future = taskPromise->get_future();
 
@@ -139,7 +147,7 @@ public:
 				});
 		}
 
-		return future.get(); 
+		return future.get();
 	}
 
 	void ProcessPendingMainThreadTasks();
@@ -155,7 +163,8 @@ private:
 	std::mutex mainThreadQueueMutex;
 	std::queue<std::function<void()>> mainThreadTaskQueue;
 
+	std::thread::id mainThreadId;
+
 	EngineManager() = default;
 
 };
-

@@ -126,9 +126,6 @@ public:
 	void DeserializeTrainConfig(BinaryReader& r);
 	pybind11::dict BuildHyperparams();
 
-	void ReloadTrainingScene();
-	void RequestSceneReload();
-
 private:
 	HeadlessMonitor() = default;
 	~HeadlessMonitor();   
@@ -151,9 +148,6 @@ private:
 	mutable std::mutex trainStatusMutex;
 	std::string trainStatus;
 	std::string trainError;
-
-	bool liveTabActiveLastFrame = false;
-	void RefreshLiveViewScene();
 
 	void Begin();
 	void End();
