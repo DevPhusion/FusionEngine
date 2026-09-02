@@ -1,6 +1,5 @@
 #pragma once
 #include "../../../Objects/Object.h"
-#include "DebugCircle.h"
 
 struct PotentialContact {
 	Object* obj[2];
@@ -11,11 +10,18 @@ template<class BoundingAreaClass>
 class BAHNode
 {
 public:
+	struct DisplacedLeaf {
+		Object* obj = nullptr;
+		int shapeId = -1;
+		BAHNode<BoundingAreaClass>* node = nullptr;
+	};
+
+
 	BAHNode* parent = nullptr;
 	BAHNode* children[2] = { nullptr, nullptr };
 	BoundingAreaClass area;
 	Object* obj = nullptr;
-	int shapeId = -1;   // NEW: which CollisionShapeEntry this leaf represents
+	int shapeId = -1;
 	BAHNode() = default;
 	BAHNode(BAHNode* p, const BoundingAreaClass& a, Object* o, int sid) : parent(p), area(a), obj(o), shapeId(sid) {}
 
@@ -28,7 +34,18 @@ public:
 		return (obj != nullptr);
 	}
 
-	BAHNode<BoundingAreaClass>* insert(Object* newObject, int newShapeId, const BoundingAreaClass& newArea);
+	void Clear() {
+		if (children[0]) { delete children[0]; children[0] = nullptr; }
+		if (children[1]) { delete children[1]; children[1] = nullptr; }
+		obj = nullptr;
+		shapeId = -1;
+		area = BoundingAreaClass();
+		parent = nullptr;
+	}
+
+	BAHNode<BoundingAreaClass>* insert(Object* newObject, int newShapeId,
+		const BoundingAreaClass& newArea, DisplacedLeaf* outDisplaced = nullptr);
+
 	void removeLeaf();
 
 	void recalculateBoundingArea();
@@ -71,10 +88,18 @@ void BAHNode<BoundingAreaClass>::removeLeaf() {
 }
 
 template<class BoundingAreaClass>
-BAHNode<BoundingAreaClass>* BAHNode<BoundingAreaClass>::insert(Object* newObject, int newShapeId, const BoundingAreaClass& newArea) {
+BAHNode<BoundingAreaClass>* BAHNode<BoundingAreaClass>::insert(Object* newObject, int newShapeId,
+	const BoundingAreaClass& newArea, DisplacedLeaf* outDisplaced) {
 	if (isLeaf()) {
-		children[0] = new BAHNode<BoundingAreaClass>(this, area, obj, shapeId);
+		BAHNode<BoundingAreaClass>* movedLeaf = new BAHNode<BoundingAreaClass>(this, area, obj, shapeId);
+		children[0] = movedLeaf;
 		children[1] = new BAHNode<BoundingAreaClass>(this, newArea, newObject, newShapeId);
+
+		if (outDisplaced) {
+			outDisplaced->obj = obj;
+			outDisplaced->shapeId = shapeId;
+			outDisplaced->node = movedLeaf;
+		}
 
 		this->obj = nullptr;
 		this->shapeId = -1;
@@ -83,10 +108,10 @@ BAHNode<BoundingAreaClass>* BAHNode<BoundingAreaClass>::insert(Object* newObject
 	}
 	else {
 		if (children[0]->area.getGrowth(newArea) < children[1]->area.getGrowth(newArea)) {
-			return children[0]->insert(newObject, newShapeId, newArea);
+			return children[0]->insert(newObject, newShapeId, newArea, outDisplaced);
 		}
 		else {
-			return children[1]->insert(newObject, newShapeId, newArea);
+			return children[1]->insert(newObject, newShapeId, newArea, outDisplaced);
 		}
 	}
 }
@@ -166,7 +191,7 @@ BAHNode<BoundingAreaClass>* BAHNode<BoundingAreaClass>::searchFor(Object* target
 
 template<class BoundingAreaClass>
 void BAHNode<BoundingAreaClass>::DrawBoundingArea() const {
-	DebugCircle::getInstance().DrawCircle(area.center, area.radius, Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
+	area.DebugDraw(); 
 
 	if (children[0] != nullptr) children[0]->DrawBoundingArea();
 	if (children[1] != nullptr) children[1]->DrawBoundingArea();

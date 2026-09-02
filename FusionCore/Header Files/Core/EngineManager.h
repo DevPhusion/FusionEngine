@@ -1,6 +1,7 @@
 #pragma once
 #include "InputManager.h"
 #include "Files/ProjectLauncher.h"
+#include "Physics/Collision/BroadPhaseHandle.h"
 #include <fstream>
 #include <stdexcept>
 #include <memory>
@@ -23,6 +24,8 @@ struct Settings {
 	glm::vec2 gameResolution = glm::vec2(1920, 1080);
 	bool drawBackgroundGrid = true;
 	std::string mainScenePath = "";
+
+	BroadPhaseMode broadPhaseMode = BroadPhaseMode::AABB;
 
 	// Debug
 	bool drawObjectWireframe = false;

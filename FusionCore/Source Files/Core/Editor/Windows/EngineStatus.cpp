@@ -371,6 +371,23 @@ void EngineStatus::ProcessSettingsPopup() {
 			}
 		}
 
+		ImGui::Text("Broad phase mode: ");
+		ImGui::SameLine();
+		{
+			const char* modeLabels[] = { "AABB", "Bounding Circle" };
+			int current = static_cast<int>(settings.broadPhaseMode);
+			ImGui::SetNextItemWidth(180.0f);
+			if (EditorField::ComboEngine(nullptr, "##BroadPhaseMode", &current, modeLabels, IM_ARRAYSIZE(modeLabels))) {
+				PhysicsEngine::getInstance().SetBroadPhaseMode(static_cast<BroadPhaseMode>(current));
+			}
+		}
+		if (ImGui::IsItemHovered()) {
+			ImGui::SetTooltip(
+				"AABB is more efficient for wide or tall objects.\n"
+				"Bounding Circle can be cheaper/tighter for roughly round objects.\n"
+				"Switching rebuilds the broad phase for every collidable object.");
+		}
+
 		ImGui::Spacing();
 		ImGui::SeparatorText("Debug");
 

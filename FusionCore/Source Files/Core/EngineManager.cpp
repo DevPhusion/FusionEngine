@@ -101,9 +101,10 @@ void EngineManager::SerializeEngineSettings(BinaryWriter& w) {
 
 	w.Write(resolutionWidth);
 	w.Write(resolutionHeight);
-
+	
 	w.Write(s.backgroundColor);
 	w.Write(s.drawBackgroundGrid);
+	w.Write((int)s.broadPhaseMode);
 	w.Write(s.drawObjectWireframe);
 	w.Write(s.drawBroadPhaseBounds);
 	w.Write(s.drawCollisionShapes);
@@ -128,6 +129,7 @@ void EngineManager::DeserializeEngineSettings(BinaryReader& r) {
 
 	s.backgroundColor = r.Read<glm::vec4>();
 	s.drawBackgroundGrid = r.Read<bool>();
+	s.broadPhaseMode = static_cast<BroadPhaseMode>(r.Read<int>());
 	s.drawObjectWireframe = r.Read<bool>();
 	s.drawBroadPhaseBounds = r.Read<bool>();
 	s.drawCollisionShapes = r.Read<bool>();

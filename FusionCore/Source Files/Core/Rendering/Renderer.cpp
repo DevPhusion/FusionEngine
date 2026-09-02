@@ -157,8 +157,10 @@ void Renderer::Draw() {
             if (debug.drawBroadPhaseBounds) {
                 {
                     TIME_BLOCK("Draw bounding area");
-                    BAHNode<BoundingCircle>* bvhRoot = &PhysicsEngine::getInstance().root;
-                    bvhRoot->DrawBoundingArea();
+                    if (EngineManager::getInstance().EngineSettings.broadPhaseMode == BroadPhaseMode::AABB)
+                        PhysicsEngine::getInstance().boxRoot.DrawBoundingArea();
+                    else
+                        PhysicsEngine::getInstance().circleRoot.DrawBoundingArea();
                 }
                 CHECK_GL("Draw bounding area");
             }

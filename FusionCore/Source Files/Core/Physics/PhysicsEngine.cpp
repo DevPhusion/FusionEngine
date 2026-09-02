@@ -7,11 +7,13 @@ void PhysicsEngine::Setup(std::vector<std::unique_ptr<Object>>* objects) {
 }
 
 void PhysicsEngine::PhysicsModeChangeEvent() {
-	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate && 
+	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate &&
 		EngineManager::getInstance().EnginePrevPhysicsMode == EngineManager::PhysicsMode::Stop) {
+		pendingBroadPhaseRebuild = true;
 		ScriptManager::getInstance().RunAllScriptsStart();
 	}
 	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Stop) {
+		pendingBroadPhaseRebuild = true;
 		ScriptManager::getInstance().RunAllScriptsStop();
 		rigidBoundaries.clear();
 		softBoundaries.clear();
@@ -27,6 +29,11 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 
 	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Pause || EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Stop) {
 		return;
+	}
+
+	if (pendingBroadPhaseRebuild) {
+		RebuildBroadPhase();
+		pendingBroadPhaseRebuild = false;
 	}
 
 	ScriptManager::getInstance().RunAllScriptsProcess(delta);
@@ -65,7 +72,10 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 		potentialContacts.reserve(allObjects->size() * 4);
 		{
 			TIME_BLOCK("Broad phase");
-			root.getPotentialContacts(potentialContacts);
+			if (EngineManager::getInstance().EngineSettings.broadPhaseMode == BroadPhaseMode::AABB)
+				boxRoot.getPotentialContacts(potentialContacts);
+			else
+				circleRoot.getPotentialContacts(potentialContacts);
 		}
 		if (!potentialContacts.empty()) {
 			{
@@ -795,6 +805,7 @@ RigidSoftContact PhysicsEngine::DetectRigidSoftContact(const glm::vec3& vertexPo
 	}
 	return contact;
 }
+
 void PhysicsEngine::ResolveRigidSoftContacts(float dtSub) {
 	const float rigidVertexRadius = 0.01f;   
 
@@ -1441,7 +1452,6 @@ void PhysicsEngine::BroadcastCollision(Object* objA, int shapeIdA, Object* objB,
 		}
 	}
 }
-
 
 void PhysicsEngine::BroadcastFluidRigidContacts() {
 	std::set<std::pair<Object*, Object*>> notified;
@@ -2202,52 +2212,75 @@ Projection PhysicsEngine::ProjectOntoAxis(std::vector<glm::vec3>& vertices, Sepa
 	return projection;
 }
 
-BAHNode<BoundingCircle>* PhysicsEngine::RegisterBoundingAreaNode(Object* obj, int shapeId, BoundingCircle boundingCircle) {
-	if (root.obj == nullptr && root.children[0] == nullptr && root.children[1] == nullptr) {
-		root.obj = obj;
-		root.shapeId = shapeId;
-		root.area = boundingCircle;
-		return &root;
-	}
+BroadPhaseHandle PhysicsEngine::RegisterBoundingAreaNode(Object* obj, int shapeId, const BoundingCircle& circle, const BoundingBox& box) {
+	bool useBox = EngineManager::getInstance().EngineSettings.broadPhaseMode == BroadPhaseMode::AABB;
 
-	BAHNode<BoundingCircle>* newNode = root.insert(obj, shapeId, boundingCircle);
+	BroadPhaseHandle handle;
+	handle.isBox = useBox;
+	handle.node = useBox
+		? static_cast<void*>(InsertBroadPhaseLeaf(boxRoot, obj, shapeId, box, true))
+		: static_cast<void*>(InsertBroadPhaseLeaf(circleRoot, obj, shapeId, circle, false));
 
-	BAHNode<BoundingCircle>* parentNode = newNode->parent;
-	if (parentNode) {
-		BAHNode<BoundingCircle>* sibling = (parentNode->children[0] == newNode) ? parentNode->children[1] : parentNode->children[0];
-		if (sibling && sibling->isLeaf() && sibling->obj) {
-			CollisionComponent* siblingCC = sibling->obj->GetComponent<CollisionComponent>();
-			if (siblingCC) {
-				CollisionShapeEntry* siblingEntry = siblingCC->GetShape(sibling->shapeId);
-				if (siblingEntry) siblingEntry->BAHnode = sibling;
-			}
-		}
-	}
-
-	return newNode;
+	return handle;
 }
 
 void PhysicsEngine::UnRegisterBoundingAreaNode(Object* obj, int shapeId) {
-	BAHNode<BoundingCircle>* node = root.searchFor(obj, shapeId);
-	if (!node) return;
+	CollisionComponent* cc = obj ? obj->GetComponent<CollisionComponent>() : nullptr;
+	CollisionShapeEntry* entry = cc ? cc->GetShape(shapeId) : nullptr;
+	if (!entry || !entry->BAHnode.IsValid()) return;
 
-	BAHNode<BoundingCircle>* parentNode = node->parent;
-	BAHNode<BoundingCircle>* sibling = nullptr;
-	if (parentNode) {
-		sibling = (parentNode->children[0] == node) ? parentNode->children[1] : parentNode->children[0];
+	if (entry->BAHnode.isBox) {
+		RemoveBroadPhaseLeaf(static_cast<BAHNode<BoundingBox>*>(entry->BAHnode.node), true);
+	}
+	else {
+		RemoveBroadPhaseLeaf(static_cast<BAHNode<BoundingCircle>*>(entry->BAHnode.node), false);
 	}
 
-	bool siblingWasLeaf = sibling && sibling->isLeaf();
-	Object* promotedObj = siblingWasLeaf ? sibling->obj : nullptr;
-	int promotedShapeId = siblingWasLeaf ? sibling->shapeId : -1;
+	entry->BAHnode.Reset();
+}
 
-	node->removeLeaf();
+void PhysicsEngine::UpdateBoundingAreaNode(BroadPhaseHandle& handle, const BoundingCircle& circle, const BoundingBox& box) {
+	if (!handle.IsValid()) return;
 
-	if (siblingWasLeaf && promotedObj) {
-		CollisionComponent* promotedCC = promotedObj->GetComponent<CollisionComponent>();
-		if (promotedCC) {
-			CollisionShapeEntry* promotedEntry = promotedCC->GetShape(promotedShapeId);
-			if (promotedEntry) promotedEntry->BAHnode = parentNode;
+	if (handle.isBox) {
+		auto* node = static_cast<BAHNode<BoundingBox>*>(handle.node);
+		node->area = box;
+		if (node->parent) node->parent->recalculateBoundingArea();
+	}
+	else {
+		auto* node = static_cast<BAHNode<BoundingCircle>*>(handle.node);
+		node->area = circle;
+		if (node->parent) node->parent->recalculateBoundingArea();
+	}
+}
+
+void PhysicsEngine::SetBroadPhaseMode(BroadPhaseMode mode) {
+	if (EngineManager::getInstance().EngineSettings.broadPhaseMode == mode) return;
+	EngineManager::getInstance().EngineSettings.broadPhaseMode = mode;
+	RebuildBroadPhase();
+}
+
+void PhysicsEngine::RebuildBroadPhase() {
+	circleRoot.Clear();
+	boxRoot.Clear();
+
+	if (!allObjects) return;
+
+	for (auto& objPtr : *allObjects) {
+		Object* obj = objPtr.get();
+		CollisionComponent* cc = obj->GetComponent<CollisionComponent>();
+		if (!cc) continue;
+
+		for (auto& entry : cc->shapes) {
+			entry.BAHnode.Reset();
+		}
+
+		if (!cc->isActive || !cc->Enabled) continue;
+		if (obj->HasComponent<FluidComponent>()) continue;
+
+		for (auto& entry : cc->shapes) {
+			if (entry.syncWithRenderComponent == false && entry.points.size() < 3) continue;
+			entry.BAHnode = RegisterBoundingAreaNode(obj, entry.id, entry.boundingCircle, entry.boundingBox);
 		}
 	}
 }

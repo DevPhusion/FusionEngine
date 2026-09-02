@@ -71,9 +71,9 @@ void CollisionComponent::Deactivate() {
 			entry.polygonEditCallbackID = -1;
 			entry.isAddVertex = false;
 		}
-		if (entry.BAHnode) {
+		if (entry.BAHnode.IsValid()) {
 			PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent, entry.id);
-			entry.BAHnode = nullptr;
+			entry.BAHnode.Reset();
 		}
 	}
 
@@ -111,9 +111,9 @@ void CollisionComponent::RemoveShape(int shapeId) {
 		Renderer::getInstance().polygonEditGizmos->EndEdit();
 		Renderer::getInstance().polygonEditGizmos->RemoveChangeCallback(it->polygonEditCallbackID);
 	}
-	if (it->BAHnode) {
+	if (it->BAHnode.IsValid()) {
 		PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent, it->id);
-		it->BAHnode = nullptr;
+		it->BAHnode.Reset();
 	}
 
 	bool wasResolution = (it->id == resolutionShapeID);
@@ -382,7 +382,10 @@ void CollisionComponent::SetCollisionLayer(uint16_t layer) {
 
 	for (auto& entry : shapes) {
 		entry.boundingCircle.collisionLayer = collisionLayer;
-		if (entry.BAHnode) entry.BAHnode->area.collisionLayer = collisionLayer;
+		entry.boundingBox.collisionLayer = collisionLayer;
+		if (entry.BAHnode.IsValid()) {
+			PhysicsEngine::getInstance().UpdateBoundingAreaNode(entry.BAHnode, entry.boundingCircle, entry.boundingBox);
+		}
 	}
 
 	FluidComponent* fc = parent->GetComponent<FluidComponent>();
@@ -396,7 +399,10 @@ void CollisionComponent::SetCollisionMask(uint16_t mask) {
 
 	for (auto& entry : shapes) {
 		entry.boundingCircle.collisionMask = collisionMask;
-		if (entry.BAHnode) entry.BAHnode->area.collisionMask = collisionMask;
+		entry.boundingBox.collisionMask = collisionMask;
+		if (entry.BAHnode.IsValid()) {
+			PhysicsEngine::getInstance().UpdateBoundingAreaNode(entry.BAHnode, entry.boundingCircle, entry.boundingBox);
+		}
 	}
 
 	FluidComponent* fc = parent->GetComponent<FluidComponent>();
@@ -993,9 +999,9 @@ void CollisionComponent::Deserialize(BinaryReader& r) {
 
 	RenderComponent* rcForCleanup = parent->GetComponent<RenderComponent>();
 	for (auto& entry : shapes) {
-		if (entry.BAHnode) {
+		if (entry.BAHnode.IsValid()) {
 			PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent, entry.id);
-			entry.BAHnode = nullptr;
+			entry.BAHnode.Reset();
 		}
 		if (entry.renderSyncCallbackID != -1) {
 			if (rcForCleanup) rcForCleanup->RemoveOnShapeSetCallback(entry.renderSyncCallbackID);
@@ -1072,9 +1078,9 @@ void CollisionComponent::PostLoad() {
 
 		bool hadAnyNode = false;
 		for (auto& entry : shapes) {
-			if (entry.BAHnode) {
+			if (entry.BAHnode.IsValid()) {
 				PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent, entry.id);
-				entry.BAHnode = nullptr;
+				entry.BAHnode.Reset();
 				hadAnyNode = true;
 			}
 		}
@@ -1093,18 +1099,17 @@ void CollisionComponent::SetEnabled(bool enabled) {
 			if (entry.syncWithRenderComponent == false && entry.points.size() < 3) {
 				continue;
 			}
-			if (!entry.BAHnode) {
-				entry.BAHnode = PhysicsEngine::getInstance().RegisterBoundingAreaNode(parent, entry.id, entry.boundingCircle);
+			if (!entry.BAHnode.IsValid()) {
+				entry.BAHnode = PhysicsEngine::getInstance().RegisterBoundingAreaNode(parent, entry.id, entry.boundingCircle, entry.boundingBox);
 			}
 		}
 		calculateBoundingCircle();
-
 	}
 	else {
 		for (auto& entry : shapes) {
-			if (entry.BAHnode) {
+			if (entry.BAHnode.IsValid()) {
 				PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent, entry.id);
-				entry.BAHnode = nullptr;
+				entry.BAHnode.Reset();
 			}
 		}
 	}
@@ -1121,9 +1126,9 @@ void CollisionComponent::calculateBoundingCircle() {
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
 	if (!tc) {
 		for (auto& entry : shapes) {
-			if (entry.BAHnode) {
+			if (entry.BAHnode.IsValid()) {
 				PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent, entry.id);
-				entry.BAHnode = nullptr;
+				entry.BAHnode.Reset();
 			}
 		}
 		return;
@@ -1141,17 +1146,21 @@ void CollisionComponent::calculateBoundingCircle(CollisionShapeEntry& entry) {
 	if (!tc) return;
 
 	if (entry.syncWithRenderComponent == false && entry.points.size() < 3) {
-		if (entry.BAHnode) {
+		if (entry.BAHnode.IsValid()) {
 			PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent, entry.id);
-			entry.BAHnode = nullptr;
+			entry.BAHnode.Reset();
 		}
 		return;
 	}
 
 	glm::vec3 center = tc->GetWorldPosition();
 	float radius = 0.0f;
+	std::vector<glm::vec3> worldPoints;
+	worldPoints.reserve(entry.points.size());
+
 	for (auto& p : entry.points) {
 		glm::vec3 worldP = tc->ProjectToWorld(glm::vec3(p[0], p[1], 0.0f));
+		worldPoints.push_back(worldP);
 		float dist = glm::distance(center, worldP);
 		if (dist > radius) radius = dist;
 	}
@@ -1161,16 +1170,15 @@ void CollisionComponent::calculateBoundingCircle(CollisionShapeEntry& entry) {
 	entry.boundingCircle.collisionLayer = collisionLayer;
 	entry.boundingCircle.collisionMask = collisionMask;
 
-	if (!isActive) return;  
+	entry.boundingBox = BoundingBox::FromPoints(worldPoints, collisionLayer, collisionMask);
 
+	if (!isActive) return;
 	if (parent->HasComponent<FluidComponent>()) return;
 
-	if (!entry.BAHnode) {
-		entry.BAHnode = PhysicsEngine::getInstance().RegisterBoundingAreaNode(parent, entry.id, entry.boundingCircle);
+	if (!entry.BAHnode.IsValid()) {
+		entry.BAHnode = PhysicsEngine::getInstance().RegisterBoundingAreaNode(parent, entry.id, entry.boundingCircle, entry.boundingBox);
 	}
 	else {
-		entry.BAHnode->area = entry.boundingCircle;
-		entry.BAHnode->recalculateBoundingArea();
-		if (entry.BAHnode->parent) entry.BAHnode->parent->recalculateBoundingArea();
+		PhysicsEngine::getInstance().UpdateBoundingAreaNode(entry.BAHnode, entry.boundingCircle, entry.boundingBox);
 	}
 }

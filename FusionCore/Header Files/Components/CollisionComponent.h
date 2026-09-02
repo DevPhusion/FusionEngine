@@ -6,6 +6,8 @@
 #include "../Core/Physics/Collision/BoundingCircle.h"
 #include "../Core/Physics/Collision/CollisionLayerMask.h"
 #include "../Core/Physics/Collision/BAHNode.h"
+#include "../Core/Physics/Collision/BoundingBox.h"
+#include "../Core/Physics/Collision/BroadPhaseHandle.h"
 #include <string>
 #include <vector>
 
@@ -35,7 +37,7 @@ struct CollisionShapeEntry {
 	std::string name = "Shape";
 
 	Shape currentShape;
-	Shape pendingShape; 
+	Shape pendingShape;
 
 	bool syncWithRenderComponent = false;
 	int renderSyncCallbackID = -1;
@@ -47,7 +49,8 @@ struct CollisionShapeEntry {
 	int polygonEditCallbackID = -1;
 
 	BoundingCircle boundingCircle;
-	BAHNode<BoundingCircle>* BAHnode = nullptr;
+	BoundingBox boundingBox;          
+	BroadPhaseHandle BAHnode;        
 };
 
 class CollisionComponent : public ComponentBase<CollisionComponent>

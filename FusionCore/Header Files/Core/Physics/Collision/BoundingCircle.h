@@ -8,7 +8,6 @@ struct BoundingCircle {
 public:
 	BoundingCircle() = default;
 	BoundingCircle(const glm::vec3 center, float radius, uint16_t collisionLayer, uint16_t collisionMask);
-	//Bounding sphere to bound two smaller sphere
 	BoundingCircle(const BoundingCircle& one, const BoundingCircle& two);
 
 	glm::vec3 center;
@@ -23,5 +22,6 @@ public:
 	}
 
 	float getGrowth(const BoundingCircle& other) const;
-};
 
+	void DebugDraw() const;   
+};

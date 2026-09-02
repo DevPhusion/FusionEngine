@@ -16,6 +16,7 @@
 #include "Collision/SpatialHashGrid.h"
 #include "../../Components/FluidComponent.h"
 #include "../Editor/Windows/Console.h"
+#include "Collision/BroadPhaseHandle.h"
 #include <numeric>
 #include <algorithm>
 #include <random>
@@ -219,7 +220,8 @@ public:
 
 	//Collision detection and resolution
 	std::vector<ContactPoint> allContactPoints;
-	BAHNode<BoundingCircle> root;
+	BAHNode<BoundingCircle> circleRoot;
+	BAHNode<BoundingBox> boxRoot;
 	std::vector<RigidBoundary> rigidBoundaries;
 	std::vector<SoftBoundary> softBoundaries;      
 	std::vector<SoftRigidContact> softRigidContacts;
@@ -231,8 +233,65 @@ public:
 	std::vector<FluidSoftContact> fluidSoftContacts;
 
 	//Broad phase
-	BAHNode<BoundingCircle>* RegisterBoundingAreaNode(Object* obj, int shapeId, BoundingCircle boundingCircle);
+	template<class BoundingAreaClass>
+	BAHNode<BoundingAreaClass>* InsertBroadPhaseLeaf(BAHNode<BoundingAreaClass>& root,
+		Object* obj, int shapeId, const BoundingAreaClass& area, bool isBox) {
+
+		if (!root.obj && !root.children[0] && !root.children[1]) {
+			root.obj = obj;
+			root.shapeId = shapeId;
+			root.area = area;
+			return &root;
+		}
+
+		typename BAHNode<BoundingAreaClass>::DisplacedLeaf displaced;
+		BAHNode<BoundingAreaClass>* newLeaf = root.insert(obj, shapeId, area, &displaced);
+
+		if (displaced.obj) {
+			if (CollisionComponent* cc = displaced.obj->GetComponent<CollisionComponent>()) {
+				if (CollisionShapeEntry* entry = cc->GetShape(displaced.shapeId)) {
+					entry->BAHnode.node = displaced.node;
+				}
+			}
+		}
+
+		return newLeaf;
+	}
+
+	template<typename T>
+	void RemoveBroadPhaseLeaf(BAHNode<T>* node, bool isBox) {
+		BAHNode<T>* parentNode = node->parent;
+		BAHNode<T>* sibling = nullptr;
+		if (parentNode) {
+			sibling = (parentNode->children[0] == node) ? parentNode->children[1] : parentNode->children[0];
+		}
+
+		bool siblingWasLeaf = sibling && sibling->isLeaf();
+		Object* promotedObj = siblingWasLeaf ? sibling->obj : nullptr;
+		int promotedShapeId = siblingWasLeaf ? sibling->shapeId : -1;
+
+		node->removeLeaf();
+
+		if (siblingWasLeaf && promotedObj) {
+			CollisionComponent* promotedCC = promotedObj->GetComponent<CollisionComponent>();
+			if (promotedCC) {
+				CollisionShapeEntry* promotedEntry = promotedCC->GetShape(promotedShapeId);
+				if (promotedEntry) {
+					promotedEntry->BAHnode.node = parentNode;
+					promotedEntry->BAHnode.isBox = isBox;
+				}
+			}
+		}
+	}
+
+	bool pendingBroadPhaseRebuild = true;
+
+	BroadPhaseHandle RegisterBoundingAreaNode(Object* obj, int shapeId, const BoundingCircle& circle, const BoundingBox& box);
 	void UnRegisterBoundingAreaNode(Object* obj, int shapeId);
+	void UpdateBoundingAreaNode(BroadPhaseHandle& handle, const BoundingCircle& circle, const BoundingBox& box);
+
+	void SetBroadPhaseMode(BroadPhaseMode mode);
+	void RebuildBroadPhase();
 
 	void ResolveContacts(PotentialContact* contacts, unsigned numContacts);
 	
