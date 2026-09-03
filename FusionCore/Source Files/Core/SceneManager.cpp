@@ -28,12 +28,16 @@ std::string SceneManager::NormalizeToVirtualPath(const std::string& path) const 
 void SceneManager::ClearLiveScene() {
 	EditorManager::getInstance().SetSelectedObject(nullptr);
 
+	std::unordered_set<Object*> removedObjects;
+	removedObjects.reserve(ObjectManager::getInstance().allObjects.size());
 	for (auto& obj : ObjectManager::getInstance().allObjects) {
+		removedObjects.insert(obj.get());
 		obj->OnDelete();
 	}
+	PhysicsEngine::getInstance().PurgeObjectsFromCollisionTracking(removedObjects);
 
 	ObjectManager::getInstance().allObjects.clear();
-	ObjectManager::getInstance().pendingRemovals.clear();  
+	ObjectManager::getInstance().pendingRemovals.clear();
 	PhysicsEngine::getInstance().registeredPGSConstraints.clear();
 }
 
@@ -233,9 +237,13 @@ void SceneManager::CloseSceneTab(int index, bool discardUnsaved) {
 		activeIndex = -1;
 	}
 	else {
+		std::unordered_set<Object*> removedObjects;
+		removedObjects.reserve(openScenes[index].objects.size());
 		for (auto& obj : openScenes[index].objects) {
+			removedObjects.insert(obj.get());
 			obj->OnDelete();
 		}
+		PhysicsEngine::getInstance().PurgeObjectsFromCollisionTracking(removedObjects);
 	}
 
 	openScenes.erase(openScenes.begin() + index);

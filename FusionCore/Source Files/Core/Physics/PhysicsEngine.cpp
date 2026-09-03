@@ -1663,6 +1663,18 @@ void PhysicsEngine::PurgeObjectFromCollisionTracking(Object* obj) {
 	purge(previousFrameCollisions);
 }
 
+void PhysicsEngine::PurgeObjectsFromCollisionTracking(const std::unordered_set<Object*>& objs) {
+	if (objs.empty()) return;
+	auto purge = [&objs](auto& map) {
+		for (auto it = map.begin(); it != map.end(); ) {
+			if (objs.count(it->first.objA) || objs.count(it->first.objB)) it = map.erase(it);
+			else ++it;
+		}
+		};
+	purge(currentFrameCollisions);
+	purge(previousFrameCollisions);
+}
+
 CollisionData PhysicsEngine::SAT(TransformComponent* tcA, const std::vector<Edge>& edgesA,
 	TransformComponent* tcB, const std::vector<Edge>& edgesB) {
 
@@ -2230,10 +2242,12 @@ void PhysicsEngine::UnRegisterBoundingAreaNode(Object* obj, int shapeId) {
 	if (!entry || !entry->BAHnode.IsValid()) return;
 
 	if (entry->BAHnode.isBox) {
-		RemoveBroadPhaseLeaf(static_cast<BAHNode<BoundingBox>*>(entry->BAHnode.node), true);
+		BAHNode<BoundingBox>* node = boxRoot.searchFor(obj, shapeId);
+		if (node) RemoveBroadPhaseLeaf(node, true);
 	}
 	else {
-		RemoveBroadPhaseLeaf(static_cast<BAHNode<BoundingCircle>*>(entry->BAHnode.node), false);
+		BAHNode<BoundingCircle>* node = circleRoot.searchFor(obj, shapeId);
+		if (node) RemoveBroadPhaseLeaf(node, false);
 	}
 
 	entry->BAHnode.Reset();

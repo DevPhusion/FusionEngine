@@ -398,11 +398,12 @@ void ObjectManager::RemoveObject(Object* obj) {
 	}
 
 	std::function<void(Object*)> destroySubtree = [&](Object* o) {
-		std::vector<Object*> kids = o->children; 
+		std::vector<Object*> kids = o->children;
 		for (Object* child : kids) {
 			destroySubtree(child);
 		}
 		o->OnDelete();
+		PhysicsEngine::getInstance().PurgeObjectFromCollisionTracking(o);
 		for (size_t i = 0; i < allObjects.size(); i++) {
 			if (allObjects[i].get() == o) {
 				allObjects.erase(allObjects.begin() + i);
@@ -421,6 +422,7 @@ void ObjectManager::RemoveObjectById(uint64_t id) {
 			if (EditorManager::getInstance().selectedObject == allObjects[i].get())
 				EditorManager::getInstance().SetSelectedObject(nullptr);
 			allObjects[i]->OnDelete();
+			PhysicsEngine::getInstance().PurgeObjectFromCollisionTracking(allObjects[i].get());
 			allObjects.erase(allObjects.begin() + i);
 			return;
 		}

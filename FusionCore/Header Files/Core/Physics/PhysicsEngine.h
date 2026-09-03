@@ -4,7 +4,6 @@
 #include "../../Components/FractureComponent.h"
 #include "../../Components/CollisionComponent.h"
 #include "Collision/BAHNode.h"
-#include "Collision/DebugPoint.h"
 #include "Constraint/PGSConstraint/Constraint.h"
 #include "Constraint/XPBDConstraint/XPBDConstraint.h"
 #include "Constraint/PGSConstraint/ContactConstraint.h"
@@ -351,7 +350,8 @@ public:
 	void RecordCollisionPair(Object* objA, int shapeIdA, Object* objB, int shapeIdB, CollisionType type,
 		const glm::vec3& point, const glm::vec3& normal, float penetration);
 	void ResolveCollisionEnterExit();
-	void PurgeObjectFromCollisionTracking(Object* obj);
+	void PurgeObjectFromCollisionTracking(Object* obj); 
+	void PurgeObjectsFromCollisionTracking(const std::unordered_set<Object*>& objs);
 
 	int ResolutionShapeIdOf(Object* obj);
 

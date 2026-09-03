@@ -215,8 +215,6 @@
     <ClCompile Include="Source Files\Core\ObjectManager.cpp" />
     <ClCompile Include="Source Files\Core\Physics\Collision\BAHNode.cpp" />
     <ClCompile Include="Source Files\Core\Physics\Collision\BoundingCircle.cpp" />
-    <ClCompile Include="Source Files\Core\Physics\Collision\DebugCircle.cpp" />
-    <ClCompile Include="Source Files\Core\Physics\Collision\DebugPoint.cpp" />
     <ClCompile Include="Source Files\Core\Physics\Collision\SpatialHashGrid.cpp" />
     <ClCompile Include="Source Files\Core\Physics\Constraint\PGSConstraint\Constraint.cpp" />
     <ClCompile Include="Source Files\Core\Physics\Constraint\PGSConstraint\ContactConstraint.cpp" />
@@ -284,8 +282,6 @@
     <ClInclude Include="Header Files\Core\Physics\Collision\BoundingCircle.h" />
     <ClInclude Include="Header Files\Core\Physics\Collision\CollisionLayerMask.h" />
     <ClInclude Include="Header Files\Core\Physics\Collision\ContactID.h" />
-    <ClInclude Include="Header Files\Core\Physics\Collision\DebugCircle.h" />
-    <ClInclude Include="Header Files\Core\Physics\Collision\DebugPoint.h" />
     <ClInclude Include="Header Files\Core\Physics\Collision\SpatialHashGrid.h" />
     <ClInclude Include="Header Files\Core\Physics\Constraint\PGSConstraint\Constraint.h" />
     <ClInclude Include="Header Files\Core\Physics\Constraint\PGSConstraint\Constraints.h" />

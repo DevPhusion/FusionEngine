@@ -1116,8 +1116,7 @@ void CollisionComponent::SetEnabled(bool enabled) {
 }
 
 void CollisionComponent::OnDelete() {
-	Deactivate();  
-	PhysicsEngine::getInstance().PurgeObjectFromCollisionTracking(parent);
+	Deactivate();
 }
 
 void CollisionComponent::calculateBoundingCircle() {

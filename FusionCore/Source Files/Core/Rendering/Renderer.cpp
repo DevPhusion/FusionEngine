@@ -173,8 +173,7 @@ void Renderer::Draw() {
                     if (debug.drawContactPoints) {
                         {
                             TIME_BLOCK("Draw contact points");
-                            DebugPoint point = DebugPoint();
-                            point.DrawPoint(cp.point, 15, Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
+                            DrawPoint(cp.point, glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), 1.5f);
                         }
                         CHECK_GL("Draw contact points");
                     }
@@ -423,6 +422,20 @@ void Renderer::DrawFilledPolygon(const std::vector<glm::vec3>& worldPoints, glm:
     for (size_t i = 0; i < worldPoints.size(); i++) {
         DrawLine(worldPoints[i], worldPoints[(i + 1) % worldPoints.size()], outlineColor, outlineThickness);
     }
+}
+
+void Renderer::DrawPoint(glm::vec3 position, glm::vec4 color, float pixelSize, int segments) {
+    float zoom = Camera::getInstance().cameraZoom;
+    float worldRadius = (pixelSize * 0.5f) / (zoom > 1e-6f ? zoom : 1.0f);
+
+    std::vector<glm::vec3> points;
+    points.reserve(segments);
+    for (int i = 0; i < segments; i++) {
+        float angle = 2.0f * glm::pi<float>() * (float)i / (float)segments;
+        points.push_back(position + glm::vec3(std::cos(angle), std::sin(angle), 0.0f) * worldRadius);
+    }
+
+    DrawFilledPolygon(points, color, color, 1.0f);
 }
 
 void Renderer::EnsureAllRenderResourcesLoaded() {
