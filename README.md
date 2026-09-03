@@ -119,6 +119,8 @@ raw_binary   = secret_key XOR final_binary
 
 The full design document covers the engine's mathematics, physics solvers, ECS, editor, file management, scripting, and reinforcement learning integration in detail.
 
+[Read the full design document](./Fusion_Engine_Design_Document.pdf)
+
 ## Status
 
 Fusion Engine is under active development. Interfaces, including the editor UI, are subject to change.
