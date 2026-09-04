@@ -1,14 +1,8 @@
 # Fusion Engine
 
-Fusion Engine is a custom 2D game engine designed for building lightweight, reinforcement learning (RL) training environments. It combines the ease of use of engines like Unity and Godot with a Python-first scripting workflow, without the overhead of general-purpose 3D engines such as NVIDIA Isaac Sim.
+Fusion Engine is a custom 2D game engine designed for building lightweight, reinforcement learning (RL) training environments. The engine uses python as its native scripting language with direct integration with Gymnasium and Stable-Baseline3 for RL training. The core architecture of the engine is inspired by Unity and Godot engine but designed with the main goal of creating RL environments instead of games. 
 
-The engine core is written in C++ for performance and low-level control, while all core functionality is exposed to Python via [pybind11](https://github.com/pybind/pybind11). This allows users to prototype and train RL agents using standard Python libraries such as Gymnasium (OpenAI Gym) and Stable-Baselines3, without leaving the engine.
-
-## Design Goals
-
-- Provide a fast, minimal 2D environment for prototyping RL training setups before scaling to larger simulators.
-- Offer a low-barrier entry point for new programmers learning to train RL agents.
-- Keep the engine modular and free of unnecessary bloat.
+<img width="1913" height="986" alt="Fusion Engine editor showing a project being edited" src="https://github.com/user-attachments/assets/45fedd5e-b4b0-4758-b92b-3718e8a44d3f" />
 
 ## Platform Support
 
@@ -60,7 +54,7 @@ The engine core is organized into the following systems:
 
 The physics engine is the core of Fusion Engine. Unlike most 2D engines, which simulate rigid bodies only, Fusion Engine is a multi-physics engine that simulates **rigid bodies, soft bodies, and fluids**, either standalone or combined in a single unified simulation (for example, a rigid boat floating on a fluid surface, or a soft body compressing under a rigid weight).
 
-**Demo:** Multi-physics simulation with rigid body, soft body and fluids interacting with one another
+**Demo:** Multiphysics simulation of rigid body, soft body and fluid dynamics
 
 https://github.com/user-attachments/assets/8f7cdf5f-0487-47e7-92c1-7d028b895245
 
@@ -95,9 +89,13 @@ Once the environment is set up, standard Python packages (Gymnasium, Stable-Base
 
 Reinforcement learning support is delivered as an installable **package** rather than a core feature, keeping the base engine lightweight. Selecting the RL package from the project configuration screen pulls in both the required Python libraries (e.g. NumPy, PyTorch, Gymnasium) and engine-side features (a dedicated `fusionRL` Python API and additional editor windows). Installed and selected packages are synced automatically in the background when a project is opened.
 
+**Demo:** RL agent learning to play Flappy Bird
+
+https://github.com/user-attachments/assets/18549414-6475-4695-be27-09421f8e3032
+
 Key RL capabilities:
 
-- **Agent component.** Attaching an agent component to an entity marks it as trainable. Combined with a script, it exposes observations, rewards, and actions through both the Python API and the editor inspector. Action and observation spaces follow Gymnasium's space types — `Discrete`, `MultiDiscrete`, `Box`, and `MultiBinary` — with `Box` used as the default observation space.
+- **Agent** Attaching an agent component to an entity marks it as trainable. Combined with a script, it exposes observations, rewards, and actions through both the Python API and the editor inspector. Action and observation spaces follow Gymnasium's space types — `Discrete`, `MultiDiscrete`, `Box`, and `MultiBinary` — with `Box` used as the default observation space.
 - **Headless training.** During training, rendering and standard physics/editor processing are disabled ("headless mode") so the simulation isn't capped by OpenGL's 60 FPS rendering limit, significantly speeding up training. The editor instead displays a training monitor (refreshed at a fixed 30 Hz) showing live training statistics. Communication between the training thread and the main thread is synchronized using mutexes for thread safety.
 - **Live view.** An optional live view lets you watch the agent train in real time; this can slow down training and is intended for debugging/observation rather than production training runs.
 - **Environment implementation.** Any scene built in the engine can act as a Gymnasium-compatible environment. The engine implements the standard `init`, `step`, and `reset` functions: `init` applies the agent's configured action/observation spaces, `step` advances the simulation and accumulates reward and observations, and `reset` reloads the scene.
