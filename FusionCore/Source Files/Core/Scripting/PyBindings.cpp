@@ -2394,7 +2394,7 @@ namespace {
 		obj->AddComponent(std::make_unique<EditorRenderComponent>(obj, obj->shader, "Resources/Images/Object.png", 0.075f));
 		obj->AddComponent(std::make_unique<TransformComponent>(obj, obj->shader,
 			obj->GetComponent<EditorRenderComponent>()->GetCenter()));
-		obj->AddComponent(std::make_unique<MouseInteractComponent>(obj, false));
+		obj->AddComponent(std::make_unique<MouseInteractComponent>(obj));
 
 		return obj;
 	}

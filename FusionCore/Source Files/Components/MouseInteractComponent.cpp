@@ -2,20 +2,18 @@
 
 bool MouseInteractComponent::ObjectSelected = false;
 
-MouseInteractComponent::MouseInteractComponent(Object* parent, bool physicsInteract) : ComponentBase<MouseInteractComponent>(parent) {
+MouseInteractComponent::MouseInteractComponent(Object* parent) : ComponentBase<MouseInteractComponent>(parent) {
 	Name = "Mouse Interact Component";
-	this->physicsInteract = physicsInteract;
 	Hidden = true;
 }
 
 void MouseInteractComponent::CopyTo(Object* other) {
 	MouseInteractComponent* target = other->GetComponent<MouseInteractComponent>();
 	if (!target) {
-		other->AddComponent(std::make_unique<MouseInteractComponent>(other, physicsInteract));
+		other->AddComponent(std::make_unique<MouseInteractComponent>(other));
 		target = other->GetComponent<MouseInteractComponent>();
 	}
 
-	target->physicsInteract = physicsInteract;
 	target->SetEnabled(Enabled);
 }
 
@@ -127,7 +125,8 @@ void MouseInteractComponent::FindSelectedPolygon(int button, int action, int mod
 			Selected = true;
 			ObjectSelected = true;
 
-			if (physicsInteract && EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) {
+			if (EngineManager::getInstance().EngineSettings.physicsInteract
+				&& EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) {
 				if (parent->HasComponent<RigidBodyComponent>()) {
 					parent->GetComponent<RigidBodyComponent>()->isDragging = true;
 				}
@@ -144,9 +143,9 @@ void MouseInteractComponent::FindSelectedPolygon(int button, int action, int mod
 		}
 	}
 
-	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS 
+	if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS
 		&& EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate
-		&& !Selected && physicsInteract) {
+		&& !Selected && EngineManager::getInstance().EngineSettings.physicsInteract) {
 		if (parent->HasComponent<RigidBodyComponent>()) {
 			parent->GetComponent<RigidBodyComponent>()->isDragging = true;
 		}
@@ -192,7 +191,7 @@ void MouseInteractComponent::DragPolygon(double xpos, double ypos) {
 		Selected = false;
 		ObjectSelected = false;
 
-		if (physicsInteract && parent->HasComponent<RigidBodyComponent>()) {
+		if (EngineManager::getInstance().EngineSettings.physicsInteract && parent->HasComponent<RigidBodyComponent>()) {
 			parent->GetComponent<RigidBodyComponent>()->isDragging = false;
 		}
 

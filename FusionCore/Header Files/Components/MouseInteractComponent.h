@@ -12,11 +12,10 @@
 class MouseInteractComponent : public ComponentBase<MouseInteractComponent>
 {
 public:
-    MouseInteractComponent(Object* parent, bool physicsInteract);
+    MouseInteractComponent(Object* parent);
     MouseInteractComponent() = default;
 
     static bool ObjectSelected; //prevent multiple selection;
-    bool physicsInteract;
     bool Selected;
     bool Inspectable = true;
 

@@ -10,14 +10,6 @@ void Renderer::Setup(std::vector<std::unique_ptr<Object>>* objects) {
     constraintEditGizmos = new ConstraintEditGizmos();
 }
 
-#define CHECK_GL(label) \
-    do { \
-        GLenum _err; \
-        while ((_err = glGetError()) != GL_NO_ERROR) { \
-            Console::PrintError("GL error {} after: {}").Format((int)_err, label); \
-        } \
-    } while (0)
-
 void Renderer::Draw() {
     TIME_BLOCK("Rendering");
 
@@ -33,7 +25,6 @@ void Renderer::Draw() {
             TIME_BLOCK("Draw background grid");
             backgroundGrid.Draw(camPos, screenSize, zoom);
         }
-        CHECK_GL("Draw background grid");
     }
 
     if (debug.drawObjectWireframe) {
@@ -42,13 +33,11 @@ void Renderer::Draw() {
     else {
         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
     }
-    CHECK_GL("Set polygon mode");
 
     {
         TIME_BLOCK("Draw constraint display");
         constraintEditGizmos->DrawConstraintDisplays();
     }
-    CHECK_GL("Draw constraint display");
 
     std::vector<Object*> renderQueue;
 
@@ -86,7 +75,6 @@ void Renderer::Draw() {
             return zA < zB;
             });
     }
-    // no GL calls in queue construction, skip CHECK_GL here
 
     for (Object* obj : renderQueue) {
         if (obj->HasComponent<FluidComponent>()) {
@@ -94,7 +82,6 @@ void Renderer::Draw() {
                 TIME_BLOCK("Draw fluids");
                 obj->GetComponent<FluidComponent>()->Draw();
             }
-            CHECK_GL("Draw fluids");
         }
         else {
             {
@@ -106,7 +93,6 @@ void Renderer::Draw() {
                     obj->GetComponent<EditorRenderComponent>()->Draw();
                 }
             }
-            CHECK_GL("Draw objects");
         }
 
         if (obj->HasComponent<TransformComponent>()) {
@@ -131,7 +117,6 @@ void Renderer::Draw() {
                 }
             }
         }
-        CHECK_GL("Draw camera bounds");
     }
 
     if (EngineManager::getInstance().EnginePhysicsMode != EngineManager::PhysicsMode::Simulate ||
@@ -145,14 +130,12 @@ void Renderer::Draw() {
                     }
                 }
             }
-            CHECK_GL("Draw collision shapes");
     }
 
     if (debug.AnyDebugGizmoEnabled()) {
         {
             TIME_BLOCK("Draw debug");
             glLineWidth(2.0f);
-            CHECK_GL("glLineWidth(2.0f) debug block");
 
             if (debug.drawBroadPhaseBounds) {
                 {
@@ -162,7 +145,6 @@ void Renderer::Draw() {
                     else
                         PhysicsEngine::getInstance().circleRoot.DrawBoundingArea();
                 }
-                CHECK_GL("Draw bounding area");
             }
 
             if (debug.drawContactPoints || debug.drawCollisionNormals) {
@@ -175,7 +157,6 @@ void Renderer::Draw() {
                             TIME_BLOCK("Draw contact points");
                             DrawPoint(cp.point, glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), 1.5f);
                         }
-                        CHECK_GL("Draw contact points");
                     }
 
                     if (debug.drawCollisionNormals) {
@@ -185,7 +166,6 @@ void Renderer::Draw() {
                             float arrowLength = 0.5f;
                             DrawArrow(cp.point, cp.normal, arrowLength, normalColor);
                         }
-                        CHECK_GL("Draw collision normal");
                     }
                 }
             }
@@ -200,7 +180,6 @@ void Renderer::Draw() {
                                 TIME_BLOCK("Draw soft body springs");
                                 sb->DrawSprings();
                             }
-                            CHECK_GL("Draw soft body springs");
                         }
                         if (debug.drawSoftBodyPointMasses) {
                             {
@@ -210,7 +189,6 @@ void Renderer::Draw() {
                                     sb->MassAggregate[j]->DrawDebug();
                                 }
                             }
-                            CHECK_GL("Draw soft body point masses");
                         }
                         if (debug.drawVirtualSoftBodyProxies) {
                             {
@@ -220,13 +198,11 @@ void Renderer::Draw() {
                                     sb->VirtualProxies[j]->DrawDebug();
                                 }
                             }
-                            CHECK_GL("Draw soft body proxies");
                         }
                     }
                 }
             }
             glLineWidth(1.0f);
-            CHECK_GL("glLineWidth(1.0f) end debug block");
         }
     }
 
@@ -236,7 +212,6 @@ void Renderer::Draw() {
         polygonEditGizmos->UpdateGizmos();
         constraintEditGizmos->DrawPivotHandles();
     }
-    CHECK_GL("Draw gizmos");
 }
 
 void Renderer::DrawLine(glm::vec3 p1, glm::vec3 p2, glm::vec4 color, float thickness, bool screenSpace) {

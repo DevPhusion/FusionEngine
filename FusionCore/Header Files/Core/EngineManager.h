@@ -28,6 +28,7 @@ struct Settings {
 	BroadPhaseMode broadPhaseMode = BroadPhaseMode::AABB;
 
 	// Debug
+	bool physicsInteract = false;
 	bool drawObjectWireframe = false;
 	bool drawBroadPhaseBounds = false;
 	bool drawCollisionShapes = false;

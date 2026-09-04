@@ -12,10 +12,6 @@ void SoftBodyComponent::Activate() {
 	transformCallbackID = parent->GetComponent<TransformComponent>()->AddTransformCallback([this] { UpdateMassAggregate(); });
 	setShapeCallbackID = parent->GetComponent<RenderComponent>()->AddOnShapeSetCallback([this] { RebuildMassAggregate(); });
 
-	if (parent->HasComponent<MouseInteractComponent>()) {
-		parent->GetComponent<MouseInteractComponent>()->physicsInteract = true;
-	}
-
 	if (Enabled) {
 		RebuildMassAggregate();
 	}

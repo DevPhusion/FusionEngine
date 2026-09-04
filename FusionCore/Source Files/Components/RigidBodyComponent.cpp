@@ -10,9 +10,6 @@ RigidBodyComponent::RigidBodyComponent(Object* parent) : ComponentBase<RigidBody
 	this->velocity = glm::vec3(0);
 	this->netForce = glm::vec3(0);
 	CalculateInertia();
-
-	MouseInteractComponent* mc = parent->GetComponent<MouseInteractComponent>();
-	if (mc) mc->physicsInteract = true;
 }
 
 void RigidBodyComponent::CopyTo(Object* other) {
@@ -97,8 +94,7 @@ void RigidBodyComponent::ProcessInspectorUI() {
 }
 
 void RigidBodyComponent::OnDelete() {
-	MouseInteractComponent* mc = parent->GetComponent<MouseInteractComponent>();
-	if (mc) mc->physicsInteract = false;
+	
 }
 
 void RigidBodyComponent::IntegrateVelocities(float delta) {

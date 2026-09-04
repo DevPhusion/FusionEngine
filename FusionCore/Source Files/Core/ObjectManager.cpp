@@ -6,7 +6,7 @@ void ObjectManager::AddObject(Object* parent) {
 
 	obj->AddComponent(std::make_unique<EditorRenderComponent>(obj.get(), obj.get()->shader, "Resources/Images/Object.png", 0.075f));
 	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj.get()->shader, obj.get()->GetComponent<EditorRenderComponent>()->GetCenter()));
-	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), false));
+	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get()));
 	for (auto& c : obj->components) {
 		c->Activate();
 	}
@@ -22,7 +22,7 @@ void ObjectManager::AddCamera(Object* parent) {
 
 	obj->AddComponent(std::make_unique<EditorRenderComponent>(obj.get(), obj.get()->shader, "Resources/Images/Object.png", 0.075f));
 	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj.get()->shader, obj.get()->GetComponent<EditorRenderComponent>()->GetCenter()));
-	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), false));
+	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<CameraComponent>(obj.get()));
 	for (auto& c : obj->components) {
 		c->Activate();
@@ -47,7 +47,7 @@ void ObjectManager::AddBox(Object* parent) {
 	shape.width = 1.0f;
 	shape.height = 1.0f;
 	render->SetShape(shape);
-	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), true));
+	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<RigidBodyComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<ConstraintComponent>(obj.get()));
@@ -73,7 +73,7 @@ void ObjectManager::AddCircle(Object* parent) {
 	shape.center = obj->GetComponent<TransformComponent>()->GetWorldPosition();
 	shape.radius = 1.0f;
 	render->SetShape(shape);
-	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), true));
+	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<RigidBodyComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<ConstraintComponent>(obj.get()));
@@ -125,7 +125,7 @@ void ObjectManager::AddPolygon(Object* parent) {
 	tc->SetRotationCenter(render->GetCenter());
 	tc->worldMatrixDirty = true;
 
-	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), true));
+	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<RigidBodyComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<ConstraintComponent>(obj.get()));
@@ -154,7 +154,7 @@ void ObjectManager::AddSoftBox(Object* parent) {
 	shape.width = 1.0f;
 	shape.height = 1.0f;
 	render->SetShape(shape);
-	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), true));
+	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<SoftBodyComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<ConstraintComponent>(obj.get()));
@@ -180,7 +180,7 @@ void ObjectManager::AddSoftCircle(Object* parent) {
 	shape.center = obj->GetComponent<TransformComponent>()->GetWorldPosition();
 	shape.radius = 1.0f;
 	render->SetShape(shape);
-	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), true));
+	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<SoftBodyComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<ConstraintComponent>(obj.get()));
@@ -232,7 +232,7 @@ void ObjectManager::AddSoftPolygon(Object* parent) {
 	tc->SetRotationCenter(render->GetCenter());
 	tc->worldMatrixDirty = true;
 
-	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), true));
+	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<SoftBodyComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<ConstraintComponent>(obj.get()));
@@ -261,7 +261,7 @@ void ObjectManager::AddFluid(Object* parent) {
 	shape.width = 10.0f;
 	shape.height = 10.0f;
 	render->SetShape(shape);
-	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get(), true));
+	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<FluidComponent>(obj.get()));
 	FluidComponent* fc = obj->GetComponent<FluidComponent>();

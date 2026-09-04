@@ -391,6 +391,7 @@ void EngineStatus::ProcessSettingsPopup() {
 		ImGui::Spacing();
 		ImGui::SeparatorText("Debug");
 
+		EditorField::CheckboxEngine("Physics interact: ", "##Physics interact", &settings.physicsInteract);
 		EditorField::CheckboxEngine("Draw object wire frame: ", "##Draw object wire frame", &settings.drawObjectWireframe);
 		EditorField::CheckboxEngine("Draw broad phase bounding area: ", "##Draw broad phase bounding area", &settings.drawBroadPhaseBounds);
 		EditorField::CheckboxEngine("Draw collision shapes: ", "##Draw collision shapes", &settings.drawCollisionShapes);

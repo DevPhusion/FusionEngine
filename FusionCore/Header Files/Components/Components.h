@@ -22,7 +22,7 @@ namespace {
 			return std::make_unique<TransformComponent>(parent, parent->shader, glm::vec3(0));
 		}
 		if (name == "Mouse Interact Component") {
-			return std::make_unique<MouseInteractComponent>(parent, false);
+			return std::make_unique<MouseInteractComponent>(parent);
 		}
 		if (name == "Collision Component") {
 			return std::make_unique<CollisionComponent>(parent);
