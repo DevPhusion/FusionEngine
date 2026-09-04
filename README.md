@@ -23,7 +23,7 @@ Precompiled builds are published as zipped executables under the [Releases](../.
 1. Go to the [Releases](../../releases) page.
 2. Download the latest `.zip` archive for the engine.
 3. Extract the archive to a folder of your choice.
-4. Run the engine executable to launch the editor.
+4. Run the engine executable `FusionApp.exe` to launch the editor.
 
 No additional build tools are required to use the compiled release.
 
@@ -34,14 +34,12 @@ Building from source requires **Visual Studio** (the project is developed and ma
 1. Clone the repository:
 
    ```
-   git clone https://github.com/DevPhusion/Fusion-Engine.git
+   git clone https://github.com/DevPhusion/FusionEngine.git
    ```
 
 2. Open the cloned folder in **Visual Studio**.
 3. Build the solution.
 4. Run the resulting executable to launch the editor.
-
-> Update the repository URL above if the actual project path differs.
 
 ## Architecture
 
@@ -61,6 +59,10 @@ The engine core is organized into the following systems:
 ## Physics Engine
 
 The physics engine is the core of Fusion Engine. Unlike most 2D engines, which simulate rigid bodies only, Fusion Engine is a multi-physics engine that simulates **rigid bodies, soft bodies, and fluids**, either standalone or combined in a single unified simulation (for example, a rigid boat floating on a fluid surface, or a soft body compressing under a rigid weight).
+
+**Demo:** Multi-physics simulation with rigid body, soft body and fluids interacting with one another
+
+https://github.com/user-attachments/assets/8f7cdf5f-0487-47e7-92c1-7d028b895245
 
 Each physics domain uses a different, purpose-built solver, bridged together through an impulse-based coupling layer:
 
