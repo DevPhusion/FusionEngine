@@ -121,6 +121,13 @@ The full design document covers the engine's mathematics, physics solvers, ECS, 
 
 [Read the full design document](./Fusion_Engine_Design_Document.pdf)
 
-## Status
+## Upcoming Features
 
-Fusion Engine is under active development. Interfaces, including the editor UI, are subject to change.
+Fusion Engine is under active development. These are some upcoming features planned for version 0.2
+
+| Feature | Status | Progress |
+|---|---|---|
+| Multiple agent training | In Development | ░░░░░░░░░░ 0% |
+| Sound / Audio support | In Development | ░░░░░░░░░░ 0% |
+| Smoke simulation | In Development | ░░░░░░░░░░ 0% |
+| Editor UI update and themes | In Development | ░░░░░░░░░░ 0% |
