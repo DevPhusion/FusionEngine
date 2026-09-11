@@ -14,7 +14,7 @@
 
 namespace {
 	bool IsIntOrFloat(const py::object& v) {
-		if (py::isinstance<py::bool_>(v)) return false;  
+		if (py::isinstance<py::bool_>(v)) return false;
 		return py::isinstance<py::int_>(v) || py::isinstance<py::float_>(v);
 	}
 
@@ -185,13 +185,16 @@ namespace {
 
 			.def_static("is_mouse_button_pressed", [](int button) {
 			return InputManager::getInstance().IsMouseButtonPressed(button);
-				}, py::arg("button"))
+				}, py::arg("button"),
+					"True every frame the mouse button is held down")
 			.def_static("is_mouse_button_just_pressed", [](int button) {
 			return InputManager::getInstance().IsMouseButtonJustPressed(button);
-				}, py::arg("button"))
+				}, py::arg("button"),
+					"True only on the frame the mouse button was pressed")
 			.def_static("is_mouse_button_released", [](int button) {
 			return InputManager::getInstance().IsMouseButtonReleased(button);
-				}, py::arg("button"))
+				}, py::arg("button"),
+					"True only on the frame the mouse button was released")
 
 			.def_static("on_key_pressed", [](int key, py::function func) {
 			return InputManager::getInstance().OnKeyPressed(key, [func]() {
@@ -214,7 +217,9 @@ namespace {
 						std::string("on_key_just_pressed callback error: ") + e.what());
 				}
 				});
-				}, py::arg("key"), py::arg("callback"))
+				}, py::arg("key"), py::arg("callback"),
+					"Fires once on the frame the key is pressed. Returns an id usable with "
+					"remove_key_just_pressed_callback().")
 
 			.def_static("on_key_released", [](int key, py::function func) {
 			return InputManager::getInstance().OnKeyReleased(key, [func]() {
@@ -225,7 +230,9 @@ namespace {
 						std::string("on_key_released callback error: ") + e.what());
 				}
 				});
-				}, py::arg("key"), py::arg("callback"))
+				}, py::arg("key"), py::arg("callback"),
+					"Fires once on the frame the key is released. Returns an id usable with "
+					"remove_key_released_callback().")
 
 			.def_static("on_mouse_button_pressed", [](int button, py::function func) {
 			return InputManager::getInstance().OnMouseButtonPressed(button, [func]() {
@@ -236,7 +243,9 @@ namespace {
 						std::string("on_mouse_button_pressed callback error: ") + e.what());
 				}
 				});
-				}, py::arg("button"), py::arg("callback"))
+				}, py::arg("button"), py::arg("callback"),
+					"Fires every frame while the mouse button is held. Returns an id usable with "
+					"remove_mouse_button_pressed_callback().")
 
 			.def_static("on_mouse_button_just_pressed", [](int button, py::function func) {
 			return InputManager::getInstance().OnMouseButtonJustPressed(button, [func]() {
@@ -247,7 +256,9 @@ namespace {
 						std::string("on_mouse_button_just_pressed callback error: ") + e.what());
 				}
 				});
-				}, py::arg("button"), py::arg("callback"))
+				}, py::arg("button"), py::arg("callback"),
+					"Fires once on the frame the mouse button is pressed. Returns an id usable with "
+					"remove_mouse_button_just_pressed_callback().")
 
 			.def_static("on_mouse_button_released", [](int button, py::function func) {
 			return InputManager::getInstance().OnMouseButtonReleased(button, [func]() {
@@ -258,28 +269,37 @@ namespace {
 						std::string("on_mouse_button_released callback error: ") + e.what());
 				}
 				});
-				}, py::arg("button"), py::arg("callback"))
+				}, py::arg("button"), py::arg("callback"),
+					"Fires once on the frame the mouse button is released. Returns an id usable with "
+					"remove_mouse_button_released_callback().")
 
 			.def_static("remove_key_pressed_callback", [](std::pair<int, int> id) {
 			InputManager::getInstance().RemoveKeyPressedCallback(id);
-				}, py::arg("id"))
+				}, py::arg("id"),
+					"Unregister a callback previously registered with on_key_pressed()")
 			.def_static("remove_key_just_pressed_callback", [](std::pair<int, int> id) {
 			InputManager::getInstance().RemoveKeyJustPressedCallback(id);
-				}, py::arg("id"))
+				}, py::arg("id"),
+					"Unregister a callback previously registered with on_key_just_pressed()")
 			.def_static("remove_key_released_callback", [](std::pair<int, int> id) {
 			InputManager::getInstance().RemoveKeyReleasedCallback(id);
-				}, py::arg("id"))
+				}, py::arg("id"),
+					"Unregister a callback previously registered with on_key_released()")
 			.def_static("remove_mouse_button_pressed_callback", [](std::pair<int, int> id) {
 			InputManager::getInstance().RemoveMouseButtonPressedCallback(id);
-				}, py::arg("id"))
+				}, py::arg("id"),
+					"Unregister a callback previously registered with on_mouse_button_pressed()")
 			.def_static("remove_mouse_button_just_pressed_callback", [](std::pair<int, int> id) {
 			InputManager::getInstance().RemoveMouseButtonJustPressedCallback(id);
-				}, py::arg("id"))
+				}, py::arg("id"),
+					"Unregister a callback previously registered with on_mouse_button_just_pressed()")
 			.def_static("remove_mouse_button_released_callback", [](std::pair<int, int> id) {
 			InputManager::getInstance().RemoveMouseButtonReleasedCallback(id);
-				}, py::arg("id"));
+				}, py::arg("id"),
+					"Unregister a callback previously registered with on_mouse_button_released()");
 
-		py::module_ keyMod = m.def_submodule("Key", "Common GLFW key codes");
+		py::module_ keyMod = m.def_submodule("Key", "Common GLFW key codes. Attributes are plain ints, "
+			"e.g. Key.SPACE, Key.A .. Key.Z, Key.NUM_0 .. Key.NUM_9, usable anywhere an int key code is expected.");
 		keyMod.attr("SPACE") = static_cast<int>(GLFW_KEY_SPACE);
 		keyMod.attr("ENTER") = static_cast<int>(GLFW_KEY_ENTER);
 		keyMod.attr("ESCAPE") = static_cast<int>(GLFW_KEY_ESCAPE);
@@ -297,7 +317,8 @@ namespace {
 			keyMod.attr((std::string("NUM_") + c).c_str()) = static_cast<int>(GLFW_KEY_0 + (c - '0'));
 		}
 
-		py::module_ mouseMod = m.def_submodule("Mouse", "Mouse button codes");
+		py::module_ mouseMod = m.def_submodule("Mouse", "Mouse button codes. Attributes are plain ints, "
+			"e.g. Mouse.LEFT, Mouse.RIGHT, Mouse.MIDDLE, usable anywhere an int button code is expected.");
 		mouseMod.attr("LEFT") = static_cast<int>(GLFW_MOUSE_BUTTON_LEFT);
 		mouseMod.attr("RIGHT") = static_cast<int>(GLFW_MOUSE_BUTTON_RIGHT);
 		mouseMod.attr("MIDDLE") = static_cast<int>(GLFW_MOUSE_BUTTON_MIDDLE);
@@ -407,7 +428,7 @@ namespace {
 
 		std::string virtualPath;
 		if (absPathStr.rfind("res://", 0) == 0) {
-			virtualPath = absPathStr; 
+			virtualPath = absPathStr;
 		}
 		else {
 			virtualPath = FileManager::getInstance().AbsoluteToVirtual(absPathStr);
@@ -522,8 +543,11 @@ namespace {
 			}
 			return AddComponentToObject(*self.parent, componentClass);
 			}, py::arg("component_class"),
-				"Attach a new component of the given type to this component's owning Object, "
-				"e.g. render = self.add_component(RenderComponent)");
+				"Attach a new component of the given type to this component's owning Object.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    render = self.add_component(RenderComponent)\n"
+				"    ```");
 	}
 
 	template <typename T, typename PyClass>
@@ -553,7 +577,8 @@ namespace {
 			"The Object that owns this component")
 			.def("get_owner", [](T& self) -> Object* {
 			return self.parent;
-				}, py::return_value_policy::reference);
+				}, py::return_value_policy::reference,
+				"The Object that owns this component");
 	}
 
 	template <typename T, typename PyClass>
@@ -587,7 +612,7 @@ namespace {
 
 	template <typename T>
 	void RegisterComponentGetter(py::object pyClass) {
-		RegisteredClassRefs()[pyClass.ptr()] = pyClass; 
+		RegisteredClassRefs()[pyClass.ptr()] = pyClass;
 
 		ComponentRegistry()[pyClass.ptr()] = [](Object* obj) -> py::object {
 			T* comp = obj->GetComponent<T>();
@@ -644,16 +669,19 @@ namespace {
 		EnableAddObject<ScriptBase>(scriptClass);
 		EnableAddChild<ScriptBase>(scriptClass);
 		EnableRemoveObject<ScriptBase>(scriptClass);
-		
+
 		py::class_<ExportMarker>(m, "_ExportMarker");
 
 		m.def("export", [](py::object value) {
 			return ExportMarker{ value, ExportType::Default, "", "", 0.0f, 1.0f };
 			}, py::arg("value"),
 				"Mark a script attribute as editable in the inspector using the default "
-				"widget for its type, e.g.\n"
-				"  name = export(\"Goblin\")\n"
-				"  hp = export(100)\n"
+				"widget for its type.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    name = export(\"Goblin\")\n"
+				"    hp = export(100)\n"
+				"    ```\n"
 				"For customizable export, use the appropriate export function: export_range, export_color_picker");
 
 		m.def("export_range", [](py::object value, float min, float max, bool slider, std::string prefix, std::string suffix) {
@@ -670,9 +698,12 @@ namespace {
 				py::arg("prefix") = "", py::arg("suffix") = "",
 				"Mark a script attribute as editable within a min/max range. Shown as a "
 				"bounded slider by default; pass slider=False for a plain input field that "
-				"still applies min/max (and any prefix/suffix), e.g.\n"
-				"  speed = export_range(200.0, 0.0, 500.0)\n"
-				"  hp = export_range(100, 0, 999, slider=False, suffix=\" hp\")");
+				"still applies min/max (and any prefix/suffix).\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    speed = export_range(200.0, 0.0, 500.0)\n"
+				"    hp = export_range(100, 0, 999, slider=False, suffix=\" hp\")\n"
+				"    ```");
 
 		m.def("export_drag", [](py::object value, float min, float max, std::string prefix, std::string suffix) {
 			if (!IsNumericOrVector(value)) {
@@ -683,9 +714,12 @@ namespace {
 			}, py::arg("value"), py::arg("min") = 0.0f, py::arg("max") = 0.0f,
 				py::arg("prefix") = "", py::arg("suffix") = "",
 				"Mark a script attribute as editable with a click-and-drag field. "
-				"min=max=0 (the default) means unbounded, e.g.\n"
-				"  jump_force = export_drag(15.0)\n"
-				"  ammo = export_drag(30, 0, 999)");
+				"min=max=0 (the default) means unbounded.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    jump_force = export_drag(15.0)\n"
+				"    ammo = export_drag(30, 0, 999)\n"
+				"    ```");
 
 		m.def("export_angle_slider", [](py::object value, float minDegrees, float maxDegrees) {
 			if (!py::isinstance<py::float_>(value)) {
@@ -695,9 +729,12 @@ namespace {
 			return ExportMarker{ value, ExportType::AngleSlider, "", "", minDegrees, maxDegrees };
 			}, py::arg("value"), py::arg("min_degrees") = -360.0f, py::arg("max_degrees") = 360.0f,
 				"Mark a float script attribute (stored in radians) as editable with an "
-				"angle slider displayed in degrees, e.g.\n"
-				"  facing = export_angle_slider(0.0)\n"
-				"  cone_angle = export_angle_slider(0.5, 0.0, 180.0)");
+				"angle slider displayed in degrees.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    facing = export_angle_slider(0.0)\n"
+				"    cone_angle = export_angle_slider(0.5, 0.0, 180.0)\n"
+				"    ```");
 
 		m.def("export_color_edit", [](py::object value) {
 			if (!IsColorVector(value)) {
@@ -707,8 +744,11 @@ namespace {
 			return ExportMarker{ value, ExportType::ColorEdit, "", "", 0.0f, 1.0f };
 			}, py::arg("value"),
 				"Mark a Vector3 or Vector4 script attribute as editable with a color "
-				"swatch that opens a picker popup, e.g.\n"
-				"  tint = export_color_edit(Vector4(1, 1, 1, 1))");
+				"swatch that opens a picker popup.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    tint = export_color_edit(Vector4(1, 1, 1, 1))\n"
+				"    ```");
 
 		m.def("export_color_picker", [](py::object value) {
 			if (!IsColorVector(value)) {
@@ -718,8 +758,11 @@ namespace {
 			return ExportMarker{ value, ExportType::ColorPicker, "", "", 0.0f, 1.0f };
 			}, py::arg("value"),
 				"Mark a Vector3 or Vector4 script attribute as editable with a full "
-				"color picker always shown inline, e.g.\n"
-				"  glow_color = export_color_picker(Vector3(0.2, 0.8, 1.0))");
+				"color picker always shown inline.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    glow_color = export_color_picker(Vector3(0.2, 0.8, 1.0))\n"
+				"    ```");
 
 		m.def("export_file", [](py::object value, std::string extension) {
 			if (!py::isinstance<py::str>(value)) {
@@ -730,8 +773,11 @@ namespace {
 				"Mark a str script attribute as editable with a file picker that stores a "
 				"res:// virtual path. Clicking opens a file dialog; files can also be "
 				"dragged in from the resource browser. extension filters which files are "
-				"shown/accepted, using ';'-separated glob patterns, e.g.\n"
-				"  icon = export_file(\"\", \"*.png;*.jpg;*.jpeg\")");
+				"shown/accepted, using ';'-separated glob patterns.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    icon = export_file(\"\", \"*.png;*.jpg;*.jpeg\")\n"
+				"    ```");
 
 		m.def("export_scene", [](py::object value) {
 			if (!py::isinstance<py::str>(value)) {
@@ -740,8 +786,11 @@ namespace {
 			return ExportMarker{ value, ExportType::File, "", "", 0.0f, 1.0f, "*.fscene" };
 			}, py::arg("value"),
 				"Mark a str script attribute as editable with a file picker restricted to "
-				".fscene files, storing a res:// virtual path, e.g.\n"
-				"  next_level = export_scene(\"res://levels/level_2.fscene\")");
+				".fscene files, storing a res:// virtual path.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    next_level = export_scene(\"res://levels/level_2.fscene\")\n"
+				"    ```");
 
 		m.def("export_section", [](std::string name) {
 			if (name.empty()) {
@@ -754,9 +803,12 @@ namespace {
 			}, py::arg("name"),
 				"Create a collapsible inspector section. All exported properties "
 				"following this marker are displayed inside the section until another "
-				"section marker is encountered. Can be used as a bare statement, e.g.\n"
-				"  export_section(\"Visuals\")\n"
-				"  color = export_color_edit(Vector4(1, 1, 1, 1))\n");
+				"section marker is encountered. Can be used as a bare statement.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    export_section(\"Visuals\")\n"
+				"    color = export_color_edit(Vector4(1, 1, 1, 1))\n"
+				"    ```");
 		m.def("export_sub_section", [](std::string name) {
 			if (name.empty()) {
 				throw py::value_error("export_sub_section: sub-section name cannot be empty");
@@ -770,11 +822,14 @@ namespace {
 				"export_section is currently open (or at the top level if none is). "
 				"Properties following this marker are displayed inside it until another "
 				"section or sub-section marker is encountered. Can be used as a bare "
-				"statement, e.g.\n"
-				"  export_section(\"Movement\")\n"
-				"  speed = export(5.0)\n"
-				"  export_sub_section(\"Advanced\")\n"
-				"  acceleration_curve = export(1.0)");
+				"statement.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    export_section(\"Movement\")\n"
+				"    speed = export(5.0)\n"
+				"    export_sub_section(\"Advanced\")\n"
+				"    acceleration_curve = export(1.0)\n"
+				"    ```");
 
 		m.def("get_script", &ImportScriptClass, py::arg("path"),
 			"Import and return the Script subclass at the given res:// path. Only needed "
@@ -783,16 +838,21 @@ namespace {
 	}
 
 	void RegisterConsoleBindings(py::module_& m) {
-		py::class_<Console>(m, "Console")
+		py::class_<Console>(m, "Console",
+			"Prints messages to the in-editor console. All methods are static — call "
+			"them directly on the class, e.g. Console.Print(\"hello\").")
 			.def_static("Print", [](const py::object& obj) {
 			Console::AddMessage(Console::MessageType::Info, py::str(obj).cast<std::string>());
-				}, py::arg("value"))
+				}, py::arg("value"),
+					"Log an informational message to the console. value is converted with str().")
 			.def_static("PrintWarning", [](const py::object& obj) {
 			Console::AddMessage(Console::MessageType::Warning, py::str(obj).cast<std::string>());
-				}, py::arg("value"))
+				}, py::arg("value"),
+					"Log a warning message to the console. value is converted with str().")
 			.def_static("PrintError", [](const py::object& obj) {
 			Console::AddMessage(Console::MessageType::Error, py::str(obj).cast<std::string>());
-				}, py::arg("value"));
+				}, py::arg("value"),
+					"Log an error message to the console. value is converted with str().");
 	}
 
 	void RegisterShapeBindings(py::module_& m) {
@@ -823,9 +883,15 @@ namespace {
 
 			return s;
 				}), py::arg("points"),
-					"Build a polygon from a list of Vector3 points in local coordinates, "
-					"e.g. [Vector3(0,0,0), Vector3(1,0,0), Vector3(0,1,0)]")
-			.def_readwrite("vertices", &PolygonShape::vertices);
+					"Build a polygon from a list of Vector3 points in local coordinates.\n\n"
+					"Example:\n"
+					"    ```python\n"
+					"    PolygonShape([Vector3(0,0,0), Vector3(1,0,0), Vector3(0,1,0)])\n"
+					"    ```")
+			.def_readwrite("vertices", &PolygonShape::vertices,
+				"Flattened vertex buffer: 5 floats per vertex (x, y, z, u, v), in the order "
+				"the points were given to the constructor. Read/write, but prefer "
+				"constructing a new PolygonShape over editing this in place.");
 
 		py::class_<RectangleShape>(m, "RectangleShape")
 			.def(py::init<>())
@@ -836,9 +902,12 @@ namespace {
 			s.height = height;
 			return s;
 				}), py::arg("center"), py::arg("width"), py::arg("height"))
-			.def_readwrite("center", &RectangleShape::center)
-			.def_readwrite("width", &RectangleShape::width)
-			.def_readwrite("height", &RectangleShape::height);
+			.def_readwrite("center", &RectangleShape::center,
+				"Local-space center of the rectangle")
+			.def_readwrite("width", &RectangleShape::width,
+				"Width of the rectangle in local units")
+			.def_readwrite("height", &RectangleShape::height,
+				"Height of the rectangle in local units");
 
 		py::class_<CircleShape>(m, "CircleShape")
 			.def(py::init<>())
@@ -850,11 +919,14 @@ namespace {
 			return s;
 				}), py::arg("center"), py::arg("radius"),
 					py::arg("segments") = 30, py::arg("physics_segments") = 30)
-			.def_readwrite("center", &CircleShape::center)
-			.def_readwrite("radius", &CircleShape::radius)
-			.def_readwrite("segments", &CircleShape::segments);
+			.def_readwrite("center", &CircleShape::center,
+				"Local-space center of the circle")
+			.def_readwrite("radius", &CircleShape::radius,
+				"Radius of the circle in local units")
+			.def_readwrite("segments", &CircleShape::segments,
+				"Number of segments used to render the circle's outline");
 	}
-	
+
 	void RegisterPhysicsBindings(py::module_& m) {
 		py::enum_<CollisionLayer>(m, "CollisionLayer",
 			"Collision layer bit flags. Combine multiple with |, e.g. "
@@ -909,7 +981,8 @@ namespace {
 			}, py::arg("layer_a"), py::arg("mask_a"), py::arg("layer_b"), py::arg("mask_b"),
 				"Check whether an (layer, mask) pair on object A would collide with (layer, mask) on object B");
 
-		py::enum_<CollisionType>(m, "CollisionType")
+		py::enum_<CollisionType>(m, "CollisionType",
+			"The kind of bodies involved in a collision, as reported on CollisionEventData.type")
 			.value("RigidVsRigid", CollisionType::RigidVsRigid)
 			.value("RigidVsStatic", CollisionType::RigidVsStatic)
 			.value("StaticVsStatic", CollisionType::StaticVsStatic)
@@ -919,17 +992,27 @@ namespace {
 			.value("FluidVsSoft", CollisionType::FluidVsSoft)
 			.export_values();
 
-		py::class_<CollisionEventData>(m, "CollisionEventData")
-			.def_readonly("type", &CollisionEventData::type)
+		py::class_<CollisionEventData>(m, "CollisionEventData",
+			"Snapshot of a single collision, passed to callbacks registered via "
+			"CollisionComponent.add_collision_callback() and friends.")
+			.def_readonly("type", &CollisionEventData::type,
+				"The CollisionType (RigidVsRigid, RigidVsSoft, etc.) of this collision")
 			.def_property_readonly("self", [](CollisionEventData& self) -> Object* { return self.self; },
-				py::return_value_policy::reference)
+				py::return_value_policy::reference,
+				"The Object whose CollisionComponent this callback is registered on")
 			.def_property_readonly("other", [](CollisionEventData& self) -> Object* { return self.other; },
-				py::return_value_policy::reference)
-			.def_readonly("shape_id", &CollisionEventData::selfShapeId)
-			.def_readonly("other_shape_id", &CollisionEventData::otherShapeId)
-			.def_readonly("point", &CollisionEventData::point)
-			.def_readonly("normal", &CollisionEventData::normal)
-			.def_readonly("penetration", &CollisionEventData::penetration)
+				py::return_value_policy::reference,
+				"The other Object involved in the collision")
+			.def_readonly("shape_id", &CollisionEventData::selfShapeId,
+				"Id of the colliding shape on self, as returned by CollisionComponent.add_shape()")
+			.def_readonly("other_shape_id", &CollisionEventData::otherShapeId,
+				"Id of the colliding shape on other")
+			.def_readonly("point", &CollisionEventData::point,
+				"World-space contact point")
+			.def_readonly("normal", &CollisionEventData::normal,
+				"World-space contact normal, pointing away from self")
+			.def_readonly("penetration", &CollisionEventData::penetration,
+				"Overlap depth along the contact normal, in world units")
 			.def("__repr__", [](const CollisionEventData& d) {
 			std::ostringstream ss;
 			ss << "CollisionEventData(shape_id=" << d.selfShapeId
@@ -938,16 +1021,24 @@ namespace {
 			return ss.str();
 				});
 
-		py::class_<RayCastHit>(m, "RayCastHit")
+		py::class_<RayCastHit>(m, "RayCastHit",
+			"Result of a Physics.raycast() query. Falsy (bool(hit) is False) when nothing was hit.")
 			.def(py::init<>())
-			.def_readonly("hit", &RayCastHit::hit)
+			.def_readonly("hit", &RayCastHit::hit,
+				"Whether the ray hit anything")
 			.def_property_readonly("object", [](RayCastHit& self) -> Object* { return self.object; },
-				py::return_value_policy::reference)
-			.def_readonly("point", &RayCastHit::point)
-			.def_readonly("normal", &RayCastHit::normal)
-			.def_readonly("distance", &RayCastHit::distance)
-			.def_readonly("edge_index", &RayCastHit::edgeIndex)
-			.def_readonly("is_soft_body", &RayCastHit::isSoftBody)
+				py::return_value_policy::reference,
+				"The Object that was hit, or None if hit is False")
+			.def_readonly("point", &RayCastHit::point,
+				"World-space point where the ray hit")
+			.def_readonly("normal", &RayCastHit::normal,
+				"World-space surface normal at the hit point")
+			.def_readonly("distance", &RayCastHit::distance,
+				"Distance from the ray's origin to the hit point")
+			.def_readonly("edge_index", &RayCastHit::edgeIndex,
+				"Index of the shape edge that was hit")
+			.def_readonly("is_soft_body", &RayCastHit::isSoftBody,
+				"Whether the hit object was a soft body")
 			.def("__bool__", [](const RayCastHit& h) { return h.hit; },
 				"Allows 'if hit:' instead of 'if hit.hit:'")
 			.def("__repr__", [](const RayCastHit& h) {
@@ -965,8 +1056,11 @@ namespace {
 			},
 			py::arg("origin"), py::arg("direction"), py::arg("length"),
 			py::arg("collision_layer") = py::none(), py::arg("ignore_objects") = std::vector<Object*>{},
-			"Cast a ray and return the closest hit. collision_layer=None hits every layer. "
-			"e.g. hit = Physics.raycast(pos, Vector3(0,-1,0), 5.0, CollisionMask.LAYER_1, [self.owner])");
+			"Cast a ray and return the closest hit. collision_layer=None hits every layer.\n\n"
+			"Example:\n"
+			"    ```python\n"
+			"    hit = Physics.raycast(pos, Vector3(0,-1,0), 5.0, CollisionMask.LAYER_1, [self.owner])\n"
+			"    ```");
 
 		physicsMod.def("raycast_all", [](glm::vec3 origin, glm::vec3 direction, float length,
 			std::optional<uint16_t> collisionLayer, std::vector<Object*> ignoreObjects) {
@@ -984,14 +1078,20 @@ namespace {
 			return FileManager::getInstance().VirtualToAbsolute(virtualPath).string();
 			}, py::arg("virtual_path"),
 				"Resolve a res:// virtual path (as stored by export_file/export_scene) to a "
-				"real filesystem path, e.g.\n"
-				"  abs_path = File.virtual_to_absolute(self.model_path)");
+				"real filesystem path.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    abs_path = File.virtual_to_absolute(self.model_path)\n"
+				"    ```");
 
 		fileMod.def("absolute_to_virtual", [](const std::string& absolutePath) {
 			return FileManager::getInstance().AbsoluteToVirtual(absolutePath);
 			}, py::arg("absolute_path"),
-				"Convert a real filesystem path back into a res:// virtual path, e.g.\n"
-				"  virtual_path = File.absolute_to_virtual(abs_path)");
+				"Convert a real filesystem path back into a res:// virtual path.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    virtual_path = File.absolute_to_virtual(abs_path)\n"
+				"    ```");
 	}
 
 	void RegisterRendererBindings(py::module_& m) {
@@ -1000,8 +1100,11 @@ namespace {
 		renderMod.def("draw_line", [](glm::vec3 p1, glm::vec3 p2, glm::vec4 color, float thickness, bool screenSpace) {
 			Renderer::getInstance().DrawLine(p1, p2, color, thickness, screenSpace);
 			}, py::arg("p1"), py::arg("p2"), py::arg("color"), py::arg("thickness") = 1.0f, py::arg("screen_space") = false,
-				"Draw a line between two world-space points for one frame, e.g.\n"
-				"  Render.draw_line(Vector3(0,0,0), Vector3(1,1,0), Vector4(1,0,0,1))");
+				"Draw a line between two world-space points for one frame.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    Render.draw_line(Vector3(0,0,0), Vector3(1,1,0), Vector4(1,0,0,1))\n"
+				"    ```");
 
 		renderMod.def("draw_arrow", [](glm::vec3 origin, glm::vec3 direction, float length, glm::vec4 color,
 			float thickness, float headLength, float headAngleDeg, bool screenSpace) {
@@ -1009,45 +1112,65 @@ namespace {
 			}, py::arg("origin"), py::arg("direction"), py::arg("length"), py::arg("color"),
 				py::arg("thickness") = 1.0f, py::arg("head_length") = 0.15f, py::arg("head_angle_deg") = 25.0f,
 				py::arg("screen_space") = false,
-				"Draw an arrow from origin along direction (auto-normalized) for one frame, e.g.\n"
-				"  Render.draw_arrow(pos, Vector3(0,1,0), 1.5, Vector4(0,1,0,1))");
+				"Draw an arrow from origin along direction (auto-normalized) for one frame.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    Render.draw_arrow(pos, Vector3(0,1,0), 1.5, Vector4(0,1,0,1))\n"
+				"    ```");
 
 		renderMod.def("draw_circle", [](glm::vec3 center, float radius, glm::vec4 color, int segments,
 			float thickness, bool screenSpace) {
 				Renderer::getInstance().DrawCircle(center, radius, color, segments, thickness, screenSpace);
 			}, py::arg("center"), py::arg("radius"), py::arg("color"), py::arg("segments") = 32,
 				py::arg("thickness") = 1.0f, py::arg("screen_space") = false,
-				"Draw a circle outline for one frame, e.g.\n"
-				"  Render.draw_circle(pos, 1.0, Vector4(1,1,0,1))");
+				"Draw a circle outline for one frame.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    Render.draw_circle(pos, 1.0, Vector4(1,1,0,1))\n"
+				"    ```");
 
 		renderMod.def("draw_filled_polygon", [](std::vector<glm::vec3> worldPoints, glm::vec4 fillColor,
 			glm::vec4 outlineColor, float outlineThickness) {
 				Renderer::getInstance().DrawFilledPolygon(worldPoints, fillColor, outlineColor, outlineThickness);
 			}, py::arg("world_points"), py::arg("fill_color"), py::arg("outline_color"), py::arg("outline_thickness") = 1.0f,
-				"Draw a filled, outlined polygon from world-space points (min 3) for one frame, e.g.\n"
-				"  Render.draw_filled_polygon([Vector3(0,0,0), Vector3(1,0,0), Vector3(0,1,0)], "
-				"Vector4(1,0,0,0.5), Vector4(1,0,0,1))");
+				"Draw a filled, outlined polygon from world-space points (min 3) for one frame.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    Render.draw_filled_polygon(\n"
+				"        [Vector3(0,0,0), Vector3(1,0,0), Vector3(0,1,0)],\n"
+				"        Vector4(1,0,0,0.5), Vector4(1,0,0,1))\n"
+				"    ```");
 	}
 
 	void RegisterConstraintBindings(py::module_& m) {
-		auto constraintClass = py::class_<Constraint, std::shared_ptr<Constraint>>(m, "Constraint")
-			.def_property_readonly("name", [](Constraint& self) { return self.Name; })
+		auto constraintClass = py::class_<Constraint, std::shared_ptr<Constraint>>(m, "Constraint",
+			"Base class for physics constraints (DistanceConstraint, SpringConstraint, "
+			"RevoluteConstraint, WeldConstraint, PrismaticConstraint). Not constructed directly.")
+			.def_property_readonly("name", [](Constraint& self) { return self.Name; },
+				"The constraint's type name, e.g. 'DistanceConstraint'")
 
 			.def_property("beta",
 				[](Constraint& self) { return self.beta; },
-				[](Constraint& self, float b) { self.beta = b; })
-			.def("set_beta", [](Constraint& self, float b) { self.beta = b; }, py::arg("beta"))
+				[](Constraint& self, float b) { self.beta = b; },
+				"Baumgarte position-correction factor (0-1). Higher values correct "
+				"constraint drift faster but can introduce jitter.")
+			.def("set_beta", [](Constraint& self, float b) { self.beta = b; }, py::arg("beta"),
+				"Set beta. See the beta property.")
 
 			.def_property("draw_constraint",
 				[](Constraint& self) { return self.canDrawConstraint; },
-				[](Constraint& self, bool draw) { self.canDrawConstraint = draw; })
+				[](Constraint& self, bool draw) { self.canDrawConstraint = draw; },
+				"Whether to draw this constraint's debug visualization in the editor/game view")
 			.def("set_draw_constraint", [](Constraint& self, bool draw) { self.canDrawConstraint = draw; },
-				py::arg("draw_constraint"))
+				py::arg("draw_constraint"),
+				"Set draw_constraint. See the draw_constraint property.")
 
 			.def_property_readonly("object_a", [](Constraint& self) -> Object* { return self.objectA.obj; },
-				py::return_value_policy::reference)
+				py::return_value_policy::reference,
+				"The first Object this constraint is attached to")
 			.def_property_readonly("object_b", [](Constraint& self) -> Object* { return self.objectB.obj; },
-				py::return_value_policy::reference)
+				py::return_value_policy::reference,
+				"The second Object this constraint is attached to, or None")
 
 			.def("set_object_a", [](Constraint& self, Object* obj) {
 			self.SetObjectA(PhysicsEngine::getInstance().GetBodyFromObject(obj));
@@ -1067,7 +1190,10 @@ namespace {
 						if (RenderComponent* rc = self.objectA.obj->GetComponent<RenderComponent>())
 							self.attachPointA = rc->GetCenter();
 					}
-				})
+				},
+				"Whether Object A's attach point tracks its RenderComponent center automatically. "
+				"Setting this to True immediately snaps attach_point_a to that center; setting "
+				"attach_point_a directly turns this back off.")
 			.def_property("use_center_b",
 				[](Constraint& self) { return self.UseCenterB(); },
 				[](Constraint& self, bool useCenter) {
@@ -1076,7 +1202,10 @@ namespace {
 						if (RenderComponent* rc = self.objectB.obj->GetComponent<RenderComponent>())
 							self.attachPointB = rc->GetCenter();
 					}
-				})
+				},
+				"Whether Object B's attach point tracks its RenderComponent center automatically. "
+				"Setting this to True immediately snaps attach_point_b to that center; setting "
+				"attach_point_b directly turns this back off.")
 
 			.def_property("attach_point_a",
 				[](Constraint& self) { return self.attachPointA; },
@@ -1087,8 +1216,10 @@ namespace {
 				[](Constraint& self, glm::vec3 p) { self.attachPointB = p; self.useCenterB = false; },
 				"Local-space attach point on Object B. Setting this disables use_center_b.")
 
-			.def("get_attach_world_a", &Constraint::GetAttachWorldA)
-			.def("get_attach_world_b", &Constraint::GetAttachWorldB)
+			.def("get_attach_world_a", &Constraint::GetAttachWorldA,
+				"World-space position of attach_point_a, given Object A's current transform")
+			.def("get_attach_world_b", &Constraint::GetAttachWorldB,
+				"World-space position of attach_point_b, given Object B's current transform")
 
 			.def("__repr__", [](Constraint& self) {
 			std::ostringstream ss;
@@ -1126,10 +1257,13 @@ namespace {
 					py::arg("extendable") = false, py::arg("retractable") = false,
 					"Create a distance constraint attached at object_a's and object_b's centers "
 					"by default. Not part of the scene until passed to "
-					"ConstraintComponent.add_constraint(), e.g.\n"
-					"  dc = DistanceConstraint(self.owner, target, 5.0)\n"
-					"  cc = self.add_component(ConstraintComponent)\n"
-					"  cc.add_constraint(dc)")
+					"ConstraintComponent.add_constraint().\n\n"
+					"Example:\n"
+					"    ```python\n"
+					"    dc = DistanceConstraint(self.owner, target, 5.0)\n"
+					"    cc = self.add_component(ConstraintComponent)\n"
+					"    cc.add_constraint(dc)\n"
+					"    ```")
 
 			.def(py::init([](Object* objectA, Object* objectB, glm::vec3 attachPointA, glm::vec3 attachPointB,
 				float distance, bool extendable, bool retractable) {
@@ -1145,25 +1279,36 @@ namespace {
 				}), py::arg("object_a"), py::arg("object_b"), py::arg("attach_point_a"), py::arg("attach_point_b"),
 					py::arg("distance"), py::arg("extendable") = false, py::arg("retractable") = false,
 					"Create a distance constraint at explicit local-space attach points on each object "
-					"(pass Vector3(0,0,0) for object_b's attach point if object_b is None), e.g.\n"
-					"  dc = DistanceConstraint(self.owner, target, Vector3(0.5, 0, 0), Vector3(0, 0, 0), 5.0)\n"
-					"  cc = self.add_component(ConstraintComponent)\n"
-					"  cc.add_constraint(dc)")
+					"(pass Vector3(0,0,0) for object_b's attach point if object_b is None).\n\n"
+					"Example:\n"
+					"    ```python\n"
+					"    dc = DistanceConstraint(self.owner, target, Vector3(0.5, 0, 0), Vector3(0, 0, 0), 5.0)\n"
+					"    cc = self.add_component(ConstraintComponent)\n"
+					"    cc.add_constraint(dc)\n"
+					"    ```")
 
 			.def_property("distance",
 				[](DistanceConstraint& self) { return self.distance; },
-				[](DistanceConstraint& self, float d) { self.distance = d; })
-			.def("set_distance", [](DistanceConstraint& self, float d) { self.distance = d; }, py::arg("distance"))
+				[](DistanceConstraint& self, float d) { self.distance = d; },
+				"Target distance the constraint tries to maintain between its two attach points")
+			.def("set_distance", [](DistanceConstraint& self, float d) { self.distance = d; }, py::arg("distance"),
+				"Set distance. See the distance property.")
 
 			.def_property("extendable",
 				[](DistanceConstraint& self) { return self.extendable; },
-				[](DistanceConstraint& self, bool e) { self.extendable = e; })
-			.def("set_extendable", [](DistanceConstraint& self, bool e) { self.extendable = e; }, py::arg("extendable"))
+				[](DistanceConstraint& self, bool e) { self.extendable = e; },
+				"If True, the two bodies may move further apart than distance (rope-like); "
+				"the constraint only resists moving closer")
+			.def("set_extendable", [](DistanceConstraint& self, bool e) { self.extendable = e; }, py::arg("extendable"),
+				"Set extendable. See the extendable property.")
 
 			.def_property("retractable",
 				[](DistanceConstraint& self) { return self.retractable; },
-				[](DistanceConstraint& self, bool r) { self.retractable = r; })
-			.def("set_retractable", [](DistanceConstraint& self, bool r) { self.retractable = r; }, py::arg("retractable"));
+				[](DistanceConstraint& self, bool r) { self.retractable = r; },
+				"If True, the two bodies may move closer than distance (rod pushing only); "
+				"the constraint only resists moving further apart")
+			.def("set_retractable", [](DistanceConstraint& self, bool r) { self.retractable = r; }, py::arg("retractable"),
+				"Set retractable. See the retractable property.");
 
 		py::class_<SpringConstraint, Constraint, std::shared_ptr<SpringConstraint>>(m, "SpringConstraint")
 			.def(py::init([](Object* objectA, Object* objectB, float length, float stiffness, float damping) {
@@ -1191,9 +1336,12 @@ namespace {
 				}), py::arg("object_a"), py::arg("object_b") = nullptr, py::arg("length"),
 					py::arg("stiffness") = 15.0f, py::arg("damping") = 7.0f,
 					"Create a spring constraint attached at object_a's and object_b's centers "
-					"by default, e.g.\n"
-					"  sc = SpringConstraint(self.owner, target, 5.0)\n"
-					"  cc.add_constraint(sc)")
+					"by default.\n\n"
+					"Example:\n"
+					"    ```python\n"
+					"    sc = SpringConstraint(self.owner, target, 5.0)\n"
+					"    cc.add_constraint(sc)\n"
+					"    ```")
 
 			.def(py::init([](Object* objectA, Object* objectB, glm::vec3 attachPointA, glm::vec3 attachPointB,
 				float length, float stiffness, float damping) {
@@ -1214,18 +1362,24 @@ namespace {
 
 			.def_property("length",
 				[](SpringConstraint& self) { return self.length; },
-				[](SpringConstraint& self, float l) { self.length = l; })
-			.def("set_length", [](SpringConstraint& self, float l) { self.length = l; }, py::arg("length"))
+				[](SpringConstraint& self, float l) { self.length = l; },
+				"Rest length of the spring")
+			.def("set_length", [](SpringConstraint& self, float l) { self.length = l; }, py::arg("length"),
+				"Set length. See the length property.")
 
 			.def_property("stiffness",
 				[](SpringConstraint& self) { return self.stiffness; },
-				[](SpringConstraint& self, float s) { self.stiffness = s; })
-			.def("set_stiffness", [](SpringConstraint& self, float s) { self.stiffness = s; }, py::arg("stiffness"))
+				[](SpringConstraint& self, float s) { self.stiffness = s; },
+				"Spring constant. Higher values pull back to the rest length more strongly.")
+			.def("set_stiffness", [](SpringConstraint& self, float s) { self.stiffness = s; }, py::arg("stiffness"),
+				"Set stiffness. See the stiffness property.")
 
 			.def_property("damping",
 				[](SpringConstraint& self) { return self.damping; },
-				[](SpringConstraint& self, float d) { self.damping = d; })
-			.def("set_damping", [](SpringConstraint& self, float d) { self.damping = d; }, py::arg("damping"));
+				[](SpringConstraint& self, float d) { self.damping = d; },
+				"Damping coefficient. Higher values reduce oscillation around the rest length.")
+			.def("set_damping", [](SpringConstraint& self, float d) { self.damping = d; }, py::arg("damping"),
+				"Set damping. See the damping property.");
 
 		py::class_<RevoluteConstraint, Constraint, std::shared_ptr<RevoluteConstraint>>(m, "RevoluteConstraint")
 			.def(py::init([](Object* objectA, Object* objectB) {
@@ -1252,9 +1406,12 @@ namespace {
 			return std::make_shared<RevoluteConstraint>(bodyA, bodyB, attachA, attachB);
 				}), py::arg("object_a"), py::arg("object_b") = nullptr,
 					"Create a revolute (hinge) constraint pinned at object_a's and object_b's "
-					"centers by default, e.g.\n"
-					"  rc = RevoluteConstraint(self.owner, target)\n"
-					"  cc.add_constraint(rc)")
+					"centers by default.\n\n"
+					"Example:\n"
+					"    ```python\n"
+					"    rc = RevoluteConstraint(self.owner, target)\n"
+					"    cc.add_constraint(rc)\n"
+					"    ```")
 
 			.def(py::init([](Object* objectA, Object* objectB, glm::vec3 attachPointA, glm::vec3 attachPointB) {
 			if (!objectA) {
@@ -1296,9 +1453,12 @@ namespace {
 			return std::make_shared<WeldConstraint>(bodyA, bodyB, attachA, attachB, angularOffset);
 				}), py::arg("object_a"), py::arg("object_b") = nullptr, py::arg("angular_offset") = 0.0f,
 					"Create a weld constraint at object_a's and object_b's centers by default, "
-					"locking their relative position and rotation, e.g.\n"
-					"  wc = WeldConstraint(self.owner, target)\n"
-					"  cc.add_constraint(wc)")
+					"locking their relative position and rotation.\n\n"
+					"Example:\n"
+					"    ```python\n"
+					"    wc = WeldConstraint(self.owner, target)\n"
+					"    cc.add_constraint(wc)\n"
+					"    ```")
 
 			.def(py::init([](Object* objectA, Object* objectB, glm::vec3 attachPointA, glm::vec3 attachPointB,
 				float angularOffset) {
@@ -1318,9 +1478,11 @@ namespace {
 
 			.def_property("angular_offset",
 				[](WeldConstraint& self) { return self.angularOffset; },
-				[](WeldConstraint& self, float a) { self.angularOffset = a; })
+				[](WeldConstraint& self, float a) { self.angularOffset = a; },
+				"Fixed rotational offset (radians) maintained between Object A and Object B")
 			.def("set_angular_offset", [](WeldConstraint& self, float a) { self.angularOffset = a; },
-				py::arg("angular_offset"));
+				py::arg("angular_offset"),
+				"Set angular_offset. See the angular_offset property.");
 
 		py::class_<PrismaticConstraint, Constraint, std::shared_ptr<PrismaticConstraint>>(m, "PrismaticConstraint")
 			.def(py::init([](Object* objectA, Object* objectB, glm::vec3 dir) {
@@ -1347,9 +1509,12 @@ namespace {
 			return std::make_shared<PrismaticConstraint>(bodyA, bodyB, attachA, attachB, dir);
 				}), py::arg("object_a"), py::arg("object_b") = nullptr, py::arg("dir") = glm::vec3(1.0f, 0.0f, 0.0f),
 					"Create a prismatic (slider) constraint at object_a's and object_b's centers "
-					"by default, constraining relative motion to the line between them, e.g.\n"
-					"  pc = PrismaticConstraint(self.owner, target)\n"
-					"  cc.add_constraint(pc)")
+					"by default, constraining relative motion to the line between them.\n\n"
+					"Example:\n"
+					"    ```python\n"
+					"    pc = PrismaticConstraint(self.owner, target)\n"
+					"    cc.add_constraint(pc)\n"
+					"    ```")
 
 			.def(py::init([](Object* objectA, Object* objectB, glm::vec3 attachPointA, glm::vec3 attachPointB,
 				glm::vec3 dir) {
@@ -1385,25 +1550,30 @@ namespace {
 		auto renderClass = py::class_<RenderComponent>(m, "RenderComponent")
 			.def_property("enable",
 				[](RenderComponent& self) { return self.Enabled; },
-				[](RenderComponent& self, bool enable) { self.SetEnabled(enable); })
+				[](RenderComponent& self, bool enable) { self.SetEnabled(enable); },
+				"Whether this component is active. Disabling hides the object's rendered shape.")
 
 			.def_property("color",
 				[](RenderComponent& self) { return self.color; },
 				[](RenderComponent& self, glm::vec4 c) {
 					self.color = c;
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"Tint/fill color (RGBA, 0-1) applied to the shape and any texture")
 
 			.def_property("z_index",
 				[](RenderComponent& self) { return self.z_index; },
 				[](RenderComponent& self, int z) {
 					self.z_index = z;
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"Draw order relative to other render components. Higher values draw on top.")
 
 			.def_property("shape",
 				[](RenderComponent& self) -> Shape { return self.currentShape; },
-				[](RenderComponent& self, Shape shape) { self.SetShape(shape); })
+				[](RenderComponent& self, Shape shape) { self.SetShape(shape); },
+				"The shape used to render this object. Accepts a RectangleShape, "
+				"CircleShape, or PolygonShape. Equivalent to calling set_shape().")
 
 			.def("set_shape", &RenderComponent::SetShape, py::arg("shape"),
 				"Accepts a RectangleShape, CircleShape, or PolygonShape")
@@ -1421,21 +1591,22 @@ namespace {
 			self.SetTexture(FileManager::getInstance().VirtualToAbsolute(virtualPath).string());
 				}, py::arg("virtual_path"),
 					"Load a texture from a res:// path (e.g. 'res://textures/wood.png'), or pass '' to clear it")
-			.def("set_enable", &RenderComponent::SetEnabled);
+			.def("set_enable", &RenderComponent::SetEnabled,
+				"Set enable. See the enable property.");
 
-			
+
 		EnableGetComponent<RenderComponent>(renderClass);
 		EnableHasComponent<RenderComponent>(renderClass);
 		RegisterComponentGetter<RenderComponent>(renderClass);
-		EnableGetOwner<RenderComponent>(renderClass);          
-		RegisterComponentRemover<RenderComponent>(renderClass); 
+		EnableGetOwner<RenderComponent>(renderClass);
+		RegisterComponentRemover<RenderComponent>(renderClass);
 		RegisterComponentAdder<RenderComponent>(renderClass,
 			[](Object& obj) {
 				return std::make_unique<RenderComponent>(&obj, std::vector<float>{}, obj.shader, "");
 			});
-		EnableAddComponent<RenderComponent>(renderClass);    
+		EnableAddComponent<RenderComponent>(renderClass);
 		EnableRemoveComponent<RenderComponent>(renderClass);
-		EnableAddObject<RenderComponent>(renderClass);   
+		EnableAddObject<RenderComponent>(renderClass);
 		EnableAddChild<RenderComponent>(renderClass);
 		EnableRemoveObject<RenderComponent>(renderClass);
 
@@ -1443,91 +1614,118 @@ namespace {
 			.def_property("world_position",
 				[](TransformComponent& self) -> glm::vec3& { return self.worldPosition; },
 				[](TransformComponent& self, glm::vec3 pos) { self.UpdateWorldPosition(pos); },
-				py::return_value_policy::reference_internal)
-			.def_property("enable", 
+				py::return_value_policy::reference_internal,
+				"World-space position of the object")
+			.def_property("enable",
 				[](TransformComponent& self) {return self.Enabled; },
-				[](TransformComponent& self, bool enable) {self.SetEnabled(enable);})
+				[](TransformComponent& self, bool enable) {self.SetEnabled(enable);},
+				"Whether this component is active")
 			.def_property("rotation_degrees",
 				[](TransformComponent& self) {return self.rotation * (180 / std::numbers::pi);},
-				[](TransformComponent& self, float angle) {self.Rotate(angle * (std::numbers::pi / 180));})
+				[](TransformComponent& self, float angle) {self.Rotate(angle * (std::numbers::pi / 180));},
+				"Rotation in degrees. Equivalent to the rotation property converted to/from radians.")
 			.def_property("rotation",
 				[](TransformComponent& self) { return self.rotation; },
-				[](TransformComponent& self, float angle) { self.Rotate(angle); })
+				[](TransformComponent& self, float angle) { self.Rotate(angle); },
+				"Rotation in radians")
 			.def_property("size",
 				[](TransformComponent& self) { return self.size; },
-				[](TransformComponent& self, glm::vec3 scale) { self.Scale(scale); })
-			.def("set_enable", &TransformComponent::SetEnabled)
-			.def("set_size", &TransformComponent::Scale)
-			.def("set_rotation", &TransformComponent::Rotate)
-			.def("set_rotation_degrees", [](TransformComponent& self, float angle) { self.Rotate(angle * (180 / std::numbers::pi)); })
-			.def("update_world_position", &TransformComponent::UpdateWorldPosition)
-			.def("to_local_coordinates", [](TransformComponent& self, glm::vec3 worldCoordinates) {self.ProjectToWorld(worldCoordinates, true);})
-			.def("to_world_coordinates", [](TransformComponent& self, glm::vec3 localCoordinates) {self.ProjectToWorld(localCoordinates, false);});
+				[](TransformComponent& self, glm::vec3 scale) { self.Scale(scale); },
+				"Scale of the object along each axis")
+			.def("set_enable", &TransformComponent::SetEnabled,
+				"Set enable. See the enable property.")
+			.def("set_size", &TransformComponent::Scale,
+				"Set size. See the size property.")
+			.def("set_rotation", &TransformComponent::Rotate,
+				"Set rotation (radians). See the rotation property.")
+			.def("set_rotation_degrees", [](TransformComponent& self, float angle) { self.Rotate(angle * (180 / std::numbers::pi)); },
+				"Set rotation_degrees. See the rotation_degrees property.")
+			.def("update_world_position", &TransformComponent::UpdateWorldPosition,
+				"Set world_position. See the world_position property.")
+			.def("to_local_coordinates", [](TransformComponent& self, glm::vec3 worldCoordinates) {self.ProjectToWorld(worldCoordinates, true);},
+				"Convert a world-space point into this object's local/model space")
+			.def("to_world_coordinates", [](TransformComponent& self, glm::vec3 localCoordinates) {self.ProjectToWorld(localCoordinates, false);},
+				"Convert a local/model-space point into world space");
 		EnableGetComponent<TransformComponent>(transformClass);
 		EnableHasComponent<TransformComponent>(transformClass);
 		RegisterComponentGetter<TransformComponent>(transformClass);
-		EnableGetOwner<TransformComponent>(transformClass);         
+		EnableGetOwner<TransformComponent>(transformClass);
 		EnableAddComponent<TransformComponent>(transformClass);
 		EnableRemoveComponent<TransformComponent>(transformClass);
-		EnableAddObject<TransformComponent>(transformClass);   
+		EnableAddObject<TransformComponent>(transformClass);
 		EnableAddChild<TransformComponent>(transformClass);
 		EnableRemoveObject<TransformComponent>(transformClass);
 
 		auto rigidBodyClass = py::class_<RigidBodyComponent>(m, "RigidBodyComponent")
 			.def_property("enable",
 				[](RigidBodyComponent& self) { return self.Enabled; },
-				[](RigidBodyComponent& self, bool enable) { self.SetEnabled(enable); })
-			.def("set_enable", &RigidBodyComponent::SetEnabled)
+				[](RigidBodyComponent& self, bool enable) { self.SetEnabled(enable); },
+				"Whether this component is active")
+			.def("set_enable", &RigidBodyComponent::SetEnabled,
+				"Set enable. See the enable property.")
 
 			.def_property("velocity",
 				[](RigidBodyComponent& self) { return self.velocity; },
 				[](RigidBodyComponent& self, glm::vec3 v) {
 					self.velocity = v;
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"Linear velocity in world units per second")
 			.def("set_velocity", [](RigidBodyComponent& self, glm::vec3 v) {
 			self.velocity = v;
 			EngineManager::getInstance().SceneChangeEvent();
-				}, py::arg("velocity"))
+				}, py::arg("velocity"),
+					"Set velocity. See the velocity property.")
 
 			.def_property("acceleration",
 				[](RigidBodyComponent& self) { return self.netAcceleration; },
-				[](RigidBodyComponent& self, glm::vec2 a) { self.netAcceleration = a; })
+				[](RigidBodyComponent& self, glm::vec2 a) { self.netAcceleration = a; },
+				"Net acceleration applied every physics step, in addition to any per-frame add_force() calls")
 			.def("set_acceleration", [](RigidBodyComponent& self, glm::vec2 a) {
 			self.netAcceleration = a;
-				}, py::arg("acceleration"))
+				}, py::arg("acceleration"),
+					"Set acceleration. See the acceleration property.")
 
 			.def_property("angular_velocity",
 				[](RigidBodyComponent& self) { return self.angularVelocity; },
 				[](RigidBodyComponent& self, float w) {
 					self.angularVelocity = w;
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"Angular velocity in radians per second")
 			.def("set_angular_velocity", [](RigidBodyComponent& self, float w) {
 			self.angularVelocity = w;
 			EngineManager::getInstance().SceneChangeEvent();
-				}, py::arg("angular_velocity"))
+				}, py::arg("angular_velocity"),
+					"Set angular_velocity. See the angular_velocity property.")
 
 			.def_property("angular_acceleration",
 				[](RigidBodyComponent& self) { return self.angularAcceleration; },
-				[](RigidBodyComponent& self, float a) { self.angularAcceleration = a; })
+				[](RigidBodyComponent& self, float a) { self.angularAcceleration = a; },
+				"Angular acceleration in radians per second squared, applied every physics step")
 			.def("set_angular_acceleration", [](RigidBodyComponent& self, float a) {
 			self.angularAcceleration = a;
-				}, py::arg("angular_acceleration"))
+				}, py::arg("angular_acceleration"),
+					"Set angular_acceleration. See the angular_acceleration property.")
 
 			.def_property("net_force",
 				[](RigidBodyComponent& self) { return self.netForceDisplay; },
-				[](RigidBodyComponent& self, glm::vec2 f) { self.netForceDisplay = f; })
+				[](RigidBodyComponent& self, glm::vec2 f) { self.netForceDisplay = f; },
+				"Read-back of the total force accumulated this step, for inspection/debugging. "
+				"Use add_force() to actually apply forces.")
 			.def("set_net_force", [](RigidBodyComponent& self, glm::vec2 f) {
 			self.netForceDisplay = f;
-				}, py::arg("net_force"))
+				}, py::arg("net_force"),
+					"Set net_force. See the net_force property.")
 
 			.def_property("torque",
 				[](RigidBodyComponent& self) { return self.torqueDisplay; },
-				[](RigidBodyComponent& self, float t) { self.torqueDisplay = t; })
+				[](RigidBodyComponent& self, float t) { self.torqueDisplay = t; },
+				"Read-back of the total torque accumulated this step, for inspection/debugging")
 			.def("set_torque", [](RigidBodyComponent& self, float t) {
 			self.torqueDisplay = t;
-				}, py::arg("torque"))
+				}, py::arg("torque"),
+					"Set torque. See the torque property.")
 
 			.def_property("mass",
 				[](RigidBodyComponent& self) { return 1.0f / self.inverseMass; },
@@ -1536,13 +1734,16 @@ namespace {
 					self.inverseMass = 1.0f / mass;
 					EngineManager::getInstance().SceneChangeEvent();
 					self.CalculateInertia();
-				})
+				},
+				"Mass of the body. Values <= 0 are clamped to 0.001. Setting this also "
+				"recalculates inertia from the current shape.")
 			.def("set_mass", [](RigidBodyComponent& self, float mass) {
 			if (mass <= 0) mass = 0.001f;
 			self.inverseMass = 1.0f / mass;
 			EngineManager::getInstance().SceneChangeEvent();
 			self.CalculateInertia();
-				}, py::arg("mass"))
+				}, py::arg("mass"),
+					"Set mass. See the mass property.")
 
 			.def_property("inverse_mass",
 				[](RigidBodyComponent& self) { return self.inverseMass; },
@@ -1550,45 +1751,57 @@ namespace {
 					self.inverseMass = invMass;
 					EngineManager::getInstance().SceneChangeEvent();
 					self.CalculateInertia();
-				})
+				},
+				"1/mass. Set this to 0 to make the body immovable/infinite mass. "
+				"Setting this also recalculates inertia from the current shape.")
 			.def("set_inverse_mass", [](RigidBodyComponent& self, float invMass) {
 			self.inverseMass = invMass;
 			EngineManager::getInstance().SceneChangeEvent();
 			self.CalculateInertia();
-				}, py::arg("inverse_mass"))
+				}, py::arg("inverse_mass"),
+					"Set inverse_mass. See the inverse_mass property.")
 
 			.def_property("inertia",
 				[](RigidBodyComponent& self) { return self.Inertia; },
 				[](RigidBodyComponent& self, float inertia) {
 					self.Inertia = inertia;
 					self.inverseInertia = inertia > 0 ? 1.0f / inertia : 0.0f;
-				})
+				},
+				"Rotational inertia. Setting this directly overrides whatever "
+				"recalculate_inertia()/mass changes would otherwise compute.")
 			.def("set_inertia", [](RigidBodyComponent& self, float inertia) {
 			self.Inertia = inertia;
 			self.inverseInertia = inertia > 0 ? 1.0f / inertia : 0.0f;
-				}, py::arg("inertia"))
+				}, py::arg("inertia"),
+					"Set inertia. See the inertia property.")
 
 			.def_property("inverse_inertia",
 				[](RigidBodyComponent& self) { return self.inverseInertia; },
 				[](RigidBodyComponent& self, float invInertia) {
 					self.inverseInertia = invInertia;
 					self.Inertia = invInertia > 0 ? 1.0f / invInertia : 0.0f;
-				})
+				},
+				"1/inertia. Set this to 0 to prevent rotation entirely.")
 			.def("set_inverse_inertia", [](RigidBodyComponent& self, float invInertia) {
 			self.inverseInertia = invInertia;
 			self.Inertia = invInertia > 0 ? 1.0f / invInertia : 0.0f;
-				}, py::arg("inverse_inertia"))
+				}, py::arg("inverse_inertia"),
+					"Set inverse_inertia. See the inverse_inertia property.")
 
 			.def("recalculate_inertia", &RigidBodyComponent::CalculateInertia,
 				"Recompute inertia from the current shape and mass, e.g. after resizing")
 
-			.def_readwrite("linear_damping", &RigidBodyComponent::linearDamping)
+			.def_readwrite("linear_damping", &RigidBodyComponent::linearDamping,
+				"Fraction of linear velocity lost per second (0 = none, 1 = stops immediately)")
 			.def("set_linear_damping", [](RigidBodyComponent& self, float d) { self.linearDamping = d; },
-				py::arg("linear_damping"))
+				py::arg("linear_damping"),
+				"Set linear_damping. See the linear_damping property.")
 
-			.def_readwrite("angular_damping", &RigidBodyComponent::angularDamping)
+			.def_readwrite("angular_damping", &RigidBodyComponent::angularDamping,
+				"Fraction of angular velocity lost per second (0 = none, 1 = stops immediately)")
 			.def("set_angular_damping", [](RigidBodyComponent& self, float d) { self.angularDamping = d; },
-				py::arg("angular_damping"))
+				py::arg("angular_damping"),
+				"Set angular_damping. See the angular_damping property.")
 
 			.def("add_force", &RigidBodyComponent::AddForce, py::arg("force"),
 				"Apply a force through the center of mass")
@@ -1617,24 +1830,34 @@ namespace {
 		auto collisionClass = py::class_<CollisionComponent>(m, "CollisionComponent")
 			.def_property("enable",
 				[](CollisionComponent& self) { return self.Enabled; },
-				[](CollisionComponent& self, bool enable) { self.SetEnabled(enable); })
-			.def("set_enable", &CollisionComponent::SetEnabled)
+				[](CollisionComponent& self, bool enable) { self.SetEnabled(enable); },
+				"Whether this component is active")
+			.def("set_enable", &CollisionComponent::SetEnabled,
+				"Set enable. See the enable property.")
 
 			.def_property("is_static",
 				[](CollisionComponent& self) { return self.isStatic; },
-				[](CollisionComponent& self, bool s) { self.isStatic = s; })
+				[](CollisionComponent& self, bool s) { self.isStatic = s; },
+				"Whether this object is treated as immovable for collision resolution "
+				"(other bodies collide against it, but it is never pushed)")
 			.def("set_static", [](CollisionComponent& self, bool s) { self.isStatic = s; },
-				py::arg("is_static"))
+				py::arg("is_static"),
+				"Set is_static. See the is_static property.")
 
 			.def_property("collision_layer",
 				[](CollisionComponent& self) { return self.collisionLayer; },
-				[](CollisionComponent& self, uint16_t layer) { self.SetCollisionLayer(layer); })
-			.def("set_collision_layer", &CollisionComponent::SetCollisionLayer, py::arg("layer"))
+				[](CollisionComponent& self, uint16_t layer) { self.SetCollisionLayer(layer); },
+				"CollisionLayer bit flags describing what this object is. Combined with "
+				"other objects' collision_mask to decide whether they collide.")
+			.def("set_collision_layer", &CollisionComponent::SetCollisionLayer, py::arg("layer"),
+				"Set collision_layer. See the collision_layer property.")
 
 			.def_property("collision_mask",
 				[](CollisionComponent& self) { return self.collisionMask; },
-				[](CollisionComponent& self, uint16_t mask) { self.SetCollisionMask(mask); })
-			.def("set_collision_mask", &CollisionComponent::SetCollisionMask, py::arg("mask"))
+				[](CollisionComponent& self, uint16_t mask) { self.SetCollisionMask(mask); },
+				"CollisionMask bit flags describing which layers this object collides with")
+			.def("set_collision_mask", &CollisionComponent::SetCollisionMask, py::arg("mask"),
+				"Set collision_mask. See the collision_mask property.")
 
 			.def_property("sync_with_render_component",
 				[](CollisionComponent& self) {
@@ -1646,16 +1869,22 @@ namespace {
 					CollisionShapeEntry* res = self.GetResolutionShape();
 					if (!res && !self.shapes.empty()) res = &self.shapes.front();
 					if (res) self.SetSyncWithRenderComponent(*res, sync);
-				})
+				},
+				"Whether the resolution shape (or the first shape if none is set as resolution) "
+				"automatically mirrors this object's RenderComponent shape. When True, calling "
+				"set_shape() on that shape will be overridden on the next sync.")
 			.def("set_sync_with_render_component", [](CollisionComponent& self, bool sync) {
 			CollisionShapeEntry* res = self.GetResolutionShape();
 			if (!res && !self.shapes.empty()) res = &self.shapes.front();
 			if (res) self.SetSyncWithRenderComponent(*res, sync);
-				}, py::arg("sync"))
+				}, py::arg("sync"),
+					"Set sync_with_render_component. See the sync_with_render_component property.")
 
 			.def_property("shape",
 				[](CollisionComponent& self) -> Shape { return self.resolutionShape; },
-				[](CollisionComponent& self, Shape shape) { self.SetShape(shape); })
+				[](CollisionComponent& self, Shape shape) { self.SetShape(shape); },
+				"The resolution shape used for physical collision response. Equivalent to "
+				"calling set_shape() with no shape_id.")
 			.def("set_shape", [](CollisionComponent& self, Shape shape) {
 			CollisionShapeEntry* res = self.GetResolutionShape();
 			if (!res && !self.shapes.empty()) res = &self.shapes.front();
@@ -1669,10 +1898,14 @@ namespace {
 					"resolution shape (or the first shape if none is set as resolution).")
 			.def("add_shape", &CollisionComponent::AddShape,
 				py::arg("shape"), py::arg("name") = "",
-				"Add a new collision shape to this component. Returns its shape_id, e.g.\n"
-				"  sid = col.add_shape(CircleShape(Vector3(0,0,0), 1.0), 'Detector')")
+				"Add a new collision shape to this component. Returns its shape_id.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    sid = col.add_shape(CircleShape(Vector3(0,0,0), 1.0), 'Detector')\n"
+				"    ```")
 
-			.def("remove_shape", &CollisionComponent::RemoveShape, py::arg("shape_id"))
+			.def("remove_shape", &CollisionComponent::RemoveShape, py::arg("shape_id"),
+				"Remove a collision shape by id, as returned by add_shape()")
 
 			.def("get_shape_ids", [](CollisionComponent& self) {
 			std::vector<int> ids;
@@ -1685,24 +1918,30 @@ namespace {
 			CollisionShapeEntry* e = self.GetShape(shapeId);
 			if (!e) throw py::value_error("get_shape_name: invalid shape_id");
 			return e->name;
-				}, py::arg("shape_id"))
+				}, py::arg("shape_id"),
+					"Get the display name of the shape with the given id")
 
 			.def("set_shape_name", [](CollisionComponent& self, int shapeId, std::string name) {
 			CollisionShapeEntry* e = self.GetShape(shapeId);
 			if (!e) throw py::value_error("set_shape_name: invalid shape_id");
 			e->name = name;
-				}, py::arg("shape_id"), py::arg("name"))
+				}, py::arg("shape_id"), py::arg("name"),
+					"Rename the shape with the given id")
 
 			.def("get_shape", [](CollisionComponent& self, int shapeId) -> Shape {
 			CollisionShapeEntry* e = self.GetShape(shapeId);
 			if (!e) throw py::value_error("get_shape: invalid shape_id");
 			return e->currentShape;
-				}, py::arg("shape_id"))
+				}, py::arg("shape_id"),
+					"Get the Shape object for the shape with the given id")
 
 			.def("get_shape_id", &CollisionComponent::GetShapeId, py::arg("name"),
 				"Look up a shape's id by its name (as set in the inspector or via "
-				"set_shape_name). Returns -1 if no shape has that name, e.g.\n"
-				"  detector_id = self.cc.get_shape_id('Aggro Radius')")
+				"set_shape_name). Returns -1 if no shape has that name.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    detector_id = self.cc.get_shape_id('Aggro Radius')\n"
+				"    ```")
 
 			.def("set_shape", [](CollisionComponent& self, int shapeId, Shape shape) {
 			CollisionShapeEntry* e = self.GetShape(shapeId);
@@ -1712,58 +1951,67 @@ namespace {
 					"is True for this shape; it will be overridden by RenderComponent");
 			}
 			self.SetShape(*e, shape);
-				}, py::arg("shape_id"), py::arg("shape"))
+				}, py::arg("shape_id"), py::arg("shape"),
+					"Replace the shape stored under the given shape_id")
 
 			.def("get_sync_with_render_component", [](CollisionComponent& self, int shapeId) {
 			CollisionShapeEntry* e = self.GetShape(shapeId);
 			if (!e) throw py::value_error("get_sync_with_render_component: invalid shape_id");
 			return e->syncWithRenderComponent;
-				}, py::arg("shape_id"))
+				}, py::arg("shape_id"),
+					"Whether the shape with the given id mirrors the RenderComponent shape")
 
 			.def("set_sync_with_render_component", [](CollisionComponent& self, int shapeId, bool sync) {
 			CollisionShapeEntry* e = self.GetShape(shapeId);
 			if (!e) throw py::value_error("set_sync_with_render_component: invalid shape_id");
 			self.SetSyncWithRenderComponent(*e, sync);
-				}, py::arg("shape_id"), py::arg("sync"))
+				}, py::arg("shape_id"), py::arg("sync"),
+					"Set whether the shape with the given id mirrors the RenderComponent shape")
 
 			.def("get_shape_center", [](CollisionComponent& self, int shapeId) {
 			CollisionShapeEntry* e = self.GetShape(shapeId);
 			if (!e) throw py::value_error("get_shape_center: invalid shape_id");
 			return self.GetCenter(*e);
-				}, py::arg("shape_id"))
+				}, py::arg("shape_id"),
+					"World-space center of the shape with the given id")
 
 			.def("get_shape_area", [](CollisionComponent& self, int shapeId) {
 			CollisionShapeEntry* e = self.GetShape(shapeId);
 			if (!e) throw py::value_error("get_shape_area: invalid shape_id");
 			return self.GetArea(*e);
-				}, py::arg("shape_id"))
+				}, py::arg("shape_id"),
+					"Area of the shape with the given id, in world units squared")
 
 			.def_property("resolution_shape_id",
 				[](CollisionComponent& self) { return self.resolutionShapeID; },
-				[](CollisionComponent& self, int shapeId) { self.SetResolutionShapeID(shapeId); })
+				[](CollisionComponent& self, int shapeId) { self.SetResolutionShapeID(shapeId); },
+				"Id of the shape used for physical collision resolution. -1 means None: "
+				"shapes stay collidable for detection, but nothing is physically resolved.")
 			.def("set_resolution_shape_id", &CollisionComponent::SetResolutionShapeID, py::arg("shape_id"),
 				"Pass -1 for None: shapes stay collidable for detection, but nothing is "
 				"physically resolved.")
-			.def("get_resolution_shape_id", [](CollisionComponent& self) { return self.resolutionShapeID; })
+			.def("get_resolution_shape_id", [](CollisionComponent& self) { return self.resolutionShapeID; },
+				"Get resolution_shape_id. See the resolution_shape_id property.")
 
 			.def("is_grounded", &CollisionComponent::isGrounded, py::arg("probe_length") = 0.15f,
 				"Cast a short ray straight down from the lowest point of this shape to check for ground")
 
-				.def("add_collision_callback", [](CollisionComponent& self, py::function func) {
-					return self.AddCollisionCallback([func](const CollisionEventData& data) {
-						py::gil_scoped_acquire gil;
-						try { func(data); }
-						catch (const py::error_already_set& e) {
-							Console::AddMessage(Console::MessageType::Error,
-								std::string("collision callback error: ") + e.what());
-						}
-						});
-	}, py::arg("callback"),
-		"Fires every physics substep while two shapes are overlapping"
-		". Returns an id usable with remove_collision_callback().")
-		.def("remove_collision_callback", &CollisionComponent::RemoveCollisionCallback, py::arg("id"))
+			.def("add_collision_callback", [](CollisionComponent& self, py::function func) {
+			return self.AddCollisionCallback([func](const CollisionEventData& data) {
+				py::gil_scoped_acquire gil;
+				try { func(data); }
+				catch (const py::error_already_set& e) {
+					Console::AddMessage(Console::MessageType::Error,
+						std::string("collision callback error: ") + e.what());
+				}
+				});
+				}, py::arg("callback"),
+					"Fires every physics substep while two shapes are overlapping"
+					". Returns an id usable with remove_collision_callback().")
+			.def("remove_collision_callback", &CollisionComponent::RemoveCollisionCallback, py::arg("id"),
+				"Unregister a callback previously registered with add_collision_callback()")
 
-		.def("add_collision_enter_callback", [](CollisionComponent& self, py::function func) {
+			.def("add_collision_enter_callback", [](CollisionComponent& self, py::function func) {
 			return self.AddCollisionEnterCallback([func](const CollisionEventData& data) {
 				py::gil_scoped_acquire gil;
 				try { func(data); }
@@ -1772,10 +2020,11 @@ namespace {
 						std::string("collision enter callback error: ") + e.what());
 				}
 				});
-		}, py::arg("callback"), "Fires once on the frame a collision first begins.")
-		.def("remove_collision_enter_callback", &CollisionComponent::RemoveCollisionEnterCallback, py::arg("id"))
+				}, py::arg("callback"), "Fires once on the frame a collision first begins.")
+			.def("remove_collision_enter_callback", &CollisionComponent::RemoveCollisionEnterCallback, py::arg("id"),
+				"Unregister a callback previously registered with add_collision_enter_callback()")
 
-		.def("add_collision_exit_callback", [](CollisionComponent& self, py::function func) {
+			.def("add_collision_exit_callback", [](CollisionComponent& self, py::function func) {
 			return self.AddCollisionExitCallback([func](const CollisionEventData& data) {
 				py::gil_scoped_acquire gil;
 				try { func(data); }
@@ -1784,8 +2033,9 @@ namespace {
 						std::string("collision exit callback error: ") + e.what());
 				}
 				});
-		}, py::arg("callback"), "Fires once on the frame a collision stops.")
-		.def("remove_collision_exit_callback", &CollisionComponent::RemoveCollisionExitCallback, py::arg("id"));
+				}, py::arg("callback"), "Fires once on the frame a collision stops.")
+			.def("remove_collision_exit_callback", &CollisionComponent::RemoveCollisionExitCallback, py::arg("id"),
+				"Unregister a callback previously registered with add_collision_exit_callback()");
 		EnableGetComponent<CollisionComponent>(collisionClass);
 		EnableHasComponent<CollisionComponent>(collisionClass);
 		RegisterComponentGetter<CollisionComponent>(collisionClass);
@@ -1804,8 +2054,10 @@ namespace {
 		auto softBodyClass = py::class_<SoftBodyComponent>(m, "SoftBodyComponent")
 			.def_property("enable",
 				[](SoftBodyComponent& self) { return self.Enabled; },
-				[](SoftBodyComponent& self, bool enable) { self.SetEnabled(enable); })
-			.def("set_enable", &SoftBodyComponent::SetEnabled)
+				[](SoftBodyComponent& self, bool enable) { self.SetEnabled(enable); },
+				"Whether this component is active")
+			.def("set_enable", &SoftBodyComponent::SetEnabled,
+				"Set enable. See the enable property.")
 
 			.def_property("mass",
 				[](SoftBodyComponent& self) { return 1.0f / self.inverseMass; },
@@ -1816,7 +2068,9 @@ namespace {
 					for (int i = 0; i < self.MassAggregate.size(); i++)
 						self.MassAggregate[i]->inverseMass = unitInvMass;
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"Total mass of the soft body. Values <= 0 are ignored. Setting this "
+				"redistributes mass evenly across every point mass.")
 			.def("set_mass", [](SoftBodyComponent& self, float mass) {
 			if (mass <= 0.0f) return;
 			self.inverseMass = 1.0f / mass;
@@ -1824,7 +2078,8 @@ namespace {
 			for (int i = 0; i < self.MassAggregate.size(); i++)
 				self.MassAggregate[i]->inverseMass = unitInvMass;
 			EngineManager::getInstance().SceneChangeEvent();
-				}, py::arg("mass"))
+				}, py::arg("mass"),
+					"Set mass. See the mass property.")
 
 			.def_property("inverse_mass",
 				[](SoftBodyComponent& self) { return self.inverseMass; },
@@ -1834,14 +2089,17 @@ namespace {
 					for (int i = 0; i < self.MassAggregate.size(); i++)
 						self.MassAggregate[i]->inverseMass = unitInvMass;
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"1/mass for the whole soft body. Setting this redistributes evenly across "
+				"every point mass, same as the mass property.")
 			.def("set_inverse_mass", [](SoftBodyComponent& self, float invMass) {
 			self.inverseMass = invMass;
 			float unitInvMass = invMass * (float)self.MassAggregate.size();
 			for (int i = 0; i < self.MassAggregate.size(); i++)
 				self.MassAggregate[i]->inverseMass = unitInvMass;
 			EngineManager::getInstance().SceneChangeEvent();
-				}, py::arg("inverse_mass"))
+				}, py::arg("inverse_mass"),
+					"Set inverse_mass. See the inverse_mass property.")
 
 			.def_property("velocity",
 				[](SoftBodyComponent& self) { return self.velocity; },
@@ -1849,12 +2107,14 @@ namespace {
 					self.velocity = v;
 					if (self.CenterPM) self.CenterPM->velocity = v;
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"Bulk velocity applied to the soft body's center point mass")
 			.def("set_velocity", [](SoftBodyComponent& self, glm::vec3 v) {
 			self.velocity = v;
 			if (self.CenterPM) self.CenterPM->velocity = v;
 			EngineManager::getInstance().SceneChangeEvent();
-				}, py::arg("velocity"))
+				}, py::arg("velocity"),
+					"Set velocity. See the velocity property.")
 
 			.def_property_readonly("acceleration", [](SoftBodyComponent& self) {
 			if (!self.CenterPM) return glm::vec3(0.0f);
@@ -1869,13 +2129,16 @@ namespace {
 					float compliance = (s > 0.0f) ? (1.0f / s) : 0.0f;
 					for (auto* spring : self.springs) spring->compliance = compliance;
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"How strongly internal springs resist deformation. Higher values make the "
+				"body feel more rigid.")
 			.def("set_stiffness", [](SoftBodyComponent& self, float s) {
 			self.stiffness = s;
 			float compliance = (s > 0.0f) ? (1.0f / s) : 0.0f;
 			for (auto* spring : self.springs) spring->compliance = compliance;
 			EngineManager::getInstance().SceneChangeEvent();
-				}, py::arg("stiffness"))
+				}, py::arg("stiffness"),
+					"Set stiffness. See the stiffness property.")
 
 			.def_property("damping",
 				[](SoftBodyComponent& self) { return self.damping; },
@@ -1883,12 +2146,14 @@ namespace {
 					self.damping = d;
 					for (auto* spring : self.springs) spring->damping = d;
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"Damping applied to internal springs, reducing jiggle/oscillation")
 			.def("set_damping", [](SoftBodyComponent& self, float d) {
 			self.damping = d;
 			for (auto* spring : self.springs) spring->damping = d;
 			EngineManager::getInstance().SceneChangeEvent();
-				}, py::arg("damping"))
+				}, py::arg("damping"),
+					"Set damping. See the damping property.")
 
 			.def_property("gas_pressure_enabled",
 				[](SoftBodyComponent& self) { return self.useGasPressure; },
@@ -1896,7 +2161,9 @@ namespace {
 					self.useGasPressure = enabled;
 					EngineManager::getInstance().SceneChangeEvent();
 					self.RebuildMassAggregate();
-				})
+				},
+				"Enable gas pressure mode, which pushes the body's outline outward to "
+				"maintain internal volume (balloon-like)")
 			.def("set_gas_pressure_enabled", [](SoftBodyComponent& self, bool enabled) {
 			self.useGasPressure = enabled;
 			EngineManager::getInstance().SceneChangeEvent();
@@ -1909,33 +2176,37 @@ namespace {
 				[](SoftBodyComponent& self, float amount) {
 					self.gasAmount = amount;
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"Amount of internal gas pressure applied when gas_pressure_enabled is True. "
+				"Higher values push outward more strongly.")
 			.def("set_gas_amount", [](SoftBodyComponent& self, float amount) {
 			self.gasAmount = amount;
 			EngineManager::getInstance().SceneChangeEvent();
-				}, py::arg("gas_amount"))
-				.def_property_readonly("point_mass_count", [](SoftBodyComponent& self) {
-					return self.MassAggregate.size();
-			})
+				}, py::arg("gas_amount"),
+					"Set gas_amount. See the gas_amount property.")
+			.def_property_readonly("point_mass_count", [](SoftBodyComponent& self) {
+			return self.MassAggregate.size();
+				}, "Number of point masses making up this soft body, including the center point mass")
 
 			.def("get_point_mass", [](SoftBodyComponent& self, int index) -> PointMass* {
-				if (index < 0 || index >= (int)self.MassAggregate.size())
-					throw py::index_error("get_point_mass: index out of range");
-				return self.MassAggregate[index].get();
-			}, py::arg("index"), py::return_value_policy::reference,
-				"Get a point mass by index. Index (size - 1) is always the center point mass.")
+			if (index < 0 || index >= (int)self.MassAggregate.size())
+				throw py::index_error("get_point_mass: index out of range");
+			return self.MassAggregate[index].get();
+				}, py::arg("index"), py::return_value_policy::reference,
+					"Get a point mass by index. Index (size - 1) is always the center point mass.")
 
-				.def_property_readonly("mass_aggregate", [](SoftBodyComponent& self) {
-					std::vector<PointMass*> result;
-					result.reserve(self.MassAggregate.size());
-					for (auto& pm : self.MassAggregate) result.push_back(pm.get());
-					return result;
-			}, py::return_value_policy::reference,
-			"All point masses in this soft body, in order (the last one is always the center)")
+			.def_property_readonly("mass_aggregate", [](SoftBodyComponent& self) {
+			std::vector<PointMass*> result;
+			result.reserve(self.MassAggregate.size());
+			for (auto& pm : self.MassAggregate) result.push_back(pm.get());
+			return result;
+				}, py::return_value_policy::reference,
+				"All point masses in this soft body, in order (the last one is always the center)")
 
 			.def_property_readonly("center_point_mass", [](SoftBodyComponent& self) -> PointMass* {
-				return self.CenterPM;
-			}, py::return_value_policy::reference)
+			return self.CenterPM;
+				}, py::return_value_policy::reference,
+				"The center point mass of this soft body")
 
 			.def("add_force", &SoftBodyComponent::AddForce, py::arg("force"),
 				"Apply a uniform force across every point mass in the soft body")
@@ -1972,30 +2243,36 @@ namespace {
 		auto fluidClass = py::class_<FluidComponent>(m, "FluidComponent")
 			.def_property("enable",
 				[](FluidComponent& self) { return self.Enabled; },
-				[](FluidComponent& self, bool enable) { self.SetEnabled(enable); })
-			.def("set_enable", &FluidComponent::SetEnabled)
+				[](FluidComponent& self, bool enable) { self.SetEnabled(enable); },
+				"Whether this component is active")
+			.def("set_enable", &FluidComponent::SetEnabled,
+				"Set enable. See the enable property.")
 
 			.def_property("color",
 				[](FluidComponent& self) { return self.color; },
 				[](FluidComponent& self, glm::vec4 c) {
 					self.color = c;
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"Fill color (RGBA, 0-1) of the rendered fluid surface")
 			.def("set_color", [](FluidComponent& self, glm::vec4 c) {
 			self.color = c;
 			EngineManager::getInstance().SceneChangeEvent();
-				}, py::arg("color"))
+				}, py::arg("color"),
+					"Set color. See the color property.")
 
 			.def_property("outline_color",
 				[](FluidComponent& self) { return self.outlineColor; },
 				[](FluidComponent& self, glm::vec4 c) {
 					self.outlineColor = c;
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"Color (RGBA, 0-1) of the fluid's rendered outline")
 			.def("set_outline_color", [](FluidComponent& self, glm::vec4 c) {
 			self.outlineColor = c;
 			EngineManager::getInstance().SceneChangeEvent();
-				}, py::arg("outline_color"))
+				}, py::arg("outline_color"),
+					"Set outline_color. See the outline_color property.")
 
 			.def_property("particle_radius",
 				[](FluidComponent& self) { return self.particleRadius; },
@@ -2003,30 +2280,39 @@ namespace {
 					self.particleRadius = std::max(0.0001f, r);
 					self.RebuildDensityQuadGeometry();
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"Visual radius of each rendered fluid particle. Clamped to a small positive minimum.")
 			.def("set_particle_radius", [](FluidComponent& self, float r) {
 			self.particleRadius = std::max(0.0001f, r);
 			self.RebuildDensityQuadGeometry();
 			EngineManager::getInstance().SceneChangeEvent();
-				}, py::arg("particle_radius"))
+				}, py::arg("particle_radius"),
+					"Set particle_radius. See the particle_radius property.")
 
 			.def_property("metaball_threshold",
 				[](FluidComponent& self) { return self.metaballThreshold; },
-				[](FluidComponent& self, float t) { self.metaballThreshold = t; })
+				[](FluidComponent& self, float t) { self.metaballThreshold = t; },
+				"Density threshold at which the metaball surface renderer considers the "
+				"fluid 'present'. Lower values merge particles into a smoother blob.")
 			.def("set_metaball_threshold", [](FluidComponent& self, float t) { self.metaballThreshold = t; },
-				py::arg("metaball_threshold"))
+				py::arg("metaball_threshold"),
+				"Set metaball_threshold. See the metaball_threshold property.")
 
 			.def_property("metaball_edge_soft",
 				[](FluidComponent& self) { return self.metaballEdgeSoft; },
-				[](FluidComponent& self, float s) { self.metaballEdgeSoft = s; })
+				[](FluidComponent& self, float s) { self.metaballEdgeSoft = s; },
+				"Softness of the metaball surface edge falloff. Higher values give a more gradual, blurred edge.")
 			.def("set_metaball_edge_soft", [](FluidComponent& self, float s) { self.metaballEdgeSoft = s; },
-				py::arg("metaball_edge_soft"))
+				py::arg("metaball_edge_soft"),
+				"Set metaball_edge_soft. See the metaball_edge_soft property.")
 
 			.def_property("outline_width_texels",
 				[](FluidComponent& self) { return self.outlineWidthTexels; },
-				[](FluidComponent& self, float w) { self.outlineWidthTexels = w; })
+				[](FluidComponent& self, float w) { self.outlineWidthTexels = w; },
+				"Width of the rendered outline, in texels")
 			.def("set_outline_width_texels", [](FluidComponent& self, float w) { self.outlineWidthTexels = w; },
-				py::arg("outline_width_texels"))
+				py::arg("outline_width_texels"),
+				"Set outline_width_texels. See the outline_width_texels property.")
 
 			.def_property("desired_particle_count",
 				[](FluidComponent& self) { return self.desiredParticleCount; },
@@ -2035,7 +2321,10 @@ namespace {
 					self.SeedParticles();
 					self.ResizeInstanceBuffer();
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"Number of particles to seed when filling the source shape. Changing this "
+				"re-seeds the whole fluid, discarding any particles added individually via "
+				"add_particle().")
 			.def("set_desired_particle_count", [](FluidComponent& self, int count) {
 			self.desiredParticleCount = std::max(1, count);
 			self.SeedParticles();
@@ -2051,12 +2340,15 @@ namespace {
 					self.collisionRadius = std::max(0.0001f, r);
 					for (auto* p : self.particles) p->collisionRadius = self.collisionRadius;
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"Physical collision radius applied to every particle. Clamped to a small "
+				"positive minimum. Distinct from particle_radius, which is purely visual.")
 			.def("set_collision_radius", [](FluidComponent& self, float r) {
 			self.collisionRadius = std::max(0.0001f, r);
 			for (auto* p : self.particles) p->collisionRadius = self.collisionRadius;
 			EngineManager::getInstance().SceneChangeEvent();
-				}, py::arg("collision_radius"))
+				}, py::arg("collision_radius"),
+					"Set collision_radius. See the collision_radius property.")
 
 			.def_property("smoothing_radius",
 				[](FluidComponent& self) { return self.smoothingRadius; },
@@ -2068,7 +2360,9 @@ namespace {
 						p->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(self.smoothingRadius);
 					}
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"SPH smoothing (kernel) radius used for density/pressure calculations. "
+				"Larger values sample a wider neighborhood per particle.")
 			.def("set_smoothing_radius", [](FluidComponent& self, float r) {
 			self.smoothingRadius = std::max(0.0001f, r);
 			for (auto* p : self.particles) {
@@ -2077,7 +2371,8 @@ namespace {
 				p->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(self.smoothingRadius);
 			}
 			EngineManager::getInstance().SceneChangeEvent();
-				}, py::arg("smoothing_radius"))
+				}, py::arg("smoothing_radius"),
+					"Set smoothing_radius. See the smoothing_radius property.")
 
 			.def_property("epsilon",
 				[](FluidComponent& self) { return self.epsilon; },
@@ -2085,12 +2380,15 @@ namespace {
 					self.epsilon = std::max(0.0001f, e);
 					for (auto* p : self.particles) p->epsilon = self.epsilon;
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"Relaxation parameter (CFM) for the position-based fluid solver, used to "
+				"prevent numerical instability in the density constraint")
 			.def("set_epsilon", [](FluidComponent& self, float e) {
 			self.epsilon = std::max(0.0001f, e);
 			for (auto* p : self.particles) p->epsilon = self.epsilon;
 			EngineManager::getInstance().SceneChangeEvent();
-				}, py::arg("epsilon"))
+				}, py::arg("epsilon"),
+					"Set epsilon. See the epsilon property.")
 
 			.def_property("particle_mass",
 				[](FluidComponent& self) { return self.particleMass; },
@@ -2101,7 +2399,9 @@ namespace {
 						p->mass = mass;
 						p->invMass = 1.0f / mass;
 					}
-				})
+				},
+				"Mass of each individual particle. Values <= 0 are clamped to 0.01. "
+				"Applies to all current particles.")
 			.def("set_particle_mass", [](FluidComponent& self, float mass) {
 			if (mass <= 0.0f) mass = 0.01f;
 			self.particleMass = mass;
@@ -2109,7 +2409,8 @@ namespace {
 				p->mass = mass;
 				p->invMass = 1.0f / mass;
 			}
-				}, py::arg("particle_mass"))
+				}, py::arg("particle_mass"),
+					"Set particle_mass. See the particle_mass property.")
 
 			.def_property("rest_density",
 				[](FluidComponent& self) { return self.restDensity; },
@@ -2117,12 +2418,15 @@ namespace {
 					if (d <= 0.0f) d = 0.01f;
 					self.restDensity = d;
 					for (auto* p : self.particles) p->restDensity = d;
-				})
+				},
+				"Target density the fluid solver tries to maintain per particle. Values <= 0 "
+				"are clamped to 0.01. Higher values make the fluid behave more incompressibly dense.")
 			.def("set_rest_density", [](FluidComponent& self, float d) {
 			if (d <= 0.0f) d = 0.01f;
 			self.restDensity = d;
 			for (auto* p : self.particles) p->restDensity = d;
-				}, py::arg("rest_density"))
+				}, py::arg("rest_density"),
+					"Set rest_density. See the rest_density property.")
 
 			.def_property("viscosity",
 				[](FluidComponent& self) { return self.viscosity; },
@@ -2130,12 +2434,15 @@ namespace {
 					if (v <= 0.0f) v = 0.01f;
 					self.viscosity = v;
 					for (auto* p : self.particles) p->viscosity = v;
-				})
+				},
+				"How resistant the fluid is to flowing/shearing. Values <= 0 are clamped to "
+				"0.01. Higher values make the fluid feel thicker, like honey.")
 			.def("set_viscosity", [](FluidComponent& self, float v) {
 			if (v <= 0.0f) v = 0.01f;
 			self.viscosity = v;
 			for (auto* p : self.particles) p->viscosity = v;
-				}, py::arg("viscosity"))
+				}, py::arg("viscosity"),
+					"Set viscosity. See the viscosity property.")
 
 			.def_property("vorticity_strength",
 				[](FluidComponent& self) { return self.vorticityStrength; },
@@ -2143,14 +2450,18 @@ namespace {
 					v = std::max(0.0f, v);
 					self.vorticityStrength = v;
 					for (auto* p : self.particles) p->vorticityEps = v;
-				})
+				},
+				"Strength of vorticity confinement, which restores small-scale swirling "
+				"motion that PBF-style solvers tend to damp out. Clamped to >= 0.")
 			.def("set_vorticity_strength", [](FluidComponent& self, float v) {
 			v = std::max(0.0f, v);
 			self.vorticityStrength = v;
 			for (auto* p : self.particles) p->vorticityEps = v;
-				}, py::arg("vorticity_strength"))
+				}, py::arg("vorticity_strength"),
+					"Set vorticity_strength. See the vorticity_strength property.")
 
-			.def_property_readonly("particle_count", [](FluidComponent& self) { return self.particles.size(); })
+			.def_property_readonly("particle_count", [](FluidComponent& self) { return self.particles.size(); },
+				"Number of particles currently in this fluid")
 
 			.def_property_readonly("particles", [](FluidComponent& self) {
 			return self.particles;
@@ -2161,21 +2472,27 @@ namespace {
 			if (index < 0 || index >= (int)self.particles.size())
 				throw py::index_error("get_particle: index out of range");
 			return self.particles[index];
-				}, py::arg("index"), py::return_value_policy::reference)
+				}, py::arg("index"), py::return_value_policy::reference,
+					"Get a particle by index")
 
 			.def("add_particle", [](FluidComponent& self, glm::vec3 worldPosition) {
-				return self.AddParticle(worldPosition);
-			}, py::arg("world_position"), py::return_value_policy::reference,
-				"Add a single fluid particle at the given world position, e.g.\n"
-				"  p = fluid.add_particle(Vector3(0, 2, 0))")
+			return self.AddParticle(worldPosition);
+				}, py::arg("world_position"), py::return_value_policy::reference,
+					"Add a single fluid particle at the given world position.\n\n"
+					"Example:\n"
+					"    ```python\n"
+					"    p = fluid.add_particle(Vector3(0, 2, 0))\n"
+					"    ```")
 
-				.def("add_particle", [](FluidComponent& self, Shape shape, int particleCount) {
-					return self.AddParticles(shape, particleCount);
-			}, py::arg("shape"), py::arg("particle_count"), py::return_value_policy::reference,
-				"Seed roughly particle_count particles filling the given shape"
-				"and add "
-				"them to the fluid, e.g.\n"
-				"  fluid.add_particle(CircleShape(Vector3(0, 3, 0), 1.5), 200)")
+			.def("add_particle", [](FluidComponent& self, Shape shape, int particleCount) {
+			return self.AddParticles(shape, particleCount);
+				}, py::arg("shape"), py::arg("particle_count"), py::return_value_policy::reference,
+					"Seed roughly particle_count particles filling the given shape and add "
+					"them to the fluid.\n\n"
+					"Example:\n"
+					"    ```python\n"
+					"    fluid.add_particle(CircleShape(Vector3(0, 3, 0), 1.5), 200)\n"
+					"    ```")
 
 			.def("remove_particle", &FluidComponent::RemoveParticle, py::arg("particle"),
 				"Remove and delete a specific FluidParticle previously returned by "
@@ -2217,15 +2534,21 @@ namespace {
 
 			.def("add_constraint", &ConstraintComponent::AddConstraint, py::arg("constraint"),
 				"Register a constraint (e.g. a DistanceConstraint) with this object and the physics "
-				"engine, e.g.\n"
-				"  cc.add_constraint(DistanceConstraint(self.owner, target, 5.0))")
+				"engine.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    cc.add_constraint(DistanceConstraint(self.owner, target, 5.0))\n"
+				"    ```")
 
 			.def("remove_constraint", py::overload_cast<Constraint*>(&ConstraintComponent::RemoveConstraint),
-				py::arg("constraint"))
+				py::arg("constraint"),
+				"Remove a constraint by reference")
 			.def("remove_constraint", py::overload_cast<std::size_t>(&ConstraintComponent::RemoveConstraint),
-				py::arg("index"))
+				py::arg("index"),
+				"Remove a constraint by its index in constraints")
 
-			.def("get_constraint_count", [](ConstraintComponent& self) { return self.appliedConstraints.size(); });
+			.def("get_constraint_count", [](ConstraintComponent& self) { return self.appliedConstraints.size(); },
+				"Number of constraints this object owns");
 
 		EnableGetComponent<ConstraintComponent>(constraintComponentClass);
 		EnableHasComponent<ConstraintComponent>(constraintComponentClass);
@@ -2248,55 +2571,68 @@ namespace {
 				[](FractureComponent& self, bool f) {
 					self.fracturable = f;
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"Whether this object can fracture at all, either from impacts or via "
+				"fracture()/fracture_at_world_point()")
 			.def("set_fracturable", [](FractureComponent& self, bool f) {
 			self.fracturable = f;
 			EngineManager::getInstance().SceneChangeEvent();
-				}, py::arg("fracturable"))
+				}, py::arg("fracturable"),
+					"Set fracturable. See the fracturable property.")
 
 			.def_property("impulse_threshold",
 				[](FractureComponent& self) { return self.impulseThreshold; },
 				[](FractureComponent& self, float t) {
 					self.impulseThreshold = t;
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"Minimum collision impulse required to trigger an automatic fracture")
 			.def("set_impulse_threshold", [](FractureComponent& self, float t) {
 			self.impulseThreshold = t;
 			EngineManager::getInstance().SceneChangeEvent();
-				}, py::arg("impulse_threshold"))
+				}, py::arg("impulse_threshold"),
+					"Set impulse_threshold. See the impulse_threshold property.")
 
 			.def_property("shard_count",
 				[](FractureComponent& self) { return self.shardCount; },
 				[](FractureComponent& self, int c) {
 					self.shardCount = c;
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"Target number of shards produced by a fracture")
 			.def("set_shard_count", [](FractureComponent& self, int c) {
 			self.shardCount = c;
 			EngineManager::getInstance().SceneChangeEvent();
-				}, py::arg("shard_count"))
+				}, py::arg("shard_count"),
+					"Set shard_count. See the shard_count property.")
 
 			.def_property("min_fragment_area",
 				[](FractureComponent& self) { return self.minFragmentArea; },
 				[](FractureComponent& self, float a) {
 					self.minFragmentArea = a;
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"Fragments smaller than this area (in world units squared) are discarded "
+				"rather than spawned as shards")
 			.def("set_min_fragment_area", [](FractureComponent& self, float a) {
 			self.minFragmentArea = a;
 			EngineManager::getInstance().SceneChangeEvent();
-				}, py::arg("min_fragment_area"))
+				}, py::arg("min_fragment_area"),
+					"Set min_fragment_area. See the min_fragment_area property.")
 
 			.def_property("max_fracture_generations",
 				[](FractureComponent& self) { return self.maxFractureGenerations; },
 				[](FractureComponent& self, int g) {
 					self.maxFractureGenerations = g;
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"Maximum number of times a shard produced by this object (or its "
+				"descendants) may itself fracture again. See the generation property.")
 			.def("set_max_fracture_generations", [](FractureComponent& self, int g) {
 			self.maxFractureGenerations = g;
 			EngineManager::getInstance().SceneChangeEvent();
-				}, py::arg("max_fracture_generations"))
+				}, py::arg("max_fracture_generations"),
+					"Set max_fracture_generations. See the max_fracture_generations property.")
 
 			.def_property_readonly("generation", [](FractureComponent& self) { return self.generation; },
 				"How many times this object (or its source ancestor) has already fractured")
@@ -2306,24 +2642,32 @@ namespace {
 				[](FractureComponent& self, float d) {
 					self.restDensity = d;
 					EngineManager::getInstance().SceneChangeEvent();
-				})
+				},
+				"Density used to compute mass for newly-created shards, based on their fragment area")
 			.def("set_rest_density", [](FractureComponent& self, float d) {
 			self.restDensity = d;
 			EngineManager::getInstance().SceneChangeEvent();
-				}, py::arg("rest_density"))
+				}, py::arg("rest_density"),
+					"Set rest_density. See the rest_density property.")
 
 			.def("fracture", [](FractureComponent& self) {
 			glm::vec3 worldPoint = self.parent->GetComponent<TransformComponent>()->GetWorldPosition();
 			PhysicsEngine::getInstance().FractureObject(self.parent, worldPoint);
-				}, "Immediately fracture this object into shards at its own center, e.g.\n" 
-					"  self.get_component(FractureComponent).fracture()")
+				}, "Immediately fracture this object into shards at its own center.\n\n"
+				"Example:\n"
+					"    ```python\n"
+					"    self.get_component(FractureComponent).fracture()\n"
+					"    ```")
 
 			.def("fracture_at_world_point", [](FractureComponent& self, glm::vec3 worldPoint) {
 			PhysicsEngine::getInstance().FractureObject(self.parent, worldPoint);
 				}, py::arg("world_point"),
 					"Immediately fracture this object into shards, using worldPoint (world-space) "
-					"as the impact point that seeds the fracture pattern, e.g.\n"
-					"  fc.fracture_at_world_point(hit.point)")
+					"as the impact point that seeds the fracture pattern.\n\n"
+					"Example:\n"
+					"    ```python\n"
+					"    fc.fracture_at_world_point(hit.point)\n"
+					"    ```")
 
 			.def("fracture_at_local_point", [](FractureComponent& self, glm::vec3 localPoint) {
 			glm::vec3 worldPoint = self.parent->GetComponent<TransformComponent>()->ProjectToWorld(localPoint);
@@ -2331,8 +2675,11 @@ namespace {
 				}, py::arg("local_point"),
 					"Immediately fracture this object into shards, using localPoint (in this "
 					"object's local/model space) as the impact point that seeds the fracture "
-					"pattern, e.g.\n"
-					"  fc.fracture_at_local_point(Vector3(0.5, 0, 0))");
+					"pattern.\n\n"
+					"Example:\n"
+					"    ```python\n"
+					"    fc.fracture_at_local_point(Vector3(0.5, 0, 0))\n"
+					"    ```");
 
 		EnableGetComponent<FractureComponent>(fractureClass);
 		EnableHasComponent<FractureComponent>(fractureClass);
@@ -2352,14 +2699,19 @@ namespace {
 		auto cameraClass = py::class_<CameraComponent>(m, "CameraComponent")
 			.def_property("enable",
 				[](CameraComponent& self) { return self.Enabled; },
-				[](CameraComponent& self, bool enable) { self.SetEnabled(enable); })
-			.def("set_enable", &CameraComponent::SetEnabled, py::arg("enable"))
+				[](CameraComponent& self, bool enable) { self.SetEnabled(enable); },
+				"Whether this component is active")
+			.def("set_enable", &CameraComponent::SetEnabled, py::arg("enable"),
+				"Set enable. See the enable property.")
 
 			.def_property("range",
 				[](CameraComponent& self) { return self.GetRange(); },
-				[](CameraComponent& self, float r) { self.SetRange(r); })
-			.def("get_range", &CameraComponent::GetRange)
-			.def("set_range", &CameraComponent::SetRange, py::arg("range"))
+				[](CameraComponent& self, float r) { self.SetRange(r); },
+				"Visible extent (view size/zoom) of the camera")
+			.def("get_range", &CameraComponent::GetRange,
+				"Get range. See the range property.")
+			.def("set_range", &CameraComponent::SetRange, py::arg("range"),
+				"Set range. See the range property.")
 
 			.def_property("is_main",
 				[](CameraComponent& self) { return Camera::getInstance().mainCam == &self; },
@@ -2370,7 +2722,8 @@ namespace {
 				"does not automatically unset another camera's is_main.")
 			.def("set_is_main", [](CameraComponent& self, bool isMain) {
 			Camera::getInstance().mainCam = isMain ? &self : nullptr;
-				}, py::arg("is_main"));
+				}, py::arg("is_main"),
+					"Set is_main. See the is_main property.");
 
 		EnableGetComponent<CameraComponent>(cameraClass);
 		EnableHasComponent<CameraComponent>(cameraClass);
@@ -2403,8 +2756,11 @@ namespace {
 		m.def("load_scene", [](const std::string& virtualPath) {
 			SceneManager::getInstance().RequestLoadScene(virtualPath);
 			}, py::arg("path"),
-				"Load a scene from a res:// path, replacing the current live scene, e.g.\n"
-				"  load_scene('res://levels/level_2.fscene')");
+				"Load a scene from a res:// path, replacing the current live scene.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    load_scene('res://levels/level_2.fscene')\n"
+				"    ```");
 
 		m.def("add_scene", [](const std::string& path, Object* parent) -> Object* {
 			if (path.rfind("res://", 0) != 0) {
@@ -2412,7 +2768,7 @@ namespace {
 			}
 
 			std::vector<Object*> newObjects;
-			Object* root = SceneManager::getInstance().AddScene(path, parent, newObjects);   
+			Object* root = SceneManager::getInstance().AddScene(path, parent, newObjects);
 			if (!root) {
 				throw py::value_error("add_scene: failed to load scene '" + path + "'");
 			}
@@ -2424,9 +2780,12 @@ namespace {
 			}, py::arg("path"), py::arg("parent") = nullptr, py::return_value_policy::reference,
 				"Load a scene from a res:// path and add it as a child of parent (or as a "
 				"root-level object if parent is None). Returns the newly created root Object "
-				"of the loaded scene, e.g. "
-				"  enemy = add_scene('res://enemy.fscene', self.owner)\n"
-				"  enemy.get_component(TransformComponent).world_position = spawn_point");
+				"of the loaded scene.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    enemy = add_scene('res://enemy.fscene', self.owner)\n"
+				"    enemy.get_component(TransformComponent).world_position = spawn_point\n"
+				"    ```");
 	}
 
 	void RegisterObjectBindings(py::module_& m) {
@@ -2434,39 +2793,64 @@ namespace {
 			.def(py::init(&CreateDefaultObject),
 				"Creates a new Object, not yet part of the scene — call "
 				"add_object() to insert it.")
-			.def_readwrite("name", &Object::name)
-			.def_readwrite("hidden", &Object::hidden)
-			.def_property_readonly("id", [](Object& self) { return self.id; })
+			.def_readwrite("name", &Object::name,
+				"Display name of this Object")
+			.def_readwrite("hidden", &Object::hidden,
+				"Whether this Object is hidden. Prefer show()/hide() over setting this directly.")
+			.def_property_readonly("id", [](Object& self) { return self.id; },
+				"Unique id of this Object")
 			.def_property_readonly("parent", [](Object& self) -> Object* {
 			return self.parent;
-				}, py::return_value_policy::reference)
-			.def_property_readonly("parent_id", [](Object& self) { return self.parentID; })
+				}, py::return_value_policy::reference,
+				"This Object's parent, or None if it has none")
+			.def_property_readonly("parent_id", [](Object& self) { return self.parentID; },
+				"Id of this Object's parent, or an invalid id if it has none")
 			.def_property_readonly("children", [](Object& self) {
 			return self.children;
-				}, py::return_value_policy::reference)
+				}, py::return_value_policy::reference,
+				"This Object's direct children")
 
 			.def("set_name", [](Object& self, const std::string& name) { self.name = name; },
-				py::arg("name"))
-			.def("show", &Object::Show)
-			.def("hide", &Object::Hide)
+				py::arg("name"),
+				"Set name. See the name property.")
+			.def("show", &Object::Show,
+				"Unhide this Object")
+			.def("hide", &Object::Hide,
+				"Hide this Object")
 			.def("get_parent", [](Object& self) -> Object* {
 			return self.parent;
-				}, py::return_value_policy::reference)
-			.def("get_parent_id", [](Object& self) { return self.parentID; })
+				}, py::return_value_policy::reference,
+				"Get parent. See the parent property.")
+			.def("get_parent_id", [](Object& self) { return self.parentID; },
+				"Get parent_id. See the parent_id property.")
 			.def("get_children", [](Object& self) {
 			return self.children;
-				}, py::return_value_policy::reference)
-			.def("get_children_count", [](Object& self) { return self.children.size(); })
+				}, py::return_value_policy::reference,
+				"Get children. See the children property.")
+			.def("get_children_count", [](Object& self) { return self.children.size(); },
+				"Number of direct children this Object has")
 			.def("get_component", [](Object& self, py::object componentClass) {
 			return GetComponentByPythonType(&self, componentClass);
 				}, py::arg("component_class"),
 					"Look up a component on this Object")
 			.def("add_component", &AddComponentToObject, py::arg("component"),
-				"Attach a component instance to this Object, e.g. obj.add_component(RenderComponent)")
+				"Attach a component instance to this Object.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    obj.add_component(RenderComponent)\n"
+				"    ```")
 			.def("has_component", &HasComponentOnObject, py::arg("component"),
-				"Check if this Object has a component of the given type, e.g. obj.has_component(RenderComponent)")
+				"Check if this Object has a component of the given type.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    obj.has_component(RenderComponent)\n"
+				"    ```")
 			.def("remove_component", &RemoveComponentFromObject, py::arg("component_class"),
-				"Remove a component of the given type from this Object, e.g. obj.remove_component(RenderComponent)")
+				"Remove a component of the given type from this Object.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    obj.remove_component(RenderComponent)\n"
+				"    ```")
 			.def("add_object", [](Object&, Object* obj, Object* parent) {
 			return AddObjectToScene(obj, parent);
 				}, py::arg("obj"), py::arg("parent") = nullptr,
@@ -2491,8 +2875,11 @@ namespace {
 			return result;
 			}, py::return_value_policy::reference,
 			"Every Object currently in the scene. Useful for linear searches instead of "
-				"maintaining your own registry, e.g.\n"
-				"  enemies = [o for o in get_all_objects() if o.has_component(Enemy)]");
+				"maintaining your own registry.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    enemies = [o for o in get_all_objects() if o.has_component(Enemy)]\n"
+				"    ```");
 
 		m.def("find_objects_with_component", [](py::object componentClass) {
 			std::vector<Object*> result;
@@ -2503,12 +2890,18 @@ namespace {
 			}
 			return result;
 			}, py::arg("component_class"), py::return_value_policy::reference,
-				"Every Object in the scene that has the given component type, e.g.\n"
-				"  enemies = find_objects_with_component(Enemy)");
+				"Every Object in the scene that has the given component type.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    enemies = find_objects_with_component(Enemy)\n"
+				"    ```");
 
-		py::class_<PointMass>(m, "PointMass")
-			.def_property_readonly("index", [](PointMass& self) { return self.index; })
-			.def_property_readonly("is_center", [](PointMass& self) { return self.isCenter; })
+		py::class_<PointMass>(m, "PointMass",
+			"A single mass point within a SoftBodyComponent's mass-spring aggregate.")
+			.def_property_readonly("index", [](PointMass& self) { return self.index; },
+				"Index of this point mass within its SoftBodyComponent.mass_aggregate")
+			.def_property_readonly("is_center", [](PointMass& self) { return self.isCenter; },
+				"Whether this is the soft body's center point mass")
 
 			.def_property_readonly("soft_body", [](PointMass& self) -> SoftBodyComponent* {
 			return self.sb;
@@ -2517,25 +2910,32 @@ namespace {
 
 			.def_property("point_radius",
 				[](PointMass& self) { return self.pointRadius; },
-				[](PointMass& self, float r) { self.pointRadius = r; })
+				[](PointMass& self, float r) { self.pointRadius = r; },
+				"Collision radius of this individual point mass")
 			.def("set_point_radius", [](PointMass& self, float r) { self.pointRadius = r; },
-				py::arg("point_radius"))
+				py::arg("point_radius"),
+				"Set point_radius. See the point_radius property.")
 
 			.def_property_readonly("local_pos", [](PointMass& self) { return self.localPos; },
 				"Rest position in the parent object's local/model space")
 
 			.def_property("world_pos",
 				[](PointMass& self) { return self.worldPos; },
-				[](PointMass& self, glm::vec3 pos) { self.UpdateWorldPosition(pos); })
-			.def("get_world_position", &PointMass::GetWorldPosition)
+				[](PointMass& self, glm::vec3 pos) { self.UpdateWorldPosition(pos); },
+				"Current world-space position of this point mass. Setting this teleports "
+				"it immediately, bypassing springs — same as update_world_position().")
+			.def("get_world_position", &PointMass::GetWorldPosition,
+				"Get world_pos. See the world_pos property.")
 			.def("update_world_position", &PointMass::UpdateWorldPosition, py::arg("position"),
 				"Move this point mass to a new world position immediately (bypasses springs)")
 
 			.def_property("velocity",
 				[](PointMass& self) { return self.velocity; },
-				[](PointMass& self, glm::vec3 v) { self.velocity = v; })
+				[](PointMass& self, glm::vec3 v) { self.velocity = v; },
+				"Linear velocity of this individual point mass")
 			.def("set_velocity", [](PointMass& self, glm::vec3 v) { self.velocity = v; },
-				py::arg("velocity"))
+				py::arg("velocity"),
+				"Set velocity. See the velocity property.")
 
 			.def_property_readonly("acceleration", [](PointMass& self) {
 			return self.baseAcceleration + self.acceleration;
@@ -2545,22 +2945,31 @@ namespace {
 			.def_property("base_acceleration",
 				[](PointMass& self) { return self.baseAcceleration; },
 				[](PointMass& self, glm::vec3 a) { self.baseAcceleration = a; },
-				"Persistent acceleration such as gravity, e.g. Vector3(0, -9.8, 0)")
+				"Persistent acceleration such as gravity.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    Vector3(0, -9.8, 0)\n"
+				"    ```")
 			.def("set_base_acceleration", [](PointMass& self, glm::vec3 a) { self.baseAcceleration = a; },
-				py::arg("base_acceleration"))
+				py::arg("base_acceleration"),
+				"Set base_acceleration. See the base_acceleration property.")
 
 			.def_property("mass",
 				[](PointMass& self) { return 1.0f / self.inverseMass; },
-				[](PointMass& self, float mass) { if (mass > 0.0f) self.inverseMass = 1.0f / mass; })
+				[](PointMass& self, float mass) { if (mass > 0.0f) self.inverseMass = 1.0f / mass; },
+				"Mass of this individual point mass. Values <= 0 are ignored.")
 			.def("set_mass", [](PointMass& self, float mass) {
 			if (mass > 0.0f) self.inverseMass = 1.0f / mass;
-				}, py::arg("mass"))
+				}, py::arg("mass"),
+					"Set mass. See the mass property.")
 
 			.def_property("inverse_mass",
 				[](PointMass& self) { return self.inverseMass; },
-				[](PointMass& self, float invMass) { self.inverseMass = invMass; })
+				[](PointMass& self, float invMass) { self.inverseMass = invMass; },
+				"1/mass of this individual point mass. Set to 0 to pin it in place.")
 			.def("set_inverse_mass", [](PointMass& self, float invMass) { self.inverseMass = invMass; },
-				py::arg("inverse_mass"))
+				py::arg("inverse_mass"),
+				"Set inverse_mass. See the inverse_mass property.")
 
 			.def("__repr__", [](PointMass& self) {
 			std::ostringstream ss;
@@ -2568,21 +2977,26 @@ namespace {
 			return ss.str();
 				});
 
-		py::class_<FluidParticle>(m, "FluidParticle")
+		py::class_<FluidParticle>(m, "FluidParticle",
+			"A single SPH particle owned by a FluidComponent.")
 			.def_property_readonly("owner", [](FluidParticle& self) -> Object* {
 			return self.parent;
-				}, py::return_value_policy::reference)
+				}, py::return_value_policy::reference,
+				"The Object whose FluidComponent owns this particle")
 
 			.def_property("position",
 				[](FluidParticle& self) { return self.position; },
 				[](FluidParticle& self, glm::vec3 pos) {
 					self.position = pos;
 					self.predictedPosition = pos;
-				})
+				},
+				"World-space position of this particle. Setting this also resets "
+				"predicted_position, teleporting the particle immediately.")
 			.def("set_position", [](FluidParticle& self, glm::vec3 pos) {
 			self.position = pos;
 			self.predictedPosition = pos;
-				}, py::arg("position"))
+				}, py::arg("position"),
+					"Set position. See the position property.")
 
 			.def_property_readonly("predicted_position",
 				[](FluidParticle& self) { return self.predictedPosition; },
@@ -2590,15 +3004,19 @@ namespace {
 
 			.def_property("velocity",
 				[](FluidParticle& self) { return self.velocity; },
-				[](FluidParticle& self, glm::vec3 v) { self.velocity = v; })
+				[](FluidParticle& self, glm::vec3 v) { self.velocity = v; },
+				"Linear velocity of this particle")
 			.def("set_velocity", [](FluidParticle& self, glm::vec3 v) { self.velocity = v; },
-				py::arg("velocity"))
+				py::arg("velocity"),
+				"Set velocity. See the velocity property.")
 
 			.def_property("collision_radius",
 				[](FluidParticle& self) { return self.collisionRadius; },
-				[](FluidParticle& self, float r) { self.collisionRadius = r; })
+				[](FluidParticle& self, float r) { self.collisionRadius = r; },
+				"Physical collision radius of this individual particle")
 			.def("set_collision_radius", [](FluidParticle& self, float r) { self.collisionRadius = r; },
-				py::arg("collision_radius"))
+				py::arg("collision_radius"),
+				"Set collision_radius. See the collision_radius property.")
 
 			.def_property("mass",
 				[](FluidParticle& self) { return self.mass; },
@@ -2606,38 +3024,46 @@ namespace {
 					if (mass <= 0.0f) mass = 0.001f;
 					self.mass = mass;
 					self.invMass = 1.0f / mass;
-				})
+				},
+				"Mass of this individual particle. Values <= 0 are clamped to 0.001.")
 			.def("set_mass", [](FluidParticle& self, float mass) {
 			if (mass <= 0.0f) mass = 0.001f;
 			self.mass = mass;
 			self.invMass = 1.0f / mass;
-				}, py::arg("mass"))
+				}, py::arg("mass"),
+					"Set mass. See the mass property.")
 
 			.def_property("inverse_mass",
 				[](FluidParticle& self) { return self.invMass; },
 				[](FluidParticle& self, float invMass) {
 					self.invMass = invMass;
 					self.mass = invMass > 0.0f ? 1.0f / invMass : 0.0f;
-				})
+				},
+				"1/mass of this individual particle")
 			.def("set_inverse_mass", [](FluidParticle& self, float invMass) {
 			self.invMass = invMass;
 			self.mass = invMass > 0.0f ? 1.0f / invMass : 0.0f;
-				}, py::arg("inverse_mass"))
+				}, py::arg("inverse_mass"),
+					"Set inverse_mass. See the inverse_mass property.")
 
 			.def_property("rest_density",
 				[](FluidParticle& self) { return self.restDensity; },
-				[](FluidParticle& self, float d) { self.restDensity = d; })
+				[](FluidParticle& self, float d) { self.restDensity = d; },
+				"Target density for this individual particle, overriding FluidComponent.rest_density")
 			.def("set_rest_density", [](FluidParticle& self, float d) { self.restDensity = d; },
-				py::arg("rest_density"))
+				py::arg("rest_density"),
+				"Set rest_density. See the rest_density property.")
 
 			.def_property_readonly("density", [](FluidParticle& self) { return self.density; },
 				"Density computed by the solver this substep (read-only)")
 
 			.def_property("viscosity",
 				[](FluidParticle& self) { return self.viscosity; },
-				[](FluidParticle& self, float v) { self.viscosity = v; })
+				[](FluidParticle& self, float v) { self.viscosity = v; },
+				"Viscosity for this individual particle, overriding FluidComponent.viscosity")
 			.def("set_viscosity", [](FluidParticle& self, float v) { self.viscosity = v; },
-				py::arg("viscosity"))
+				py::arg("viscosity"),
+				"Set viscosity. See the viscosity property.")
 
 			.def_property("smoothing_radius",
 				[](FluidParticle& self) { return self.smoothingRadius; },
@@ -2645,23 +3071,30 @@ namespace {
 					self.smoothingRadius = r;
 					self.poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(r);
 					self.spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(r);
-				})
+				},
+				"SPH smoothing radius for this individual particle, overriding FluidComponent.smoothing_radius")
 			.def("set_smoothing_radius", [](FluidParticle& self, float r) {
 			self.smoothingRadius = r;
 			self.poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(r);
 			self.spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(r);
-				}, py::arg("smoothing_radius"))
+				}, py::arg("smoothing_radius"),
+					"Set smoothing_radius. See the smoothing_radius property.")
 
 			.def_property("epsilon",
 				[](FluidParticle& self) { return self.epsilon; },
-				[](FluidParticle& self, float e) { self.epsilon = e; })
-			.def("set_epsilon", [](FluidParticle& self, float e) { self.epsilon = e; }, py::arg("epsilon"))
+				[](FluidParticle& self, float e) { self.epsilon = e; },
+				"Relaxation parameter (CFM) for this individual particle, overriding FluidComponent.epsilon")
+			.def("set_epsilon", [](FluidParticle& self, float e) { self.epsilon = e; }, py::arg("epsilon"),
+				"Set epsilon. See the epsilon property.")
 
 			.def_property("vorticity_strength",
 				[](FluidParticle& self) { return self.vorticityEps; },
-				[](FluidParticle& self, float v) { self.vorticityEps = v; })
+				[](FluidParticle& self, float v) { self.vorticityEps = v; },
+				"Vorticity confinement strength for this individual particle, overriding "
+				"FluidComponent.vorticity_strength")
 			.def("set_vorticity_strength", [](FluidParticle& self, float v) { self.vorticityEps = v; },
-				py::arg("vorticity_strength"))
+				py::arg("vorticity_strength"),
+				"Set vorticity_strength. See the vorticity_strength property.")
 
 			.def_property_readonly("lambda", [](FluidParticle& self) { return self.lambda; },
 				"Constraint multiplier from the solver's last substep (read-only)")
@@ -2674,11 +3107,17 @@ namespace {
 				});
 	}
 
-	AgentComponent* FindFirstAgent() {
+	std::vector<AgentComponent*> FindAllAgents() {
+		std::vector<AgentComponent*> result;
 		for (auto& obj : ObjectManager::getInstance().allObjects) {
-			if (auto* agent = obj->GetComponent<AgentComponent>()) return agent;
+			if (auto* agent = obj->GetComponent<AgentComponent>()) {
+				if (agent->Enabled) result.push_back(agent);
+			}
 		}
-		return nullptr;
+		std::sort(result.begin(), result.end(), [](AgentComponent* a, AgentComponent* b) {
+			return a->AgentId() < b->AgentId();
+			});
+		return result;
 	}
 
 	constexpr const char* kFusionModelRunnerSource = R"PYCODE(
@@ -2811,27 +3250,35 @@ def clear_cache():
 	void RegisterEnvironmentBindings(py::module_& rlModule) {
 		py::module_ envMod = rlModule.def_submodule("Environment", "Headless RL stepping API");
 		envMod.def("get_action_space", []() -> py::object {
-			AgentComponent* agent = FindFirstAgent();
-			if (!agent) throw py::value_error("Environment.get_action_space: no AgentComponent in the scene");
-			py::object space = agent->GetActionSpace();
+			auto agents = FindAllAgents();
+			if (agents.empty())
+				throw py::value_error("Environment.get_action_space: no AgentComponent in the scene");
+			py::object space = agents.front()->GetActionSpace();
 			if (space.is_none()) {
 				throw py::value_error(
 					"Environment.get_action_space: no action space configured. Call "
 					"agent.set_action_space(<a gymnasium.spaces.Space>) from the attached "
-					"script's OnStart before training, e.g.\n"
-					"  from gymnasium import spaces\n"
-					"  self.agent.set_action_space(spaces.MultiDiscrete([3, 2, 2]))");
+					"script's OnStart before training.\n\n"
+					"Example:\n"
+					"    ```python\n"
+					"    from gymnasium import spaces\n"
+					"    self.agent.set_action_space(spaces.MultiDiscrete([3, 2, 2]))\n"
+					"    ```");
 			}
 			return space;
 			}, "Returns the gymnasium.spaces.Space configured via AgentComponent.set_action_space() "
-			"on the scene's first AgentComponent.");
+			"on the scene's first AgentComponent, ordered by agent_id. All agents must share the "
+				"same action space configuration.");
 
 		envMod.def("get_observation_space", []() -> py::object {
-			AgentComponent* agent = FindFirstAgent();
-			if (!agent) throw py::value_error("Environment.get_observation_space: no AgentComponent in the scene");
-			return agent->GetObservationSpace();  
-			}, "Returns the gymnasium.spaces.Space configured via AgentComponent.set_observation_space(), "
-			"or None if unset (in which case a default Box inferred from observation length is used).");
+			auto agents = FindAllAgents();
+			if (agents.empty())
+				throw py::value_error("Environment.get_observation_space: no AgentComponent in the scene");
+			return agents.front()->GetObservationSpace();
+			}, "Returns the gymnasium.spaces.Space configured via AgentComponent.set_observation_space() "
+			"on the scene's first AgentComponent, or None if unset (in which case a default Box "
+				"inferred from observation length is used).");
+
 		envMod.def("get_snapshot", [](int width, int height) -> py::array_t<uint8_t> {
 			if (width <= 0 || height <= 0)
 				throw py::value_error("Environment.get_snapshot: width and height must be positive");
@@ -2849,20 +3296,32 @@ def clear_cache():
 			return result;
 			}, py::arg("width") = 128, py::arg("height") = 128,
 				"Render the scene off-screen (works even during headless training) and return it as "
-				"an (height, width, 3) uint8 RGB array, e.g.\n"
-				"  frame = fusionRL.Environment.get_snapshot(84, 84)\n"
-				"  self.agent.add_observation((frame.astype('float32') / 255.0).flatten().tolist())");
-		envMod.def("step", [](py::object action) {
+				"an (height, width, 3) uint8 RGB array.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    frame = fusionRL.Environment.get_snapshot(84, 84)\n"
+				"    self.agent.add_observation((frame.astype('float32') / 255.0).flatten().tolist())\n"
+				"    ```");
+
+		envMod.def("get_num_agents", []() {
+			return (int)FindAllAgents().size();
+			}, "Number of active AgentComponents in the scene. When >1, every agent shares "
+			"the single policy passed to train() (self-play).");
+
+		envMod.def("step", [](py::list actions) {
 			EngineManager& eng = EngineManager::getInstance();
 
-			AgentComponent* agent = nullptr;
 			{
-				py::gil_scoped_release release;                  
+				py::gil_scoped_release release;
 				std::lock_guard<std::mutex> lock(eng.headlessSimMutex);
-				py::gil_scoped_acquire gil;                       
-				agent = FindFirstAgent();
-				if (!agent) throw py::value_error("Environment.step: no AgentComponent in the scene");
-				agent->SetAction(action);
+				py::gil_scoped_acquire gil;
+				auto agents = FindAllAgents();
+				if (agents.empty())
+					throw py::value_error("Environment.step: no AgentComponent in the scene");
+				if (agents.size() != actions.size())
+					throw py::value_error("Environment.step: got " + std::to_string(actions.size()) +
+						" actions for " + std::to_string(agents.size()) + " agents");
+				for (size_t i = 0; i < agents.size(); i++) agents[i]->SetAction(actions[i]);
 			}
 
 			const float PHYSICS_STEP = 1.0f / 60.0f;
@@ -2901,60 +3360,61 @@ def clear_cache():
 				ScriptManager::getInstance().Update();
 			}
 
-			py::list obs;
-			float reward = 0.0f;
-			bool done = false;
+			py::list obsList, rewardList, doneList;
 			{
-				py::gil_scoped_release release;                    
+				py::gil_scoped_release release;
 				std::lock_guard<std::mutex> lock(eng.headlessSimMutex);
 				py::gil_scoped_acquire gil;
-				agent = FindFirstAgent();                           
-				if (!agent) throw py::value_error("Environment.step: no AgentComponent in the scene");
-				for (float v : agent->GetObservation()) obs.append(v);
-				reward = agent->ConsumeReward();
-				done = agent->ConsumeDone();
+				for (auto* agent : FindAllAgents()) {
+					py::list obs;
+					for (float v : agent->GetObservation()) obs.append(v);
+					obsList.append(obs);
+					rewardList.append(agent->ConsumeReward());
+					doneList.append(agent->ConsumeDone());
+				}
 			}
-			return py::make_tuple(obs, reward, done);
-			}, py::arg("action"),
-				"Advance the simulation by one physics tick with the given action applied "
-				"(type must match the configured action_space), returning (observation, reward, done).");
+			return py::make_tuple(obsList, rewardList, doneList);
+			}, py::arg("actions"),
+				"Advance the simulation by one physics tick. actions must have one entry per "
+				"AgentComponent in the scene (ordered by agent_id). Returns (obs_list, "
+				"reward_list, done_list), one entry per agent.");
 
 		envMod.def("reset", []() -> py::list {
 			{
 				py::gil_scoped_release release;
 				EngineManager::getInstance().RunOnMainThread([]() {
 					const std::string& sceneToLoad = HeadlessMonitor::getInstance().trainingScenePath;
-					if (!sceneToLoad.empty())
-						SceneManager::getInstance().LoadSceneFromFile(sceneToLoad);
-					else
-						SceneManager::getInstance().NewScene();
-
+					sceneToLoad.empty() ? SceneManager::getInstance().NewScene()
+						: SceneManager::getInstance().LoadSceneFromFile(sceneToLoad);
 					SceneManager::getInstance().ProcessPendingSceneLoad();
 					ScriptManager::getInstance().RunAllScriptsLoad();
 					ScriptManager::getInstance().RunAllScriptsStart();
 
-					AgentComponent* agent = FindFirstAgent();
-					if (agent) {
+					auto agents = FindAllAgents();
+					if (!agents.empty()) {
 						py::gil_scoped_acquire gil;
-						py::object space = agent->GetActionSpace();
-						if (!space.is_none()) {
-							agent->SetAction(space.attr("sample")());
-						}
+						py::object space = agents.front()->GetActionSpace();
+						if (!space.is_none())
+							for (auto* agent : agents) agent->SetAction(space.attr("sample")());
 						PhysicsEngine::getInstance().ProcessPhysics(0.0f);
 					}
 					});
 			}
 
-			AgentComponent* agent = FindFirstAgent();
-			if (!agent) throw py::value_error("Environment.reset: no AgentComponent found in the scene.");
+			auto agents = FindAllAgents();
+			if (agents.empty())
+				throw py::value_error("Environment.reset: no AgentComponent found in the scene.");
 
-			agent->ConsumeReward();
-			agent->ConsumeDone();
-
-			py::list obs;
-			for (float v : agent->GetObservation()) obs.append(v);
-			return obs;
-		}, "Reload the editing scene, run one priming tick, and return the initial observation.");
+			py::list obsList;
+			for (auto* agent : agents) {
+				agent->ConsumeReward();
+				agent->ConsumeDone();
+				py::list obs;
+				for (float v : agent->GetObservation()) obs.append(v);
+				obsList.append(obs);
+			}
+			return obsList;
+			}, "Reload the training scene and return a list of initial observations, one per agent.");
 
 		py::dict envDict = envMod.attr("__dict__");
 		py::object builtins = py::module_::import("builtins");
@@ -3033,6 +3493,7 @@ import pickle
 import numpy as np
 import gymnasium as gym
 from gymnasium import spaces
+from stable_baselines3.common.vec_env import VecEnv
 import fusion
 import fusionRL
 
@@ -3040,13 +3501,17 @@ _VECNORM_ZIP_ENTRY = "fusion_vecnormalize.pkl"
 
 
 class FusionEnv(gym.Env):
+    """Single-agent adapter over the (always per-agent-list-shaped) native step/reset
+    API. Wraps the action into a one-element list and unwraps the single agent's
+    entry from the returned lists, so this still matches gym.Env's flat interface."""
     def __init__(self, obs_size: int | None = None):
         super().__init__()
 
         self.action_space = fusionRL.Environment.get_action_space()
 
         custom_obs_space = fusionRL.Environment.get_observation_space()
-        initial_obs = fusionRL.Environment.reset()
+        initial_obs_list = fusionRL.Environment.reset()
+        initial_obs = initial_obs_list[0]
 
         if custom_obs_space is not None:
             self.observation_space = custom_obs_space
@@ -3064,14 +3529,99 @@ class FusionEnv(gym.Env):
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
-        obs = fusionRL.Environment.reset()
-        self._last_obs = np.array(obs, dtype=np.float32)
+        obs_list = fusionRL.Environment.reset()
+        self._last_obs = np.array(obs_list[0], dtype=np.float32)
         return self._last_obs, {}
 
     def step(self, action):
-        obs, reward, done = fusionRL.Environment.step(action)
+        obs_list, reward_list, done_list = fusionRL.Environment.step([action])
+        self._last_obs = np.array(obs_list[0], dtype=np.float32)
+        return self._last_obs, float(reward_list[0]), bool(done_list[0]), False, {}
+
+
+class FusionMultiAgentVecEnv(VecEnv):
+    """Every AgentComponent in the scene is one row of this VecEnv, but the shared
+    scene is stepped exactly once per step_wait(). All rows feed the same policy —
+    that's what makes this self-play with a single output model. Episodes are
+    round-based: when ANY agent's done fires, the whole scene resets and every row
+    reports done=True that step, since the agents can't be reset independently."""
+
+    def __init__(self):
+        n = fusionRL.Environment.get_num_agents()
+        if n < 1:
+            raise ValueError("FusionMultiAgentVecEnv: no AgentComponent in the scene")
+
+        self.action_space = fusionRL.Environment.get_action_space()
+        custom_obs_space = fusionRL.Environment.get_observation_space()
+        initial_obs = fusionRL.Environment.reset()
+
+        if custom_obs_space is not None:
+            observation_space = custom_obs_space
+        else:
+            obs_len = len(initial_obs[0])
+            if obs_len == 0:
+                raise ValueError(
+                    "FusionMultiAgentVecEnv: agent observation is empty. Call "
+                    "agent.add_observation(...) before training.")
+            observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(obs_len,), dtype=np.float32)
+
+        super().__init__(n, observation_space, self.action_space)
+        self._last_obs = np.array(initial_obs, dtype=np.float32)
+        self._actions = None
+        self._ep_rewards = np.zeros(n, dtype=np.float64)
+        self._ep_lengths = np.zeros(n, dtype=np.int64)
+
+    def reset(self):
+        obs = fusionRL.Environment.reset()
         self._last_obs = np.array(obs, dtype=np.float32)
-        return self._last_obs, float(reward), bool(done), False, {}
+        self._ep_rewards[:] = 0.0
+        self._ep_lengths[:] = 0
+        return self._last_obs
+
+    def step_async(self, actions):
+        self._actions = [
+            a.item() if hasattr(a, "item") and a.ndim == 0 else
+            (a.tolist() if isinstance(a, np.ndarray) else a)
+            for a in actions
+        ]
+
+    def step_wait(self):
+        obs, rewards, dones = fusionRL.Environment.step(self._actions)
+        obs = np.array(obs, dtype=np.float32)
+        rewards = np.array(rewards, dtype=np.float64)
+        dones = np.array(dones, dtype=bool)
+
+        self._ep_rewards += rewards
+        self._ep_lengths += 1
+
+        infos = [{} for _ in range(self.num_envs)]
+        if dones.any():
+            for i in range(self.num_envs):
+                infos[i]["episode"] = {"r": float(self._ep_rewards[i]), "l": int(self._ep_lengths[i])}
+                infos[i]["terminal_observation"] = obs[i]
+            dones[:] = True
+            obs = self.reset()
+
+        self._last_obs = obs
+        return obs, rewards, dones, infos
+
+    def close(self):
+        pass
+
+    def get_attr(self, attr_name, indices=None):
+        return [getattr(self, attr_name, None)] * self.num_envs
+
+    def set_attr(self, attr_name, value, indices=None):
+        pass
+
+    def env_method(self, method_name, *a, indices=None, **kw):
+        return [None] * self.num_envs
+
+    def env_is_wrapped(self, wrapper_class, indices=None):
+        return [False] * self.num_envs
+
+    def seed(self, seed=None):
+        return [None] * self.num_envs
 
 
 class _ConsoleWriter:
@@ -3153,12 +3703,16 @@ def train(algorithm: str, policy: str, total_timesteps: int, save_dir: str, star
 
     fusionRL.Environment.is_training = True
     try:
-        if status_cb: status_cb("Building environment")
-        base_env = FusionEnv()
-        monitored_env = Monitor(base_env)
-        vec_env = DummyVecEnv([lambda: monitored_env])
+        num_agents = fusionRL.Environment.get_num_agents()
+        if num_agents > 1:
+            if status_cb: status_cb(f"Building shared-policy self-play environment ({num_agents} agents)")
+            vec_env = FusionMultiAgentVecEnv()
+        else:
+            if status_cb: status_cb("Building environment")
+            base_env = FusionEnv()
+            vec_env = DummyVecEnv([lambda: Monitor(base_env)])
 
-        can_norm_obs = isinstance(base_env.observation_space, spaces.Box)
+        can_norm_obs = isinstance(vec_env.observation_space, spaces.Box)
 
         algo_cls = algos[algorithm]
 
@@ -3286,7 +3840,7 @@ def train(algorithm: str, policy: str, total_timesteps: int, save_dir: str, star
 		py::object sysModule = py::module_::import("sys");
 		py::dict sysModules = sysModule.attr("modules");
 
-		if (sysModules.contains("fusion_gym")) return; 
+		if (sysModules.contains("fusion_gym")) return;
 
 		py::object typesModule = py::module_::import("types");
 		py::object moduleObj = typesModule.attr("ModuleType")("fusion_gym");
@@ -3305,7 +3859,7 @@ def train(algorithm: str, policy: str, total_timesteps: int, save_dir: str, star
 			throw;
 		}
 	}
-	
+
 	void RegisterRLBindings(py::module_& m) {
 		py::module_ fusionRL = m.def_submodule("RL",
 			"Fusion Reinforcement Learning bindings (requires the 'rl' package)");
@@ -3313,39 +3867,56 @@ def train(algorithm: str, policy: str, total_timesteps: int, save_dir: str, star
 		auto agentClass = py::class_<AgentComponent>(m, "AgentComponent")
 			.def_property("enable",
 				[](AgentComponent& self) { return self.Enabled; },
-				[](AgentComponent& self, bool e) { self.SetEnabled(e); })
+				[](AgentComponent& self, bool e) { self.SetEnabled(e); },
+				"Whether this component is active")
 
-			.def("add_observation", py::overload_cast<float>(&AgentComponent::AddObservation), py::arg("value"))
+			.def("add_observation", py::overload_cast<float>(&AgentComponent::AddObservation), py::arg("value"),
+				"Append a single float to this frame's observation vector")
 			.def("add_observation", [](AgentComponent& self, std::vector<float> values) {
 			self.AddObservationVec(values);
-				}, py::arg("values"))
-			.def("set_observation", &AgentComponent::SetObservation, py::arg("values"))
-			.def("clear_observation", &AgentComponent::ClearObservation)
+				}, py::arg("values"),
+					"Append multiple floats to this frame's observation vector")
+			.def("set_observation", &AgentComponent::SetObservation, py::arg("values"),
+				"Replace this frame's entire observation vector")
+			.def("clear_observation", &AgentComponent::ClearObservation,
+				"Clear the observation vector accumulated so far this frame")
 
-			.def("add_reward", &AgentComponent::AddReward, py::arg("delta"))
-			.def("set_reward", &AgentComponent::SetReward, py::arg("value"))
-			.def("end_episode", &AgentComponent::EndEpisode)
+			.def("add_reward", &AgentComponent::AddReward, py::arg("delta"),
+				"Add delta to this episode's accumulated reward")
+			.def("set_reward", &AgentComponent::SetReward, py::arg("value"),
+				"Overwrite this step's reward with value")
+			.def("end_episode", &AgentComponent::EndEpisode,
+				"Mark the current episode as done, ending the RL rollout on the next step")
 
 			.def("set_action_space", &AgentComponent::SetActionSpace, py::arg("space"),
 				"Set this agent's action space to any gymnasium.spaces.Space instance "
-				"(Discrete, Box, MultiDiscrete, MultiBinary), e.g.\n"
-				"  from gymnasium import spaces\n"
-				"  self.agent.set_action_space(spaces.MultiDiscrete([3, 2, 2]))\n"
+				"(Discrete, Box, MultiDiscrete, MultiBinary).\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    from gymnasium import spaces\n"
+				"    self.agent.set_action_space(spaces.MultiDiscrete([3, 2, 2]))\n"
+				"    ```\n"
 				"Must be called (e.g. from OnStart) before training or inference.")
-			.def_property_readonly("action_space", &AgentComponent::GetActionSpace)
+			.def_property_readonly("action_space", &AgentComponent::GetActionSpace,
+				"The gymnasium.spaces.Space configured via set_action_space()")
 
 			.def("set_observation_space", &AgentComponent::SetObservationSpace, py::arg("space"),
 				"Optional. Override the observation space with any gymnasium.spaces.Space. "
 				"If not set, a Box inferred from the length of accumulated add_observation() "
 				"values is used automatically (previous default behavior).")
-			.def_property_readonly("observation_space", &AgentComponent::GetObservationSpace)
+			.def_property_readonly("observation_space", &AgentComponent::GetObservationSpace,
+				"The gymnasium.spaces.Space configured via set_observation_space(), or None if unset")
 
 			.def_property_readonly("action", &AgentComponent::GetAction,
 				"The most recent action, in whatever type matches the configured action_space "
-				"(int for Discrete, list for Box/MultiDiscrete/MultiBinary), e.g.\n"
-				"  move_idx, jump, shoot = self.agent.action  # MultiDiscrete([3, 2, 2])")
+				"(int for Discrete, list for Box/MultiDiscrete/MultiBinary).\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    move_idx, jump, shoot = self.agent.action  # MultiDiscrete([3, 2, 2])\n"
+				"    ```")
 
-			.def_property_readonly("agent_id", [](AgentComponent& self) { return self.AgentId(); });
+			.def_property_readonly("agent_id", [](AgentComponent& self) { return self.AgentId(); },
+				"Unique id of this agent, used to key per-agent training state");
 
 		EnableGetComponent<AgentComponent>(agentClass);
 		EnableHasComponent<AgentComponent>(agentClass);
@@ -3476,7 +4047,7 @@ void RegisterEngineBindings(py::module_& m) {
 	RegisterScriptBindings(m);
 	RegisterInputBindings(m);
 	RegisterConsoleBindings(m);
-	RegisterComponentBindings(m);      
+	RegisterComponentBindings(m);
 	RegisterSceneBindings(m);
 	RegisterObjectBindings(m);
 	InstallPackageImportHook(m);
