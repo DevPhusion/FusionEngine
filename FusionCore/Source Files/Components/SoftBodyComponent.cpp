@@ -7,7 +7,7 @@ SoftBodyComponent::SoftBodyComponent(Object* parent) : ComponentBase<SoftBodyCom
 }
 
 void SoftBodyComponent::Activate() {
-	isActive = true;
+	Component::Activate();
 
 	transformCallbackID = parent->GetComponent<TransformComponent>()->AddTransformCallback([this] { UpdateMassAggregate(); });
 	setShapeCallbackID = parent->GetComponent<RenderComponent>()->AddOnShapeSetCallback([this] { RebuildMassAggregate(); });
@@ -18,6 +18,8 @@ void SoftBodyComponent::Activate() {
 }
 
 void SoftBodyComponent::Deactivate() {
+	Component::Deactivate();
+
 	for (XPBDDistanceConstraint* s : springs)
 		PhysicsEngine::getInstance().UnRegisterXPBDConstraint(s);
 	springs.clear();
@@ -59,8 +61,6 @@ void SoftBodyComponent::Deactivate() {
 	RenderComponent* rc = parent->GetComponent<RenderComponent>();
 	if (rc && setShapeCallbackID != -1) rc->RemoveOnShapeSetCallback(setShapeCallbackID);
 	setShapeCallbackID = -1;
-
-	isActive = false;
 }
 
 void SoftBodyComponent::ProcessSoftBody(float delta) {

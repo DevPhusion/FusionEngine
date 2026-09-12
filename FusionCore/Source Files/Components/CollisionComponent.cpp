@@ -20,8 +20,7 @@ CollisionComponent::CollisionComponent(Object* parent) : ComponentBase<Collision
 }
 
 void CollisionComponent::Activate() {
-	if (isActive) return;
-	isActive = true;
+	Component::Activate();
 
 	if (parent->HasComponent<FluidComponent>()) return;
 
@@ -51,7 +50,7 @@ void CollisionComponent::Activate() {
 }
 
 void CollisionComponent::Deactivate() {
-	if (!isActive) return;
+	Component::Deactivate();
 
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
 	if (tc && onTransformCallbackID != -1) {
@@ -76,8 +75,6 @@ void CollisionComponent::Deactivate() {
 			entry.BAHnode.Reset();
 		}
 	}
-
-	isActive = false;
 }
 
 int CollisionComponent::AddShape(Shape shape, std::string name) {

@@ -33,8 +33,7 @@ void CameraComponent::UnregisterCallbacks() {
 }
 
 void CameraComponent::Activate() {
-	if (isActive) return;   
-	isActive = true;
+	Component::Activate();
 
 	if (!Enabled) return;   
 
@@ -51,8 +50,7 @@ void CameraComponent::Activate() {
 }
 
 void CameraComponent::Deactivate() {
-	if (!isActive) return;
-	isActive = false;
+	Component::Deactivate();
 
 	if (Enabled) {
 		UnregisterCallbacks();

@@ -94,6 +94,34 @@ namespace {
 		}
 	}
 
+	void DrawAudioIcon(ImDrawList* dl, ImVec2 pos, float size, ImU32 bodyColor, ImU32 glyphColor) {
+		DrawFileIcon(dl, pos, size, bodyColor);
+
+		float bodyW = size * 0.78f;
+
+		// Single eighth-note style music note, anchored toward the bottom of the file body.
+		float noteHeadRadiusX = bodyW * 0.15f;
+		float noteHeadRadiusY = size * 0.09f;
+		float stemThickness = std::max(1.0f, size * 0.055f);
+
+		ImVec2 headCenter(pos.x + bodyW * 0.40f, pos.y + size * 0.80f);
+		float stemTopY = pos.y + size * 0.40f;
+		float stemX = headCenter.x + noteHeadRadiusX * 0.85f;
+
+		// Notehead, drawn as a slightly rotated filled ellipse.
+		dl->AddEllipseFilled(headCenter, ImVec2(noteHeadRadiusX, noteHeadRadiusY), glyphColor, -0.35f);
+
+		// Stem.
+		dl->AddLine(ImVec2(stemX, headCenter.y), ImVec2(stemX, stemTopY), glyphColor, stemThickness);
+
+		// Flag.
+		dl->AddBezierQuadratic(
+			ImVec2(stemX, stemTopY),
+			ImVec2(stemX + bodyW * 0.22f, stemTopY + size * 0.06f),
+			ImVec2(stemX + bodyW * 0.05f, stemTopY + size * 0.22f),
+			glyphColor, stemThickness);
+	}
+
 	void OpenPathInVSCode(const std::filesystem::path& projectDir, const std::filesystem::path& fileAbsPath) {
 		std::string args = "\"" + projectDir.string() + "\" -g \"" + fileAbsPath.string() + "\"";
 
@@ -160,7 +188,7 @@ void FileSystem::ExpandParentsOf(const std::string& virtualPath) {
 		expandedPaths.insert(fm.AbsoluteToVirtual(current));
 		if (current == root) break;
 		std::filesystem::path parent = current.parent_path();
-		if (parent == current) break; 
+		if (parent == current) break;
 		current = parent;
 	}
 
@@ -308,7 +336,7 @@ void FileSystem::DrawNode(const FileSystemEntry& entry, int depth) {
 		OpenPathInVSCode(FileManager::getInstance().currentProjectDirectory, entry.absolutePath);
 	}
 	if (rowDoubleClicked && !isRenaming && !toggledOpen && entry.iconType == ResourceIconType::Scene
-		&& EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Stop) { 
+		&& EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Stop) {
 		SceneManager::getInstance().OpenSceneTab(entry.absolutePath.string());
 	}
 
@@ -360,11 +388,14 @@ void FileSystem::DrawNode(const FileSystemEntry& entry, int depth) {
 	else if (entry.iconType == ResourceIconType::Script) {
 		DrawScriptIcon(dl, iconPos, iconSize, IM_COL32(90, 160, 110, 255), IM_COL32(235, 235, 235, 255));
 	}
-	else if (entry.iconType == ResourceIconType::Scene) {                             
+	else if (entry.iconType == ResourceIconType::Scene) {
 		DrawSceneIcon(dl, iconPos, iconSize, IM_COL32(150, 110, 200, 255), IM_COL32(235, 235, 235, 255));
 	}
 	else if (entry.iconType == ResourceIconType::Archive) {
 		DrawArchiveIcon(dl, iconPos, iconSize, IM_COL32(200, 170, 90, 255), IM_COL32(35, 30, 15, 255));
+	}
+	else if (entry.iconType == ResourceIconType::Audio) {
+		DrawAudioIcon(dl, iconPos, iconSize, IM_COL32(210, 110, 140, 255), IM_COL32(255, 255, 255, 255));
 	}
 	else {
 		DrawFileIcon(dl, iconPos, iconSize, IM_COL32(160, 160, 160, 255));

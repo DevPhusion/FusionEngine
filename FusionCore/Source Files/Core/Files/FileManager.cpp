@@ -25,9 +25,13 @@ FileManager::~FileManager() {
 
 ResourceIconType FileManager::ClassifyExtension(const std::string& extLower) {
 	static const std::vector<std::string> imageExts = { ".png", ".jpg", ".jpeg", ".bmp", ".tga", ".svg" };
+	static const std::vector<std::string> audioExts = { ".mp3", ".wav" };
 
 	if (std::find(imageExts.begin(), imageExts.end(), extLower) != imageExts.end())
 		return ResourceIconType::Image;
+
+	if (std::find(audioExts.begin(), audioExts.end(), extLower) != audioExts.end())
+		return ResourceIconType::Audio;
 
 	if (extLower == ".py") {
 		return ResourceIconType::Script;
@@ -103,7 +107,7 @@ void FileManager::UpdateScriptImportPath(const std::filesystem::path& previousRo
 		sysModules.attr("pop")(name, py::none());
 	}
 
-	ResetDynamicComponentRegistries(); 
+	ResetDynamicComponentRegistries();
 }
 
 void FileManager::ScanForScripts(const std::string& virtualDir) {
@@ -278,8 +282,8 @@ bool FileManager::CreateScene(const std::string& parentVirtualPath, const std::s
 	BinaryWriter w(out);
 	w.Write(SceneManager::getInstance().sceneMagicByte);
 	w.Write(SceneManager::getInstance().sceneVersion);
-	w.Write(static_cast<uint32_t>(0)); 
-	w.Write(static_cast<uint32_t>(0)); 
+	w.Write(static_cast<uint32_t>(0));
+	w.Write(static_cast<uint32_t>(0));
 
 	return w.Good();
 }
@@ -321,7 +325,7 @@ bool FileManager::ImportFile(const std::string& sourceAbsolutePath, const std::s
 	if (ClassifyExtension(ext) == ResourceIconType::Script) {
 		std::string virtualPath = AbsoluteToVirtual(dest);
 		ScriptManager::getInstance().RegisterScript(virtualPath);
-		ScriptManager::getInstance().TryRegisterScriptAsComponent(virtualPath); 
+		ScriptManager::getInstance().TryRegisterScriptAsComponent(virtualPath);
 	}
 
 	return true;
@@ -348,7 +352,7 @@ bool FileManager::RenameResource(const std::string& virtualPath, const std::stri
 
 	std::string newVirtualPath = AbsoluteToVirtual(dest);
 	for (auto& oldScriptPath : scriptsBefore) {
-		std::string suffix = oldScriptPath.substr(virtualPath.size()); 
+		std::string suffix = oldScriptPath.substr(virtualPath.size());
 		ScriptManager::getInstance().RenameRegisteredScript(oldScriptPath, newVirtualPath + suffix);
 	}
 
@@ -576,7 +580,7 @@ void FileManager::RestoreObjects(const std::vector<uint8_t>& data, const std::ve
 	isRestoring = true;
 
 	for (uint64_t id : idsToRemove) {
-		ObjectManager::getInstance().RemoveObjectById(id);  
+		ObjectManager::getInstance().RemoveObjectById(id);
 	}
 
 	std::istringstream in(std::string(data.begin(), data.end()), std::ios::binary);
@@ -619,7 +623,7 @@ void FileManager::RestoreObjects(const std::vector<uint8_t>& data, const std::ve
 		}
 	}
 
-	for (Object* obj : touched) {          
+	for (Object* obj : touched) {
 		for (auto& c : obj->components) {
 			c->PostLoad();
 		}
@@ -639,7 +643,7 @@ std::vector<uint8_t> FileManager::SnapshotConstraints() const {
 
 	w.Write(static_cast<uint32_t>(toSave.size()));
 	for (Constraint* c : toSave) {
-		c->Serialize(w);   
+		c->Serialize(w);
 	}
 
 	std::string s = out.str();
@@ -672,7 +676,7 @@ void FileManager::RestoreConstraints(const std::vector<uint8_t>& data) {
 		Object* b = ObjectManager::getInstance().FindObjectById(idB);
 
 		if (!a) {
-			constraint->Deserialize(r);   
+			constraint->Deserialize(r);
 			continue;
 		}
 

@@ -26,6 +26,7 @@ namespace EditorField {
 		}
 		if (changed) {
 			onChange();
+			EngineManager::getInstance().SceneChangeEvent();
 		}
 		if (ImGui::IsItemDeactivatedAfterEdit()) {
 			EditorManager::getInstance().EndEdit(targets);
@@ -97,6 +98,7 @@ namespace EditorField {
 		if (changed) {
 			EditorManager::getInstance().BeginEdit(targets, forceNewEdit);
 			onChange();
+			EngineManager::getInstance().SceneChangeEvent();
 			EditorManager::getInstance().EndEdit(targets);
 		}
 		return changed;
@@ -112,6 +114,7 @@ namespace EditorField {
 		if (triggered) {
 			EditorManager::getInstance().BeginEdit(targets, forceNewEdit);
 			onChange();
+			EngineManager::getInstance().SceneChangeEvent();
 			EditorManager::getInstance().EndEdit(targets);
 		}
 		return triggered;

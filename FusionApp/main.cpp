@@ -18,6 +18,7 @@
 #include "../FusionCore/Header Files/Core/Scripting/ScriptManager.h"
 #include "../FusionCore/Header Files/Core/SceneManager.h"
 #include "../FusionCore/Header Files/Core/Editor/HeadlessMonitor.h"
+#include "../FusionCore/Header Files/Core/AudioManager.h"
 
 
 PYBIND11_EMBEDDED_MODULE(fusion, m) {
@@ -82,6 +83,8 @@ int main(int argc, char* argv[]) {
 	}
 
 	EngineManager::getInstance().isPlayer = false;
+
+	AudioManager::getInstance().Initialize();
 
 	Renderer::getInstance().Setup(&ObjectManager::getInstance().allObjects);
 	EditorManager::getInstance().Setup(window);
@@ -230,6 +233,7 @@ int main(int argc, char* argv[]) {
 		glfwSwapBuffers(window);
 	}
 
+	AudioManager::getInstance().Shutdown();
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();

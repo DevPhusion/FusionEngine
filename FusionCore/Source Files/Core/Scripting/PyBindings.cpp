@@ -1,3 +1,4 @@
+#define NOMINMAX
 #include "../../../Header Files/Core/Scripting/PyBindings.h"
 #include "../../../Header Files/Core/Files/Export/ExportPackageReader.h"
 #include "../../../Header Files/Core/Editor/Windows/Console.h"
@@ -2739,6 +2740,97 @@ namespace {
 		EnableAddObject<CameraComponent>(cameraClass);
 		EnableAddChild<CameraComponent>(cameraClass);
 		EnableRemoveObject<CameraComponent>(cameraClass);
+
+		auto audioClass = py::class_<AudioComponent>(m, "AudioComponent")
+			.def_property("enable",
+				[](AudioComponent& self) { return self.Enabled; },
+				[](AudioComponent& self, bool enable) { self.SetEnabled(enable); },
+				"Whether this component is active. Disabling unloads the sound.")
+			.def("set_enable", &AudioComponent::SetEnabled, py::arg("enable"),
+				"Set enable. See the enable property.")
+
+			.def_property("audio_path",
+				[](AudioComponent& self) -> std::string {
+					if (self.audioPath.empty()) return self.audioPath;
+					return FileManager::getInstance().AbsoluteToVirtual(self.audioPath);
+				},
+				[](AudioComponent& self, const std::string& virtualPath) {
+					if (virtualPath.empty()) {
+						self.SetAudioPath("");
+						return;
+					}
+					if (!FileManager::getInstance().VirtualPathExists(virtualPath)) {
+						Console::AddMessage(Console::MessageType::Error,
+							"AudioComponent.audio_path: resource not found: " + virtualPath);
+						return;
+					}
+					self.SetAudioPath(FileManager::getInstance().VirtualToAbsolute(virtualPath).string());
+				},
+				"res:// path to the audio file (.wav/.mp3). Setting this (re)loads the sound "
+				"immediately using the current streaming/loop settings.")
+			.def("set_audio_path", [](AudioComponent& self, const std::string& virtualPath) {
+			if (virtualPath.empty()) {
+				self.SetAudioPath("");
+				return;
+			}
+			if (!FileManager::getInstance().VirtualPathExists(virtualPath)) {
+				Console::AddMessage(Console::MessageType::Error,
+					"AudioComponent.set_audio_path: resource not found: " + virtualPath);
+				return;
+			}
+			self.SetAudioPath(FileManager::getInstance().VirtualToAbsolute(virtualPath).string());
+				}, py::arg("virtual_path"),
+					"Set audio_path. See the audio_path property.")
+
+			.def_property("streaming",
+				[](AudioComponent& self) { return self.streaming; },
+				[](AudioComponent& self, bool streaming) { self.SetStreaming(streaming); },
+				"Whether the sound streams from disk rather than being fully decoded into "
+				"memory. Changing this reloads the sound if a path is set.")
+			.def("set_streaming", &AudioComponent::SetStreaming, py::arg("streaming"),
+				"Set streaming. See the streaming property.")
+
+			.def_property("loop",
+				[](AudioComponent& self) { return self.loop; },
+				[](AudioComponent& self, bool loop) { self.SetLooping(loop); },
+				"Whether the sound loops when it reaches the end. Changing this reloads "
+				"the sound if a path is set.")
+			.def("set_loop", &AudioComponent::SetLooping, py::arg("loop"),
+				"Set loop. See the loop property.")
+
+			.def_property("volume",
+				[](AudioComponent& self) { return self.volume; },
+				[](AudioComponent& self, float volume) { self.SetVolume(volume); },
+				"Playback volume. Only takes effect once a sound is loaded.")
+			.def("set_volume", &AudioComponent::SetVolume, py::arg("volume"),
+				"Set volume. See the volume property.")
+
+			.def_property_readonly("is_playing", [](AudioComponent& self) { return self.isPlaying; },
+				"Whether the sound is currently playing. Use play()/stop() to change this.")
+
+			.def("play", &AudioComponent::PlayAudio,
+				"Start (or resume) playback of the loaded sound.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    audio.play()\n"
+				"    ```")
+			.def("stop", &AudioComponent::StopAudio,
+				"Stop playback of the loaded sound");
+
+		EnableGetComponent<AudioComponent>(audioClass);
+		EnableHasComponent<AudioComponent>(audioClass);
+		RegisterComponentGetter<AudioComponent>(audioClass);
+		EnableGetOwner<AudioComponent>(audioClass);
+		RegisterComponentRemover<AudioComponent>(audioClass);
+		RegisterComponentAdder<AudioComponent>(audioClass,
+			[](Object& obj) {
+				return std::make_unique<AudioComponent>(&obj);
+			});
+		EnableAddComponent<AudioComponent>(audioClass);
+		EnableRemoveComponent<AudioComponent>(audioClass);
+		EnableAddObject<AudioComponent>(audioClass);
+		EnableAddChild<AudioComponent>(audioClass);
+		EnableRemoveObject<AudioComponent>(audioClass);
 	}
 
 	Object* CreateDefaultObject() {

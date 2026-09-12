@@ -99,14 +99,12 @@ ScriptComponent::ScriptComponent(Object* parent, std::string sourcePath) : Compo
 }
 
 void ScriptComponent::Deactivate() {
-	if (!isActive) return;
+	Component::Deactivate();
 
 	if (loaded) {
 		pendingExportedValues = exportedProperties;
 	}
 	Unload();
-
-	isActive = false;
 }
 
 std::string ScriptComponent::GetDisplayName() {

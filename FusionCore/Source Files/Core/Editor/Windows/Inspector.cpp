@@ -7,6 +7,7 @@
 #include "../../../../Header Files/Components/FractureComponent.h"
 #include "../../../../Header Files/Components/FluidComponent.h"
 #include "../../../../Header Files/Components/CameraComponent.h"
+#include "../../../../Header Files/Components/AudioComponent.h"
 #include "../../../../Header Files/Components/ScriptComponent.h"
 #include "../../../../Header Files/Components/AgentComponent.h"
 
@@ -203,6 +204,15 @@ void Inspector::ProcessWindow() {
                 if (ImGui::MenuItem("Camera Component")) {
                     EditorManager::getInstance().BeginEdit({ selected });
                     selected->AddComponent(std::make_unique<CameraComponent>(selected));
+                    EditorManager::getInstance().EndEdit({ selected });
+                    EngineManager::getInstance().SceneChangeEvent();
+                    m_SearchBuffer[0] = '\0';
+                    ImGui::CloseCurrentPopup();
+                }
+            if (!selected->HasComponent<AudioComponent>() && std::string("Audio Component").find(search) != std::string::npos)
+                if (ImGui::MenuItem("Audio Component")) {
+                    EditorManager::getInstance().BeginEdit({ selected });
+                    selected->AddComponent(std::make_unique<AudioComponent>(selected));
                     EditorManager::getInstance().EndEdit({ selected });
                     EngineManager::getInstance().SceneChangeEvent();
                     m_SearchBuffer[0] = '\0';

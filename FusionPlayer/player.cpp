@@ -17,6 +17,7 @@
 #include "../FusionCore/Header Files/Core/Scripting/PyBindings.h"
 #include "../FusionCore/Header Files/Core/Scripting/ScriptManager.h"
 #include "../FusionCore/Header Files/Core/SceneManager.h" 
+#include "../FusionCore/Header Files/Core/AudioManager.h"
 
 PYBIND11_EMBEDDED_MODULE(fusion, m) {
 	RegisterEngineBindings(m);
@@ -165,6 +166,7 @@ int main(int argc, char* argv[]) {
 	}
 
 	EngineManager::getInstance().isPlayer = true;
+	AudioManager::getInstance().Initialize();
 	Renderer::getInstance().Setup(&ObjectManager::getInstance().allObjects);
 	InputManager::getInstance().Setup(window);
 	EngineManager::getInstance().Setup(window);
@@ -242,6 +244,7 @@ int main(int argc, char* argv[]) {
 		glfwSwapBuffers(window);
 	}
 
+	AudioManager::getInstance().Shutdown();
 	glfwDestroyWindow(window);
 	glfwTerminate();
 	return 0;

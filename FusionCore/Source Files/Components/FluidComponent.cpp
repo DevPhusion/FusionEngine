@@ -16,7 +16,7 @@ void FluidComponent::EnsureGLResources() {
 }
 
 void FluidComponent::Activate() {
-	isActive = true;
+	Component::Activate();
 
 	setShapeCallbackID = parent->GetComponent<RenderComponent>()->AddOnShapeSetCallback([this] {
 		SeedParticles();
@@ -37,6 +37,8 @@ void FluidComponent::Activate() {
 }
 
 void FluidComponent::Deactivate() {
+	Component::Deactivate();
+
 	RenderComponent* rc = parent->GetComponent<RenderComponent>();
 	if (rc && setShapeCallbackID != -1) rc->RemoveOnShapeSetCallback(setShapeCallbackID);
 	setShapeCallbackID = -1;

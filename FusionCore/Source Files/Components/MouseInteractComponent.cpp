@@ -41,14 +41,12 @@ void MouseInteractComponent::UnregisterCallbacks() {
 }
 
 void MouseInteractComponent::Activate() {
-	if (isActive) return;
-	isActive = true;
+	Component::Activate();
 	RegisterCallbacks();
 }
 
 void MouseInteractComponent::Deactivate() {
-	if (!isActive) return;
-	isActive = false;
+	Component::Deactivate();
 	UnregisterCallbacks();
 
 	if (Selected) {

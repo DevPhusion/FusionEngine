@@ -15,8 +15,7 @@ ConstraintComponent::ConstraintComponent(Object* parent)
 }
 
 void ConstraintComponent::Activate() {
-    if (isActive) return;
-    isActive = true;
+    Component::Activate();
 
     for (auto& c : appliedConstraints) {
         c->Activate();
@@ -24,8 +23,7 @@ void ConstraintComponent::Activate() {
 }
 
 void ConstraintComponent::Deactivate() {
-    if (!isActive) return;
-    isActive = false;
+    Component::Deactivate();
 
     for (auto& c : appliedConstraints) {
         c->Deactivate();

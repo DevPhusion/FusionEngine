@@ -12,6 +12,7 @@
 #include "CameraComponent.h"
 #include "EditorRenderComponent.h"
 #include "AgentComponent.h"
+#include "AudioComponent.h"
 
 namespace {
 	std::unique_ptr<Component> CreateComponentFromName(Object* parent, std::string name) {
@@ -44,6 +45,9 @@ namespace {
 		}
 		if (name == "Camera Component") {
 			return std::make_unique<CameraComponent>(parent);
+		}
+		if (name == "Audio Component") {
+			return std::make_unique<AudioComponent>(parent);
 		}
 		if (name == "Editor Render Component") {
 			return std::make_unique<EditorRenderComponent>(parent, parent->shader);
