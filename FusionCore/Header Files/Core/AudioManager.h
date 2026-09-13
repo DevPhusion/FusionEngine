@@ -2,15 +2,17 @@
 #include <miniaudio/miniaudio.h>
 #include "../Core/Editor/Windows/Console.h"
 
-struct SoundHandle {
+class AudioComponent;
+
+struct AudioHandle {
 	std::unique_ptr<ma_sound> sound;
 	bool loaded = false;
 
-	SoundHandle() = default;
-	SoundHandle(const SoundHandle&) = delete;
-	SoundHandle& operator=(const SoundHandle&) = delete;
-	SoundHandle(SoundHandle&&) = default;
-	SoundHandle& operator=(SoundHandle&&) = default;
+	AudioHandle() = default;
+	AudioHandle(const AudioHandle&) = delete;
+	AudioHandle& operator=(const AudioHandle&) = delete;
+	AudioHandle(AudioHandle&&) = default;
+	AudioHandle& operator=(AudioHandle&&) = default;
 };
 
 class AudioManager
@@ -27,10 +29,11 @@ public:
 	void Initialize();
 	void Shutdown();
 
-	SoundHandle LoadSound(const std::string& path, bool stream = false, bool loop = false);
-	void UnloadSound(SoundHandle& handle);
+	AudioHandle LoadSound(const std::string& path, bool stream = false, bool loop = false);
+	void UnloadSound(AudioHandle& handle);
 
 	ma_engine audioEngine;
+	AudioComponent* activeListener;
 
 private:
 	AudioManager() = default;

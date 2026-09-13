@@ -1,4 +1,5 @@
 #include "../../Header Files/Core/AudioManager.h"
+#include "../../Header Files/Components/AudioComponent.h"
 
 void AudioManager::Initialize() {
 	ma_result result = ma_engine_init(NULL, &audioEngine);
@@ -12,8 +13,8 @@ void AudioManager::Shutdown() {
 	ma_engine_uninit(&audioEngine);
 }
 
-SoundHandle AudioManager::LoadSound(const std::string& path, bool stream, bool loop) {
-	SoundHandle handle;
+AudioHandle AudioManager::LoadSound(const std::string& path, bool stream, bool loop) {
+	AudioHandle handle;
 	handle.sound = std::make_unique<ma_sound>();
 
 	ma_uint32 flags = stream ? MA_SOUND_FLAG_STREAM : 0;
@@ -31,7 +32,7 @@ SoundHandle AudioManager::LoadSound(const std::string& path, bool stream, bool l
 	return handle;
 }
 
-void AudioManager::UnloadSound(SoundHandle& handle) {
+void AudioManager::UnloadSound(AudioHandle& handle) {
 	if (handle.loaded && handle.sound) {
 		ma_sound_uninit(handle.sound.get());
 		handle.sound.reset();

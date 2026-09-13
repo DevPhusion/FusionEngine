@@ -2745,32 +2745,85 @@ namespace {
 			.def_property("enable",
 				[](AudioComponent& self) { return self.Enabled; },
 				[](AudioComponent& self, bool enable) { self.SetEnabled(enable); },
-				"Whether this component is active. Disabling unloads the sound.")
+				"Whether this component is active. Disabling unloads every track's sound.")
 			.def("set_enable", &AudioComponent::SetEnabled, py::arg("enable"),
 				"Set enable. See the enable property.")
 
-			.def_property("audio_path",
-				[](AudioComponent& self) -> std::string {
-					if (self.audioPath.empty()) return self.audioPath;
-					return FileManager::getInstance().AbsoluteToVirtual(self.audioPath);
-				},
-				[](AudioComponent& self, const std::string& virtualPath) {
-					if (virtualPath.empty()) {
-						self.SetAudioPath("");
-						return;
+			.def_property("listener",
+				[](AudioComponent& self) { return self.listener; },
+				[](AudioComponent& self, bool listener) {
+					self.listener = listener;
+					if (listener) {
+						AudioManager::getInstance().activeListener = &self;
+						for (auto& obj : ObjectManager::getInstance().allObjects) {
+							auto* audioComp = obj->GetComponent<AudioComponent>();
+							if (audioComp && audioComp != &self && audioComp->listener) {
+								audioComp->listener = false;
+							}
+						}
 					}
-					if (!FileManager::getInstance().VirtualPathExists(virtualPath)) {
-						Console::AddMessage(Console::MessageType::Error,
-							"AudioComponent.audio_path: resource not found: " + virtualPath);
-						return;
+					else if (AudioManager::getInstance().activeListener == &self) {
+						AudioManager::getInstance().activeListener = nullptr;
 					}
-					self.SetAudioPath(FileManager::getInstance().VirtualToAbsolute(virtualPath).string());
 				},
-				"res:// path to the audio file (.wav/.mp3). Setting this (re)loads the sound "
-				"immediately using the current streaming/loop settings.")
-			.def("set_audio_path", [](AudioComponent& self, const std::string& virtualPath) {
+				"Whether this component is the scene's active audio listener. Setting this to "
+				"True unsets listener on any other AudioComponent in the scene.")
+			.def("set_listener", [](AudioComponent& self, bool listener) {
+			self.listener = listener;
+			if (listener) {
+				AudioManager::getInstance().activeListener = &self;
+				for (auto& obj : ObjectManager::getInstance().allObjects) {
+					auto* audioComp = obj->GetComponent<AudioComponent>();
+					if (audioComp && audioComp != &self && audioComp->listener) {
+						audioComp->listener = false;
+					}
+				}
+			}
+			else if (AudioManager::getInstance().activeListener == &self) {
+				AudioManager::getInstance().activeListener = nullptr;
+			}
+				}, py::arg("listener"),
+					"Set listener. See the listener property.")
+
+			.def("get_track_names", [](AudioComponent& self) {
+			std::vector<std::string> names;
+			names.reserve(self.audioEntries.size());
+			for (auto& e : self.audioEntries) names.push_back(e.name);
+			return names;
+				}, "Names of every audio track on this component")
+
+			.def("add_track", [](AudioComponent& self, std::string name, const std::string& path,
+				bool streaming, bool loop, float volume) {
+					self.AddAudioTrack(name, path, streaming, loop, volume);
+					return self.audioEntries.back().name;
+				}, py::arg("name") = "", py::arg("path") = "", py::arg("streaming") = false,
+					py::arg("loop") = false, py::arg("volume") = 1.0f,
+					"Add a new audio track and return its actual name. If name collides with an "
+					"existing track, a numeric suffix is appended to keep it unique, so check the "
+					"returned value rather than assuming it matches what you passed in.\n\n"
+					"Example:\n"
+					"    ```python\n"
+					"    track = audio.add_track('Footstep', 'res://sfx/step.wav')\n"
+					"    audio.play(track)\n"
+					"    ```")
+
+			.def("remove_track", &AudioComponent::RemoveAudioTrack, py::arg("name"),
+				"Remove the track with the given name")
+
+			.def("get_audio_path", [](AudioComponent& self, const std::string& name) -> std::string {
+			AudioEntry* e = self.FindAudioEntry(name);
+			if (!e) throw py::value_error("get_audio_path: no track named '" + name + "'");
+			if (e->audioPath.empty()) return e->audioPath;
+			return FileManager::getInstance().AbsoluteToVirtual(e->audioPath);
+				}, py::arg("name"),
+					"res:// path to the track's audio file")
+
+			.def("set_audio_path", [](AudioComponent& self, const std::string& name, const std::string& virtualPath) {
+			if (!self.FindAudioEntry(name)) {
+				throw py::value_error("set_audio_path: no track named '" + name + "'");
+			}
 			if (virtualPath.empty()) {
-				self.SetAudioPath("");
+				self.SetAudioPath(name, "");
 				return;
 			}
 			if (!FileManager::getInstance().VirtualPathExists(virtualPath)) {
@@ -2778,44 +2831,55 @@ namespace {
 					"AudioComponent.set_audio_path: resource not found: " + virtualPath);
 				return;
 			}
-			self.SetAudioPath(FileManager::getInstance().VirtualToAbsolute(virtualPath).string());
-				}, py::arg("virtual_path"),
-					"Set audio_path. See the audio_path property.")
+			self.SetAudioPath(name, FileManager::getInstance().VirtualToAbsolute(virtualPath).string());
+				}, py::arg("name"), py::arg("path"),
+					"Set the audio file (a res:// path) for the given track. (Re)loads the sound "
+					"immediately using its current streaming/loop settings.")
 
-			.def_property("streaming",
-				[](AudioComponent& self) { return self.streaming; },
-				[](AudioComponent& self, bool streaming) { self.SetStreaming(streaming); },
-				"Whether the sound streams from disk rather than being fully decoded into "
-				"memory. Changing this reloads the sound if a path is set.")
-			.def("set_streaming", &AudioComponent::SetStreaming, py::arg("streaming"),
-				"Set streaming. See the streaming property.")
+			.def("get_streaming", [](AudioComponent& self, const std::string& name) {
+			AudioEntry* e = self.FindAudioEntry(name);
+			if (!e) throw py::value_error("get_streaming: no track named '" + name + "'");
+			return e->streaming;
+				}, py::arg("name"),
+					"Whether the given track streams from disk rather than being fully decoded into memory")
+			.def("set_streaming", &AudioComponent::SetStreaming, py::arg("name"), py::arg("streaming"),
+				"Set streaming for the given track. Reloads the sound if a path is set.")
 
-			.def_property("loop",
-				[](AudioComponent& self) { return self.loop; },
-				[](AudioComponent& self, bool loop) { self.SetLooping(loop); },
-				"Whether the sound loops when it reaches the end. Changing this reloads "
-				"the sound if a path is set.")
-			.def("set_loop", &AudioComponent::SetLooping, py::arg("loop"),
-				"Set loop. See the loop property.")
+			.def("get_loop", [](AudioComponent& self, const std::string& name) {
+			AudioEntry* e = self.FindAudioEntry(name);
+			if (!e) throw py::value_error("get_loop: no track named '" + name + "'");
+			return e->loop;
+				}, py::arg("name"),
+					"Whether the given track loops when it reaches the end")
+			.def("set_loop", &AudioComponent::SetLooping, py::arg("name"), py::arg("loop"),
+				"Set loop for the given track. Reloads the sound if a path is set.")
 
-			.def_property("volume",
-				[](AudioComponent& self) { return self.volume; },
-				[](AudioComponent& self, float volume) { self.SetVolume(volume); },
-				"Playback volume. Only takes effect once a sound is loaded.")
-			.def("set_volume", &AudioComponent::SetVolume, py::arg("volume"),
-				"Set volume. See the volume property.")
+			.def("get_volume", [](AudioComponent& self, const std::string& name) {
+			AudioEntry* e = self.FindAudioEntry(name);
+			if (!e) throw py::value_error("get_volume: no track named '" + name + "'");
+			return e->volume;
+				}, py::arg("name"),
+					"Playback volume of the given track")
+			.def("set_volume", &AudioComponent::SetVolume, py::arg("name"), py::arg("volume"),
+				"Set volume for the given track. Only takes effect once the track's sound is loaded.")
 
-			.def_property_readonly("is_playing", [](AudioComponent& self) { return self.isPlaying; },
-				"Whether the sound is currently playing. Use play()/stop() to change this.")
+			.def("get_is_playing", [](AudioComponent& self, const std::string& name) {
+			AudioEntry* e = self.FindAudioEntry(name);
+			if (!e) throw py::value_error("get_is_playing: no track named '" + name + "'");
+			return e->isPlaying;
+				}, py::arg("name"),
+					"Whether the given track is currently playing")
 
-			.def("play", &AudioComponent::PlayAudio,
-				"Start (or resume) playback of the loaded sound.\n\n"
+			.def("play", &AudioComponent::PlayAudioTrack, py::arg("name"),
+				"Start (or resume) playback of the track with the given name.\n\n"
 				"Example:\n"
 				"    ```python\n"
-				"    audio.play()\n"
+				"    audio.play('Footstep')\n"
 				"    ```")
-			.def("stop", &AudioComponent::StopAudio,
-				"Stop playback of the loaded sound");
+			.def("pause", &AudioComponent::PauseAudioTrack, py::arg("name"),
+				"Pause playback of the track with the given name")
+			.def("stop", &AudioComponent::StopAudioTrack, py::arg("name"),
+				"Stop playback of the track with the given name");
 
 		EnableGetComponent<AudioComponent>(audioClass);
 		EnableHasComponent<AudioComponent>(audioClass);
