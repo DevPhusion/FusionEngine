@@ -32,8 +32,11 @@ public:
 	AudioHandle LoadSound(const std::string& path, bool stream = false, bool loop = false);
 	void UnloadSound(AudioHandle& handle);
 
+	void SetListenerPosition(const glm::vec3& pos);
+	void SetListenerDirection(const glm::vec3& forward);
+
 	ma_engine audioEngine;
-	AudioComponent* activeListener;
+	AudioComponent* activeListener = nullptr;
 
 private:
 	AudioManager() = default;

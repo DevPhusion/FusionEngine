@@ -39,3 +39,11 @@ void AudioManager::UnloadSound(AudioHandle& handle) {
 		handle.loaded = false;
 	}
 }
+
+void AudioManager::SetListenerPosition(const glm::vec3& pos) {
+	ma_engine_listener_set_position(&audioEngine, 0, pos.x, pos.y, pos.z);
+}
+
+void AudioManager::SetListenerDirection(const glm::vec3& forward) {
+	ma_engine_listener_set_direction(&audioEngine, 0, forward.x, forward.y, forward.z);
+}

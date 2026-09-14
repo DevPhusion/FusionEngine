@@ -6,6 +6,23 @@ AudioComponent::AudioComponent(Object* parent) : ComponentBase<AudioComponent>(p
 	Name = "Audio Component";
 }
 
+void AudioComponent::UpdatePosition() {
+	TransformComponent* transform = parent->GetComponent<TransformComponent>();
+	if (!transform) return;
+
+	glm::vec3 pos = transform->GetWorldPosition();
+
+	for (auto& entry : audioEntries) {
+		if (entry.handle.loaded && entry.spatialAudio) {
+			ma_sound_set_position(entry.handle.sound.get(), pos.x, pos.y, pos.z);
+		}
+	}
+
+	if (listener) {
+		AudioManager::getInstance().SetListenerPosition(pos);
+	}
+}
+
 void AudioComponent::OnPhysicsModeChanged() {
 	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Pause) {
 		for (auto& entry : audioEntries) {
@@ -29,16 +46,35 @@ void AudioComponent::OnPhysicsModeChanged() {
 void AudioComponent::Activate() {
 	Component::Activate();
 	physicsModeChangedCallbackId = EngineManager::getInstance().AddPhysicsModeChangedEvent([&]() { OnPhysicsModeChanged(); });
+
 	for (auto& entry : audioEntries) {
 		if (entry.audioPath != "") {
 			entry.handle = AudioManager::getInstance().LoadSound(entry.audioPath, entry.streaming, entry.loop);
+			ApplySpatialSettings(&entry);
 		}
+	}
+
+	if (TransformComponent* transform = parent->GetComponent<TransformComponent>()) {
+		transformCallbackId = transform->AddTransformCallback([this]() { UpdatePosition(); });
+		UpdatePosition(); 
 	}
 }
 
 void AudioComponent::Deactivate() {
 	Component::Deactivate();
 	EngineManager::getInstance().RemovePhysicsModeChangedEvent(physicsModeChangedCallbackId);
+
+	if (transformCallbackId != -1) {
+		if (TransformComponent* transform = parent->GetComponent<TransformComponent>()) {
+			transform->RemoveTransformCallback(transformCallbackId);
+		}
+		transformCallbackId = -1;
+	}
+
+	if (AudioManager::getInstance().activeListener == this) {
+		AudioManager::getInstance().activeListener = nullptr;
+	}
+
 	for (auto& entry : audioEntries) {
 		AudioManager::getInstance().UnloadSound(entry.handle);
 	}
@@ -69,23 +105,34 @@ void AudioComponent::Serialize(BinaryWriter& w) {
 		w.Write(entry.volume);
 		w.Write(entry.streaming);
 		w.Write(entry.loop);
+		w.Write(entry.spatialAudio);
+		w.Write(entry.minDistance);
+		w.Write(entry.maxDistance);
 	}
-
 	w.Write(listener);
 }
 
 void AudioComponent::Deserialize(BinaryReader& r) {
 	Component::Deserialize(r);
 	int count = r.Read<int>();
-	for (int i = 0; i < count; i++)
-	{
+	for (int i = 0; i < count; i++) {
 		std::string name = r.ReadString();
 		std::string path = r.ReadString();
 		float volume = r.Read<float>();
 		bool streaming = r.Read<bool>();
 		bool loop = r.Read<bool>();
+		bool spatialAudio = r.Read<bool>();
+		float minDist = r.Read<float>();
+		float maxDist = r.Read<float>();
 
 		AddAudioTrack(name, path, streaming, loop, volume);
+		AudioEntry* entry = FindAudioEntry(name);
+		if (entry) {
+			entry->spatialAudio = spatialAudio;
+			entry->minDistance = minDist;
+			entry->maxDistance = maxDist;
+			ApplySpatialSettings(entry);
+		}
 	}
 	listener = r.Read<bool>();
 	if (listener) {
@@ -198,6 +245,22 @@ void AudioComponent::ProcessInspectorUI() {
 				SetVolume(entry.name, entry.volume);
 				});
 
+
+			ImGui::Separator();
+
+			EditorField::CheckboxScene(parent, "Spatial Audio", "##Is3D", &entry.spatialAudio, [&] {
+				SetSpatialAudio(entry.name, entry.spatialAudio);
+				});
+
+			if (entry.spatialAudio) {
+				EditorField::InputFloatScene(parent, "Min Distance", "##MinDist", &entry.minDistance, [&] {
+					SetMinDistance(entry.name, entry.minDistance);
+					});
+				EditorField::InputFloatScene(parent, "Max Distance", "##MaxDist", &entry.maxDistance, [&] {
+					SetMaxDistance(entry.name, entry.maxDistance);
+					});
+			}
+
 			ImGui::Unindent();
 			ImGui::TreePop();
 		}
@@ -239,6 +302,20 @@ AudioEntry* AudioComponent::FindAudioEntry(const std::string& name) {
 	return nullptr;
 }
 
+void AudioComponent::ApplySpatialSettings(AudioEntry* entry) {
+	if (!entry->handle.loaded) return;
+
+	ma_sound_set_spatialization_enabled(entry->handle.sound.get(), entry->spatialAudio ? MA_TRUE : MA_FALSE);
+	if (entry->spatialAudio) {
+		ma_sound_set_attenuation_model(entry->handle.sound.get(), ma_attenuation_model_inverse);
+		ma_sound_set_rolloff(entry->handle.sound.get(), 1.0f);
+		ma_sound_set_min_distance(entry->handle.sound.get(), entry->minDistance);
+		ma_sound_set_max_distance(entry->handle.sound.get(), entry->maxDistance);
+		ma_sound_set_min_gain(entry->handle.sound.get(), 0.0f);
+		ma_sound_set_max_gain(entry->handle.sound.get(), 1.0f);
+	}
+}
+
 void AudioComponent::SetAudioPath(std::string name, const std::string& path) {
 	AudioEntry* entry = FindAudioEntry(name);
 	if (!entry) return;
@@ -247,6 +324,7 @@ void AudioComponent::SetAudioPath(std::string name, const std::string& path) {
 	if (isActive && !EngineManager::getInstance().isHeadless) {
 		AudioManager::getInstance().UnloadSound(entry->handle);
 		entry->handle = AudioManager::getInstance().LoadSound(entry->audioPath, entry->streaming, entry->loop);
+		ApplySpatialSettings(entry);
 	}
 }
 
@@ -270,6 +348,28 @@ void AudioComponent::SetLooping(std::string name, bool loop) {
 		AudioManager::getInstance().UnloadSound(entry->handle);
 		entry->handle = AudioManager::getInstance().LoadSound(entry->audioPath, entry->streaming, entry->loop);
 	}
+}
+
+void AudioComponent::SetSpatialAudio(std::string name, bool enabled) {
+	AudioEntry* entry = FindAudioEntry(name);
+	if (!entry) return;
+	entry->spatialAudio = enabled;
+	ApplySpatialSettings(entry);
+	if (enabled) UpdatePosition();
+}
+
+void AudioComponent::SetMinDistance(std::string name, float distance) {
+	AudioEntry* entry = FindAudioEntry(name);
+	if (!entry) return;
+	entry->minDistance = distance;
+	if (entry->handle.loaded) ma_sound_set_min_distance(entry->handle.sound.get(), distance);
+}
+
+void AudioComponent::SetMaxDistance(std::string name, float distance) {
+	AudioEntry* entry = FindAudioEntry(name);
+	if (!entry) return;
+	entry->maxDistance = distance;
+	if (entry->handle.loaded) ma_sound_set_max_distance(entry->handle.sound.get(), distance);
 }
 
 void AudioComponent::PlayAudioTrack(std::string name) {
@@ -349,10 +449,16 @@ void AudioComponent::AddAudioTrack(std::string name, const std::string& audioPat
 	newEntry.streaming = streaming;
 	newEntry.loop = loop;
 	newEntry.volume = volume;
+
 	if (isActive && !EngineManager::getInstance().isHeadless && audioPath != "") {
 		newEntry.handle = AudioManager::getInstance().LoadSound(audioPath, streaming, loop);
 	}
-	ma_sound_set_volume(newEntry.handle.sound.get(), volume);
+
+	if (newEntry.handle.loaded) { 
+		ma_sound_set_volume(newEntry.handle.sound.get(), volume);
+		ApplySpatialSettings(&newEntry);
+	}
+
 	audioEntries.push_back(std::move(newEntry));
 }
 

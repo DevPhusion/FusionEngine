@@ -19,6 +19,10 @@ struct AudioEntry {
 	bool isPlaying = false;
 	bool previouslyPlaying = false; // used for physics mode changed event only
 	float volume = 1.0f;
+
+	bool spatialAudio = false;
+	float minDistance = 1.0f; 
+	float maxDistance = 50.0f;
 };
 
 class AudioComponent : public ComponentBase<AudioComponent>
@@ -53,9 +57,16 @@ public:
 	void PlayAudioTrack(std::string name);
 	void StopAudioTrack(std::string name);
 	void SetVolume(std::string name, float volume);
+	
+	void SetSpatialAudio(std::string name, bool enabled);
+	void SetMinDistance(std::string name, float minDistance);
+	void SetMaxDistance(std::string name, float maxDistance);
+	void UpdatePosition();
 private:
 	int physicsModeChangedCallbackId = -1;
+	int transformCallbackId = -1;
 	std::string GenerateUniqueTrackName(const std::string& baseName, const std::string* exclude = nullptr);
 	void OnPhysicsModeChanged();
+	void ApplySpatialSettings(AudioEntry* entry);
 };
 
