@@ -146,7 +146,8 @@ Fusion Engine is under active development. These are some upcoming features plan
 | Feature | Status | Progress |
 |---|---|---|
 | Multiple agent training | Completed | ![100%](https://img.shields.io/badge/Progress-100%25-brightgreen) |
-| Sound / Audio support | In Development | ![80%](https://img.shields.io/badge/Progress-80%25-yellow) |
+| Sound / Audio support | In Development | ![100%](https://img.shields.io/badge/Progress-100%25-brightgreen) |
+| Anti-aliasing | In Development | ![0%](https://img.shields.io/badge/Progress-0%25-red) |
 | Smoke simulation | In Development | ![0%](https://img.shields.io/badge/Progress-0%25-red) |
 | Editor UI update and themes | In Development | ![0%](https://img.shields.io/badge/Progress-0%25-red) |
 
