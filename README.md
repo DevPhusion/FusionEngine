@@ -35,9 +35,23 @@ Building from source requires **Visual Studio** (the project is developed and ma
 3. Build the solution.
 4. Run the resulting executable to launch the editor.
 
+## Libraries
+
+Fusion Engine is built on top of the following open-source libraries:
+
+| Library | Purpose |
+|---|---|
+| [GLFW](https://github.com/glfw/glfw) | Cross-platform window creation, input handling, and OpenGL context management. |
+| [GLAD](https://github.com/Dav1dde/glad) | OpenGL function loader, used to bind the OpenGL API at runtime for the rendering engine. |
+| [Dear ImGui](https://github.com/ocornut/imgui) | Immediate-mode GUI library powering the editor interface, panels, and windows. |
+| [ImGui Docking Branch](https://github.com/ocornut/imgui/tree/docking) | Extends Dear ImGui with dockable, rearrangeable windows for the editor layout. |
+| [ImPlot](https://github.com/epezent/implot) | ImGui-based plotting library, used to render live training statistics and graphs during RL training. |
+| [GLM](https://github.com/g-truc/glm) | Header-only math library (vectors, matrices, transforms) used throughout the rendering and physics engines. |
+| [pybind11](https://github.com/pybind/pybind11) | Bridges the C++ engine core with Python, exposing engine functionality to the scripting and RL API. |
+
 ## Architecture
 
-Fusion Engine follows an Entity-Component System (ECS) inspired by Unity, with a modular scene node system inspired by Godot. An entity performs no behavior on its own; components are attached to add or modify behavior. Scenes can be nested within other scenes, and instanced scenes stay synchronized across all their occurrences.
+Fusion Engine follows an Entity-Component System (ECS) inspired by Unity, with a modular scene node system inspired by Godot. An entity performs no behavior on its own; components are attached to add or modify behavior. Multiple objects grouped together is a scene and scenes can be nested within other scenes as well.
 
 The engine core is organized into the following systems:
 
@@ -45,10 +59,10 @@ The engine core is organized into the following systems:
 |---|---|
 | Rendering Engine | OpenGL-based rasterization renderer |
 | Physics Engine | Rigid body, soft body, and fluid simulation |
-| Object and Component Manager | Manages entities and their components (ECS) |
+| Object and Scene Manager | Manages objects, components and scenes |
 | Editor | ImGui-based editor UI, windows, and gizmos |
-| File and Project Manager | Project/scene serialization, resource paths, and export |
-| Script Manager | C++/Python bindings and script bridging |
+| File and Project Manager | Project serialization, file system, and exporting projects |
+| Script Manager | Python bindings and RL integration |
 
 ## Physics Engine
 
@@ -60,15 +74,15 @@ https://github.com/user-attachments/assets/8f7cdf5f-0487-47e7-92c1-7d028b895245
 
 Each physics domain uses a different, purpose-built solver, bridged together through an impulse-based coupling layer:
 
-- **Rigid body — Projected Gauss Seidel (PGS) solver.** Constraints are described using Jacobian matrices, the same general approach used by Box2D. Supports contact constraints as well as 3-DOF joints such as Weld, Revolute, and Prismatic constraints, with contact caching for solver stability.
-- **Soft body — Extended Position Based Dynamics (XPBD).** Chosen over a pure force-based mass-spring approach for its stability. Supports distance and area constraints, damping, and inflatable objects modeled with the ideal gas law.
-- **Fluids — Position Based Fluids (PBF).** Chosen because it operates in position space (integrating naturally with XPBD) while remaining fast. Includes viscosity, vorticity confinement, and neighbor queries accelerated by a spatial hash grid.
+- **Rigid body — Projected Gauss Seidel (PGS) solver.** Constraints are described using Jacobian matrices, the same general approach used by Box2D. Supports contact constraints as well as joints such as Weld, Revolute, and Prismatic constraints, with contact caching for solver stability.
+- **Soft body — Extended Position Based Dynamics (XPBD).** Chosen over a pure force-based mass-spring approach for its stability, area constraints are used to help soft bodies maintain their shapes. For inflatable objects such as tires or balloons, there is an option to use gases and pressure to simulate them.
+- **Fluids — Position Based Fluids (PBF).** Chosen because it operates in position space (integrating naturally with XPBD) while remaining fast. 
 
 Collision handling varies by object pairing:
 
-- **Rigid–rigid:** Separating Axis Theorem (SAT) for narrow-phase detection, Sutherland–Hodgman line clipping for contact point generation, and impulse-based resolution.
-- **Rigid–soft and soft–soft:** Ray casting for collision detection, with direct positional correction for soft–soft collisions and a mixed impulse/positional approach for mixed cases.
-- **Fluid–rigid and fluid–soft:** Ray casting-based detection, combined with buoyancy handling for fluid–rigid interactions.
+- **Rigid–Rigid:** Separating Axis Theorem (SAT) for narrow-phase detection, Sutherland–Hodgman line clipping for contact point generation, and impulse-based resolution.
+- **Rigid–Soft and Soft–Soft:** Ray casting for collision detection, with direct positional correction for soft–soft collisions and a mixed impulse/positional approach for mixed cases.
+- **Fluid–Rigid and Fluid–Soft:** Ray casting-based detection, combined with buoyancy handling for fluid–rigid interactions.
 
 Broad-phase collision culling uses a Bounding Area Hierarchy (BAH). All three solvers (PGS, XPBD, PBF) run within a shared physics processing loop each frame, with the solvers unified through the impulse bridge described above.
 
@@ -78,7 +92,7 @@ Rigid bodies also support **fracture physics**, using Voronoi cell generation to
 
 The engine core is coded in C++, but nearly all functionality is exposed to Python via pybind11, allowing rapid iteration and direct use of the Python ecosystem.
 
-- **Python version:** 3.11 (later versions are also expected to work).
+- **Python version:** 3.11 
 - **Bridging:** pybind11 provides the C++ ↔ Python translation layer, allowing C++ to call Python functions and vice versa.
 - **Editor tooling:** On project setup, alongside the resources folder, a Python virtual environment is configured. The engine compiles a Python module (`.pyd`) linking the C++ core to Python, then generates a `.pyi` stub file (via `pybind-stubgen`) into a `typings` folder so editors such as Visual Studio Code get accurate autocomplete and syntax highlighting for the engine's Python API. VS Code settings are written automatically to link the interpreter and stub path.
 - **Script components:** Behavior is attached to entities through script components, with a component registry and support for exporting script properties to the inspector.
@@ -117,6 +131,10 @@ raw_binary   = secret_key XOR final_binary
 
 ## Documentation
 
+The documentation for the python scripting API 
+
+[Read scripting API](https://devphusion.github.io/FusionEngineDocumentation/)
+
 The full design document covers the engine's mathematics, physics solvers, ECS, editor, file management, scripting, and reinforcement learning integration in detail.
 
 [Read the full design document](./Fusion_Engine_Design_Document.pdf)
@@ -128,7 +146,7 @@ Fusion Engine is under active development. These are some upcoming features plan
 | Feature | Status | Progress |
 |---|---|---|
 | Multiple agent training | Completed | ![100%](https://img.shields.io/badge/Progress-100%25-brightgreen) |
-| Sound / Audio support | In Development | ![60%](https://img.shields.io/badge/Progress-60%25-yellow) |
+| Sound / Audio support | In Development | ![80%](https://img.shields.io/badge/Progress-80%25-yellow) |
 | Smoke simulation | In Development | ![0%](https://img.shields.io/badge/Progress-0%25-red) |
 | Editor UI update and themes | In Development | ![0%](https://img.shields.io/badge/Progress-0%25-red) |
 
