@@ -152,7 +152,6 @@ glm::vec3 TransformComponent::GetTransformedPoint(glm::vec3 point, bool inverseT
 
 	glm::mat4 trans = OriginTransform;
 	trans = glm::translate(trans, rotation_center); // Translate to 0,0
-	trans = glm::translate(trans, position);
 	trans = glm::rotate(trans, rotation, glm::vec3(0, 0, 1));
 	trans = glm::scale(trans, size);
 	trans = glm::translate(trans, -rotation_center); // Translate back to original pos
@@ -175,16 +174,6 @@ void TransformComponent::SetRotationCenter(glm::vec3 rotation_center) {
 
 void TransformComponent::SetOriginTransform(glm::mat4 transform) {
 	this->OriginTransform = transform;
-	worldMatrixDirty = true;
-	EngineManager::getInstance().SceneChangeEvent();
-	if (FileManager::getInstance().IsRestoring()) return;
-	for (const auto& [id, func] : transformCallback) {
-		func();
-	}
-}
-
-void TransformComponent::Translate(glm::vec3 translation) {
-	position = translation;
 	worldMatrixDirty = true;
 	EngineManager::getInstance().SceneChangeEvent();
 	if (FileManager::getInstance().IsRestoring()) return;
@@ -232,7 +221,6 @@ void TransformComponent::ProcessTransform() {
 	this->transform = OriginTransform;
 	this->transform = glm::translate(this->transform, rotation_center); // Translate to 0,0
 
-	this->transform = glm::translate(this->transform, position);
 	this->transform = glm::rotate(this->transform, rotation, glm::vec3(0, 0, 1));
 	this->transform = glm::scale(this->transform, size);
 

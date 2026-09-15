@@ -63,9 +63,11 @@ int main(int argc, char* argv[]) {
 	const int launcherHeight = 600;
 
 	glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+	glfwWindowHint(GLFW_SAMPLES, 8);
 	GLFWwindow* window = glfwCreateWindow(launcherWidth, launcherHeight, "Fusion Engine - Projects", NULL, NULL);
 	glfwMakeContextCurrent(window);
 	gladLoadGL();
+	glEnable(GL_MULTISAMPLE);
 
 	const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());
 	if (mode) {

@@ -19,7 +19,6 @@ public:
 
 	glm::vec3 worldPosition = glm::vec3(0);
 	glm::vec3 rotation_center = glm::vec3(0);
-	glm::vec3 position = glm::vec3(0);
 	glm::vec3 prevPos = glm::vec3(0);
 	glm::vec3 size = glm::vec3(1);
 	std::unordered_map<int, std::function<void()>> transformCallback;
@@ -34,6 +33,7 @@ public:
 	virtual void Serialize(BinaryWriter& w);
 	virtual void Deserialize(BinaryReader& r);
 
+	glm::mat4 GetWorldMatrix(bool includeScale = true);
 	// model space -> screen space (inverse: screen space -> model space) 
 	glm::vec3 GetTransformedPoint(glm::vec3 point, bool inverseTransform = false); 
 	glm::vec3 GetWorldPosition();
@@ -43,14 +43,12 @@ public:
 	void TranslateByDelta(glm::vec3 delta);
 	void SetOriginTransform(glm::mat4 transform);
 	void SetRotationCenter(glm::vec3 rotation_center);
-	void Translate(glm::vec3 translation);
 	void Rotate(float angle);
 	void Scale(glm::vec3 scale);
 	int AddTransformCallback(std::function<void()> func);
 	void RemoveTransformCallback(int ID);
 	void ProcessTransform();
 private:
-	glm::mat4 GetWorldMatrix(bool includeScale = true);
 	void PropagateDeltaToChildren(glm::vec3 delta);
 	int CurrentTransformCallbackID = -1;
 	Shader shader;

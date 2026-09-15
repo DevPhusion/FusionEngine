@@ -58,6 +58,22 @@ public:
 	void UpdateShape(std::vector<float> vertices, std::vector<unsigned int> indices);
 	void Draw();
 
+	GLuint GetTextureID() const { return TextureID; }
+
+	static inline const std::string kDefaultVertexPath = "Resources/Shaders/vertex.txt";
+	static inline const std::string kDefaultFragmentPath = "Resources/Shaders/fragment.txt";
+
+	bool IsBatchableWith() const {
+		return Enabled && glResourcesReady
+			&& shader.vertexPath == kDefaultVertexPath
+			&& shader.fragmentPath == kDefaultFragmentPath;
+	}
+
+	void GetLocalBounds(glm::vec3& outMin, glm::vec3& outMax) const {
+		outMin = localBoundsMin;
+		outMax = localBoundsMax;
+	}
+
 private:
 	int physicsChangeEventCallbackID = -1;
 
@@ -68,6 +84,9 @@ private:
 
 	std::unordered_map<int, std::function<void()>> OnShapeSetCallbacks;
 	int shapeCallbackID = -1;
+
+	glm::vec3 localBoundsMin{ 0.0f };
+	glm::vec3 localBoundsMax{ 0.0f };
 
 	bool initialized = false;
 	Shader shader;

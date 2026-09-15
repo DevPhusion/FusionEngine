@@ -551,6 +551,18 @@ void RenderComponent::UpdateShape(std::vector<float> vertices, std::vector<unsig
 	Vertices = vertices;
 	Indices = indices;
 
+	if (!vertices.empty()) {
+		glm::vec3 bmin(INFINITY), bmax(-INFINITY);
+		for (size_t i = 0; i + 1 < vertices.size(); i += 5) {
+			bmin.x = std::min(bmin.x, vertices[i]);
+			bmax.x = std::max(bmax.x, vertices[i]);
+			bmin.y = std::min(bmin.y, vertices[i + 1]);
+			bmax.y = std::max(bmax.y, vertices[i + 1]);
+		}
+		localBoundsMin = bmin;
+		localBoundsMax = bmax;
+	}
+
 	points.clear();
 	for (int i = 0; i < vertices.size(); i += 5) {
 		points.push_back({ vertices[i], vertices[i + 1], float(i / 5) });
@@ -668,10 +680,6 @@ void RenderComponent::Deserialize(BinaryReader& r) {
 void RenderComponent::PostLoad() {
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
 
-	tc->rotation = tc->pendingRotation;
-	tc->size = tc->pendingScale;
-	tc->worldMatrixDirty = true;
-
 	std::visit([&](auto&& s) {
 		using T = std::decay_t<decltype(s)>;
 		if constexpr (std::is_same_v<T, RectangleShape> || std::is_same_v<T, CircleShape>) {
@@ -680,6 +688,10 @@ void RenderComponent::PostLoad() {
 		}, pendingShape);
 
 	SetShape(pendingShape);
+
+	tc->rotation = tc->pendingRotation;
+	tc->size = tc->pendingScale;
+	tc->worldMatrixDirty = true;
 
 	tc->SetRotationCenter(GetCenter());
 }

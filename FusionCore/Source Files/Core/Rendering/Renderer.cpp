@@ -14,17 +14,14 @@ void Renderer::Draw() {
     TIME_BLOCK("Rendering");
 
     glm::vec2 camPos = glm::vec2(Camera::getInstance().cameraPos.x, Camera::getInstance().cameraPos.y);
-
     glm::vec2 screenSize = glm::vec2(EngineManager::getInstance().resolutionWidth, EngineManager::getInstance().resolutionHeight);
     float zoom = Camera::getInstance().cameraZoom;
 
     auto& debug = EngineManager::getInstance().EngineSettings;
 
     if (debug.drawBackgroundGrid && EngineManager::getInstance().EnginePhysicsMode != EngineManager::PhysicsMode::Simulate) {
-        {
-            TIME_BLOCK("Draw background grid");
-            backgroundGrid.Draw(camPos, screenSize, zoom);
-        }
+        TIME_BLOCK("Draw background grid");
+        backgroundGrid.Draw(camPos, screenSize, zoom);
     }
 
     if (debug.drawObjectWireframe) {
@@ -40,7 +37,6 @@ void Renderer::Draw() {
     }
 
     std::vector<Object*> renderQueue;
-
     {
         TIME_BLOCK("Construct draw queue");
         for (size_t i = 0; i < this->allObjects->size(); i++) {
@@ -49,48 +45,162 @@ void Renderer::Draw() {
             if ((*allObjects)[i]->HasComponent<RenderComponent>()) {
                 renderQueue.push_back((*allObjects)[i].get());
             }
-
             if ((*allObjects)[i]->HasComponent<EditorRenderComponent>() &&
                 EngineManager::getInstance().EnginePhysicsMode != EngineManager::PhysicsMode::Simulate) {
                 renderQueue.push_back((*allObjects)[i].get());
             }
         }
         std::sort(renderQueue.begin(), renderQueue.end(), [](Object* a, Object* b) {
-            float zA = 0.0f;
-            float zB = 0.0f;
-
-            if (a->HasComponent<RenderComponent>()) {
-                zA = a->GetComponent<RenderComponent>()->z_index;
-            }
-            else {
-                zA = a->GetComponent<EditorRenderComponent>()->z_index;
-            }
-            if (b->HasComponent<RenderComponent>()) {
-                zB = b->GetComponent<RenderComponent>()->z_index;
-            }
-            else {
-                zB = b->GetComponent<EditorRenderComponent>()->z_index;
-            }
-
+            float zA = a->HasComponent<RenderComponent>()
+                ? a->GetComponent<RenderComponent>()->z_index
+                : a->GetComponent<EditorRenderComponent>()->z_index;
+            float zB = b->HasComponent<RenderComponent>()
+                ? b->GetComponent<RenderComponent>()->z_index
+                : b->GetComponent<EditorRenderComponent>()->z_index;
             return zA < zB;
             });
     }
 
-    for (Object* obj : renderQueue) {
-        if (obj->HasComponent<FluidComponent>()) {
-            {
-                TIME_BLOCK("Draw fluids");
-                obj->GetComponent<FluidComponent>()->Draw();
-            }
+    static GLuint batchVAO = 0, batchVBO = 0, batchEBO = 0;
+    static size_t batchVBOCapacity = 0, batchEBOCapacity = 0;
+    static Shader batchShader = Shader("Resources/Shaders/batch_vertex.txt", "Resources/Shaders/batch_fragment.txt");
+
+    if (batchVAO == 0) {
+        glGenVertexArrays(1, &batchVAO);
+        glGenBuffers(1, &batchVBO);
+        glGenBuffers(1, &batchEBO);
+
+        glBindVertexArray(batchVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, batchVBO);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)0);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(3 * sizeof(float)));
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(5 * sizeof(float)));
+        glEnableVertexAttribArray(2);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, batchEBO);
+        glBindVertexArray(0);
+    }
+
+    std::vector<float> vertexScratch;
+    std::vector<unsigned int> indexScratch;
+    GLuint currentBatchTexture = 0;
+    bool haveBatch = false;
+
+    glm::mat4 batchProjection = glm::ortho(-EngineManager::getInstance().gameAspectRatio,
+        EngineManager::getInstance().gameAspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
+
+    const float cullAspect = EngineManager::getInstance().gameAspectRatio;
+    const glm::mat4 cullView = Camera::getInstance().viewMatrix;
+    const float cullMargin = 0.05f;
+
+    auto IsVisible = [&](RenderComponent* rc, TransformComponent* tc) -> bool {
+        if (!rc || !tc) return true; 
+
+        glm::vec3 lmin, lmax;
+        rc->GetLocalBounds(lmin, lmax);
+
+        glm::mat4 mv = cullView * tc->GetWorldMatrix(true);
+        glm::vec3 corners[4] = {
+            { lmin.x, lmin.y, 0.0f }, { lmax.x, lmin.y, 0.0f },
+            { lmax.x, lmax.y, 0.0f }, { lmin.x, lmax.y, 0.0f }
+        };
+
+        glm::vec2 vmin(FLT_MAX), vmax(-FLT_MAX);
+        for (auto& c : corners) {
+            glm::vec4 p = mv * glm::vec4(c, 1.0f);
+            vmin = glm::min(vmin, glm::vec2(p));
+            vmax = glm::max(vmax, glm::vec2(p));
+        }
+
+        return !(vmax.x < -cullAspect - cullMargin || vmin.x > cullAspect + cullMargin ||
+            vmax.y < -1.0f - cullMargin || vmin.y > 1.0f + cullMargin);
+        };
+
+    auto flushBatch = [&]() {
+        if (indexScratch.empty()) return;
+
+        glBindVertexArray(batchVAO);
+        glBindBuffer(GL_ARRAY_BUFFER, batchVBO);
+        size_t vBytes = vertexScratch.size() * sizeof(float);
+        if (vBytes > batchVBOCapacity) {
+            glBufferData(GL_ARRAY_BUFFER, vBytes, vertexScratch.data(), GL_DYNAMIC_DRAW);
+            batchVBOCapacity = vBytes;
         }
         else {
-            {
-                TIME_BLOCK("Draw objects");
-                if (obj->HasComponent<RenderComponent>()) {
-                    obj->GetComponent<RenderComponent>()->Draw();
+            glBufferSubData(GL_ARRAY_BUFFER, 0, vBytes, vertexScratch.data());
+        }
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, batchEBO);
+        size_t iBytes = indexScratch.size() * sizeof(unsigned int);
+        if (iBytes > batchEBOCapacity) {
+            glBufferData(GL_ELEMENT_ARRAY_BUFFER, iBytes, indexScratch.data(), GL_DYNAMIC_DRAW);
+            batchEBOCapacity = iBytes;
+        }
+        else {
+            glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, iBytes, indexScratch.data());
+        }
+
+        batchShader.use();
+        batchShader.setMat4D("projection", batchProjection);
+        batchShader.setMat4D("view", Camera::getInstance().viewMatrix);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, currentBatchTexture);
+
+        glDrawElements(GL_TRIANGLES, (GLsizei)indexScratch.size(), GL_UNSIGNED_INT, 0);
+        glBindVertexArray(0);
+
+        vertexScratch.clear();
+        indexScratch.clear();
+        };
+
+    for (Object* obj : renderQueue) {
+        if (obj->HasComponent<FluidComponent>()) {
+            flushBatch();
+            haveBatch = false;
+            TIME_BLOCK("Draw fluids");
+            obj->GetComponent<FluidComponent>()->Draw();
+        }
+        else {
+            RenderComponent* rc = obj->GetComponent<RenderComponent>();
+            TransformComponent* tc = obj->GetComponent<TransformComponent>();
+
+            if (!rc || IsVisible(rc, tc)) {
+                bool batchable = rc && rc->IsBatchableWith();
+
+                if (batchable) {
+                    if (haveBatch && rc->GetTextureID() != currentBatchTexture) flushBatch();
+                    currentBatchTexture = rc->GetTextureID();
+                    haveBatch = true;
+
+
+                    glm::mat4 model = tc ? tc->GetWorldMatrix(true) : glm::mat4(1.0f);
+                    glm::vec4 col = rc->color;
+
+                    const auto& verts = rc->Vertices;
+                    unsigned int baseVertex = (unsigned int)(vertexScratch.size() / 9);
+
+                    for (size_t i = 0; i + 4 < verts.size(); i += 5) {
+                        glm::vec4 world = model * glm::vec4(verts[i + 0], verts[i + 1], verts[i + 2], 1.0f);
+                        vertexScratch.insert(vertexScratch.end(), {
+                            world.x, world.y, world.z,
+                            verts[i + 3], verts[i + 4],
+                            col.x, col.y, col.z, col.w
+                            });
+                    }
+                    for (unsigned int idx : rc->Indices) indexScratch.push_back(idx + baseVertex);
                 }
                 else {
-                    obj->GetComponent<EditorRenderComponent>()->Draw();
+                    flushBatch();
+                    haveBatch = false;
+                    TIME_BLOCK("Draw objects");
+                    if (rc) {
+                        rc->Draw();
+                    }
+                    else {
+                        obj->GetComponent<EditorRenderComponent>()->Draw();
+                    }
                 }
             }
         }
@@ -100,110 +210,79 @@ void Renderer::Draw() {
         }
         SoftBodyComponent* sb = obj->GetComponent<SoftBodyComponent>();
         if (sb) {
-            for (int i = 0; i < sb->MassAggregate.size(); i++)
-            {
+            for (int i = 0; i < sb->MassAggregate.size(); i++) {
                 sb->MassAggregate[i]->ProcessTransform();
             }
         }
     }
+    flushBatch();
 
     if (EngineManager::getInstance().EnginePhysicsMode != EngineManager::PhysicsMode::Simulate) {
-        {
-            TIME_BLOCK("Draw camera bounds");
-            for (size_t i = 0; i < (*allObjects).size(); i++) {
-                CameraComponent* camComp = (*allObjects)[i]->GetComponent<CameraComponent>();
-                if (camComp) {
-                    camComp->DrawDebug();
-                }
-            }
+        TIME_BLOCK("Draw camera bounds");
+        for (size_t i = 0; i < (*allObjects).size(); i++) {
+            CameraComponent* camComp = (*allObjects)[i]->GetComponent<CameraComponent>();
+            if (camComp) camComp->DrawDebug();
         }
     }
 
     if (EngineManager::getInstance().EnginePhysicsMode != EngineManager::PhysicsMode::Simulate ||
         debug.drawCollisionShapes) {
-            {
-                TIME_BLOCK("Draw collision shapes");
-                for (size_t i = 0; i < (*allObjects).size(); i++) {
-                    CollisionComponent* cc = (*allObjects)[i]->GetComponent<CollisionComponent>();
-                    if (cc) {
-                        cc->Draw();
-                    }
-                }
-            }
+        TIME_BLOCK("Draw collision shapes");
+        for (size_t i = 0; i < (*allObjects).size(); i++) {
+            CollisionComponent* cc = (*allObjects)[i]->GetComponent<CollisionComponent>();
+            if (cc) cc->Draw();
+        }
     }
 
     if (debug.AnyDebugGizmoEnabled()) {
-        {
-            TIME_BLOCK("Draw debug");
-            glLineWidth(2.0f);
+        TIME_BLOCK("Draw debug");
+        glLineWidth(2.0f);
 
-            if (debug.drawBroadPhaseBounds) {
-                {
-                    TIME_BLOCK("Draw bounding area");
-                    if (EngineManager::getInstance().EngineSettings.broadPhaseMode == BroadPhaseMode::AABB)
-                        PhysicsEngine::getInstance().boxRoot.DrawBoundingArea();
-                    else
-                        PhysicsEngine::getInstance().circleRoot.DrawBoundingArea();
-                }
-            }
-
-            if (debug.drawContactPoints || debug.drawCollisionNormals) {
-                for (int i = 0; i < PhysicsEngine::getInstance().allContactPoints.size(); i++)
-                {
-                    ContactPoint& cp = PhysicsEngine::getInstance().allContactPoints[i];
-
-                    if (debug.drawContactPoints) {
-                        {
-                            TIME_BLOCK("Draw contact points");
-                            DrawPoint(cp.point, glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), 1.5f);
-                        }
-                    }
-
-                    if (debug.drawCollisionNormals) {
-                        {
-                            TIME_BLOCK("Draw collision normal");
-                            glm::vec4 normalColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
-                            float arrowLength = 0.5f;
-                            DrawArrow(cp.point, cp.normal, arrowLength, normalColor);
-                        }
-                    }
-                }
-            }
-
-            if (debug.drawSoftBodyPointMasses || debug.drawSoftBodySprings || debug.drawVirtualSoftBodyProxies) {
-                for (int i = 0; i < (*allObjects).size(); i++)
-                {
-                    SoftBodyComponent* sb = (*allObjects)[i]->GetComponent<SoftBodyComponent>();
-                    if (sb) {
-                        if (debug.drawSoftBodySprings) {
-                            {
-                                TIME_BLOCK("Draw soft body springs");
-                                sb->DrawSprings();
-                            }
-                        }
-                        if (debug.drawSoftBodyPointMasses) {
-                            {
-                                TIME_BLOCK("Draw soft body point masses");
-                                for (int j = 0; j < sb->MassAggregate.size(); j++)
-                                {
-                                    sb->MassAggregate[j]->DrawDebug();
-                                }
-                            }
-                        }
-                        if (debug.drawVirtualSoftBodyProxies) {
-                            {
-                                TIME_BLOCK("Draw soft body proxies");
-                                for (int j = 0; j < sb->VirtualProxies.size(); j++)
-                                {
-                                    sb->VirtualProxies[j]->DrawDebug();
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            glLineWidth(1.0f);
+        if (debug.drawBroadPhaseBounds) {
+            TIME_BLOCK("Draw bounding area");
+            if (EngineManager::getInstance().EngineSettings.broadPhaseMode == BroadPhaseMode::AABB)
+                PhysicsEngine::getInstance().boxRoot.DrawBoundingArea();
+            else
+                PhysicsEngine::getInstance().circleRoot.DrawBoundingArea();
         }
+
+        if (debug.drawContactPoints || debug.drawCollisionNormals) {
+            for (int i = 0; i < PhysicsEngine::getInstance().allContactPoints.size(); i++) {
+                ContactPoint& cp = PhysicsEngine::getInstance().allContactPoints[i];
+                if (debug.drawContactPoints) {
+                    TIME_BLOCK("Draw contact points");
+                    DrawPoint(cp.point, glm::vec4(0.0f, 1.0f, 0.0f, 1.0f), 1.5f);
+                }
+                if (debug.drawCollisionNormals) {
+                    TIME_BLOCK("Draw collision normal");
+                    glm::vec4 normalColor = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);
+                    DrawArrow(cp.point, cp.normal, 0.5f, normalColor);
+                }
+            }
+        }
+
+        if (debug.drawSoftBodyPointMasses || debug.drawSoftBodySprings || debug.drawVirtualSoftBodyProxies) {
+            for (int i = 0; i < (*allObjects).size(); i++) {
+                SoftBodyComponent* sb = (*allObjects)[i]->GetComponent<SoftBodyComponent>();
+                if (sb) {
+                    if (debug.drawSoftBodySprings) {
+                        TIME_BLOCK("Draw soft body springs");
+                        sb->DrawSprings();
+                    }
+                    if (debug.drawSoftBodyPointMasses) {
+                        TIME_BLOCK("Draw soft body point masses");
+                        for (int j = 0; j < sb->MassAggregate.size(); j++)
+                            sb->MassAggregate[j]->DrawDebug();
+                    }
+                    if (debug.drawVirtualSoftBodyProxies) {
+                        TIME_BLOCK("Draw soft body proxies");
+                        for (int j = 0; j < sb->VirtualProxies.size(); j++)
+                            sb->VirtualProxies[j]->DrawDebug();
+                    }
+                }
+            }
+        }
+        glLineWidth(1.0f);
     }
 
     {

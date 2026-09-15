@@ -134,6 +134,7 @@ int main(int argc, char* argv[]) {
 	const int windowWidth = 1280;
 	const int windowHeight = 720;
 
+	glfwWindowHint(GLFW_SAMPLES, 8);
 	GLFWwindow* window = glfwCreateWindow(windowWidth, windowHeight, windowTitle.c_str(), NULL, NULL);
 	if (!window) {
 		FatalError("Failed to create window. Your GPU or drivers may not support OpenGL 3.3.");
@@ -148,6 +149,8 @@ int main(int argc, char* argv[]) {
 		glfwTerminate();
 		return 1;
 	}
+
+	glEnable(GL_MULTISAMPLE);
 
 	{
 		const GLFWvidmode* mode = glfwGetVideoMode(glfwGetPrimaryMonitor());

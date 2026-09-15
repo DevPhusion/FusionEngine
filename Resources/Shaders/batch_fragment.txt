@@ -1,0 +1,13 @@
+#version 330 core
+in vec2 UV;
+in vec4 VertColor;
+
+uniform sampler2D tex;
+
+out vec4 FragColor;
+
+void main() {
+    vec4 texColor = texture(tex, UV);
+    FragColor = texColor * VertColor;
+    if (FragColor.a < 0.001) discard;
+}
