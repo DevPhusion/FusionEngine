@@ -1,39 +1,40 @@
 #pragma once
 #include "Component.h"
-#include "../Objects/Object.h"
-#include "../Core/EngineManager.h"
 #include "../Core/Physics/Particle.h"
-#include <unordered_set>
 
-struct RigidBoundary;
-struct SoftBoundary;
-
-class FluidComponent : public ComponentBase<FluidComponent>
+class GasComponent : public ComponentBase<GasComponent>
 {
 public:
-    FluidComponent(Object* parent);
-    FluidComponent() = default;
+	GasComponent(Object* parent);
+	GasComponent() = default;
 
-    std::vector<FluidParticle*> particles;
+    std::vector<GasParticle*> particles;
     glm::vec4 color = glm::vec4(0.2f, 0.5f, 1.0f, 0.8f);
     int desiredParticleCount = 500;
     float particleRadius = 0.5f;
     float collisionRadius = 0.1f;
 
     float particleMass = 1.0f;
-    float restDensity = 400.0f;
+    float restDensity = 1.2f;
     float viscosity = 0.0001f;
     float epsilon = 100.0f;
     float smoothingRadius = 1.0f;
     float vorticityStrength = 0.0f;
-    
+
+    float stiffness = 50.0f;
+    float gamma = 1.0f;
+
+	float initialTemperature = 300.0f;
+	float ambientTemperature = 300.0f;
+	float dissipationRate = 0.15f;
+
     glm::vec4 outlineColor = glm::vec4(0.05f, 0.2f, 0.45f, 1.0f);
     float metaballThreshold = 0.6f;
     float metaballEdgeSoft = 0.05f;
     float outlineWidthTexels = 2.0f;
 
     virtual void Activate();
-	virtual void Deactivate();
+    virtual void Deactivate();
     virtual void OnDelete();
     virtual void ProcessInspectorUI();
     virtual void CopyTo(Object* other);
@@ -52,14 +53,7 @@ public:
     void Draw();
 
     void ResizeRenderTargets(int width, int height);
-    std::vector<const RigidBoundary*> GetOverlappingRigidBodies();
-    std::vector<const SoftBoundary*> GetOverlappingSoftBodies();
     void RebuildDensityQuadGeometry();
-
-    FluidParticle* AddParticle(glm::vec3 worldPosition);
-    std::vector<FluidParticle*> AddParticles(Shape shape, int particleCount);
-    void RemoveParticle(FluidParticle* particle);
-
 private:
     void RebuildQuadGeometry();
 
@@ -68,18 +62,10 @@ private:
     void InitVectorFieldResources();
     void UpdateHeatBuffer();
     glm::vec4 VelocityHeatmapColor(float t);
-    void DrawObjectSilhouette(const RigidBoundary& rb);
-    void DrawObjectSilhouette(const SoftBoundary& sb);
     void DrawDensityPass();
     void DrawComposite();
     void DrawParticlesDebug();
     void DrawVelocityField();
-
-    float GetWaterLine(const SoftBoundary& soft);
-    float GetWaterLine(const RigidBoundary& rb);
-
-    void GetShapeBounds(const Shape& shape, glm::vec3& outMin, glm::vec3& outMax);
-    bool IsPointInsideShape(const Shape& shape, const glm::vec3& point);
 
     int transformCallbackID = -1;
     int setShapeCallbackID = -1;
@@ -100,7 +86,7 @@ private:
 
     GLuint densityFBO = 0;
     GLuint densityTex = 0;
-    GLuint densityQuadVAO = 0, densityQuadVBO = 0; 
+    GLuint densityQuadVAO = 0, densityQuadVBO = 0;
     Shader densityShader;
     int densityW = 0, densityH = 0;
     bool densityInitialized = false;
@@ -108,3 +94,4 @@ private:
     GLuint fsQuadVAO = 0, fsQuadVBO = 0;
     Shader compositeShader;
 };
+

@@ -1,15 +1,6 @@
 #include "../../../../Header Files/Core/Editor/Windows/Inspector.h"
 #include "../../../../Header Files/Core/Editor/EditorManager.h"
-#include "../../../../Header Files/Components/CollisionComponent.h"
-#include "../../../../Header Files/Components/RigidBodyComponent.h"
-#include "../../../../Header Files/Components/ConstraintComponent.h"
-#include "../../../../Header Files/Components/SoftBodyComponent.h"
-#include "../../../../Header Files/Components/FractureComponent.h"
-#include "../../../../Header Files/Components/FluidComponent.h"
-#include "../../../../Header Files/Components/CameraComponent.h"
-#include "../../../../Header Files/Components/AudioComponent.h"
-#include "../../../../Header Files/Components/ScriptComponent.h"
-#include "../../../../Header Files/Components/AgentComponent.h"
+#include "../../../../Header Files/Components/Components.h"
 
 
 namespace {
@@ -195,6 +186,7 @@ void Inspector::ProcessWindow() {
                 if (ImGui::MenuItem("Render Component")) {
                     EditorManager::getInstance().BeginEdit({ selected });
                     selected->AddComponent(std::make_unique<RenderComponent>(selected, std::vector<float> {}, selected->shader, ""));
+					selected->GetComponent<RenderComponent>()->Activate();
                     EditorManager::getInstance().EndEdit({ selected });
                     EngineManager::getInstance().SceneChangeEvent();
                     m_SearchBuffer[0] = '\0';
@@ -204,6 +196,7 @@ void Inspector::ProcessWindow() {
                 if (ImGui::MenuItem("Camera Component")) {
                     EditorManager::getInstance().BeginEdit({ selected });
                     selected->AddComponent(std::make_unique<CameraComponent>(selected));
+					selected->GetComponent<CameraComponent>()->Activate();
                     EditorManager::getInstance().EndEdit({ selected });
                     EngineManager::getInstance().SceneChangeEvent();
                     m_SearchBuffer[0] = '\0';
@@ -213,6 +206,7 @@ void Inspector::ProcessWindow() {
                 if (ImGui::MenuItem("Audio Component")) {
                     EditorManager::getInstance().BeginEdit({ selected });
                     selected->AddComponent(std::make_unique<AudioComponent>(selected));
+					selected->GetComponent<AudioComponent>()->Activate();
                     EditorManager::getInstance().EndEdit({ selected });
                     EngineManager::getInstance().SceneChangeEvent();
                     m_SearchBuffer[0] = '\0';
@@ -222,6 +216,7 @@ void Inspector::ProcessWindow() {
                 if (ImGui::MenuItem("Rigid Body Component")) {
                     EditorManager::getInstance().BeginEdit({ selected });
                     selected->AddComponent(std::make_unique<RigidBodyComponent>(selected));
+					selected->GetComponent<RigidBodyComponent>()->Activate();
                     EditorManager::getInstance().EndEdit({ selected });
                     EngineManager::getInstance().SceneChangeEvent();
                     m_SearchBuffer[0] = '\0';
@@ -232,6 +227,7 @@ void Inspector::ProcessWindow() {
                 if (ImGui::MenuItem("Soft Body Component")) {
                     EditorManager::getInstance().BeginEdit({ selected });
                     selected->AddComponent(std::make_unique<SoftBodyComponent>(selected));
+					selected->GetComponent<SoftBodyComponent>()->Activate();
                     EditorManager::getInstance().EndEdit({ selected });
                     EngineManager::getInstance().SceneChangeEvent();
                     m_SearchBuffer[0] = '\0';
@@ -242,6 +238,7 @@ void Inspector::ProcessWindow() {
                 if (ImGui::MenuItem("Collision Component")) {
                     EditorManager::getInstance().BeginEdit({ selected });
                     selected->AddComponent(std::make_unique<CollisionComponent>(selected));
+					selected->GetComponent<CollisionComponent>()->Activate();
                     EditorManager::getInstance().EndEdit({ selected });
                     EngineManager::getInstance().SceneChangeEvent();
                     m_SearchBuffer[0] = '\0';
@@ -252,6 +249,7 @@ void Inspector::ProcessWindow() {
                 if (ImGui::MenuItem("Constraint Component")) {
                     EditorManager::getInstance().BeginEdit({ selected });
                     selected->AddComponent(std::make_unique<ConstraintComponent>(selected));
+					selected->GetComponent<ConstraintComponent>()->Activate();
                     EditorManager::getInstance().EndEdit({ selected });
                     EngineManager::getInstance().SceneChangeEvent();
                     m_SearchBuffer[0] = '\0';
@@ -262,6 +260,7 @@ void Inspector::ProcessWindow() {
                 if (ImGui::MenuItem("Fracture Component")) {
                     EditorManager::getInstance().BeginEdit({ selected });
                     selected->AddComponent(std::make_unique<FractureComponent>(selected));
+					selected->GetComponent<FractureComponent>()->Activate();
                     EditorManager::getInstance().EndEdit({ selected });
                     EngineManager::getInstance().SceneChangeEvent();
                     m_SearchBuffer[0] = '\0';
@@ -271,6 +270,17 @@ void Inspector::ProcessWindow() {
                 if (ImGui::MenuItem("Fluid Component")) {
                     EditorManager::getInstance().BeginEdit({ selected });
                     selected->AddComponent(std::make_unique<FluidComponent>(selected));
+                    selected->GetComponent<FluidComponent>()->Activate();
+                    EditorManager::getInstance().EndEdit({ selected });
+                    EngineManager::getInstance().SceneChangeEvent();
+                    m_SearchBuffer[0] = '\0';
+                    ImGui::CloseCurrentPopup();
+                }
+            if (!selected->HasComponent<GasComponent>() && std::string("Gas Component").find(search) != std::string::npos)
+                if (ImGui::MenuItem("Gas Component")) {
+                    EditorManager::getInstance().BeginEdit({ selected });
+                    selected->AddComponent(std::make_unique<GasComponent>(selected));
+					selected->GetComponent<GasComponent>()->Activate();
                     EditorManager::getInstance().EndEdit({ selected });
                     EngineManager::getInstance().SceneChangeEvent();
                     m_SearchBuffer[0] = '\0';
@@ -282,6 +292,7 @@ void Inspector::ProcessWindow() {
                 if (ImGui::MenuItem("Agent Component")) {
                     EditorManager::getInstance().BeginEdit({ selected });
                     selected->AddComponent(std::make_unique<AgentComponent>(selected));
+					selected->GetComponent<AgentComponent>()->Activate();
                     EditorManager::getInstance().EndEdit({ selected });
                     EngineManager::getInstance().SceneChangeEvent();
                     m_SearchBuffer[0] = '\0';

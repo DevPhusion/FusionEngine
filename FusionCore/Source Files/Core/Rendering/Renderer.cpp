@@ -162,6 +162,12 @@ void Renderer::Draw() {
             TIME_BLOCK("Draw fluids");
             obj->GetComponent<FluidComponent>()->Draw();
         }
+        else if (obj->HasComponent<GasComponent>()) {
+			flushBatch();
+			haveBatch = false;
+			TIME_BLOCK("Draw gas");
+			obj->GetComponent<GasComponent>()->Draw();
+		}
         else {
             RenderComponent* rc = obj->GetComponent<RenderComponent>();
             TransformComponent* tc = obj->GetComponent<TransformComponent>();

@@ -1,21 +1,22 @@
-#include "../../Header Files/Components/FluidComponent.h"
+#include "../../Header Files/Components/GasComponent.h"
 #include "../../Header Files/Core/Physics/PhysicsEngine.h"
 #include "../../Header Files/Core/Editor/EditorField.h"
 
-FluidComponent::FluidComponent(Object* parent) : ComponentBase<FluidComponent>(parent) {
-	Name = "Fluid Component";
+
+GasComponent::GasComponent(Object* parent) : ComponentBase<GasComponent>(parent) {
+	Name = "Gas Component";
 
 	if (!EngineManager::getInstance().isHeadless) {
 		InitRenderResources();
 	}
 }
 
-void FluidComponent::EnsureGLResources() {
-	if (renderInitialized) return;   
-	InitRenderResources();          
+void GasComponent::EnsureGLResources() {
+	if (renderInitialized) return;
+	InitRenderResources();
 }
 
-void FluidComponent::Activate() {
+void GasComponent::Activate() {
 	Component::Activate();
 
 	setShapeCallbackID = parent->GetComponent<RenderComponent>()->AddOnShapeSetCallback([this] {
@@ -32,11 +33,11 @@ void FluidComponent::Activate() {
 		if (tc) tc->RemoveTransformCallback(cc->onTransformCallbackID);
 	}
 
-	SeedParticles();      
+	SeedParticles();
 	ResizeInstanceBuffer();
 }
 
-void FluidComponent::Deactivate() {
+void GasComponent::Deactivate() {
 	Component::Deactivate();
 
 	RenderComponent* rc = parent->GetComponent<RenderComponent>();
@@ -47,101 +48,22 @@ void FluidComponent::Deactivate() {
 	if (tc && transformCallbackID != -1) tc->RemoveTransformCallback(transformCallbackID);
 	transformCallbackID = -1;
 
-	ClearParticles();  
+	ClearParticles();
 	isActive = false;
 }
 
-void FluidComponent::ClearParticles() {
-	auto& allParticles = PhysicsEngine::getInstance().allFluidParticles;
-	for (FluidParticle* p : particles) {
-		allParticles.erase(std::remove(allParticles.begin(), allParticles.end(), p), allParticles.end());
-	}
-	for (FluidParticle* p : particles) {
+void GasComponent::ClearParticles() {
+	//auto& allParticles = PhysicsEngine::getInstance().allFluidParticles;
+	//for (GasParticle* p : particles) {
+	//	allParticles.erase(std::remove(allParticles.begin(), allParticles.end(), p), allParticles.end());
+	//}
+	for (GasParticle* p : particles) {
 		delete p;
 	}
 	particles.clear();
 }
 
-FluidParticle* FluidComponent::AddParticle(glm::vec3 worldPosition) {
-	FluidParticle* p = new FluidParticle();
-	p->parent = parent;
-	p->position = worldPosition;
-	p->predictedPosition = worldPosition;
-	p->velocity = glm::vec3(0.0f);
-	p->collisionRadius = collisionRadius;
-	p->mass = particleMass;
-	p->invMass = particleMass > 0.0f ? 1.0f / particleMass : 0.0f;
-	p->restDensity = restDensity;
-	p->viscosity = viscosity;
-	p->lambda = 0.0f;
-	p->vorticityEps = vorticityStrength;
-	p->epsilon = epsilon;
-	p->smoothingRadius = smoothingRadius;
-	p->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(smoothingRadius);
-	p->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(smoothingRadius);
-	p->density = 0.0f;
-
-	CollisionComponent* cc = parent->GetComponent<CollisionComponent>();
-	if (cc) {
-		p->collisionLayer = cc->collisionLayer;
-		p->collisionMask = cc->collisionMask;
-	}
-
-	PhysicsEngine::getInstance().allFluidParticles.push_back(p);
-	particles.push_back(p);
-
-	ResizeInstanceBuffer();
-	return p;
-}
-
-std::vector<FluidParticle*> FluidComponent::AddParticles(Shape shape, int particleCount) {
-	std::vector<FluidParticle*> added;
-	particleCount = std::max(1, particleCount);
-
-	glm::vec3 boundsMin, boundsMax;
-	GetShapeBounds(shape, boundsMin, boundsMax);
-
-	float width = boundsMax.x - boundsMin.x;
-	float height = boundsMax.y - boundsMin.y;
-	float area = width * height;
-	if (area <= 0.0f) return added;
-
-	float spacing = std::sqrt(area / (float)particleCount);
-	spacing = std::max(spacing, 0.001f);
-
-	for (float y = boundsMin.y + spacing * 0.5f; y <= boundsMax.y; y += spacing) {
-		for (float x = boundsMin.x + spacing * 0.5f; x <= boundsMax.x; x += spacing) {
-			glm::vec3 point(x, y, boundsMin.z);
-			if (IsPointInsideShape(shape, point)) {
-				added.push_back(AddParticle(point));
-			}
-		}
-	}
-
-	return added;
-}
-
-void FluidComponent::RemoveParticle(FluidParticle* particle) {
-	if (!particle) return;
-
-	auto it = std::find(particles.begin(), particles.end(), particle);
-	if (it == particles.end()) return;
-
-	size_t index = std::distance(particles.begin(), it);
-
-	auto& allParticles = PhysicsEngine::getInstance().allFluidParticles;
-	allParticles.erase(std::remove(allParticles.begin(), allParticles.end(), particle), allParticles.end());
-
-	delete particle;
-	particles.erase(it);
-	if (index < localParticlePositions.size()) {
-		localParticlePositions.erase(localParticlePositions.begin() + index);
-	}
-
-	ResizeInstanceBuffer();
-}
-
-void FluidComponent::SeedParticles() {
+void GasComponent::SeedParticles() {
 	if (!Enabled) return;
 
 	RenderComponent* rc = parent->GetComponent<RenderComponent>();
@@ -178,7 +100,7 @@ void FluidComponent::SeedParticles() {
 	for (auto& localPos : localParticlePositions) {
 		glm::vec3 worldPos = tc ? tc->ProjectToWorld(localPos) : localPos;
 
-		FluidParticle* p = new FluidParticle();
+		GasParticle* p = new GasParticle();
 		p->parent = parent;
 		p->position = worldPos;
 		p->predictedPosition = worldPos;
@@ -192,18 +114,23 @@ void FluidComponent::SeedParticles() {
 		p->vorticityEps = vorticityStrength;
 		p->epsilon = epsilon;
 		p->smoothingRadius = smoothingRadius;
+		p->stiffness = stiffness;
+		p->gamma = gamma;
+		p->temperature = initialTemperature;
+		p->ambientTemperature = ambientTemperature;
+		p->dissipationRate = dissipationRate;
 		p->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(smoothingRadius);
 		p->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(smoothingRadius);
 		if (cc) {
 			p->collisionLayer = p->collisionLayer;
 			p->collisionMask = p->collisionMask;
 		}
-		PhysicsEngine::getInstance().allFluidParticles.push_back(p);
+		//PhysicsEngine::getInstance().allFluidParticles.push_back(p);
 		particles.push_back(p);
 	}
 }
 
-void FluidComponent::ProcessInspectorUI() {
+void GasComponent::ProcessInspectorUI() {
 	if (ImGui::TreeNodeEx("Visuals", ImGuiTreeNodeFlags_DefaultOpen)) {
 		float displayColor[4] = { color.x, color.y, color.z, color.a };
 		EditorField::ColorEdit4Scene(parent, "Color", "##Color", displayColor, [&] {
@@ -228,7 +155,7 @@ void FluidComponent::ProcessInspectorUI() {
 		ImGui::TreePop();
 	}
 
-	if (ImGui::TreeNodeEx("Fluid Properties", ImGuiTreeNodeFlags_DefaultOpen)) {
+	if (ImGui::TreeNodeEx("Gas Properties", ImGuiTreeNodeFlags_DefaultOpen)) {
 		EditorField::InputIntScene(parent, "Particles Count", "##ParticlesCount", &desiredParticleCount, [&] {
 			desiredParticleCount = std::max(1, desiredParticleCount);
 			SeedParticles();
@@ -266,26 +193,63 @@ void FluidComponent::ProcessInspectorUI() {
 			}
 			}, "%.3f kg");
 
-		EditorField::InputFloatScene(parent, "Density", "##Density", &restDensity, [&] {
+		EditorField::InputFloatScene(parent, "Ambient Density", "##Density", &restDensity, [&] {
 			if (restDensity <= 0) restDensity = 0.01f;
 			for (int i = 0; i < particles.size(); i++) particles[i]->restDensity = restDensity;
 			}, "%.3f kg/m³");
 
 		EditorField::InputFloatScene(parent, "Viscosity", "##Viscosity", &viscosity, [&] {
-			if (viscosity <= 0) viscosity = 0.01f;
+			if (viscosity <= 0) viscosity = 0.0f;
 			for (int i = 0; i < particles.size(); i++) particles[i]->viscosity = viscosity;
 			});
 
 		EditorField::InputFloatScene(parent, "Vorticity Strength", "##Vorticity Strength", &vorticityStrength, [&] {
-			if (vorticityStrength <= 0) vorticityStrength = 0.0f;
+			if (vorticityStrength < 0) vorticityStrength = 0.0f;
 			for (int i = 0; i < particles.size(); i++) particles[i]->vorticityEps = vorticityStrength;
+			});
+
+		ImGui::TreePop();
+	}
+
+	if (ImGui::TreeNodeEx("Equation of State", ImGuiTreeNodeFlags_DefaultOpen)) {
+		EditorField::InputFloatScene(parent, "Stiffness", "##Stiffness", &stiffness, [&] {
+			stiffness = std::max(0.0001f, stiffness);
+			for (int i = 0; i < particles.size(); i++) particles[i]->stiffness = stiffness;
+			});
+
+		EditorField::InputFloatScene(parent, "Gamma", "##Gamma", &gamma, [&] {
+			gamma = std::max(0.0001f, gamma);
+			for (int i = 0; i < particles.size(); i++) particles[i]->gamma = gamma;
+			});
+
+		ImGui::TreePop();
+	}
+
+	if (ImGui::TreeNodeEx("Thermal", ImGuiTreeNodeFlags_DefaultOpen)) {
+		EditorField::InputFloatScene(parent, "Initial Temperature", "##InitialTemperature", &initialTemperature, [&] {
+			SeedParticles();
+			ResizeInstanceBuffer();
+			EngineManager::getInstance().SceneChangeEvent();
+			});
+
+		EditorField::InputFloatScene(parent, "Ambient Temperature", "##AmbientTemperature", &ambientTemperature, [&] {
+			for (int i = 0; i < particles.size(); i++) particles[i]->ambientTemperature = ambientTemperature;
+			});
+
+		ImGui::TreePop();
+	}
+
+	if (ImGui::TreeNodeEx("Lifecycle", ImGuiTreeNodeFlags_DefaultOpen)) {
+		EditorField::InputFloatScene(parent, "Dissipation Rate", "##DissipationRate", &dissipationRate, [&] {
+			dissipationRate = std::max(0.0f, dissipationRate);
+			for (int i = 0; i < particles.size(); i++) particles[i]->dissipationRate = dissipationRate;
 			});
 
 		ImGui::TreePop();
 	}
 }
 
-void FluidComponent::OnDelete() {
+void GasComponent::OnDelete() {
 	RenderComponent* rc = parent->GetComponent<RenderComponent>();
 	if (rc && setShapeCallbackID != -1) rc->RemoveOnShapeSetCallback(setShapeCallbackID);
 
@@ -319,11 +283,11 @@ void FluidComponent::OnDelete() {
 	glDeleteVertexArrays(1, &vectorFieldVAO);
 }
 
-void FluidComponent::CopyTo(Object* other) {
-	FluidComponent* target = other->GetComponent<FluidComponent>();
+void GasComponent::CopyTo(Object* other) {
+	GasComponent* target = other->GetComponent<GasComponent>();
 	if (!target) {
-		other->AddComponent(std::make_unique<FluidComponent>(other));
-		target = other->GetComponent<FluidComponent>();
+		other->AddComponent(std::make_unique<GasComponent>(other));
+		target = other->GetComponent<GasComponent>();
 	}
 
 	target->desiredParticleCount = desiredParticleCount;
@@ -337,6 +301,11 @@ void FluidComponent::CopyTo(Object* other) {
 	target->vorticityStrength = vorticityStrength;
 	target->epsilon = epsilon;
 	target->smoothingRadius = smoothingRadius;
+	target->stiffness = stiffness;
+	target->gamma = gamma;
+	target->initialTemperature = initialTemperature;
+	target->ambientTemperature = ambientTemperature;
+	target->dissipationRate = dissipationRate;
 	target->SeedParticles();
 	target->ResizeInstanceBuffer();
 	target->RebuildQuadGeometry();
@@ -344,7 +313,7 @@ void FluidComponent::CopyTo(Object* other) {
 	target->SetEnabled(Enabled);
 }
 
-void FluidComponent::Serialize(BinaryWriter& w) {
+void GasComponent::Serialize(BinaryWriter& w) {
 	Component::Serialize(w);
 	w.Write(desiredParticleCount);
 	w.Write(color);
@@ -357,9 +326,14 @@ void FluidComponent::Serialize(BinaryWriter& w) {
 	w.Write(vorticityStrength);
 	w.Write(epsilon);
 	w.Write(smoothingRadius);
+	w.Write(stiffness);
+	w.Write(gamma);
+	w.Write(initialTemperature);
+	w.Write(ambientTemperature);
+	w.Write(dissipationRate);
 }
 
-void FluidComponent::Deserialize(BinaryReader& r) {
+void GasComponent::Deserialize(BinaryReader& r) {
 	Component::Deserialize(r);
 	desiredParticleCount = r.Read<int>();
 	color = r.Read<glm::vec4>();
@@ -372,13 +346,18 @@ void FluidComponent::Deserialize(BinaryReader& r) {
 	vorticityStrength = r.Read<float>();
 	epsilon = r.Read<float>();
 	smoothingRadius = r.Read<float>();
+	stiffness = r.Read<float>();
+	gamma = r.Read<float>();
+	initialTemperature = r.Read<float>();
+	ambientTemperature = r.Read<float>();
+	dissipationRate = r.Read<float>();
 	SeedParticles();
 	ResizeInstanceBuffer();
 	RebuildQuadGeometry();
 	RebuildDensityQuadGeometry();
 }
 
-void FluidComponent::SetEnabled(bool enabled) {
+void GasComponent::SetEnabled(bool enabled) {
 	Component::SetEnabled(enabled);
 	if (enabled) {
 		SeedParticles();
@@ -391,7 +370,7 @@ void FluidComponent::SetEnabled(bool enabled) {
 	}
 }
 
-void FluidComponent::Draw() {
+void GasComponent::Draw() {
 	if (!renderInitialized || particles.empty()) return;
 	if (!Enabled) return;
 
@@ -415,7 +394,7 @@ void FluidComponent::Draw() {
 	DrawComposite();
 }
 
-void FluidComponent::InitRenderResources() {
+void GasComponent::InitRenderResources() {
 	unsigned int quadIdx[] = { 0, 1, 2,  2, 3, 0 };
 
 	particleShader = Shader("Resources/Shaders/Fluid/fluid_vertex.txt", "Resources/Shaders/Fluid/fluid_fragment.txt");
@@ -438,7 +417,7 @@ void FluidComponent::InitRenderResources() {
 
 	glGenBuffers(1, &quadVBO);
 	glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
-	glBufferData(GL_ARRAY_BUFFER, 4 * 5 * sizeof(float), nullptr, GL_DYNAMIC_DRAW); 
+	glBufferData(GL_ARRAY_BUFFER, 4 * 5 * sizeof(float), nullptr, GL_DYNAMIC_DRAW); // now dynamic, filled by RebuildQuadGeometry()
 
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
 	glEnableVertexAttribArray(0);
@@ -483,7 +462,7 @@ void FluidComponent::InitRenderResources() {
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
 	glEnableVertexAttribArray(1);
 
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadEBO); 
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadEBO); // reuse the same 6 indices
 
 	glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
 	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
@@ -498,7 +477,7 @@ void FluidComponent::InitRenderResources() {
 	InitVectorFieldResources();
 }
 
-void FluidComponent::RebuildQuadGeometry() {
+void GasComponent::RebuildQuadGeometry() {
 	if (!renderInitialized) return;
 
 	float h = particleRadius;
@@ -514,7 +493,7 @@ void FluidComponent::RebuildQuadGeometry() {
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-void FluidComponent::RebuildDensityQuadGeometry() {
+void GasComponent::RebuildDensityQuadGeometry() {
 	if (!renderInitialized || densityQuadVBO == 0) return;
 
 	float h = particleRadius;
@@ -530,7 +509,7 @@ void FluidComponent::RebuildDensityQuadGeometry() {
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-void FluidComponent::InitFullscreenQuad() {
+void GasComponent::InitFullscreenQuad() {
 	float verts[] = {
 		-1.0f, -1.0f,   0.0f, 0.0f,
 		 1.0f, -1.0f,   1.0f, 0.0f,
@@ -556,7 +535,7 @@ void FluidComponent::InitFullscreenQuad() {
 	glBindVertexArray(0);
 }
 
-void FluidComponent::InitDensityFBO(int width, int height) {
+void GasComponent::InitDensityFBO(int width, int height) {
 	width = std::max(1, width);
 	height = std::max(1, height);
 	densityW = width;
@@ -580,7 +559,7 @@ void FluidComponent::InitDensityFBO(int width, int height) {
 	densityInitialized = true;
 }
 
-void FluidComponent::InitVectorFieldResources() {
+void GasComponent::InitVectorFieldResources() {
 	glGenVertexArrays(1, &vectorFieldVAO);
 	glGenBuffers(1, &vectorFieldVBO);
 
@@ -597,7 +576,7 @@ void FluidComponent::InitVectorFieldResources() {
 	glBindVertexArray(0);
 }
 
-void FluidComponent::ResizeRenderTargets(int width, int height) {
+void GasComponent::ResizeRenderTargets(int width, int height) {
 	if (width <= 0 || height <= 0) return;
 	if (densityInitialized && width == densityW && height == densityH) return;
 
@@ -609,49 +588,7 @@ void FluidComponent::ResizeRenderTargets(int width, int height) {
 	InitDensityFBO(width, height);
 }
 
-void FluidComponent::DrawObjectSilhouette(const RigidBoundary& rb) {
-	if (rb.worldEdges.size() < 3) return;
-
-	glm::vec3 centroid(0.0f);
-	for (auto& e : rb.worldEdges) centroid += e.start;
-	centroid /= (float)rb.worldEdges.size();
-
-	std::vector<float> verts;
-	verts.reserve((rb.worldEdges.size() + 2) * 3);
-	verts.insert(verts.end(), { centroid.x, centroid.y, centroid.z });
-	for (auto& e : rb.worldEdges) verts.insert(verts.end(), { e.start.x, e.start.y, e.start.z });
-	verts.insert(verts.end(), { rb.worldEdges[0].start.x, rb.worldEdges[0].start.y, rb.worldEdges[0].start.z });
-
-	glBindBuffer(GL_ARRAY_BUFFER, solidMaskVBO);
-	glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(float), verts.data(), GL_DYNAMIC_DRAW);
-
-	glBindVertexArray(solidMaskVAO);
-	glDrawArrays(GL_TRIANGLE_FAN, 0, (GLsizei)(verts.size() / 3));
-	glBindVertexArray(0);
-}
-
-void FluidComponent::DrawObjectSilhouette(const SoftBoundary& soft) {
-	if (soft.worldEdges.size() < 3) return;
-
-	glm::vec3 centroid(0.0f);
-	for (auto& e : soft.worldEdges) centroid += e.edge.start;
-	centroid /= (float)soft.worldEdges.size();
-
-	std::vector<float> verts;
-	verts.reserve((soft.worldEdges.size() + 2) * 3);
-	verts.insert(verts.end(), { centroid.x, centroid.y, centroid.z });
-	for (auto& e : soft.worldEdges) verts.insert(verts.end(), { e.edge.start.x, e.edge.start.y, e.edge.start.z });
-	verts.insert(verts.end(), { soft.worldEdges[0].edge.start.x, soft.worldEdges[0].edge.start.y, soft.worldEdges[0].edge.start.z });
-
-	glBindBuffer(GL_ARRAY_BUFFER, solidMaskVBO);
-	glBufferData(GL_ARRAY_BUFFER, verts.size() * sizeof(float), verts.data(), GL_DYNAMIC_DRAW);
-
-	glBindVertexArray(solidMaskVAO);
-	glDrawArrays(GL_TRIANGLE_FAN, 0, (GLsizei)(verts.size() / 3));
-	glBindVertexArray(0);
-}
-
-void FluidComponent::DrawDensityPass() {
+void GasComponent::DrawDensityPass() {
 	if (!densityInitialized) return;
 
 	GLint prevViewport[4];
@@ -682,38 +619,11 @@ void FluidComponent::DrawDensityPass() {
 	glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, (GLsizei)particles.size());
 	glBindVertexArray(0);
 
-	auto overlappingRigid = GetOverlappingRigidBodies();
-	auto overlappingSoft = GetOverlappingSoftBodies();
-	if (!overlappingRigid.empty() || !overlappingSoft.empty()) {
-		glBlendEquation(GL_MAX);
-		glBlendFunc(GL_ONE, GL_ONE);
-
-		solidMaskShader.use();
-		solidMaskShader.setMat4D("projection", projection);
-		solidMaskShader.setMat4D("view", view);
-		solidMaskShader.setFloat("softness", particleRadius);
-
-		for (const RigidBoundary* rb : overlappingRigid) {
-			float waterLine = GetWaterLine(*rb);
-			if (waterLine == -INFINITY) continue;
-			solidMaskShader.setFloat("waterLevel", waterLine);
-			DrawObjectSilhouette(*rb);
-		}
-		for (const SoftBoundary* sb : overlappingSoft) {
-			float waterLine = GetWaterLine(*sb);
-			if (waterLine == -INFINITY) continue;
-			solidMaskShader.setFloat("waterLevel", waterLine);
-			DrawObjectSilhouette(*sb);
-		}
-
-		glBlendEquation(GL_FUNC_ADD);
-	}
-
-	glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)prevFBO);   
+	glBindFramebuffer(GL_FRAMEBUFFER, (GLuint)prevFBO);
 	glViewport(prevViewport[0], prevViewport[1], prevViewport[2], prevViewport[3]);
 }
 
-void FluidComponent::DrawComposite() {
+void GasComponent::DrawComposite() {
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // normal alpha blend over the scene
 
@@ -736,14 +646,14 @@ void FluidComponent::DrawComposite() {
 	glBindTexture(GL_TEXTURE_2D, 0);
 }
 
-glm::vec4 FluidComponent::VelocityHeatmapColor(float t) {
+glm::vec4 GasComponent::VelocityHeatmapColor(float t) {
 	t = glm::clamp(t, 0.0f, 1.0f);
 
 	glm::vec3 c0(0.05f, 0.05f, 0.35f);
-	glm::vec3 c1(0.0f, 0.75f, 0.9f);  
-	glm::vec3 c2(0.2f, 0.85f, 0.2f);  
-	glm::vec3 c3(0.95f, 0.85f, 0.1f);  
-	glm::vec3 c4(0.9f, 0.15f, 0.1f);  
+	glm::vec3 c1(0.0f, 0.75f, 0.9f);
+	glm::vec3 c2(0.2f, 0.85f, 0.2f);
+	glm::vec3 c3(0.95f, 0.85f, 0.1f);
+	glm::vec3 c4(0.9f, 0.15f, 0.1f);
 
 	glm::vec3 color;
 	if (t < 0.25f)      color = glm::mix(c0, c1, t / 0.25f);
@@ -754,7 +664,7 @@ glm::vec4 FluidComponent::VelocityHeatmapColor(float t) {
 	return glm::vec4(color, 1.0f);
 }
 
-void FluidComponent::DrawVelocityField() {
+void GasComponent::DrawVelocityField() {
 	if (!vectorFieldVAO || particles.empty()) return;
 
 	float maxSpeed = 0.0001f;
@@ -767,17 +677,17 @@ void FluidComponent::DrawVelocityField() {
 		lineVerts.insert(lineVerts.end(), { pos.x, pos.y, pos.z, col.r, col.g, col.b, col.a });
 		};
 
-	const glm::vec3 defaultDir(1.0f, 0.0f, 0.0f); 
+	const glm::vec3 defaultDir(1.0f, 0.0f, 0.0f);
 
 	for (auto* p : particles) {
 		float speed = glm::length(p->velocity);
-		float t = speed / maxSpeed; 
+		float t = speed / maxSpeed;
 
 		glm::vec3 dir = (speed > 1e-8f) ? (p->velocity / speed) : defaultDir;
 		glm::vec4 color = VelocityHeatmapColor(t);
 
 		glm::vec3 start = p->position;
-		glm::vec3 end = start + dir * particleRadius; 
+		glm::vec3 end = start + dir * particleRadius;
 
 		pushVert(start, color);
 		pushVert(end, color);
@@ -815,7 +725,7 @@ void FluidComponent::DrawVelocityField() {
 	glBindVertexArray(0);
 }
 
-void FluidComponent::DrawParticlesDebug() {
+void GasComponent::DrawParticlesDebug() {
 	glm::mat4 projection = glm::ortho(-EngineManager::getInstance().gameAspectRatio, EngineManager::getInstance().gameAspectRatio, -1.0f, 1.0f, -1.0f, 1.0f);
 	glm::mat4 view = Camera::getInstance().viewMatrix;
 
@@ -846,7 +756,7 @@ void FluidComponent::DrawParticlesDebug() {
 	}
 }
 
-void FluidComponent::UpdateCollisionLayerMask() {
+void GasComponent::UpdateCollisionLayerMask() {
 	CollisionComponent* cc = parent->GetComponent<CollisionComponent>();
 	if (cc) {
 		for (auto* p : particles) {
@@ -856,7 +766,7 @@ void FluidComponent::UpdateCollisionLayerMask() {
 	}
 }
 
-void FluidComponent::UpdateInstanceBuffer() {
+void GasComponent::UpdateInstanceBuffer() {
 	if (!renderInitialized) return;
 
 	std::vector<glm::vec3> positions;
@@ -868,7 +778,7 @@ void FluidComponent::UpdateInstanceBuffer() {
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-void FluidComponent::UpdateHeatBuffer() {
+void GasComponent::UpdateHeatBuffer() {
 	if (!renderInitialized) return;
 
 	FluidHeatmapMode mode = EngineManager::getInstance().EngineSettings.fluidHeatmapMode;
@@ -883,7 +793,7 @@ void FluidComponent::UpdateHeatBuffer() {
 		for (auto* p : particles) rawValues.push_back(p->density);
 	}
 	else {
-		return; 
+		return;
 	}
 
 	float maxVal = 0.0001f;
@@ -898,7 +808,7 @@ void FluidComponent::UpdateHeatBuffer() {
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
-void FluidComponent::UpdateParticleTransforms() {
+void GasComponent::UpdateParticleTransforms() {
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
 	if (!tc) return;
 	if (localParticlePositions.size() != particles.size()) return;
@@ -910,167 +820,11 @@ void FluidComponent::UpdateParticleTransforms() {
 	}
 }
 
-void FluidComponent::ResizeInstanceBuffer() {
+void GasComponent::ResizeInstanceBuffer() {
 	if (!renderInitialized) return;
 	glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
 	glBufferData(GL_ARRAY_BUFFER, particles.size() * sizeof(glm::vec3), nullptr, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, heatVBO);
 	glBufferData(GL_ARRAY_BUFFER, particles.size() * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
-}
-
-std::vector<const RigidBoundary*> FluidComponent::GetOverlappingRigidBodies() {
-	std::vector<const RigidBoundary*> result;
-	if (particles.empty()) return result;
-
-	glm::vec3 fMin(INFINITY), fMax(-INFINITY);
-	for (auto* p : particles) {
-		glm::vec3 r(p->collisionRadius);
-		fMin = glm::min(fMin, p->position - r);
-		fMax = glm::max(fMax, p->position + r);
-	}
-
-	for (const RigidBoundary& rb : PhysicsEngine::getInstance().rigidBoundaries) {
-		if (rb.obj == parent) continue; 
-
-		glm::vec3 rMin(INFINITY), rMax(-INFINITY);
-		for (auto& e : rb.worldEdges) {
-			rMin = glm::min(rMin, glm::min(e.start, e.end));
-			rMax = glm::max(rMax, glm::max(e.start, e.end));
-		}
-		if (rMin.x > fMax.x || rMax.x < fMin.x) continue;
-		if (rMin.y > fMax.y || rMax.y < fMin.y) continue;
-
-		result.push_back(&rb);
-	}
-	return result;
-}
-
-std::vector<const SoftBoundary*> FluidComponent::GetOverlappingSoftBodies() {
-	std::vector<const SoftBoundary*> result;
-	if (particles.empty()) return result;
-
-	glm::vec3 fMin(INFINITY), fMax(-INFINITY);
-	for (auto* p : particles) {
-		glm::vec3 r(p->collisionRadius);
-		fMin = glm::min(fMin, p->position - r);
-		fMax = glm::max(fMax, p->position + r);
-	}
-
-	for (const SoftBoundary& sb : PhysicsEngine::getInstance().softBoundaries) {
-		if (sb.obj == parent) continue;
-		if (sb.worldEdges.empty()) continue;
-
-		glm::vec3 sMin(INFINITY), sMax(-INFINITY);
-		for (auto& e : sb.worldEdges) {
-			sMin = glm::min(sMin, glm::min(e.edge.start, e.edge.end));
-			sMax = glm::max(sMax, glm::max(e.edge.start, e.edge.end));
-		}
-		if (sMin.x > fMax.x || sMax.x < fMin.x) continue;
-		if (sMin.y > fMax.y || sMax.y < fMin.y) continue;
-
-		result.push_back(&sb);
-	}
-	return result;
-}
-
-float FluidComponent::GetWaterLine(const RigidBoundary& rb) {
-	if (rb.worldEdges.empty() || particles.empty()) return -INFINITY;
-
-	float coverage2 = particleRadius * particleRadius;
-	float highestY = -INFINITY;
-	bool anyCovered = false;
-
-	for (auto& e : rb.worldEdges) {
-		bool vertexCovered = false;
-		for (auto* p : particles) {
-			glm::vec3 d = p->position - e.start;
-			if ((d.x * d.x + d.y * d.y) <= coverage2) {
-				vertexCovered = true;
-				break;
-			}
-		}
-		if (vertexCovered) {
-			anyCovered = true;
-			highestY = std::max(highestY, e.start.y);
-		}
-	}
-
-	return anyCovered ? highestY : -INFINITY;
-}
-
-float FluidComponent::GetWaterLine(const SoftBoundary& soft) {
-	if (soft.worldEdges.empty() || particles.empty()) return -INFINITY;
-
-	float coverage2 = particleRadius * particleRadius;
-	float highestY = -INFINITY;
-	bool anyCovered = false;
-
-	for (auto& e : soft.worldEdges) {
-		bool vertexCovered = false;
-		for (auto* p : particles) {
-			glm::vec3 d = p->position - e.edge.start;
-			if ((d.x * d.x + d.y * d.y) <= coverage2) {
-				vertexCovered = true;
-				break;
-			}
-		}
-		if (vertexCovered) {
-			anyCovered = true;
-			highestY = std::max(highestY, e.edge.start.y);
-		}
-	}
-
-	return anyCovered ? highestY : -INFINITY;
-}
-
-void FluidComponent::GetShapeBounds(const Shape& shape, glm::vec3& outMin, glm::vec3& outMax) {
-	std::visit([&](auto&& s) {
-		using T = std::decay_t<decltype(s)>;
-		if constexpr (std::is_same_v<T, RectangleShape>) {
-			outMin = s.center - glm::vec3(s.width * 0.5f, s.height * 0.5f, 0.0f);
-			outMax = s.center + glm::vec3(s.width * 0.5f, s.height * 0.5f, 0.0f);
-		}
-		else if constexpr (std::is_same_v<T, CircleShape>) {
-			outMin = s.center - glm::vec3(s.radius, s.radius, 0.0f);
-			outMax = s.center + glm::vec3(s.radius, s.radius, 0.0f);
-		}
-		else if constexpr (std::is_same_v<T, PolygonShape>) {
-			if (s.vertices.size() < 5) { outMin = outMax = glm::vec3(0.0f); return; }
-			outMin = glm::vec3(s.vertices[0], s.vertices[1], s.vertices[2]);
-			outMax = outMin;
-			for (size_t i = 0; i + 4 < s.vertices.size(); i += 5) {
-				glm::vec3 v(s.vertices[i], s.vertices[i + 1], s.vertices[i + 2]);
-				outMin = glm::min(outMin, v);
-				outMax = glm::max(outMax, v);
-			}
-		}
-		}, shape);
-}
-
-bool FluidComponent::IsPointInsideShape(const Shape& shape, const glm::vec3& point) {
-	return std::visit([&](auto&& s) -> bool {
-		using T = std::decay_t<decltype(s)>;
-		if constexpr (std::is_same_v<T, RectangleShape>) {
-			return std::abs(point.x - s.center.x) <= s.width * 0.5f &&
-				std::abs(point.y - s.center.y) <= s.height * 0.5f;
-		}
-		else if constexpr (std::is_same_v<T, CircleShape>) {
-			glm::vec2 d(point.x - s.center.x, point.y - s.center.y);
-			return glm::dot(d, d) <= s.radius * s.radius;
-		}
-		else if constexpr (std::is_same_v<T, PolygonShape>) {
-			bool inside = false;
-			size_t vertCount = s.vertices.size() / 5;
-			for (size_t i = 0, j = vertCount - 1; i < vertCount; j = i++) {
-				float xi = s.vertices[i * 5 + 0], yi = s.vertices[i * 5 + 1];
-				float xj = s.vertices[j * 5 + 0], yj = s.vertices[j * 5 + 1];
-				bool intersect = ((yi > point.y) != (yj > point.y)) &&
-					(point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
-				if (intersect) inside = !inside;
-			}
-			return inside;
-		}
-		return false;
-		}, shape);
 }

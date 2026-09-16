@@ -6,6 +6,7 @@
 #include "../../Components/TransformComponent.h"
 #include "../../Components/SoftBodyComponent.h"
 #include "../../Components/FluidComponent.h"
+#include "../../Components/GasComponent.h"
 #include "../../Components/CameraComponent.h"
 #include "../Physics/PhysicsEngine.h"
 #include "../Editor/InfiniteGrid.h"

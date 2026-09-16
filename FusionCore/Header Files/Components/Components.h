@@ -8,6 +8,7 @@
 #include "SoftBodyComponent.h"
 #include "FractureComponent.h"
 #include "FluidComponent.h"
+#include "GasComponent.h"
 #include "ScriptComponent.h"
 #include "CameraComponent.h"
 #include "EditorRenderComponent.h"
@@ -42,6 +43,9 @@ namespace {
 		}
 		if (name == "Fluid Component") {
 			return std::make_unique<FluidComponent>(parent);
+		}
+		if (name == "Gas Component") {
+			return std::make_unique<GasComponent>(parent);
 		}
 		if (name == "Camera Component") {
 			return std::make_unique<CameraComponent>(parent);
