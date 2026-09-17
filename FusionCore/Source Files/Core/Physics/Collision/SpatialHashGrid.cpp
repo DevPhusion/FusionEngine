@@ -4,14 +4,14 @@ SpatialHashGrid::SpatialHashGrid(float cellSize) {
 	this->cellSize = cellSize;
 }
 
-void SpatialHashGrid::Build(const std::vector<glm::vec3>& positions) {
+void SpatialHashGrid::Build(const std::vector<glm::vec3>& positions, const std::vector<int>& indices) {
 	cells.clear();
 	boundPositions = &positions;
-	
-	for (int i = 0; i < positions.size(); i++)
+
+	for (int idx : indices)
 	{
-		CellCoord cell = ToCellCoord(positions[i]);
-		cells[HashKey(cell.first, cell.second)].push_back(i);
+		CellCoord cell = ToCellCoord(positions[idx]);
+		cells[HashKey(cell.first, cell.second)].push_back(idx);
 	}
 }
 

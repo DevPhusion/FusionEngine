@@ -304,7 +304,7 @@
     <ClInclude Include="Header Files\Core\Physics\Constraint\XPBDConstraint\XPBDDistanceConstraint.h" />
     <ClInclude Include="Header Files\Core\Physics\Constraint\XPBDConstraint\XPBDProxyPointConstraint.h" />
     <ClInclude Include="Header Files\Core\Physics\Constraint\XPBDConstraint\XPBDTriAreaConstraint.h" />
-    <ClInclude Include="Header Files\Core\Physics\Particle.h" />
+    <ClInclude Include="Header Files\Core\Physics\ContinuumParticle.h" />
     <ClInclude Include="Header Files\Core\Physics\PhysicsBody.h" />
     <ClInclude Include="Header Files\Core\Physics\PhysicsEngine.h" />
     <ClInclude Include="Header Files\Core\Rendering\Renderer.h" />

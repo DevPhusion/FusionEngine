@@ -62,4 +62,4 @@ struct GasParticle {
     uint16_t collisionMask = 0xFFFF;
 };
 
-using Particle = std::variant<FluidParticle, GasParticle>;
+using ContinuumParticle = std::variant<FluidParticle*, GasParticle*>;

@@ -52,9 +52,22 @@ void FluidComponent::Deactivate() {
 }
 
 void FluidComponent::ClearParticles() {
-	auto& allParticles = PhysicsEngine::getInstance().allFluidParticles;
+	auto& allParticles = PhysicsEngine::getInstance().allContinuumParticles;
 	for (FluidParticle* p : particles) {
-		allParticles.erase(std::remove(allParticles.begin(), allParticles.end(), p), allParticles.end());
+		allParticles.erase(
+			std::remove_if(allParticles.begin(), allParticles.end(),
+				[p](const ContinuumParticle& v) {
+					return std::visit([p](auto&& stored) -> bool {
+						using T = std::decay_t<decltype(stored)>;
+						if constexpr (std::is_same_v<T, FluidParticle*>) {
+							return stored == p;
+						}
+						else {
+							return false;
+						}
+						}, v);
+				}),
+			allParticles.end());
 	}
 	for (FluidParticle* p : particles) {
 		delete p;
@@ -87,7 +100,7 @@ FluidParticle* FluidComponent::AddParticle(glm::vec3 worldPosition) {
 		p->collisionMask = cc->collisionMask;
 	}
 
-	PhysicsEngine::getInstance().allFluidParticles.push_back(p);
+	PhysicsEngine::getInstance().allContinuumParticles.push_back(p);
 	particles.push_back(p);
 
 	ResizeInstanceBuffer();
@@ -129,8 +142,21 @@ void FluidComponent::RemoveParticle(FluidParticle* particle) {
 
 	size_t index = std::distance(particles.begin(), it);
 
-	auto& allParticles = PhysicsEngine::getInstance().allFluidParticles;
-	allParticles.erase(std::remove(allParticles.begin(), allParticles.end(), particle), allParticles.end());
+	auto& allParticles = PhysicsEngine::getInstance().allContinuumParticles;
+	allParticles.erase(
+		std::remove_if(allParticles.begin(), allParticles.end(),
+			[particle](const ContinuumParticle& v) {
+				return std::visit([particle](auto&& stored) -> bool {
+					using T = std::decay_t<decltype(stored)>;
+					if constexpr (std::is_same_v<T, FluidParticle*>) {
+						return stored == particle;
+					}
+					else {
+						return false;
+					}
+					}, v);
+			}),
+		allParticles.end());
 
 	delete particle;
 	particles.erase(it);
@@ -198,7 +224,7 @@ void FluidComponent::SeedParticles() {
 			p->collisionLayer = p->collisionLayer;
 			p->collisionMask = p->collisionMask;
 		}
-		PhysicsEngine::getInstance().allFluidParticles.push_back(p);
+		PhysicsEngine::getInstance().allContinuumParticles.push_back(p);
 		particles.push_back(p);
 	}
 }

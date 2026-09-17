@@ -305,7 +305,7 @@ FluidSoftContact PhysicsEngine::DetectFluidSoftContact(const glm::vec3& particle
 }
 
 template<typename BoundaryT, typename ContactT, typename DetectFn>
-void PhysicsEngine::ResolveFluidBoundaryContactsGeneric(std::vector<FluidParticle*>& particles, std::vector<int>& indices,
+void PhysicsEngine::ResolveFluidBoundaryContactsGeneric(std::vector<ContinuumParticle>& particles, std::vector<int>& indices,
 	std::vector<BoundaryT>& boundaries, std::vector<ContactT>& outContacts, DetectFn detect) {
 
 	if (outContacts.size() != particles.size())
@@ -318,33 +318,40 @@ void PhysicsEngine::ResolveFluidBoundaryContactsGeneric(std::vector<FluidParticl
 
 	std::for_each(std::execution::par_unseq, indices.begin(), indices.end(),
 		[&](int i) {
-			FluidParticle* p = particles[i];
-			ContactT best;
-			best.penetration = -INFINITY;
+			std::visit([&](auto&& p) {
+				using T = std::decay_t<decltype(p)>;
+				if constexpr (std::is_same_v<T, FluidParticle*>) {
+					ContactT best;
+					best.penetration = -INFINITY;
 
-			for (int s = 0; s < (int)boundaries.size(); s++) {
-				if (boundaries[s].obj == p->parent) continue;
-				if (!layerOverlap(p->collisionLayer, p->collisionMask,
-					boundaries[s].collisionLayer, boundaries[s].collisionMask))
-					continue;
-				ContactT c = detect(p->predictedPosition, p->collisionRadius, boundaries[s], s);
-				if (c.hit && c.penetration > best.penetration) {
-					best = c;
+					for (int s = 0; s < (int)boundaries.size(); s++) {
+						if (boundaries[s].obj == p->parent) continue;
+						if (!layerOverlap(p->collisionLayer, p->collisionMask,
+							boundaries[s].collisionLayer, boundaries[s].collisionMask))
+							continue;
+						ContactT c = detect(p->predictedPosition, p->collisionRadius, boundaries[s], s);
+						if (c.hit && c.penetration > best.penetration) {
+							best = c;
+						}
+					}
+					if (!best.hit) best.penetration = 0.0f;
+
+					const float positionCorrectionFactor = 0.2f;
+					if (best.hit) {
+						p->predictedPosition += best.normal * (best.penetration * positionCorrectionFactor);
+					}
+
+					outContacts[i] = best;
 				}
-			}
-			if (!best.hit) best.penetration = 0.0f;
-
-			const float positionCorrectionFactor = 0.2f;
-			if (best.hit) {
-				p->predictedPosition += best.normal * (best.penetration * positionCorrectionFactor);
-			}
-
-			outContacts[i] = best;
+				else if constexpr (std::is_same_v<T, GasParticle*>) {
+					outContacts[i] = ContactT();
+				}
+				}, particles[i]);
 		});
 }
 
 void PhysicsEngine::ResolveFluidSoftContacts(float dtSub) {
-	ResolveFluidBoundaryContactsGeneric(allFluidParticles, particleIndices, softBoundaries, fluidSoftContacts,
+	ResolveFluidBoundaryContactsGeneric(allContinuumParticles, fluidIndices, softBoundaries, fluidSoftContacts,
 		[&](const glm::vec3& pos, float radius, const SoftBoundary& sb, int idx) -> FluidSoftContact {
 			FluidSoftContact c;
 			if (!sb.valid) return c;
@@ -359,42 +366,45 @@ void PhysicsEngine::ResolveFluidSoftImpulses(float dtSub) {
 	float beta = 0.2f;
 	float slop = 0.0005f;
 	float restitution = 0.0f;
-	float pressureGain = 5.0f;
-	float buoyancyDamping = 1.0f;
-	const float maxBiasVelocity = 2.0f;   
+	const float maxBiasVelocity = 2.0f;
 
 	for (int iter = 0; iter < contactIterations; iter++) {
-		for (int i = 0; i < (int)allFluidParticles.size(); i++) {
+		for (int i : fluidIndices) {
 			const FluidSoftContact& c = fluidSoftContacts[i];
 			if (!c.hit) continue;
 
-			FluidParticle* p = allFluidParticles[i];
-			SoftBoundary& soft = softBoundaries[c.softIndex];
-			const SoftEdge& se = soft.worldEdges[c.edgeIdx];
-			PointMass* pmA = soft.sb->MassAggregate[se.idxA].get();
-			PointMass* pmB = soft.sb->MassAggregate[se.idxB].get();
+			std::visit([&](auto&& pv) {
+				using T = std::decay_t<decltype(pv)>;
+				if constexpr (std::is_same_v<T, FluidParticle*>) {
+					FluidParticle* p = pv;
+					SoftBoundary& soft = softBoundaries[c.softIndex];
+					const SoftEdge& se = soft.worldEdges[c.edgeIdx];
+					PointMass* pmA = soft.sb->MassAggregate[se.idxA].get();
+					PointMass* pmB = soft.sb->MassAggregate[se.idxB].get();
 
-			float w1 = c.edgeT;
-			float w0 = 1.0f - w1;
+					float w1 = c.edgeT;
+					float w0 = 1.0f - w1;
 
-			float invMassEdge = pmA->inverseMass * w0 * w0 + pmB->inverseMass * w1 * w1;
-			float invMassSum = p->invMass + invMassEdge;
-			if (invMassSum <= 1e-8f) continue;
+					float invMassEdge = pmA->inverseMass * w0 * w0 + pmB->inverseMass * w1 * w1;
+					float invMassSum = p->invMass + invMassEdge;
+					if (invMassSum <= 1e-8f) return;
 
-			glm::vec3 edgeVel = pmA->velocity * w0 + pmB->velocity * w1;
-			glm::vec3 vRel = p->velocity - edgeVel;
-			float vn = glm::dot(vRel, c.normal);
+					glm::vec3 edgeVel = pmA->velocity * w0 + pmB->velocity * w1;
+					glm::vec3 vRel = p->velocity - edgeVel;
+					float vn = glm::dot(vRel, c.normal);
 
-			float bias = std::min((beta / dtSub) * std::max(0.0f, c.penetration - slop), maxBiasVelocity);
+					float bias = std::min((beta / dtSub) * std::max(0.0f, c.penetration - slop), maxBiasVelocity);
 
-			float lambda = (-(1.0f + restitution) * vn + bias) / invMassSum;
-			lambda = std::max(lambda, 0.0f);
+					float lambda = (-(1.0f + restitution) * vn + bias) / invMassSum;
+					lambda = std::max(lambda, 0.0f);
 
-			glm::vec3 impulse = lambda * c.normal;
+					glm::vec3 impulse = lambda * c.normal;
 
-			p->velocity += p->invMass * impulse;
-			pmA->velocity -= pmA->inverseMass * w0 * impulse;
-			pmB->velocity -= pmB->inverseMass * w1 * impulse;
+					p->velocity += p->invMass * impulse;
+					pmA->velocity -= pmA->inverseMass * w0 * impulse;
+					pmB->velocity -= pmB->inverseMass * w1 * impulse;
+				}
+				}, allContinuumParticles[i]);
 		}
 	}
 }
@@ -430,7 +440,7 @@ FluidRigidContact PhysicsEngine::DetectFluidRigidContact(const glm::vec3& partic
 }
 
 void PhysicsEngine::ResolveFluidRigidContacts(float dtSub) {
-	ResolveFluidBoundaryContactsGeneric(allFluidParticles, particleIndices, rigidBoundaries, fluidRigidContacts,
+	ResolveFluidBoundaryContactsGeneric(allContinuumParticles, fluidIndices, rigidBoundaries, fluidRigidContacts,
 		[&](const glm::vec3& pos, float radius, const RigidBoundary& rb, int idx) -> FluidRigidContact {
 			FluidRigidContact c = DetectFluidRigidContact(pos, radius, rb);
 			if (c.hit) c.rigidIndex = idx;
@@ -443,43 +453,48 @@ void PhysicsEngine::ResolveFluidRigidImpulses(float dtSub) {
 	float beta = 0.2f;
 	float slop = 0.0005f;
 	float restitution = 0.0f;
-	const float maxBiasVelocity = 2.0f; 
+	const float maxBiasVelocity = 2.0f;
 
 	for (int iter = 0; iter < contactIterations; iter++) {
-		for (int i = 0; i < (int)allFluidParticles.size(); i++) {
+		for (int i : fluidIndices) {
 			const FluidRigidContact& c = fluidRigidContacts[i];
 			if (!c.hit) continue;
 
-			FluidParticle* p = allFluidParticles[i];
-			RigidBoundary& rigid = rigidBoundaries[c.rigidIndex];
-			RigidBodyComponent* rb = rigid.rb;
+			std::visit([&](auto&& pv) {
+				using T = std::decay_t<decltype(pv)>;
+				if constexpr (std::is_same_v<T, FluidParticle*>) {
+					FluidParticle* p = pv;
+					RigidBoundary& rigid = rigidBoundaries[c.rigidIndex];
+					RigidBodyComponent* rb = rigid.rb;
 
-			float rbInvMass = rb ? rb->inverseMass : 0.0f;
-			float invMassSum = p->invMass + rbInvMass;
-			if (invMassSum <= 1e-8f) continue;
+					float rbInvMass = rb ? rb->inverseMass : 0.0f;
+					float invMassSum = p->invMass + rbInvMass;
+					if (invMassSum <= 1e-8f) return;
 
-			glm::vec3 velAtContact = rb
-				? rb->velocity + glm::vec3(-rb->angularVelocity * (c.point - rigid.worldCenter).y,
-					rb->angularVelocity * (c.point - rigid.worldCenter).x, 0.0f)
-				: glm::vec3(0.0f);
+					glm::vec3 velAtContact = rb
+						? rb->velocity + glm::vec3(-rb->angularVelocity * (c.point - rigid.worldCenter).y,
+							rb->angularVelocity * (c.point - rigid.worldCenter).x, 0.0f)
+						: glm::vec3(0.0f);
 
-			glm::vec3 vRel = p->velocity - velAtContact;
-			float vn = glm::dot(vRel, c.normal);
+					glm::vec3 vRel = p->velocity - velAtContact;
+					float vn = glm::dot(vRel, c.normal);
 
-			float bias = std::min((beta / dtSub) * std::max(0.0f, c.penetration - slop), maxBiasVelocity);
+					float bias = std::min((beta / dtSub) * std::max(0.0f, c.penetration - slop), maxBiasVelocity);
 
-			float lambda = (-(1.0f + restitution) * vn + bias) / invMassSum;
-			lambda = std::max(lambda, 0.0f);
+					float lambda = (-(1.0f + restitution) * vn + bias) / invMassSum;
+					lambda = std::max(lambda, 0.0f);
 
-			glm::vec3 impulse = lambda * c.normal;
+					glm::vec3 impulse = lambda * c.normal;
 
-			p->velocity += p->invMass * impulse;
-			if (rb) {
-				glm::vec3 r = c.point - rigid.worldCenter;
-				float angImpulse = r.x * impulse.y - r.y * impulse.x;
-				rb->velocity -= rbInvMass * impulse;
-				rb->angularVelocity -= rb->inverseInertia * angImpulse;
-			}
+					p->velocity += p->invMass * impulse;
+					if (rb) {
+						glm::vec3 r = c.point - rigid.worldCenter;
+						float angImpulse = r.x * impulse.y - r.y * impulse.x;
+						rb->velocity -= rbInvMass * impulse;
+						rb->angularVelocity -= rb->inverseInertia * angImpulse;
+					}
+				}
+				}, allContinuumParticles[i]);
 		}
 	}
 }
@@ -1455,11 +1470,16 @@ void PhysicsEngine::BroadcastCollision(Object* objA, int shapeIdA, Object* objB,
 
 void PhysicsEngine::BroadcastFluidRigidContacts() {
 	std::set<std::pair<Object*, Object*>> notified;
-	for (size_t i = 0; i < fluidRigidContacts.size(); i++) {
+	for (int i : fluidIndices) {
 		const FluidRigidContact& c = fluidRigidContacts[i];
 		if (!c.hit) continue;
 
-		Object* fluidObj = allFluidParticles[i]->parent;
+		Object* fluidObj = nullptr;
+		std::visit([&](auto&& p) {
+			using T = std::decay_t<decltype(p)>;
+			if constexpr (std::is_same_v<T, FluidParticle*>) fluidObj = p->parent;
+			}, allContinuumParticles[i]);
+
 		Object* rigidObj = rigidBoundaries[c.rigidIndex].obj;
 		if (!fluidObj || !rigidObj) continue;
 		if (!notified.insert({ fluidObj, rigidObj }).second) continue;
@@ -1470,11 +1490,16 @@ void PhysicsEngine::BroadcastFluidRigidContacts() {
 
 void PhysicsEngine::BroadcastFluidSoftContacts() {
 	std::set<std::pair<Object*, Object*>> notified;
-	for (size_t i = 0; i < fluidSoftContacts.size(); i++) {
+	for (int i : fluidIndices) {
 		const FluidSoftContact& c = fluidSoftContacts[i];
 		if (!c.hit) continue;
 
-		Object* fluidObj = allFluidParticles[i]->parent;
+		Object* fluidObj = nullptr;
+		std::visit([&](auto&& p) {
+			using T = std::decay_t<decltype(p)>;
+			if constexpr (std::is_same_v<T, FluidParticle*>) fluidObj = p->parent;
+			}, allContinuumParticles[i]);
+
 		Object* softObj = softBoundaries[c.softIndex].obj;
 		if (!fluidObj || !softObj) continue;
 		if (!notified.insert({ fluidObj, softObj }).second) continue;
@@ -1899,30 +1924,44 @@ void PhysicsEngine::RefreshSoftBoundariesSurface() {
 }
 
 void PhysicsEngine::ComputeFluidSurfaceQualification() {
-	if (fluidSurfaceQualifies.size() != allFluidParticles.size())
-		fluidSurfaceQualifies.resize(allFluidParticles.size());
+	if (fluidSurfaceQualifies.size() != allContinuumParticles.size())
+		fluidSurfaceQualifies.resize(allContinuumParticles.size());
 	
 	fluidBoundsMin = glm::vec3(INFINITY);
 	fluidBoundsMax = glm::vec3(-INFINITY);
-	for (auto* p : allFluidParticles) {
-		glm::vec3 r(p->collisionRadius);
-		fluidBoundsMin = glm::min(fluidBoundsMin, p->position - r);
-		fluidBoundsMax = glm::max(fluidBoundsMax, p->position + r);
+	for (int i : fluidIndices) {
+		std::visit([&](auto&& p) {
+			using T = std::decay_t<decltype(p)>;
+			if constexpr (std::is_same_v<T, FluidParticle*>) {
+				glm::vec3 r(p->collisionRadius);
+				fluidBoundsMin = glm::min(fluidBoundsMin, p->position - r);
+				fluidBoundsMax = glm::max(fluidBoundsMax, p->position + r);
+			}
+			}, allContinuumParticles[i]);
 	}
 	
-	std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+	std::for_each(std::execution::par_unseq, fluidIndices.begin(), fluidIndices.end(),
 		[&](int i) {
-			FluidParticle * c = allFluidParticles[i];
-			int neighborCount = 0;
-			for (int j : fluidNeighbors[i]) {
-				if (j == i) continue;
-				if (glm::distance(allFluidParticles[j]->position, c->position) <= c->smoothingRadius) {
-					neighborCount++;
-					if (neighborCount >= buoyancyMinNeighbours) break;
-					
+			std::visit([&](auto&& p) {
+				if constexpr (std::is_same_v<std::decay_t<decltype(p)>, FluidParticle*>) {
+					int neighborCount = 0;
+					for (int j : fluidNeighbors[i]) {
+						if (j == i) continue;
+						std::visit([&](auto&& pj) {
+							if constexpr (std::is_same_v<std::decay_t<decltype(pj)>, FluidParticle*>) {
+								if (glm::distance(pj->position, p->position) <= p->smoothingRadius) {
+									neighborCount++;
+								}
+							}
+							}, allContinuumParticles[j]);
+						if (neighborCount >= buoyancyMinNeighbours) break;
+					}
+					fluidSurfaceQualifies[i] = neighborCount >= buoyancyMinNeighbours;
 				}
-			}
-			fluidSurfaceQualifies[i] = neighborCount >= buoyancyMinNeighbours;
+				else if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
+					fluidSurfaceQualifies[i] = false; 
+				}
+				}, allContinuumParticles[i]);
 		});
 }
 
@@ -2704,143 +2743,164 @@ glm::vec3 PhysicsEngine::SpikyGradientKernel(float spikyCoeff, float h, float r,
 }
 
 void PhysicsEngine::SolvePBFLambda(int particleIdx, std::vector<int>& neighboursIdx) {
-	FluidParticle* pi = allFluidParticles[particleIdx];
-	float rho0 = pi->restDensity;
-	float h = pi->smoothingRadius;
-	float h2 = h * h;
-	float poly6Coeff = pi->poly6Coeff;
-	float spikyCoeff = pi->spikyCoeff;
+	std::visit([&](auto&& pi) {
+		float rho0 = pi->restDensity;
+		float h = pi->smoothingRadius;
+		float h2 = h * h;
+		float poly6Coeff = pi->poly6Coeff;
+		float spikyCoeff = pi->spikyCoeff;
 
-	float restDensity = 0.0f;
-	glm::vec3 gradSelf(0.0f);
-	float sumGradSq = 0.0f;
+		float restDensity = 0.0f;
+		glm::vec3 gradSelf(0.0f);
+		float sumGradSq = 0.0f;
 
-	for (int j : neighboursIdx) {
-		FluidParticle* pj = allFluidParticles[j];
-		glm::vec3 rVec = pi->predictedPosition - pj->predictedPosition;
-		float r2 = glm::length2(rVec);
-		if (r2 > h2) continue;
+		for (int j : neighboursIdx) {
+			std::visit([&](auto&& pj) {
+				glm::vec3 rVec = pi->predictedPosition - pj->predictedPosition;
+				float r2 = glm::length2(rVec);
+				if (r2 <= h2) {
+					restDensity += pj->mass * Poly6Kernel(poly6Coeff, h2, r2);
 
-		restDensity += pj->mass * Poly6Kernel(poly6Coeff, h2, r2);
+					float r = std::sqrt(r2);
+					glm::vec3 grad = SpikyGradientKernel(spikyCoeff, h, r, rVec) / rho0;
+					sumGradSq += glm::dot(grad, grad);
+					gradSelf += grad;
+				}
+				},
+				allContinuumParticles[j]);
 
-		float r = std::sqrt(r2);
-		glm::vec3 grad = SpikyGradientKernel(spikyCoeff, h, r, rVec) / rho0;
-		sumGradSq += glm::dot(grad, grad);
-		gradSelf += grad;
-	}
-	sumGradSq += glm::dot(gradSelf, gradSelf);
+		}
+		sumGradSq += glm::dot(gradSelf, gradSelf);
 
-	float C = restDensity / rho0 - 1.0f;
-	pi->density = restDensity;
-	pi->lambda = -C / (sumGradSq + pi->epsilon);
+		float C = restDensity / rho0 - 1.0f;
+		pi->density = restDensity;
+		if constexpr(std::is_same_v<std::decay_t<decltype(pi)>, FluidParticle*>) {
+			pi->lambda = -C / (sumGradSq + pi->epsilon);
+		}
+		if constexpr (std::is_same_v<std::decay_t<decltype(pi)>, GasParticle*>) {
+			pi->lambda += (-C - pi->compliance * pi->lambda) / (sumGradSq + pi->compliance);
+		}
+	}, allContinuumParticles[particleIdx]);
 }
 
 void PhysicsEngine::SolvePBFPosition(int particleIdx, std::vector<int>& neighboursIdx, std::vector<glm::vec3>& outPositions) {
-	FluidParticle* pi = allFluidParticles[particleIdx];
-	float rho0 = pi->restDensity;
-	float h = pi->smoothingRadius;
-	float h2 = h * h;
-	float poly6Coeff = pi->poly6Coeff;
-	float spikyCoeff = pi->spikyCoeff;
+	std::visit([&](auto&& pi) {
+		float rho0 = pi->restDensity;
+		float h = pi->smoothingRadius;
+		float h2 = h * h;
+		float poly6Coeff = pi->poly6Coeff;
+		float spikyCoeff = pi->spikyCoeff;
 
-	float deltaQ = 0.2f * h;
-	float wq = Poly6Kernel(poly6Coeff, h2, deltaQ * deltaQ);
-	bool wqValid = wq > 1e-8f;
+		float deltaQ = 0.2f * h;
+		float wq = Poly6Kernel(poly6Coeff, h2, deltaQ * deltaQ);
+		bool wqValid = wq > 1e-8f;
 
-	glm::vec3 deltaP(0.0f);
-	for (int j : neighboursIdx) {
-		FluidParticle* pj = allFluidParticles[j];
-		glm::vec3 rVec = pi->predictedPosition - pj->predictedPosition;
-		float r2 = rVec.x * rVec.x + rVec.y * rVec.y + rVec.z * rVec.z;
-		if (r2 > h2) continue;
+		glm::vec3 deltaP(0.0f);
+		for (int j : neighboursIdx) {
+			std::visit([&](auto&& pj) {
+				glm::vec3 rVec = pi->predictedPosition - pj->predictedPosition;
+				float r2 = rVec.x * rVec.x + rVec.y * rVec.y + rVec.z * rVec.z;
+				if (r2 <= h2) {
 
-		float r = std::sqrt(r2);
+					float r = std::sqrt(r2);
 
-		float sCorr = 0.0f;
-		if (wqValid) {
-			float w = Poly6Kernel(poly6Coeff, h2, r2);
-			float x = w / wq;
-			float x2 = x * x;
-			sCorr = -0.1f * (x2 * x2);
+					float sCorr = 0.0f;
+					if (wqValid) {
+						float w = Poly6Kernel(poly6Coeff, h2, r2);
+						float x = w / wq;
+						float x2 = x * x;
+						sCorr = -0.1f * (x2 * x2);
+					}
+
+					glm::vec3 grad = SpikyGradientKernel(spikyCoeff, h, r, rVec);
+
+					deltaP += (pi->lambda + pj->lambda + sCorr) * grad;
+				}
+			}, allContinuumParticles[j]);
 		}
 
-		glm::vec3 grad = SpikyGradientKernel(spikyCoeff, h, r, rVec);
-
-		deltaP += (pi->lambda + pj->lambda + sCorr) * grad;
-	}
-
-	glm::vec3 result = pi->predictedPosition + deltaP / rho0;
-	outPositions[particleIdx] = result;
+		glm::vec3 result = pi->predictedPosition + deltaP / rho0;
+		outPositions[particleIdx] = result;
+	}, allContinuumParticles[particleIdx]);
+	
 }
 
 void PhysicsEngine::SolveXSPHViscosity(int particleIdx, std::vector<int>& neighboursIdx, std::vector<glm::vec3>& outDeltas) {
-	FluidParticle* pi = allFluidParticles[particleIdx];
-	float h2 = pi->smoothingRadius * pi->smoothingRadius;
-	float poly6Coeff = pi->poly6Coeff;
+	std::visit([&](auto&& pi) {
+		float h2 = pi->smoothingRadius * pi->smoothingRadius;
+		float poly6Coeff = pi->poly6Coeff;
 
-	glm::vec3 delta(0.0f);
-	for (int j : neighboursIdx) {
-		FluidParticle* pj = allFluidParticles[j];
-		glm::vec3 rVec = pi->position - pj->position;
-		float r2 = glm::dot(rVec, rVec);
-		if (r2 > h2) continue;
-
-		float w = Poly6Kernel(poly6Coeff, h2, r2);
-		delta += w * (pj->velocity - pi->velocity);
-	}
-	outDeltas[particleIdx] = pi->viscosity * delta;
+		glm::vec3 delta(0.0f);
+		for (int j : neighboursIdx) {
+			std::visit([&](auto&& pj) {
+				glm::vec3 rVec = pi->position - pj->position;
+				float r2 = glm::dot(rVec, rVec);
+				if (r2 <= h2) {
+					float w = Poly6Kernel(poly6Coeff, h2, r2);
+					delta += w * (pj->velocity - pi->velocity);
+				}
+			}, allContinuumParticles[j]);
+		}
+		outDeltas[particleIdx] = pi->viscosity * delta;
+	}, allContinuumParticles[particleIdx]);
 }
 
 void PhysicsEngine::SolveVorticityConfinement(int particleIdx, std::vector<int>& neighboursIdx, std::vector<float>& omega, std::vector<glm::vec3>& outForce) {
-	FluidParticle* pi = allFluidParticles[particleIdx];
-	float h = pi->smoothingRadius;
-	float spikyCoeff = pi->spikyCoeff;
+	std::visit([&](auto&& pi) {
+		float h = pi->smoothingRadius;
+		float spikyCoeff = pi->spikyCoeff;
 
-	glm::vec3 eta(0.0f);
-	for (int j : neighboursIdx) {
-		FluidParticle* pj = allFluidParticles[j];
-		glm::vec3 rVec = pi->position - pj->position;
-		float r2 = glm::dot(rVec, rVec);
-		if (r2 > h * h) continue;
-		float r = std::sqrt(r2);
-		if (r < 1e-6f) continue;
+		glm::vec3 eta(0.0f);
+		for (int j : neighboursIdx) {
+			std::visit([&](auto&& pj) {
+				glm::vec3 rVec = pi->position - pj->position;
+				float r2 = glm::dot(rVec, rVec);
+				if (r2 <= h * h) {
+					float r = std::sqrt(r2);
+					if (r >= 1e-6f) {
+						glm::vec3 grad = SpikyGradientKernel(spikyCoeff, h, r, rVec);
 
-		glm::vec3 grad = SpikyGradientKernel(spikyCoeff, h, r, rVec);
+						eta += std::abs(omega[j]) * grad;
+					}
+				}
+			}, allContinuumParticles[j]);
+		}
 
-		eta += std::abs(omega[j]) * grad;
-	}
+		float etaLen = glm::length(eta);
+		if (etaLen < 1e-6f) { outForce[particleIdx] = glm::vec3(0.0f); return; }
 
-	float etaLen = glm::length(eta);
-	if (etaLen < 1e-6f) { outForce[particleIdx] = glm::vec3(0.0f); return; }
+		glm::vec3 N = eta / etaLen;
+		glm::vec3 omegaVec = glm::vec3(0.0f, 0.0f, omega[particleIdx]);
 
-	glm::vec3 N = eta / etaLen;
-	glm::vec3 omegaVec = glm::vec3(0.0f, 0.0f, omega[particleIdx]);
-
-	outForce[particleIdx] = pi->vorticityEps * glm::cross(N, omegaVec);
+		outForce[particleIdx] = pi->vorticityEps * glm::cross(N, omegaVec);
+	}, allContinuumParticles[particleIdx]);	
 }
 
 void PhysicsEngine::ComputeVorticity(int particleIdx, std::vector<int>& neighboursIdx, std::vector<float>& outOmegas) {
-	FluidParticle* pi = allFluidParticles[particleIdx];
-	float h = pi->smoothingRadius;
-	float spikyCoeff = pi->spikyCoeff;
+	std::visit([&](auto&& pi) {
+		float h = pi->smoothingRadius;
+		float spikyCoeff = pi->spikyCoeff;
 
-	float omega = 0.0f;
-	for (int j : neighboursIdx)
-	{
-		FluidParticle* pj = allFluidParticles[j];
-		glm::vec3 rVec = pi->position - pj->position;
-		float r2 = glm::dot(rVec, rVec);
-		if (r2 > h * h) continue;
-		float r = std::sqrt(r2);
-		if (r < 1e-6f) continue;
+		float omega = 0.0f;
+		for (int j : neighboursIdx)
+		{
+			std::visit([&](auto&& pj) {
+				glm::vec3 rVec = pi->position - pj->position;
+				float r2 = glm::dot(rVec, rVec);
+				if (r2 <= h * h) {
+					float r = std::sqrt(r2);
+					if (r < 1e-6f) {
+						glm::vec3 grad = SpikyGradientKernel(spikyCoeff, h, r, rVec);
 
-		glm::vec3 grad = SpikyGradientKernel(spikyCoeff, h, r, rVec);
+						glm::vec3 vij = pj->velocity - pi->velocity;
+						omega += vij.x * grad.y - vij.y * grad.x;
+					}
+				}
+			}, allContinuumParticles[j]);
+		}
 
-		glm::vec3 vij = pj->velocity - pi->velocity;
-		omega += vij.x * grad.y - vij.y * grad.x;
-	}
-
-	outOmegas[particleIdx] = omega;
+		outOmegas[particleIdx] = omega;
+	}, allContinuumParticles[particleIdx]);
 }
 
 bool PhysicsEngine::FindLocalFluidSurface(const glm::vec3& bMin, const glm::vec3& bMax,
@@ -2856,25 +2916,28 @@ bool PhysicsEngine::FindLocalFluidSurface(const glm::vec3& bMin, const glm::vec3
 	float fallbackRestDensity = 0.0f;
 	bool haveFallback = false;
 
-	for (size_t idx = 0; idx < allFluidParticles.size(); idx++) {
+	for (size_t idx = 0; idx < allContinuumParticles.size(); idx++) {
 		if (!fluidSurfaceQualifies[idx]) continue;
-		FluidParticle* c = allFluidParticles[idx];
 
-		if (!layerOverlap(c->collisionLayer, c->collisionMask, boundaryLayer, boundaryMask)) continue;
+		std::visit([&](auto&& p) {
+			if constexpr (std::is_same_v<std::decay_t<decltype(p)>, FluidParticle*>) {
+				if (!layerOverlap(p->collisionLayer, p->collisionMask, boundaryLayer, boundaryMask)) return;
 
-		glm::vec3 r(c->collisionRadius);
-		glm::vec3 pMin = c->position - r;
-		glm::vec3 pMax = c->position + r;
-		if (pMin.x > bMax.x || pMax.x < bMin.x) continue;
+				glm::vec3 r(p->collisionRadius);
+				glm::vec3 pMin = p->position - r;
+				glm::vec3 pMax = p->position + r;
+				if (pMin.x > bMax.x || pMax.x < bMin.x) return;
 
-		surfaceY = std::max(surfaceY, c->position.y);
-		foundSurface = true;
+				surfaceY = std::max(surfaceY, p->position.y);
+				foundSurface = true;
 
-		if (!haveFallback) { fallbackRestDensity = 0.0f; haveFallback = true; }
+				if (!haveFallback) { fallbackRestDensity = 0.0f; haveFallback = true; }
 
-		if (pMin.y > bMax.y || pMax.y < bMin.y) continue;
-		rho0Sum += c->density;
-		rho0Count++;
+				if (pMin.y > bMax.y || pMax.y < bMin.y) return;
+				rho0Sum += p->density;
+				rho0Count++;
+			}
+		}, allContinuumParticles[idx]);
 	}
 	if (!foundSurface) return false;
 
@@ -2951,7 +3014,7 @@ void PhysicsEngine::ApplySoftBuoyancy(float dtSub) {
 }
 
 void PhysicsEngine::ResolvePBF(float delta) {
-	if (allFluidParticles.empty()) return;
+	if (allContinuumParticles.empty()) return;
 
 	int pbfSubsteps = 2;
 	float dtSub = delta / pbfSubsteps;
@@ -2959,9 +3022,26 @@ void PhysicsEngine::ResolvePBF(float delta) {
 	GenerateRigidBoundaries();
 	GenerateSoftBoundaries();
 
-	if (particleIndices.size() != allFluidParticles.size()) {
-		particleIndices.resize(allFluidParticles.size());
-		std::iota(particleIndices.begin(), particleIndices.end(), 0);
+	fluidIndices.clear();
+	gasIndices.clear();
+	for (int i = 0; i < allContinuumParticles.size(); i++)
+	{
+		std::visit([&](auto&& p) {
+			if constexpr (std::is_same_v<std::decay_t<decltype(p)>, FluidParticle*>) {
+				fluidIndices.push_back(i);
+			}
+			if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
+				gasIndices.push_back(i);
+			}
+		}, allContinuumParticles[i]);
+	}
+
+	for (auto& gasIndex : gasIndices) {
+		std::visit([&](auto&& p) {
+			if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
+				p->lambda = 0;
+			}
+			}, allContinuumParticles[gasIndex]);
 	}
 
 	for (int sub = 0; sub < pbfSubsteps; sub++) {
@@ -2970,34 +3050,68 @@ void PhysicsEngine::ResolvePBF(float delta) {
 
 		{
 			TIME_BLOCK("Predict Positions");
-			std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+			std::for_each(std::execution::par_unseq, fluidIndices.begin(), fluidIndices.end(),
 				[&](int i) {
-					FluidParticle* p = allFluidParticles[i];
-					p->velocity += dtSub * glm::vec3(0.0f, -9.8f, 0.0f);
-					p->predictedPosition = p->position + dtSub * p->velocity;
+					std::visit([&](auto&& p) {
+						p->velocity += dtSub * glm::vec3(0.0f, -9.8f, 0.0f);
+						p->predictedPosition = p->position + dtSub * p->velocity;
+					}, allContinuumParticles[i]);
+				});
+			std::for_each(std::execution::par_unseq, gasIndices.begin(), gasIndices.end(),
+				[&](int i) {
+					std::visit([&](auto&& p) {
+						p->velocity += dtSub * glm::vec3(0.0f, -9.8f, 0.0f);
+						p->predictedPosition = p->position + dtSub * p->velocity;
+						}, allContinuumParticles[i]);
 				});
 		}
 
-		std::vector<glm::vec3> predicted;
-		predicted.resize(allFluidParticles.size());
-		float max_smoothing = 0.0f;
-		for (size_t i = 0; i < allFluidParticles.size(); i++) {
-			predicted[i] = allFluidParticles[i]->predictedPosition;
-			max_smoothing = std::max(allFluidParticles[i]->smoothingRadius, max_smoothing);
+		std::vector<glm::vec3> predictedFluid;
+		predictedFluid.resize(allContinuumParticles.size());
+		std::vector<glm::vec3> predictedGas;
+		predictedGas.resize(allContinuumParticles.size());
+		float max_smoothing_fluid = 0.0f;
+		float max_smoothing_gas = 0.0f;
+		for (size_t i = 0; i < allContinuumParticles.size(); i++) {
+			std::visit([&](auto&& p) {
+				if constexpr (std::is_same_v<std::decay_t<decltype(p)>, FluidParticle*>) {
+					predictedFluid[i] = p->predictedPosition;
+				}
+				if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
+					predictedGas[i] = p->predictedPosition;
+				}
+			}, allContinuumParticles[i]);
+
+			std::visit([&](auto&& p) {
+				if constexpr (std::is_same_v<std::decay_t<decltype(p)>, FluidParticle*>) {
+					max_smoothing_fluid = std::max(max_smoothing_fluid, p->smoothingRadius);
+				}
+				if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
+					max_smoothing_gas = std::max(max_smoothing_gas, p->smoothingRadius);
+				}
+			}, allContinuumParticles[i]);
 		}
 
 		{
 			TIME_BLOCK("Grid Build");
-			SpatialGrid.cellSize = max_smoothing;
-			SpatialGrid.Build(predicted);
+			FluidSpatialGrid.cellSize = max_smoothing_fluid;
+			FluidSpatialGrid.Build(predictedFluid, fluidIndices);
+			GasSpatialGrid.cellSize = max_smoothing_gas;
+			GasSpatialGrid.Build(predictedGas, gasIndices);
 		}
 
-		fluidNeighbors.assign(allFluidParticles.size(), {});
+		fluidNeighbors.assign(allContinuumParticles.size(), {});
+		gasNeighbors.assign(allContinuumParticles.size(), {});
 		{
 			TIME_BLOCK("Neighbor Query");
-			std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+			std::for_each(std::execution::par_unseq, fluidIndices.begin(), fluidIndices.end(),
 				[&](int i) {
-					SpatialGrid.QueryNeighbourCells(predicted[i], fluidNeighbors[i]);
+					FluidSpatialGrid.QueryNeighbourCells(predictedFluid[i], fluidNeighbors[i]);
+				});
+
+			std::for_each(std::execution::par_unseq, gasIndices.begin(), gasIndices.end(),
+				[&](int i) {
+					GasSpatialGrid.QueryNeighbourCells(predictedGas[i], gasNeighbors[i]);
 				});
 		}
 
@@ -3025,20 +3139,41 @@ void PhysicsEngine::ResolvePBF(float delta) {
 			{
 				{
 					TIME_BLOCK("Solve Lambda");
-					std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+					std::for_each(std::execution::par_unseq, fluidIndices.begin(), fluidIndices.end(),
 						[&](int i) { SolvePBFLambda(i, fluidNeighbors[i]); });
+
+
+					for (auto& gasIndex : gasIndices) {
+						std::visit([&](auto&& p) {
+							if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
+								p->compliance = 1 / (p->stiffness * dtSub * dtSub);
+							}
+							}, allContinuumParticles[gasIndex]);
+					}
+
+					std::for_each(std::execution::par_unseq, gasIndices.begin(), gasIndices.end(),
+						[&](int i) {
+							SolvePBFLambda(i, gasNeighbors[i]); }
+					);
 				}
 
-				if (correctedPositions.size() != allFluidParticles.size())
-					correctedPositions.resize(allFluidParticles.size());
+				if (correctedPositions.size() != allContinuumParticles.size())
+					correctedPositions.resize(allContinuumParticles.size());
 
 				{
 					TIME_BLOCK("Solve Position");
-					std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+					std::for_each(std::execution::par_unseq, fluidIndices.begin(), fluidIndices.end(),
 						[&](int i) { SolvePBFPosition(i, fluidNeighbors[i], correctedPositions); });
 
-					std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
-						[&](int i) { allFluidParticles[i]->predictedPosition = correctedPositions[i]; });
+					std::for_each(std::execution::par_unseq, gasIndices.begin(), gasIndices.end(),
+						[&](int i) { SolvePBFPosition(i, gasNeighbors[i], correctedPositions); });
+
+					std::for_each(std::execution::par_unseq, fluidIndices.begin(), fluidIndices.end(),
+						[&](int i) { std::visit([&](auto&& p) { p->predictedPosition = correctedPositions[i]; }, allContinuumParticles[i]); });
+
+
+					std::for_each(std::execution::par_unseq, gasIndices.begin(), gasIndices.end(),
+						[&](int i) { std::visit([&](auto&& p) { p->predictedPosition = correctedPositions[i]; }, allContinuumParticles[i]); });
 				}
 			}
 		}
@@ -3056,11 +3191,19 @@ void PhysicsEngine::ResolvePBF(float delta) {
 
 		{
 			TIME_BLOCK("Velocity update");
-			std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+			std::for_each(std::execution::par_unseq, fluidIndices.begin(), fluidIndices.end(),
 				[&](int i) {
-					FluidParticle* p = allFluidParticles[i];
-					p->velocity = (1 / dtSub) * (p->predictedPosition - p->position);
-					p->position = p->predictedPosition;
+					std::visit([&](auto&& p) {
+						p->velocity = (1 / dtSub) * (p->predictedPosition - p->position);
+						p->position = p->predictedPosition;
+					}, allContinuumParticles[i]);
+				});
+			std::for_each(std::execution::par_unseq, gasIndices.begin(), gasIndices.end(),
+				[&](int i) {
+					std::visit([&](auto&& p) {
+						p->velocity = (1 / dtSub) * (p->predictedPosition - p->position);
+						p->position = p->predictedPosition;
+						}, allContinuumParticles[i]);
 				});
 		}
 
@@ -3076,29 +3219,44 @@ void PhysicsEngine::ResolvePBF(float delta) {
 
 		{
 			TIME_BLOCK("Vorticity");
-			if (vorticityOmegas.size() != allFluidParticles.size()) vorticityOmegas.resize(allFluidParticles.size());
-			if (vorticityForces.size() != allFluidParticles.size()) vorticityForces.resize(allFluidParticles.size());
+			if (vorticityOmegas.size() != allContinuumParticles.size()) vorticityOmegas.resize(allContinuumParticles.size());
+			if (vorticityForces.size() != allContinuumParticles.size()) vorticityForces.resize(allContinuumParticles.size());
 
-			std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+			std::for_each(std::execution::par_unseq, fluidIndices.begin(), fluidIndices.end(),
 				[&](int i) { ComputeVorticity(i, fluidNeighbors[i], vorticityOmegas); });
 
-			std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+			std::for_each(std::execution::par_unseq, fluidIndices.begin(), fluidIndices.end(),
 				[&](int i) { SolveVorticityConfinement(i, fluidNeighbors[i], vorticityOmegas, vorticityForces); });
 
-			std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
-				[&](int i) { allFluidParticles[i]->velocity += vorticityForces[i] * dtSub; });
+			std::for_each(std::execution::par_unseq, fluidIndices.begin(), fluidIndices.end(),
+				[&](int i) { std::visit([&](auto&& p) { p->velocity += vorticityForces[i] * dtSub; }, allContinuumParticles[i]); });
+
+			std::for_each(std::execution::par_unseq, gasIndices.begin(), gasIndices.end(),
+				[&](int i) { ComputeVorticity(i, gasNeighbors[i], vorticityOmegas); });
+
+			std::for_each(std::execution::par_unseq, gasIndices.begin(), gasIndices.end(),
+				[&](int i) { SolveVorticityConfinement(i, gasNeighbors[i], vorticityOmegas, vorticityForces); });
+
+			std::for_each(std::execution::par_unseq, gasIndices.begin(), gasIndices.end(),
+				[&](int i) { std::visit([&](auto&& p) { p->velocity += vorticityForces[i] * dtSub; }, allContinuumParticles[i]); });
 		}
 
 		{
 			TIME_BLOCK("Viscosity");
-			if (viscosityDeltas.size() != allFluidParticles.size())
-				viscosityDeltas.resize(allFluidParticles.size());
+			if (viscosityDeltas.size() != allContinuumParticles.size())
+				viscosityDeltas.resize(allContinuumParticles.size());
 
-			std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
+			std::for_each(std::execution::par_unseq, fluidIndices.begin(), fluidIndices.end(),
 				[&](int i) { SolveXSPHViscosity(i, fluidNeighbors[i], viscosityDeltas); });
 
-			std::for_each(std::execution::par_unseq, particleIndices.begin(), particleIndices.end(),
-				[&](int i) { allFluidParticles[i]->velocity += viscosityDeltas[i]; });
+			std::for_each(std::execution::par_unseq, fluidIndices.begin(), fluidIndices.end(),
+				[&](int i) { std::visit([&](auto&& p) { p->velocity += viscosityDeltas[i]; }, allContinuumParticles[i]); });
+
+			std::for_each(std::execution::par_unseq, gasIndices.begin(), gasIndices.end(),
+				[&](int i) { SolveXSPHViscosity(i, gasNeighbors[i], viscosityDeltas); });
+
+			std::for_each(std::execution::par_unseq, gasIndices.begin(), gasIndices.end(),
+				[&](int i) { std::visit([&](auto&& p) { p->velocity += viscosityDeltas[i]; }, allContinuumParticles[i]); });
 		}
 	}
 }

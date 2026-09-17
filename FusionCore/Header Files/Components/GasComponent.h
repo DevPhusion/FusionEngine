@@ -1,6 +1,6 @@
 #pragma once
 #include "Component.h"
-#include "../Core/Physics/Particle.h"
+#include "../Core/Physics/ContinuumParticle.h"
 
 class GasComponent : public ComponentBase<GasComponent>
 {

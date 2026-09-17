@@ -297,7 +297,7 @@ public:
 	//Fluid collision
 	FluidSoftContact DetectFluidSoftContact(const glm::vec3& particlePos, float radius, const SoftBoundary& soft);
 	template<typename BoundaryT, typename ContactT, typename DetectFn>
-	void ResolveFluidBoundaryContactsGeneric(std::vector<FluidParticle*>& particles, std::vector<int>& indices,
+	void ResolveFluidBoundaryContactsGeneric(std::vector<ContinuumParticle>& particles, std::vector<int>& indices,
 		std::vector<BoundaryT>& boundaries, std::vector<ContactT>& outContacts, DetectFn detect);
 	void ResolveFluidSoftContacts(float dtSub);
 	void ResolveFluidSoftImpulses(float dtSub);
@@ -403,10 +403,13 @@ public:
 	void ResolveXPBDConstraints(float delta);
 
 	//PBF resolution
-	SpatialHashGrid SpatialGrid = SpatialHashGrid(1.0f);
-	std::vector<FluidParticle*> allFluidParticles;
-	std::vector<int> particleIndices;
+	SpatialHashGrid FluidSpatialGrid = SpatialHashGrid(1.0f);
+	SpatialHashGrid GasSpatialGrid = SpatialHashGrid(1.0f);
+	std::vector<ContinuumParticle> allContinuumParticles;
+	std::vector<int> fluidIndices;
+	std::vector<int> gasIndices;
 	std::vector<std::vector<int>> fluidNeighbors;
+	std::vector<std::vector<int>> gasNeighbors;
 	std::vector<glm::vec3> correctedPositions;
 	std::vector<glm::vec3> viscosityDeltas;
 	std::vector<float> vorticityOmegas;
@@ -414,7 +417,7 @@ public:
 	std::vector<char> fluidSurfaceQualifies;
 	glm::vec3 fluidBoundsMin = glm::vec3(INFINITY);
 	glm::vec3 fluidBoundsMax = glm::vec3(-INFINITY);
-	float buoyancyMinNeighbours = 4;
+	int buoyancyMinNeighbours = 4;
 	float Poly6Coefficient(float h);
 	float SpikyCoefficient(float h);
 	float Poly6Kernel(float poly6Coeff, float h2, float r2);

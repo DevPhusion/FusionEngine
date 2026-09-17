@@ -11,7 +11,7 @@ public:
 
 	float cellSize;
 
-	void Build(const std::vector<glm::vec3>& positions);
+	void Build(const std::vector<glm::vec3>& positions, const std::vector<int>& indices);
 	void Query(const glm::vec3& position, float radius, std::vector<int>& outIndices);
 	void QueryNeighbourCells(const glm::vec3& position, std::vector<int>& outIndices);
 	void Clear();

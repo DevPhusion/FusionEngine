@@ -2,7 +2,7 @@
 #include "Component.h"
 #include "../Objects/Object.h"
 #include "../Core/EngineManager.h"
-#include "../Core/Physics/Particle.h"
+#include "../Core/Physics/ContinuumParticle.h"
 #include <unordered_set>
 
 struct RigidBoundary;

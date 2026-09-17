@@ -53,10 +53,23 @@ void GasComponent::Deactivate() {
 }
 
 void GasComponent::ClearParticles() {
-	//auto& allParticles = PhysicsEngine::getInstance().allFluidParticles;
-	//for (GasParticle* p : particles) {
-	//	allParticles.erase(std::remove(allParticles.begin(), allParticles.end(), p), allParticles.end());
-	//}
+	auto& allParticles = PhysicsEngine::getInstance().allContinuumParticles;
+	for (GasParticle* p : particles) {
+		allParticles.erase(
+			std::remove_if(allParticles.begin(), allParticles.end(),
+				[p](const ContinuumParticle& v) {
+					return std::visit([p](auto&& stored) -> bool {
+						using T = std::decay_t<decltype(stored)>;
+						if constexpr (std::is_same_v<T, GasParticle*>) {
+							return stored == p;
+						}
+						else {
+							return false;
+						}
+						}, v);
+				}),
+			allParticles.end());
+	}
 	for (GasParticle* p : particles) {
 		delete p;
 	}
@@ -125,7 +138,7 @@ void GasComponent::SeedParticles() {
 			p->collisionLayer = p->collisionLayer;
 			p->collisionMask = p->collisionMask;
 		}
-		//PhysicsEngine::getInstance().allFluidParticles.push_back(p);
+		PhysicsEngine::getInstance().allContinuumParticles.push_back(p);
 		particles.push_back(p);
 	}
 }

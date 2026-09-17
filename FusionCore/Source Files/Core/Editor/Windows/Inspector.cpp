@@ -54,7 +54,7 @@ namespace {
 }
 
 
-Inspector::Inspector(std::string main) : EditorWindow(main) {
+Inspector::Inspector(std::string name) : EditorWindow(name) {
 
 }
 
