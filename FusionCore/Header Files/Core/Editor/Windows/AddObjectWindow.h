@@ -6,7 +6,7 @@
 class AddObjectWindow : public EditorWindow
 {
 public:
-	std::vector<std::string> ObjectTypes = {"Object", "Camera", "Rigid Box", "Rigid Circle", "Rigid Polygon", "Soft Box", "Soft Circle", "Soft Polygon", "Fluid"};
+	std::vector<std::string> ObjectTypes = {"Object", "Camera", "Rigid Box", "Rigid Circle", "Rigid Polygon", "Soft Box", "Soft Circle", "Soft Polygon", "Fluid", "Gas"};
 	std::string SelectedType = "";
 	Object* parent = nullptr;
 

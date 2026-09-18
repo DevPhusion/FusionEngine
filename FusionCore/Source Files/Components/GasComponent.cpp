@@ -135,8 +135,8 @@ void GasComponent::SeedParticles() {
 		p->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(smoothingRadius);
 		p->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(smoothingRadius);
 		if (cc) {
-			p->collisionLayer = p->collisionLayer;
-			p->collisionMask = p->collisionMask;
+			p->collisionLayer = cc->collisionLayer;
+			p->collisionMask = cc->collisionMask;
 		}
 		PhysicsEngine::getInstance().allContinuumParticles.push_back(p);
 		particles.push_back(p);
@@ -164,6 +164,12 @@ void GasComponent::ProcessInspectorUI() {
 			});
 
 		EditorField::InputFloatScene(parent, "Metaball Threshold", "##MetaballThreshold", &metaballThreshold, [] {});
+
+		EditorField::InputFloatScene(parent, "Noise Scale", "##NoiseScale", &noiseScale, [] {});
+		
+		EditorField::InputFloatScene(parent, "Noise Strength", "##NoiseStrength", &noiseStrength, [] {});
+		
+		EditorField::InputFloatScene(parent, "Rise Speed", "##RiseSpeed", &riseSpeed, [] {});
 
 		ImGui::TreePop();
 	}
@@ -344,6 +350,9 @@ void GasComponent::Serialize(BinaryWriter& w) {
 	w.Write(initialTemperature);
 	w.Write(ambientTemperature);
 	w.Write(dissipationRate);
+	w.Write(noiseScale);
+	w.Write(noiseStrength);
+	w.Write(riseSpeed);
 }
 
 void GasComponent::Deserialize(BinaryReader& r) {
@@ -364,6 +373,9 @@ void GasComponent::Deserialize(BinaryReader& r) {
 	initialTemperature = r.Read<float>();
 	ambientTemperature = r.Read<float>();
 	dissipationRate = r.Read<float>();
+	noiseScale = r.Read<float>();
+	noiseStrength = r.Read<float>();
+	riseSpeed = r.Read<float>();
 	SeedParticles();
 	ResizeInstanceBuffer();
 	RebuildQuadGeometry();
@@ -386,6 +398,10 @@ void GasComponent::SetEnabled(bool enabled) {
 void GasComponent::Draw() {
 	if (!renderInitialized || particles.empty()) return;
 	if (!Enabled) return;
+
+	auto now = std::chrono::steady_clock::now();
+	smokeTime += std::chrono::duration<float>(now - lastFrameTime).count();
+	lastFrameTime = now;
 
 	UpdateInstanceBuffer();
 
@@ -411,8 +427,8 @@ void GasComponent::InitRenderResources() {
 	unsigned int quadIdx[] = { 0, 1, 2,  2, 3, 0 };
 
 	particleShader = Shader("Resources/Shaders/Fluid/fluid_vertex.txt", "Resources/Shaders/Fluid/fluid_fragment.txt");
-	densityShader = Shader("Resources/Shaders/Fluid/fluid_density_vertex.txt", "Resources/Shaders/Fluid/fluid_density_fragment.txt");
-	compositeShader = Shader("Resources/Shaders/Fluid/fluid_composite_vertex.txt", "Resources/Shaders/Fluid/fluid_composite_fragment.txt");
+	densityShader = Shader("Resources/Shaders/Gas/gas_density_vertex.txt", "Resources/Shaders/Gas/gas_density_fragment.txt");
+	compositeShader = Shader("Resources/Shaders/Gas/gas_composite_vertex.txt", "Resources/Shaders/Gas/gas_composite_fragment.txt");
 	solidMaskShader = Shader("Resources/Shaders/Fluid/fluid_solidmask_vertex.txt", "Resources/Shaders/Fluid/fluid_solidmask_fragment.txt");
 	vectorFieldShader = Shader("Resources/Shaders/Fluid/fluid_vector_vertex.txt", "Resources/Shaders/Fluid/fluid_vector_fragment.txt");
 
@@ -638,16 +654,19 @@ void GasComponent::DrawDensityPass() {
 
 void GasComponent::DrawComposite() {
 	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // normal alpha blend over the scene
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	compositeShader.use();
 	compositeShader.setInt("densityTex", 0);
-	compositeShader.setVec4D("fillColor", this->color);
-	compositeShader.setVec4D("outlineColor", this->outlineColor);
+	compositeShader.setVec4D("coreColor", this->color);
+	compositeShader.setVec4D("edgeColor", this->outlineColor);
 	compositeShader.setFloat("threshold", metaballThreshold);
 	compositeShader.setFloat("edgeSoft", metaballEdgeSoft);
-	compositeShader.setFloat("outlineWidth", outlineWidthTexels);
 	compositeShader.setVec2D("texelSize", glm::vec2(1.0f / densityW, 1.0f / densityH));
+	compositeShader.setFloat("time", smokeTime);
+	compositeShader.setFloat("noiseScale", noiseScale);
+	compositeShader.setFloat("noiseStrength", noiseStrength);
+	compositeShader.setFloat("riseSpeed", riseSpeed);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, densityTex);

@@ -22,7 +22,8 @@ CollisionComponent::CollisionComponent(Object* parent) : ComponentBase<Collision
 void CollisionComponent::Activate() {
 	Component::Activate();
 
-	if (parent->HasComponent<FluidComponent>()) return;
+	if (parent->HasComponent<FluidComponent>() ||
+		parent->HasComponent<GasComponent>()) return;
 
 	onTransformCallbackID = parent->GetComponent<TransformComponent>()->AddTransformCallback([this]() {
 		this->calculateBoundingCircle();
@@ -387,6 +388,8 @@ void CollisionComponent::SetCollisionLayer(uint16_t layer) {
 
 	FluidComponent* fc = parent->GetComponent<FluidComponent>();
 	if (fc) fc->UpdateCollisionLayerMask();
+	GasComponent* gc = parent->GetComponent<GasComponent>();
+	if (gc) gc->UpdateCollisionLayerMask();
 
 	EngineManager::getInstance().SceneChangeEvent();
 }
@@ -404,6 +407,8 @@ void CollisionComponent::SetCollisionMask(uint16_t mask) {
 
 	FluidComponent* fc = parent->GetComponent<FluidComponent>();
 	if (fc) fc->UpdateCollisionLayerMask();
+	GasComponent* gc = parent->GetComponent<GasComponent>();
+	if (gc) gc->UpdateCollisionLayerMask();
 
 	EngineManager::getInstance().SceneChangeEvent();
 }
@@ -799,7 +804,7 @@ void CollisionComponent::ProcessShapeEntryUI(CollisionShapeEntry& entry) {
 
 void CollisionComponent::ProcessInspectorUI() {
 	if (!(parent->HasComponent<RigidBodyComponent>() || parent->HasComponent<SoftBodyComponent>()
-		|| parent->HasComponent<FluidComponent>())) {
+		|| parent->HasComponent<FluidComponent>() || parent->HasComponent<GasComponent>())) {
 		bool staticVal = isStatic;
 		if (ImGui::Checkbox("Static", &staticVal)) {
 			EditorManager::getInstance().BeginEdit({ parent });
@@ -942,6 +947,8 @@ void CollisionComponent::CopyTo(Object* other) {
 
 	FluidComponent* fc = other->GetComponent<FluidComponent>();
 	if (fc) fc->UpdateCollisionLayerMask();
+	GasComponent* gc = other->GetComponent<GasComponent>();
+	if (gc) gc->UpdateCollisionLayerMask();
 
 	target->SetEnabled(Enabled);
 }
@@ -1051,6 +1058,7 @@ void CollisionComponent::Deserialize(BinaryReader& r) {
 
 void CollisionComponent::PostLoad() {
 	FluidComponent* fc = parent->GetComponent<FluidComponent>();
+	GasComponent* gc = parent->GetComponent<GasComponent>();
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
 
 	for (auto& entry : shapes) {
@@ -1085,6 +1093,21 @@ void CollisionComponent::PostLoad() {
 			tc->RemoveTransformCallback(onTransformCallbackID);
 		}
 	}
+	else if (gc) {
+		gc->UpdateCollisionLayerMask();
+
+		bool hadAnyNode = false;
+		for (auto& entry : shapes) {
+			if (entry.BAHnode.IsValid()) {
+				PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent, entry.id);
+				entry.BAHnode.Reset();
+				hadAnyNode = true;
+			}
+		}
+		if (hadAnyNode && tc) {
+			tc->RemoveTransformCallback(onTransformCallbackID);
+		}
+	}
 	else {
 		calculateBoundingCircle();
 	}
@@ -1092,12 +1115,16 @@ void CollisionComponent::PostLoad() {
 
 void CollisionComponent::SetEnabled(bool enabled) {
 	if (enabled) {
-		for (auto& entry : shapes) {
-			if (entry.syncWithRenderComponent == false && entry.points.size() < 3) {
-				continue;
-			}
-			if (!entry.BAHnode.IsValid()) {
-				entry.BAHnode = PhysicsEngine::getInstance().RegisterBoundingAreaNode(parent, entry.id, entry.boundingCircle, entry.boundingBox);
+		bool isFluidOrGas = parent->HasComponent<FluidComponent>() || parent->HasComponent<GasComponent>();
+
+		if (!isFluidOrGas) {
+			for (auto& entry : shapes) {
+				if (entry.syncWithRenderComponent == false && entry.points.size() < 3) {
+					continue;
+				}
+				if (!entry.BAHnode.IsValid()) {
+					entry.BAHnode = PhysicsEngine::getInstance().RegisterBoundingAreaNode(parent, entry.id, entry.boundingCircle, entry.boundingBox);
+				}
 			}
 		}
 		calculateBoundingCircle();
@@ -1139,7 +1166,13 @@ void CollisionComponent::calculateBoundingCircle(CollisionShapeEntry& entry) {
 	EngineManager::getInstance().SceneChangeEvent();
 
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
-	if (!tc) return;
+	if (!tc) {
+		if (entry.BAHnode.IsValid()) {
+			PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent, entry.id);
+			entry.BAHnode.Reset();
+		}
+		return;
+	}
 
 	if (entry.syncWithRenderComponent == false && entry.points.size() < 3) {
 		if (entry.BAHnode.IsValid()) {
@@ -1168,8 +1201,18 @@ void CollisionComponent::calculateBoundingCircle(CollisionShapeEntry& entry) {
 
 	entry.boundingBox = BoundingBox::FromPoints(worldPoints, collisionLayer, collisionMask);
 
-	if (!isActive) return;
-	if (parent->HasComponent<FluidComponent>()) return;
+	bool shouldHaveNode = isActive
+		&& !parent->HasComponent<FluidComponent>()
+		&& !parent->HasComponent<GasComponent>()
+		&& !(entry.syncWithRenderComponent == false && entry.points.size() < 3);
+
+	if (!shouldHaveNode) {
+		if (entry.BAHnode.IsValid()) {
+			PhysicsEngine::getInstance().UnRegisterBoundingAreaNode(parent, entry.id);
+			entry.BAHnode.Reset();
+		}
+		return;
+	}
 
 	if (!entry.BAHnode.IsValid()) {
 		entry.BAHnode = PhysicsEngine::getInstance().RegisterBoundingAreaNode(parent, entry.id, entry.boundingCircle, entry.boundingBox);

@@ -264,7 +264,32 @@ void ObjectManager::AddFluid(Object* parent) {
 	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
 	obj->AddComponent(std::make_unique<FluidComponent>(obj.get()));
-	FluidComponent* fc = obj->GetComponent<FluidComponent>();
+	for (auto& c : obj->components) {
+		c->Activate();
+	}
+
+	obj->addedToScene = true;
+	AttachNewObject(obj.get(), parent);
+	EditorManager::getInstance().RegisterObjectCreated(obj.get());
+	allObjects.push_back(std::move(obj));
+}
+
+void ObjectManager::AddGas(Object* parent) {
+	EngineManager::getInstance().SceneChangeEvent();
+	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
+	obj->AddComponent(std::make_unique<EditorRenderComponent>(obj.get(), obj->shader, "Resources/Images/Object.png", 0.075f));
+	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj->shader, glm::vec3(0.0f)));
+	obj->AddComponent(std::make_unique<RenderComponent>(obj.get(), std::vector<float> {}, obj->shader, ""));
+	auto* render = obj->GetComponent<RenderComponent>();
+	obj->GetComponent<TransformComponent>()->SetRotationCenter(render->GetCenter());
+	RectangleShape shape = RectangleShape();
+	shape.center = obj->GetComponent<TransformComponent>()->GetWorldPosition();
+	shape.width = 10.0f;
+	shape.height = 10.0f;
+	render->SetShape(shape);
+	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get()));
+	obj->AddComponent(std::make_unique<CollisionComponent>(obj.get()));
+	obj->AddComponent(std::make_unique<GasComponent>(obj.get()));
 	for (auto& c : obj->components) {
 		c->Activate();
 	}

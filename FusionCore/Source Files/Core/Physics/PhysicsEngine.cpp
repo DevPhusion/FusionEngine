@@ -319,39 +319,42 @@ void PhysicsEngine::ResolveFluidBoundaryContactsGeneric(std::vector<ContinuumPar
 	std::for_each(std::execution::par_unseq, indices.begin(), indices.end(),
 		[&](int i) {
 			std::visit([&](auto&& p) {
-				using T = std::decay_t<decltype(p)>;
-				if constexpr (std::is_same_v<T, FluidParticle*>) {
-					ContactT best;
-					best.penetration = -INFINITY;
+				ContactT best;
+				best.penetration = -INFINITY;
 
-					for (int s = 0; s < (int)boundaries.size(); s++) {
-						if (boundaries[s].obj == p->parent) continue;
-						if (!layerOverlap(p->collisionLayer, p->collisionMask,
-							boundaries[s].collisionLayer, boundaries[s].collisionMask))
-							continue;
-						ContactT c = detect(p->predictedPosition, p->collisionRadius, boundaries[s], s);
-						if (c.hit && c.penetration > best.penetration) {
-							best = c;
-						}
+				for (int s = 0; s < (int)boundaries.size(); s++) {
+					if (boundaries[s].obj == p->parent) continue;
+					if (!layerOverlap(p->collisionLayer, p->collisionMask,
+						boundaries[s].collisionLayer, boundaries[s].collisionMask))
+						continue;
+					ContactT c = detect(p->predictedPosition, p->collisionRadius, boundaries[s], s);
+					if (c.hit && c.penetration > best.penetration) {
+						best = c;
 					}
-					if (!best.hit) best.penetration = 0.0f;
-
-					const float positionCorrectionFactor = 0.2f;
-					if (best.hit) {
-						p->predictedPosition += best.normal * (best.penetration * positionCorrectionFactor);
-					}
-
-					outContacts[i] = best;
 				}
-				else if constexpr (std::is_same_v<T, GasParticle*>) {
-					outContacts[i] = ContactT();
+				if (!best.hit) best.penetration = 0.0f;
+
+				const float positionCorrectionFactor = 0.2f;
+				if (best.hit) {
+					p->predictedPosition += best.normal * (best.penetration * positionCorrectionFactor);
 				}
-				}, particles[i]);
+
+				outContacts[i] = best;
+			}, particles[i]);
 		});
 }
 
 void PhysicsEngine::ResolveFluidSoftContacts(float dtSub) {
 	ResolveFluidBoundaryContactsGeneric(allContinuumParticles, fluidIndices, softBoundaries, fluidSoftContacts,
+		[&](const glm::vec3& pos, float radius, const SoftBoundary& sb, int idx) -> FluidSoftContact {
+			FluidSoftContact c;
+			if (!sb.valid) return c;
+			c = DetectFluidSoftContact(pos, radius, sb);
+			if (c.hit) c.softIndex = idx;
+			return c;
+		});
+
+	ResolveFluidBoundaryContactsGeneric(allContinuumParticles, gasIndices, softBoundaries, fluidSoftContacts,
 		[&](const glm::vec3& pos, float radius, const SoftBoundary& sb, int idx) -> FluidSoftContact {
 			FluidSoftContact c;
 			if (!sb.valid) return c;
@@ -373,38 +376,34 @@ void PhysicsEngine::ResolveFluidSoftImpulses(float dtSub) {
 			const FluidSoftContact& c = fluidSoftContacts[i];
 			if (!c.hit) continue;
 
-			std::visit([&](auto&& pv) {
-				using T = std::decay_t<decltype(pv)>;
-				if constexpr (std::is_same_v<T, FluidParticle*>) {
-					FluidParticle* p = pv;
-					SoftBoundary& soft = softBoundaries[c.softIndex];
-					const SoftEdge& se = soft.worldEdges[c.edgeIdx];
-					PointMass* pmA = soft.sb->MassAggregate[se.idxA].get();
-					PointMass* pmB = soft.sb->MassAggregate[se.idxB].get();
+			std::visit([&](auto&& p) {
+				SoftBoundary& soft = softBoundaries[c.softIndex];
+				const SoftEdge& se = soft.worldEdges[c.edgeIdx];
+				PointMass* pmA = soft.sb->MassAggregate[se.idxA].get();
+				PointMass* pmB = soft.sb->MassAggregate[se.idxB].get();
 
-					float w1 = c.edgeT;
-					float w0 = 1.0f - w1;
+				float w1 = c.edgeT;
+				float w0 = 1.0f - w1;
 
-					float invMassEdge = pmA->inverseMass * w0 * w0 + pmB->inverseMass * w1 * w1;
-					float invMassSum = p->invMass + invMassEdge;
-					if (invMassSum <= 1e-8f) return;
+				float invMassEdge = pmA->inverseMass * w0 * w0 + pmB->inverseMass * w1 * w1;
+				float invMassSum = p->invMass + invMassEdge;
+				if (invMassSum <= 1e-8f) return;
 
-					glm::vec3 edgeVel = pmA->velocity * w0 + pmB->velocity * w1;
-					glm::vec3 vRel = p->velocity - edgeVel;
-					float vn = glm::dot(vRel, c.normal);
+				glm::vec3 edgeVel = pmA->velocity * w0 + pmB->velocity * w1;
+				glm::vec3 vRel = p->velocity - edgeVel;
+				float vn = glm::dot(vRel, c.normal);
 
-					float bias = std::min((beta / dtSub) * std::max(0.0f, c.penetration - slop), maxBiasVelocity);
+				float bias = std::min((beta / dtSub) * std::max(0.0f, c.penetration - slop), maxBiasVelocity);
 
-					float lambda = (-(1.0f + restitution) * vn + bias) / invMassSum;
-					lambda = std::max(lambda, 0.0f);
+				float lambda = (-(1.0f + restitution) * vn + bias) / invMassSum;
+				lambda = std::max(lambda, 0.0f);
 
-					glm::vec3 impulse = lambda * c.normal;
+				glm::vec3 impulse = lambda * c.normal;
 
-					p->velocity += p->invMass * impulse;
-					pmA->velocity -= pmA->inverseMass * w0 * impulse;
-					pmB->velocity -= pmB->inverseMass * w1 * impulse;
-				}
-				}, allContinuumParticles[i]);
+				p->velocity += p->invMass * impulse;
+				pmA->velocity -= pmA->inverseMass * w0 * impulse;
+				pmB->velocity -= pmB->inverseMass * w1 * impulse;
+			}, allContinuumParticles[i]);
 		}
 	}
 }
@@ -446,6 +445,13 @@ void PhysicsEngine::ResolveFluidRigidContacts(float dtSub) {
 			if (c.hit) c.rigidIndex = idx;
 			return c;
 		});
+
+	ResolveFluidBoundaryContactsGeneric(allContinuumParticles, gasIndices, rigidBoundaries, fluidRigidContacts,
+		[&](const glm::vec3& pos, float radius, const RigidBoundary& rb, int idx) -> FluidRigidContact {
+			FluidRigidContact c = DetectFluidRigidContact(pos, radius, rb);
+			if (c.hit) c.rigidIndex = idx;
+			return c;
+		});
 }
 
 void PhysicsEngine::ResolveFluidRigidImpulses(float dtSub) {
@@ -460,41 +466,37 @@ void PhysicsEngine::ResolveFluidRigidImpulses(float dtSub) {
 			const FluidRigidContact& c = fluidRigidContacts[i];
 			if (!c.hit) continue;
 
-			std::visit([&](auto&& pv) {
-				using T = std::decay_t<decltype(pv)>;
-				if constexpr (std::is_same_v<T, FluidParticle*>) {
-					FluidParticle* p = pv;
-					RigidBoundary& rigid = rigidBoundaries[c.rigidIndex];
-					RigidBodyComponent* rb = rigid.rb;
+			std::visit([&](auto&& p) {
+				RigidBoundary& rigid = rigidBoundaries[c.rigidIndex];
+				RigidBodyComponent* rb = rigid.rb;
 
-					float rbInvMass = rb ? rb->inverseMass : 0.0f;
-					float invMassSum = p->invMass + rbInvMass;
-					if (invMassSum <= 1e-8f) return;
+				float rbInvMass = rb ? rb->inverseMass : 0.0f;
+				float invMassSum = p->invMass + rbInvMass;
+				if (invMassSum <= 1e-8f) return;
 
-					glm::vec3 velAtContact = rb
-						? rb->velocity + glm::vec3(-rb->angularVelocity * (c.point - rigid.worldCenter).y,
-							rb->angularVelocity * (c.point - rigid.worldCenter).x, 0.0f)
-						: glm::vec3(0.0f);
+				glm::vec3 velAtContact = rb
+					? rb->velocity + glm::vec3(-rb->angularVelocity * (c.point - rigid.worldCenter).y,
+						rb->angularVelocity * (c.point - rigid.worldCenter).x, 0.0f)
+					: glm::vec3(0.0f);
 
-					glm::vec3 vRel = p->velocity - velAtContact;
-					float vn = glm::dot(vRel, c.normal);
+				glm::vec3 vRel = p->velocity - velAtContact;
+				float vn = glm::dot(vRel, c.normal);
 
-					float bias = std::min((beta / dtSub) * std::max(0.0f, c.penetration - slop), maxBiasVelocity);
+				float bias = std::min((beta / dtSub) * std::max(0.0f, c.penetration - slop), maxBiasVelocity);
 
-					float lambda = (-(1.0f + restitution) * vn + bias) / invMassSum;
-					lambda = std::max(lambda, 0.0f);
+				float lambda = (-(1.0f + restitution) * vn + bias) / invMassSum;
+				lambda = std::max(lambda, 0.0f);
 
-					glm::vec3 impulse = lambda * c.normal;
+				glm::vec3 impulse = lambda * c.normal;
 
-					p->velocity += p->invMass * impulse;
-					if (rb) {
-						glm::vec3 r = c.point - rigid.worldCenter;
-						float angImpulse = r.x * impulse.y - r.y * impulse.x;
-						rb->velocity -= rbInvMass * impulse;
-						rb->angularVelocity -= rb->inverseInertia * angImpulse;
-					}
+				p->velocity += p->invMass * impulse;
+				if (rb) {
+					glm::vec3 r = c.point - rigid.worldCenter;
+					float angImpulse = r.x * impulse.y - r.y * impulse.x;
+					rb->velocity -= rbInvMass * impulse;
+					rb->angularVelocity -= rb->inverseInertia * angImpulse;
 				}
-				}, allContinuumParticles[i]);
+			}, allContinuumParticles[i]);
 		}
 	}
 }
@@ -1827,7 +1829,7 @@ void PhysicsEngine::GenerateRigidBoundaries() {
 	rigidBoundaries.clear();
 	for (auto& objPtr : *allObjects) {
 		Object* obj = objPtr.get();
-		if (obj->HasComponent<SoftBodyComponent>() || obj->HasComponent<FluidComponent>()) continue;
+		if (obj->HasComponent<SoftBodyComponent>() || obj->HasComponent<FluidComponent>() || obj->HasComponent<GasComponent>()) continue;
 		if (!obj->HasComponent<CollisionComponent>()) continue;
 
 		CollisionComponent* cc = obj->GetComponent<CollisionComponent>();
@@ -2329,7 +2331,7 @@ void PhysicsEngine::RebuildBroadPhase() {
 		}
 
 		if (!cc->isActive || !cc->Enabled) continue;
-		if (obj->HasComponent<FluidComponent>()) continue;
+		if (obj->HasComponent<FluidComponent>() || obj->HasComponent<GasComponent>()) continue;
 
 		for (auto& entry : cc->shapes) {
 			if (entry.syncWithRenderComponent == false && entry.points.size() < 3) continue;
@@ -2889,9 +2891,8 @@ void PhysicsEngine::ComputeVorticity(int particleIdx, std::vector<int>& neighbou
 				float r2 = glm::dot(rVec, rVec);
 				if (r2 <= h * h) {
 					float r = std::sqrt(r2);
-					if (r < 1e-6f) {
+					if (r >= 1e-6f) {
 						glm::vec3 grad = SpikyGradientKernel(spikyCoeff, h, r, rVec);
-
 						glm::vec3 vij = pj->velocity - pi->velocity;
 						omega += vij.x * grad.y - vij.y * grad.x;
 					}
@@ -3036,15 +3037,15 @@ void PhysicsEngine::ResolvePBF(float delta) {
 		}, allContinuumParticles[i]);
 	}
 
-	for (auto& gasIndex : gasIndices) {
-		std::visit([&](auto&& p) {
-			if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
-				p->lambda = 0;
-			}
-			}, allContinuumParticles[gasIndex]);
-	}
-
 	for (int sub = 0; sub < pbfSubsteps; sub++) {
+		for (auto& gasIndex : gasIndices) {
+			std::visit([&](auto&& p) {
+				if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
+					p->lambda = 0;
+				}
+				}, allContinuumParticles[gasIndex]);
+		}
+
 		RefreshRigidBoundariesEdges();
 		RefreshSoftBoundariesEdges();
 

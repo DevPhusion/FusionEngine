@@ -153,6 +153,10 @@ void AddObjectWindow::ProcessWindow() {
 				ObjectManager::getInstance().AddFluid(parent);
 				Hide();
 			}
+			else if (SelectedType == "Gas") {
+				ObjectManager::getInstance().AddGas(parent);
+				Hide();
+			}
 		}
 		else {
 			if (SelectedType == "Rigid Polygon") {

@@ -9,16 +9,16 @@ public:
 	GasComponent() = default;
 
     std::vector<GasParticle*> particles;
-    glm::vec4 color = glm::vec4(0.2f, 0.5f, 1.0f, 0.8f);
+    glm::vec4 color = glm::vec4(0.85, 0.85, 0.9, 0.55);
     int desiredParticleCount = 500;
-    float particleRadius = 0.5f;
+    float particleRadius = 2.0f;
     float collisionRadius = 0.1f;
 
     float particleMass = 1.0f;
     float restDensity = 1.2f;
     float viscosity = 0.0001f;
     float epsilon = 100.0f;
-    float smoothingRadius = 1.0f;
+    float smoothingRadius = 3.0f;
     float vorticityStrength = 0.0f;
 
     float stiffness = 50.0f;
@@ -28,10 +28,14 @@ public:
 	float ambientTemperature = 300.0f;
 	float dissipationRate = 0.15f;
 
-    glm::vec4 outlineColor = glm::vec4(0.05f, 0.2f, 0.45f, 1.0f);
-    float metaballThreshold = 0.6f;
+    glm::vec4 outlineColor = glm::vec4(0.6, 0.6, 0.65, 0.1);
+    float metaballThreshold = 0.3f;
     float metaballEdgeSoft = 0.05f;
     float outlineWidthTexels = 2.0f;
+
+    float noiseScale = 6.0f;
+    float noiseStrength = 0.35f;
+    float riseSpeed = 0.15f;
 
     virtual void Activate();
     virtual void Deactivate();
@@ -70,6 +74,9 @@ private:
     int transformCallbackID = -1;
     int setShapeCallbackID = -1;
     std::vector<glm::vec3> localParticlePositions;
+
+    float smokeTime = 0.0f;
+    std::chrono::steady_clock::time_point lastFrameTime = std::chrono::steady_clock::now();
 
     GLuint vectorFieldVAO = 0, vectorFieldVBO = 0;
     Shader vectorFieldShader;
