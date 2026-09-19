@@ -2746,7 +2746,13 @@ glm::vec3 PhysicsEngine::SpikyGradientKernel(float spikyCoeff, float h, float r,
 
 void PhysicsEngine::SolvePBFLambda(int particleIdx, std::vector<int>& neighboursIdx) {
 	std::visit([&](auto&& pi) {
-		float rho0 = pi->restDensity;
+		float rho0 = 0.0f;
+		if constexpr (std::is_same_v<std::decay_t<decltype(pi)>, FluidParticle*>) {
+			rho0 = pi->restDensity;
+		}
+		else if constexpr (std::is_same_v<std::decay_t<decltype(pi)>, GasParticle*>) {
+			rho0 = pi->restDensity * (pi->ambientTemperature / pi->temperature);
+		}
 		float h = pi->smoothingRadius;
 		float h2 = h * h;
 		float poly6Coeff = pi->poly6Coeff;
@@ -3054,7 +3060,14 @@ void PhysicsEngine::ResolvePBF(float delta) {
 			std::for_each(std::execution::par_unseq, fluidIndices.begin(), fluidIndices.end(),
 				[&](int i) {
 					std::visit([&](auto&& p) {
-						p->velocity += dtSub * glm::vec3(0.0f, -9.8f, 0.0f);
+						glm::vec3 accel = glm::vec3(0);
+						if constexpr (std::is_same_v<std::decay_t<decltype(p)>, FluidParticle*>) {
+							accel = glm::vec3(0.0f, -9.8f, 0.0f);
+						}
+						else if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
+							accel = glm::vec3(0.0f, -9.8f * (-1 / p->temperature) * (p->temperature - p->ambientTemperature), 0.0f);
+						}
+						p->velocity += dtSub * accel;
 						p->predictedPosition = p->position + dtSub * p->velocity;
 					}, allContinuumParticles[i]);
 				});
@@ -3147,7 +3160,7 @@ void PhysicsEngine::ResolvePBF(float delta) {
 					for (auto& gasIndex : gasIndices) {
 						std::visit([&](auto&& p) {
 							if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
-								p->compliance = 1 / (p->stiffness * dtSub * dtSub);
+								p->compliance = 1 / (p->gamma * p->stiffness * p->restDensity * p->temperature * dtSub * dtSub);
 							}
 							}, allContinuumParticles[gasIndex]);
 					}
