@@ -413,6 +413,7 @@ public:
 	std::vector<glm::vec3> correctedPositions;
 	std::vector<glm::vec3> viscosityDeltas;
 	std::vector<float> vorticityOmegas;
+	std::vector<float> thermalDeltas;
 	std::vector<glm::vec3> vorticityForces;
 	std::vector<char> fluidSurfaceQualifies;
 	glm::vec3 fluidBoundsMin = glm::vec3(INFINITY);
@@ -422,11 +423,13 @@ public:
 	float SpikyCoefficient(float h);
 	float Poly6Kernel(float poly6Coeff, float h2, float r2);
 	glm::vec3 SpikyGradientKernel(float spikyCoeff, float h, float r, glm::vec3 rVec);
+	float ViscosityLaplacianKernel(float spikyCoeff, float h, float r);
 	void ComputeVorticity(int particleIdx, std::vector<int>& neighboursIdx, std::vector<float>& outOmegas);
 	void SolvePBFLambda(int particleIdx, std::vector<int>& neighboursIdx);
 	void SolvePBFPosition(int particleIdx, std::vector<int>& neighboursIdx, std::vector<glm::vec3>& outPositions);
 	void SolveXSPHViscosity(int particleIdx, std::vector<int>& neighboursIdx, std::vector<glm::vec3>& outDeltas);
 	void SolveVorticityConfinement(int particleIdx, std::vector<int>& neighboursIdx, std::vector<float>& omega, std::vector<glm::vec3>& outForce);
+	void SolveThermalDiffusion(int particleIdx, std::vector<int>& neighboursIdx, std::vector<float>& outDeltaT);
 	bool FindLocalFluidSurface(const glm::vec3& bMin, const glm::vec3& bMax, 
 		uint16_t boundaryLayer, uint16_t boundaryMask,
 		float& outSurfaceY, float& outRho0);

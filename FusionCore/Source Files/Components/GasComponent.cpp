@@ -132,6 +132,8 @@ void GasComponent::SeedParticles() {
 		p->temperature = initialTemperature;
 		p->ambientTemperature = ambientTemperature;
 		p->dissipationRate = dissipationRate;
+		p->thermalDiffusivity = thermalDiffusivity;
+		p->coolingRate = coolingRate;
 		p->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(smoothingRadius);
 		p->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(smoothingRadius);
 		if (cc) {
@@ -255,6 +257,14 @@ void GasComponent::ProcessInspectorUI() {
 			for (int i = 0; i < particles.size(); i++) particles[i]->ambientTemperature = ambientTemperature;
 			});
 
+		EditorField::InputFloatScene(parent, "Thermal Diffusivity", "##ThermalDiffusivity", &thermalDiffusivity, [&] {
+			for (int i = 0; i < particles.size(); i++) particles[i]->thermalDiffusivity = thermalDiffusivity;
+			});
+
+		EditorField::InputFloatScene(parent, "Cooling Rate", "##CoolingRate", &coolingRate, [&] {
+			for (int i = 0; i < particles.size(); i++) particles[i]->coolingRate = coolingRate;
+			});
+
 		ImGui::TreePop();
 	}
 
@@ -325,6 +335,11 @@ void GasComponent::CopyTo(Object* other) {
 	target->initialTemperature = initialTemperature;
 	target->ambientTemperature = ambientTemperature;
 	target->dissipationRate = dissipationRate;
+	target->noiseScale = noiseScale;
+	target->noiseStrength = noiseStrength;
+	target->riseSpeed = riseSpeed;
+	target->thermalDiffusivity;
+	target->coolingRate;
 	target->SeedParticles();
 	target->ResizeInstanceBuffer();
 	target->RebuildQuadGeometry();
@@ -353,6 +368,8 @@ void GasComponent::Serialize(BinaryWriter& w) {
 	w.Write(noiseScale);
 	w.Write(noiseStrength);
 	w.Write(riseSpeed);
+	w.Write(thermalDiffusivity);
+	w.Write(coolingRate);
 }
 
 void GasComponent::Deserialize(BinaryReader& r) {
@@ -376,6 +393,8 @@ void GasComponent::Deserialize(BinaryReader& r) {
 	noiseScale = r.Read<float>();
 	noiseStrength = r.Read<float>();
 	riseSpeed = r.Read<float>();
+	thermalDiffusivity = r.Read<float>();
+	coolingRate = r.Read<float>();
 	SeedParticles();
 	ResizeInstanceBuffer();
 	RebuildQuadGeometry();

@@ -10,11 +10,11 @@ public:
 
     std::vector<GasParticle*> particles;
     glm::vec4 color = glm::vec4(0.85, 0.85, 0.9, 0.55);
-    int desiredParticleCount = 500;
+    int desiredParticleCount = 100;
     float particleRadius = 2.0f;
     float collisionRadius = 0.1f;
 
-    float particleMass = 1.0f;
+    float particleMass = 0.01f;
     float restDensity = 1.2f;
     float viscosity = 0.0001f;
     float epsilon = 100.0f;
@@ -27,6 +27,9 @@ public:
 	float initialTemperature = 300.0f;
 	float ambientTemperature = 300.0f;
 	float dissipationRate = 0.15f;
+
+    float thermalDiffusivity = 0.5f;
+    float coolingRate = 0.1f;
 
     glm::vec4 outlineColor = glm::vec4(0.6, 0.6, 0.65, 0.1);
     float metaballThreshold = 0.3f;

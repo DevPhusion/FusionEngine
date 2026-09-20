@@ -2737,6 +2737,10 @@ float PhysicsEngine::Poly6Kernel(float poly6Coeff, float h2, float r2) {
 	return poly6Coeff * (term * term * term);
 }
 
+float PhysicsEngine::ViscosityLaplacianKernel(float spikyCoeff, float h, float r) {
+	return -spikyCoeff * (h - r);
+}
+
 glm::vec3 PhysicsEngine::SpikyGradientKernel(float spikyCoeff, float h, float r, glm::vec3 rVec) {
 	if (r < 1e-6f) return glm::vec3(0.0f);
 	float rSafe = std::max(r, 0.1f * h);
@@ -2910,6 +2914,37 @@ void PhysicsEngine::ComputeVorticity(int particleIdx, std::vector<int>& neighbou
 	}, allContinuumParticles[particleIdx]);
 }
 
+void PhysicsEngine::SolveThermalDiffusion(int particleIdx, std::vector<int>& neighboursIdx, std::vector<float>& outDeltaT) {
+	std::visit([&](auto&& pi) {
+		if constexpr (std::is_same_v<std::decay_t<decltype(pi)>, GasParticle*>) {
+			float h = pi->smoothingRadius;
+			float spikyCoeff = pi->spikyCoeff;
+
+			float conduction = 0.0f;
+			for (int j : neighboursIdx) {
+				std::visit([&](auto&& pj) {
+					if constexpr (std::is_same_v<std::decay_t<decltype(pj)>, GasParticle*>) {
+						if (pj->density <= 1e-6f) return;
+						glm::vec3 rVec = pi->position - pj->position;
+						float r2 = glm::dot(rVec, rVec);
+						if (r2 <= h * h) {
+							float r = std::sqrt(r2);
+							float lap = ViscosityLaplacianKernel(spikyCoeff, h, r);
+							conduction += (pj->mass / pj->density) * (pj->temperature - pi->temperature) * lap;
+						}
+					}
+				}, allContinuumParticles[j]);
+			}
+
+			float cooling = -pi->coolingRate * (pi->temperature - pi->ambientTemperature);
+			outDeltaT[particleIdx] = pi->thermalDiffusivity * conduction + cooling;
+		}
+		else {
+			outDeltaT[particleIdx] = 0;
+		}
+	}, allContinuumParticles[particleIdx]);
+}
+
 bool PhysicsEngine::FindLocalFluidSurface(const glm::vec3& bMin, const glm::vec3& bMax,
 	uint16_t boundaryLayer, uint16_t boundaryMask,
 	float& outSurfaceY, float& outRho0) {
@@ -3057,26 +3092,22 @@ void PhysicsEngine::ResolvePBF(float delta) {
 
 		{
 			TIME_BLOCK("Predict Positions");
+
 			std::for_each(std::execution::par_unseq, fluidIndices.begin(), fluidIndices.end(),
 				[&](int i) {
 					std::visit([&](auto&& p) {
-						glm::vec3 accel = glm::vec3(0);
-						if constexpr (std::is_same_v<std::decay_t<decltype(p)>, FluidParticle*>) {
-							accel = glm::vec3(0.0f, -9.8f, 0.0f);
-						}
-						else if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
-							accel = glm::vec3(0.0f, -9.8f * (-1 / p->temperature) * (p->temperature - p->ambientTemperature), 0.0f);
-						}
-						p->velocity += dtSub * accel;
+						p->velocity += dtSub * glm::vec3(0.0f, -9.8f, 0.0f);
 						p->predictedPosition = p->position + dtSub * p->velocity;
 					}, allContinuumParticles[i]);
 				});
 			std::for_each(std::execution::par_unseq, gasIndices.begin(), gasIndices.end(),
 				[&](int i) {
 					std::visit([&](auto&& p) {
-						p->velocity += dtSub * glm::vec3(0.0f, -9.8f, 0.0f);
-						p->predictedPosition = p->position + dtSub * p->velocity;
-						}, allContinuumParticles[i]);
+						if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
+							p->velocity += dtSub * glm::vec3(0.0f, -9.8f * (-1 / p->temperature) * (p->temperature - p->ambientTemperature), 0.0f);
+							p->predictedPosition = p->position + dtSub * p->velocity;
+						}
+					}, allContinuumParticles[i]);
 				});
 		}
 
@@ -3160,7 +3191,8 @@ void PhysicsEngine::ResolvePBF(float delta) {
 					for (auto& gasIndex : gasIndices) {
 						std::visit([&](auto&& p) {
 							if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
-								p->compliance = 1 / (p->gamma * p->stiffness * p->restDensity * p->temperature * dtSub * dtSub);
+								float tempRatio = p->temperature / p->ambientTemperature; 
+								p->compliance = 1.0f / (p->gamma * p->stiffness * p->restDensity * tempRatio * dtSub * dtSub);
 							}
 							}, allContinuumParticles[gasIndex]);
 					}
@@ -3271,6 +3303,38 @@ void PhysicsEngine::ResolvePBF(float delta) {
 
 			std::for_each(std::execution::par_unseq, gasIndices.begin(), gasIndices.end(),
 				[&](int i) { std::visit([&](auto&& p) { p->velocity += viscosityDeltas[i]; }, allContinuumParticles[i]); });
+		}
+
+		{
+			TIME_BLOCK("Thermal diffusion");
+			if (thermalDeltas.size() != allContinuumParticles.size())
+				thermalDeltas.resize(allContinuumParticles.size());
+
+			std::for_each(std::execution::par_unseq, gasIndices.begin(), gasIndices.end(),
+				[&](int i) { SolveThermalDiffusion(i, gasNeighbors[i], thermalDeltas); });
+
+			std::for_each(std::execution::par_unseq, gasIndices.begin(), gasIndices.end(),
+				[&](int i) {
+					std::visit([&](auto&& p) {
+						if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
+							p->temperature += thermalDeltas[i] * dtSub;
+							p->temperature = std::max(p->temperature, 1.0f);
+						}
+						}, allContinuumParticles[i]);
+				});
+		}
+
+		{
+			TIME_BLOCK("Gas mass dissipation");
+			std::for_each(std::execution::par_unseq, gasIndices.begin(), gasIndices.end(),
+				[&](int i) {
+					std::visit([&](auto&& p) {
+						if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
+							p->mass *= std::exp(-p->dissipationRate * dtSub);
+							p->invMass = 1.0f / p->mass;
+						}
+					}, allContinuumParticles[i]);
+				});
 		}
 	}
 }

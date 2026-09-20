@@ -46,6 +46,9 @@ struct GasParticle {
 	float ambientTemperature;
     float dissipationRate;
 
+    float thermalDiffusivity;
+    float coolingRate;
+
     float invMass;
     float mass;
 
