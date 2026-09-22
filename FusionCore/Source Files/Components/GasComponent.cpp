@@ -145,6 +145,102 @@ void GasComponent::SeedParticles() {
 	}
 }
 
+GasParticle* GasComponent::AddParticle(glm::vec3 worldPosition) {
+	GasParticle* p = new GasParticle();
+	CollisionComponent* cc = parent->GetComponent<CollisionComponent>();
+	p->parent = parent;
+	p->position = worldPosition;
+	p->predictedPosition = worldPosition;
+	p->velocity = glm::vec3(0.0f);
+	p->collisionRadius = collisionRadius;
+	p->mass = particleMass;
+	p->invMass = 1 / p->mass;
+	p->restDensity = restDensity;
+	p->viscosity = viscosity;
+	p->lambda = 0.0f;
+	p->vorticityEps = vorticityStrength;
+	p->epsilon = epsilon;
+	p->smoothingRadius = smoothingRadius;
+	p->stiffness = stiffness;
+	p->gamma = gamma;
+	p->temperature = initialTemperature;
+	p->ambientTemperature = ambientTemperature;
+	p->dissipationRate = dissipationRate;
+	p->thermalDiffusivity = thermalDiffusivity;
+	p->coolingRate = coolingRate;
+	p->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(smoothingRadius);
+	p->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(smoothingRadius);
+	if (cc) {
+		p->collisionLayer = cc->collisionLayer;
+		p->collisionMask = cc->collisionMask;
+	}
+	PhysicsEngine::getInstance().allContinuumParticles.push_back(p);
+	particles.push_back(p);
+
+	ResizeInstanceBuffer();
+	return p;
+}
+
+std::vector<GasParticle*> GasComponent::AddParticles(Shape shape, int particleCount) {
+	std::vector<GasParticle*> added;
+	particleCount = std::max(1, particleCount);
+
+	glm::vec3 boundsMin, boundsMax;
+	GetShapeBounds(shape, boundsMin, boundsMax);
+
+	float width = boundsMax.x - boundsMin.x;
+	float height = boundsMax.y - boundsMin.y;
+	float area = width * height;
+	if (area <= 0.0f) return added;
+
+	float spacing = std::sqrt(area / (float)particleCount);
+	spacing = std::max(spacing, 0.001f);
+
+	for (float y = boundsMin.y + spacing * 0.5f; y <= boundsMax.y; y += spacing) {
+		for (float x = boundsMin.x + spacing * 0.5f; x <= boundsMax.x; x += spacing) {
+			glm::vec3 point(x, y, boundsMin.z);
+			if (IsPointInsideShape(shape, point)) {
+				added.push_back(AddParticle(point));
+			}
+		}
+	}
+
+	return added;
+}
+
+void GasComponent::RemoveParticle(GasParticle* particle) {
+	if (!particle) return;
+
+	auto it = std::find(particles.begin(), particles.end(), particle);
+	if (it == particles.end()) return;
+
+	size_t index = std::distance(particles.begin(), it);
+
+	auto& allParticles = PhysicsEngine::getInstance().allContinuumParticles;
+	allParticles.erase(
+		std::remove_if(allParticles.begin(), allParticles.end(),
+			[particle](const ContinuumParticle& v) {
+				return std::visit([particle](auto&& stored) -> bool {
+					using T = std::decay_t<decltype(stored)>;
+					if constexpr (std::is_same_v<T, GasParticle*>) {
+						return stored == particle;
+					}
+					else {
+						return false;
+					}
+					}, v);
+			}),
+		allParticles.end());
+
+	delete particle;
+	particles.erase(it);
+	if (index < localParticlePositions.size()) {
+		localParticlePositions.erase(localParticlePositions.begin() + index);
+	}
+
+	ResizeInstanceBuffer();
+}
+
 void GasComponent::ProcessInspectorUI() {
 	if (ImGui::TreeNodeEx("Visuals", ImGuiTreeNodeFlags_DefaultOpen)) {
 		float displayColor[4] = { color.x, color.y, color.z, color.a };
@@ -878,4 +974,56 @@ void GasComponent::ResizeInstanceBuffer() {
 	glBindBuffer(GL_ARRAY_BUFFER, heatVBO);
 	glBufferData(GL_ARRAY_BUFFER, particles.size() * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+
+void GasComponent::GetShapeBounds(const Shape& shape, glm::vec3& outMin, glm::vec3& outMax) {
+	std::visit([&](auto&& s) {
+		using T = std::decay_t<decltype(s)>;
+		if constexpr (std::is_same_v<T, RectangleShape>) {
+			outMin = s.center - glm::vec3(s.width * 0.5f, s.height * 0.5f, 0.0f);
+			outMax = s.center + glm::vec3(s.width * 0.5f, s.height * 0.5f, 0.0f);
+		}
+		else if constexpr (std::is_same_v<T, CircleShape>) {
+			outMin = s.center - glm::vec3(s.radius, s.radius, 0.0f);
+			outMax = s.center + glm::vec3(s.radius, s.radius, 0.0f);
+		}
+		else if constexpr (std::is_same_v<T, PolygonShape>) {
+			if (s.vertices.size() < 5) { outMin = outMax = glm::vec3(0.0f); return; }
+			outMin = glm::vec3(s.vertices[0], s.vertices[1], s.vertices[2]);
+			outMax = outMin;
+			for (size_t i = 0; i + 4 < s.vertices.size(); i += 5) {
+				glm::vec3 v(s.vertices[i], s.vertices[i + 1], s.vertices[i + 2]);
+				outMin = glm::min(outMin, v);
+				outMax = glm::max(outMax, v);
+			}
+		}
+		}, shape);
+}
+
+bool GasComponent::IsPointInsideShape(const Shape& shape, const glm::vec3& point) {
+	return std::visit([&](auto&& s) -> bool {
+		using T = std::decay_t<decltype(s)>;
+		if constexpr (std::is_same_v<T, RectangleShape>) {
+			return std::abs(point.x - s.center.x) <= s.width * 0.5f &&
+				std::abs(point.y - s.center.y) <= s.height * 0.5f;
+		}
+		else if constexpr (std::is_same_v<T, CircleShape>) {
+			glm::vec2 d(point.x - s.center.x, point.y - s.center.y);
+			return glm::dot(d, d) <= s.radius * s.radius;
+		}
+		else if constexpr (std::is_same_v<T, PolygonShape>) {
+			bool inside = false;
+			size_t vertCount = s.vertices.size() / 5;
+			for (size_t i = 0, j = vertCount - 1; i < vertCount; j = i++) {
+				float xi = s.vertices[i * 5 + 0], yi = s.vertices[i * 5 + 1];
+				float xj = s.vertices[j * 5 + 0], yj = s.vertices[j * 5 + 1];
+				bool intersect = ((yi > point.y) != (yj > point.y)) &&
+					(point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
+				if (intersect) inside = !inside;
+			}
+			return inside;
+		}
+		return false;
+		}, shape);
 }

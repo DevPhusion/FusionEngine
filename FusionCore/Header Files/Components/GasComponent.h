@@ -1,6 +1,7 @@
 #pragma once
 #include "Component.h"
 #include "../Core/Physics/ContinuumParticle.h"
+#include "../Core/Rendering/Shapes.h"
 
 class GasComponent : public ComponentBase<GasComponent>
 {
@@ -52,6 +53,9 @@ public:
     void EnsureGLResources();
     void ClearParticles();
     void SeedParticles();
+    GasParticle* AddParticle(glm::vec3 worldPosition);
+    std::vector<GasParticle*> AddParticles(Shape shape, int particleCount);
+    void RemoveParticle(GasParticle* particle);
     void InitRenderResources();
     void UpdateInstanceBuffer();
     void UpdateCollisionLayerMask();
@@ -73,6 +77,9 @@ private:
     void DrawComposite();
     void DrawParticlesDebug();
     void DrawVelocityField();
+
+    void GetShapeBounds(const Shape& shape, glm::vec3& outMin, glm::vec3& outMax);
+    bool IsPointInsideShape(const Shape& shape, const glm::vec3& point);
 
     int transformCallbackID = -1;
     int setShapeCallbackID = -1;

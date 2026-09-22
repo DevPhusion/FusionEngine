@@ -2523,6 +2523,388 @@ namespace {
 		EnableAddChild<FluidComponent>(fluidClass);
 		EnableRemoveObject<FluidComponent>(fluidClass);
 
+		auto gasClass = py::class_<GasComponent>(m, "GasComponent")
+			.def_property("enable",
+				[](GasComponent& self) { return self.Enabled; },
+				[](GasComponent& self, bool enable) { self.SetEnabled(enable); },
+				"Whether this component is active")
+			.def("set_enable", &GasComponent::SetEnabled, py::arg("enable"),
+				"Set enable. See the enable property.")
+
+			.def_property("color",
+				[](GasComponent& self) { return self.color; },
+				[](GasComponent& self, glm::vec4 c) {
+					self.color = c;
+					EngineManager::getInstance().SceneChangeEvent();
+				},
+				"Core fill color (RGBA, 0-1) of the rendered gas")
+			.def("set_color", [](GasComponent& self, glm::vec4 c) {
+			self.color = c;
+			EngineManager::getInstance().SceneChangeEvent();
+				}, py::arg("color"),
+					"Set color. See the color property.")
+
+			.def_property("outline_color",
+				[](GasComponent& self) { return self.outlineColor; },
+				[](GasComponent& self, glm::vec4 c) {
+					self.outlineColor = c;
+					EngineManager::getInstance().SceneChangeEvent();
+				},
+				"Edge color (RGBA, 0-1) blended in at the metaball surface's edge")
+			.def("set_outline_color", [](GasComponent& self, glm::vec4 c) {
+			self.outlineColor = c;
+			EngineManager::getInstance().SceneChangeEvent();
+				}, py::arg("outline_color"),
+					"Set outline_color. See the outline_color property.")
+
+			.def_property("particle_radius",
+				[](GasComponent& self) { return self.particleRadius; },
+				[](GasComponent& self, float r) {
+					self.particleRadius = std::max(0.0001f, r);
+					self.RebuildDensityQuadGeometry();
+					EngineManager::getInstance().SceneChangeEvent();
+				},
+				"Visual radius of each rendered gas particle's splat quad. Clamped to a small positive minimum.")
+			.def("set_particle_radius", [](GasComponent& self, float r) {
+			self.particleRadius = std::max(0.0001f, r);
+			self.RebuildDensityQuadGeometry();
+			EngineManager::getInstance().SceneChangeEvent();
+				}, py::arg("particle_radius"),
+					"Set particle_radius. See the particle_radius property.")
+
+			.def_readwrite("metaball_threshold", &GasComponent::metaballThreshold,
+				"Density threshold at which the metaball surface renderer considers the gas 'present'")
+			.def("set_metaball_threshold", [](GasComponent& self, float t) { self.metaballThreshold = t; },
+				py::arg("metaball_threshold"),
+				"Set metaball_threshold. See the metaball_threshold property.")
+
+			.def_readwrite("metaball_edge_soft", &GasComponent::metaballEdgeSoft,
+				"Softness of the metaball surface edge falloff")
+			.def("set_metaball_edge_soft", [](GasComponent& self, float s) { self.metaballEdgeSoft = s; },
+				py::arg("metaball_edge_soft"),
+				"Set metaball_edge_soft. See the metaball_edge_soft property.")
+
+			.def_readwrite("outline_width_texels", &GasComponent::outlineWidthTexels,
+				"Width of the rendered outline, in texels")
+			.def("set_outline_width_texels", [](GasComponent& self, float w) { self.outlineWidthTexels = w; },
+				py::arg("outline_width_texels"),
+				"Set outline_width_texels. See the outline_width_texels property.")
+
+			.def_readwrite("noise_scale", &GasComponent::noiseScale,
+				"Spatial scale of the procedural noise applied to the gas surface")
+			.def("set_noise_scale", [](GasComponent& self, float s) { self.noiseScale = s; },
+				py::arg("noise_scale"),
+				"Set noise_scale. See the noise_scale property.")
+
+			.def_readwrite("noise_strength", &GasComponent::noiseStrength,
+				"Strength of the procedural noise applied to the gas surface")
+			.def("set_noise_strength", [](GasComponent& self, float s) { self.noiseStrength = s; },
+				py::arg("noise_strength"),
+				"Set noise_strength. See the noise_strength property.")
+
+			.def_readwrite("rise_speed", &GasComponent::riseSpeed,
+				"Speed at which the surface noise animates upward, giving a rising-smoke look")
+			.def("set_rise_speed", [](GasComponent& self, float s) { self.riseSpeed = s; },
+				py::arg("rise_speed"),
+				"Set rise_speed. See the rise_speed property.")
+
+			.def_property("desired_particle_count",
+				[](GasComponent& self) { return self.desiredParticleCount; },
+				[](GasComponent& self, int count) {
+					self.desiredParticleCount = std::max(1, count);
+					self.SeedParticles();
+					self.ResizeInstanceBuffer();
+					EngineManager::getInstance().SceneChangeEvent();
+				},
+				"Number of particles to seed when filling the source shape. Changing this "
+				"re-seeds the whole gas, discarding any particles added individually via "
+				"add_particle().")
+			.def("set_desired_particle_count", [](GasComponent& self, int count) {
+			self.desiredParticleCount = std::max(1, count);
+			self.SeedParticles();
+			self.ResizeInstanceBuffer();
+			EngineManager::getInstance().SceneChangeEvent();
+				}, py::arg("desired_particle_count"),
+					"Changing this re-seeds the whole gas on its source shape, discarding "
+					"any particles added individually via add_particle()")
+
+			.def_property("collision_radius",
+				[](GasComponent& self) { return self.collisionRadius; },
+				[](GasComponent& self, float r) {
+					self.collisionRadius = std::max(0.0001f, r);
+					for (auto* p : self.particles) p->collisionRadius = self.collisionRadius;
+					EngineManager::getInstance().SceneChangeEvent();
+				},
+				"Physical collision radius applied to every particle. Clamped to a small "
+				"positive minimum. Distinct from particle_radius, which is purely visual.")
+			.def("set_collision_radius", [](GasComponent& self, float r) {
+			self.collisionRadius = std::max(0.0001f, r);
+			for (auto* p : self.particles) p->collisionRadius = self.collisionRadius;
+			EngineManager::getInstance().SceneChangeEvent();
+				}, py::arg("collision_radius"),
+					"Set collision_radius. See the collision_radius property.")
+
+			.def_property("smoothing_radius",
+				[](GasComponent& self) { return self.smoothingRadius; },
+				[](GasComponent& self, float r) {
+					self.smoothingRadius = std::max(0.0001f, r);
+					for (auto* p : self.particles) {
+						p->smoothingRadius = self.smoothingRadius;
+						p->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(self.smoothingRadius);
+						p->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(self.smoothingRadius);
+					}
+					EngineManager::getInstance().SceneChangeEvent();
+				},
+				"SPH smoothing (kernel) radius used for density/pressure calculations")
+			.def("set_smoothing_radius", [](GasComponent& self, float r) {
+			self.smoothingRadius = std::max(0.0001f, r);
+			for (auto* p : self.particles) {
+				p->smoothingRadius = self.smoothingRadius;
+				p->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(self.smoothingRadius);
+				p->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(self.smoothingRadius);
+			}
+			EngineManager::getInstance().SceneChangeEvent();
+				}, py::arg("smoothing_radius"),
+					"Set smoothing_radius. See the smoothing_radius property.")
+
+			.def_property("epsilon",
+				[](GasComponent& self) { return self.epsilon; },
+				[](GasComponent& self, float e) {
+					self.epsilon = std::max(0.0001f, e);
+					for (auto* p : self.particles) p->epsilon = self.epsilon;
+					EngineManager::getInstance().SceneChangeEvent();
+				},
+				"Relaxation parameter (CFM) for the position-based solver")
+			.def("set_epsilon", [](GasComponent& self, float e) {
+			self.epsilon = std::max(0.0001f, e);
+			for (auto* p : self.particles) p->epsilon = self.epsilon;
+			EngineManager::getInstance().SceneChangeEvent();
+				}, py::arg("epsilon"),
+					"Set epsilon. See the epsilon property.")
+
+			.def_property("particle_mass",
+				[](GasComponent& self) { return self.particleMass; },
+				[](GasComponent& self, float mass) {
+					if (mass <= 0.0f) mass = 0.01f;
+					self.particleMass = mass;
+					for (auto* p : self.particles) {
+						p->mass = mass;
+						p->invMass = 1.0f / mass;
+					}
+				},
+				"Mass of each individual particle. Values <= 0 are clamped to 0.01.")
+			.def("set_particle_mass", [](GasComponent& self, float mass) {
+			if (mass <= 0.0f) mass = 0.01f;
+			self.particleMass = mass;
+			for (auto* p : self.particles) {
+				p->mass = mass;
+				p->invMass = 1.0f / mass;
+			}
+				}, py::arg("particle_mass"),
+					"Set particle_mass. See the particle_mass property.")
+
+			.def_property("rest_density",
+				[](GasComponent& self) { return self.restDensity; },
+				[](GasComponent& self, float d) {
+					if (d <= 0.0f) d = 0.01f;
+					self.restDensity = d;
+					for (auto* p : self.particles) p->restDensity = d;
+				},
+				"Target ambient density the gas solver tries to maintain per particle")
+			.def("set_rest_density", [](GasComponent& self, float d) {
+			if (d <= 0.0f) d = 0.01f;
+			self.restDensity = d;
+			for (auto* p : self.particles) p->restDensity = d;
+				}, py::arg("rest_density"),
+					"Set rest_density. See the rest_density property.")
+
+			.def_property("viscosity",
+				[](GasComponent& self) { return self.viscosity; },
+				[](GasComponent& self, float v) {
+					if (v <= 0.0f) v = 0.0f;
+					self.viscosity = v;
+					for (auto* p : self.particles) p->viscosity = v;
+				},
+				"How resistant the gas is to flowing/shearing")
+			.def("set_viscosity", [](GasComponent& self, float v) {
+			if (v <= 0.0f) v = 0.0f;
+			self.viscosity = v;
+			for (auto* p : self.particles) p->viscosity = v;
+				}, py::arg("viscosity"),
+					"Set viscosity. See the viscosity property.")
+
+			.def_property("vorticity_strength",
+				[](GasComponent& self) { return self.vorticityStrength; },
+				[](GasComponent& self, float v) {
+					v = std::max(0.0f, v);
+					self.vorticityStrength = v;
+					for (auto* p : self.particles) p->vorticityEps = v;
+				},
+				"Strength of vorticity confinement, restoring small-scale swirling motion. Clamped to >= 0.")
+			.def("set_vorticity_strength", [](GasComponent& self, float v) {
+			v = std::max(0.0f, v);
+			self.vorticityStrength = v;
+			for (auto* p : self.particles) p->vorticityEps = v;
+				}, py::arg("vorticity_strength"),
+					"Set vorticity_strength. See the vorticity_strength property.")
+
+			.def_property("stiffness",
+				[](GasComponent& self) { return self.stiffness; },
+				[](GasComponent& self, float s) {
+					s = std::max(0.0001f, s);
+					self.stiffness = s;
+					for (auto* p : self.particles) p->stiffness = s;
+				},
+				"Equation-of-state stiffness: how strongly the gas resists compression")
+			.def("set_stiffness", [](GasComponent& self, float s) {
+			s = std::max(0.0001f, s);
+			self.stiffness = s;
+			for (auto* p : self.particles) p->stiffness = s;
+				}, py::arg("stiffness"),
+					"Set stiffness. See the stiffness property.")
+
+			.def_property("gamma",
+				[](GasComponent& self) { return self.gamma; },
+				[](GasComponent& self, float g) {
+					g = std::max(0.0001f, g);
+					self.gamma = g;
+					for (auto* p : self.particles) p->gamma = g;
+				},
+				"Polytropic exponent used in the gas's equation of state")
+			.def("set_gamma", [](GasComponent& self, float g) {
+			g = std::max(0.0001f, g);
+			self.gamma = g;
+			for (auto* p : self.particles) p->gamma = g;
+				}, py::arg("gamma"),
+					"Set gamma. See the gamma property.")
+
+			.def_property("initial_temperature",
+				[](GasComponent& self) { return self.initialTemperature; },
+				[](GasComponent& self, float t) {
+					self.initialTemperature = t;
+					self.SeedParticles();
+					self.ResizeInstanceBuffer();
+					EngineManager::getInstance().SceneChangeEvent();
+				},
+				"Temperature newly seeded particles start at. Changing this re-seeds the gas.")
+			.def("set_initial_temperature", [](GasComponent& self, float t) {
+			self.initialTemperature = t;
+			self.SeedParticles();
+			self.ResizeInstanceBuffer();
+			EngineManager::getInstance().SceneChangeEvent();
+				}, py::arg("initial_temperature"),
+					"Set initial_temperature. See the initial_temperature property.")
+
+			.def_property("ambient_temperature",
+				[](GasComponent& self) { return self.ambientTemperature; },
+				[](GasComponent& self, float t) {
+					self.ambientTemperature = t;
+					for (auto* p : self.particles) p->ambientTemperature = t;
+				},
+				"Temperature particles cool/warm toward over time")
+			.def("set_ambient_temperature", [](GasComponent& self, float t) {
+			self.ambientTemperature = t;
+			for (auto* p : self.particles) p->ambientTemperature = t;
+				}, py::arg("ambient_temperature"),
+					"Set ambient_temperature. See the ambient_temperature property.")
+
+			.def_property("thermal_diffusivity",
+				[](GasComponent& self) { return self.thermalDiffusivity; },
+				[](GasComponent& self, float d) {
+					self.thermalDiffusivity = d;
+					for (auto* p : self.particles) p->thermalDiffusivity = d;
+				},
+				"How quickly heat diffuses between neighboring particles")
+			.def("set_thermal_diffusivity", [](GasComponent& self, float d) {
+			self.thermalDiffusivity = d;
+			for (auto* p : self.particles) p->thermalDiffusivity = d;
+				}, py::arg("thermal_diffusivity"),
+					"Set thermal_diffusivity. See the thermal_diffusivity property.")
+
+			.def_property("cooling_rate",
+				[](GasComponent& self) { return self.coolingRate; },
+				[](GasComponent& self, float r) {
+					self.coolingRate = r;
+					for (auto* p : self.particles) p->coolingRate = r;
+				},
+				"How quickly particles cool toward ambient_temperature")
+			.def("set_cooling_rate", [](GasComponent& self, float r) {
+			self.coolingRate = r;
+			for (auto* p : self.particles) p->coolingRate = r;
+				}, py::arg("cooling_rate"),
+					"Set cooling_rate. See the cooling_rate property.")
+
+			.def_property("dissipation_rate",
+				[](GasComponent& self) { return self.dissipationRate; },
+				[](GasComponent& self, float r) {
+					r = std::max(0.0f, r);
+					self.dissipationRate = r;
+					for (auto* p : self.particles) p->dissipationRate = r;
+				},
+				"Rate at which the gas fades/dissipates over time. Clamped to >= 0.")
+			.def("set_dissipation_rate", [](GasComponent& self, float r) {
+			r = std::max(0.0f, r);
+			self.dissipationRate = r;
+			for (auto* p : self.particles) p->dissipationRate = r;
+				}, py::arg("dissipation_rate"),
+					"Set dissipation_rate. See the dissipation_rate property.")
+
+			.def_property_readonly("particle_count", [](GasComponent& self) { return self.particles.size(); },
+				"Number of particles currently in this gas")
+
+			.def_property_readonly("particles", [](GasComponent& self) {
+			return self.particles;
+				}, py::return_value_policy::reference,
+				"All GasParticle instances currently owned by this component")
+
+			.def("get_particle", [](GasComponent& self, int index) -> GasParticle* {
+			if (index < 0 || index >= (int)self.particles.size())
+				throw py::index_error("get_particle: index out of range");
+			return self.particles[index];
+				}, py::arg("index"), py::return_value_policy::reference,
+					"Get a particle by index")
+
+			.def("add_particle", [](GasComponent& self, glm::vec3 worldPosition) {
+			return self.AddParticle(worldPosition);
+				}, py::arg("world_position"), py::return_value_policy::reference,
+					"Add a single gas particle at the given world position.\n\n"
+					"Example:\n"
+					"    ```python\n"
+					"    p = gas.add_particle(Vector3(0, 2, 0))\n"
+					"    ```")
+
+			.def("add_particle", [](GasComponent& self, Shape shape, int particleCount) {
+			return self.AddParticles(shape, particleCount);
+				}, py::arg("shape"), py::arg("particle_count"), py::return_value_policy::reference,
+					"Seed roughly particle_count particles filling the given shape and add "
+					"them to the gas.\n\n"
+					"Example:\n"
+					"    ```python\n"
+					"    gas.add_particle(CircleShape(Vector3(0, 3, 0), 1.5), 200)\n"
+					"    ```")
+
+			.def("remove_particle", &GasComponent::RemoveParticle, py::arg("particle"),
+				"Remove and delete a specific GasParticle previously returned by "
+				"add_particle(), particles, or get_particle()")
+
+			.def("update_collision_layer_mask", &GasComponent::UpdateCollisionLayerMask,
+				"Sync every particle's collision_layer/collision_mask with this Object's CollisionComponent");
+
+		EnableGetComponent<GasComponent>(gasClass);
+		EnableHasComponent<GasComponent>(gasClass);
+		RegisterComponentGetter<GasComponent>(gasClass);
+		EnableGetOwner<GasComponent>(gasClass);
+		RegisterComponentRemover<GasComponent>(gasClass);
+		RegisterComponentAdder<GasComponent>(gasClass,
+			[](Object& obj) {
+				return std::make_unique<GasComponent>(&obj);
+			});
+		EnableAddComponent<GasComponent>(gasClass);
+		EnableRemoveComponent<GasComponent>(gasClass);
+		EnableAddObject<GasComponent>(gasClass);
+		EnableAddChild<GasComponent>(gasClass);
+		EnableRemoveObject<GasComponent>(gasClass);
+
 		auto constraintComponentClass = py::class_<ConstraintComponent>(m, "ConstraintComponent")
 			.def_property_readonly("constraints", [](ConstraintComponent& self) {
 			return self.appliedConstraints;
@@ -3259,6 +3641,191 @@ namespace {
 			std::ostringstream ss;
 			ss << "FluidParticle(position=(" << self.position.x << ", "
 				<< self.position.y << ", " << self.position.z << "))";
+			return ss.str();
+				});
+		py::class_<GasParticle>(m, "GasParticle",
+			"A single SPH particle owned by a GasComponent.")
+			.def_property_readonly("owner", [](GasParticle& self) -> Object* {
+			return self.parent;
+				}, py::return_value_policy::reference,
+				"The Object whose GasComponent owns this particle")
+
+			.def_property("position",
+				[](GasParticle& self) { return self.position; },
+				[](GasParticle& self, glm::vec3 pos) {
+					self.position = pos;
+					self.predictedPosition = pos;
+				},
+				"World-space position of this particle. Setting this also resets "
+				"predicted_position, teleporting the particle immediately.")
+			.def("set_position", [](GasParticle& self, glm::vec3 pos) {
+			self.position = pos;
+			self.predictedPosition = pos;
+				}, py::arg("position"),
+					"Set position. See the position property.")
+
+			.def_property_readonly("predicted_position",
+				[](GasParticle& self) { return self.predictedPosition; },
+				"Position predicted by the solver this substep (read-only)")
+
+			.def_property("velocity",
+				[](GasParticle& self) { return self.velocity; },
+				[](GasParticle& self, glm::vec3 v) { self.velocity = v; },
+				"Linear velocity of this particle")
+			.def("set_velocity", [](GasParticle& self, glm::vec3 v) { self.velocity = v; },
+				py::arg("velocity"),
+				"Set velocity. See the velocity property.")
+
+			.def_property("collision_radius",
+				[](GasParticle& self) { return self.collisionRadius; },
+				[](GasParticle& self, float r) { self.collisionRadius = r; },
+				"Physical collision radius of this individual particle")
+			.def("set_collision_radius", [](GasParticle& self, float r) { self.collisionRadius = r; },
+				py::arg("collision_radius"),
+				"Set collision_radius. See the collision_radius property.")
+
+			.def_property("mass",
+				[](GasParticle& self) { return self.mass; },
+				[](GasParticle& self, float mass) {
+					if (mass <= 0.0f) mass = 0.001f;
+					self.mass = mass;
+					self.invMass = 1.0f / mass;
+				},
+				"Mass of this individual particle. Values <= 0 are clamped to 0.001.")
+			.def("set_mass", [](GasParticle& self, float mass) {
+			if (mass <= 0.0f) mass = 0.001f;
+			self.mass = mass;
+			self.invMass = 1.0f / mass;
+				}, py::arg("mass"),
+					"Set mass. See the mass property.")
+
+			.def_property("inverse_mass",
+				[](GasParticle& self) { return self.invMass; },
+				[](GasParticle& self, float invMass) {
+					self.invMass = invMass;
+					self.mass = invMass > 0.0f ? 1.0f / invMass : 0.0f;
+				},
+				"1/mass of this individual particle")
+			.def("set_inverse_mass", [](GasParticle& self, float invMass) {
+			self.invMass = invMass;
+			self.mass = invMass > 0.0f ? 1.0f / invMass : 0.0f;
+				}, py::arg("inverse_mass"),
+					"Set inverse_mass. See the inverse_mass property.")
+
+			.def_property("rest_density",
+				[](GasParticle& self) { return self.restDensity; },
+				[](GasParticle& self, float d) { self.restDensity = d; },
+				"Target ambient density for this individual particle, overriding GasComponent.rest_density")
+			.def("set_rest_density", [](GasParticle& self, float d) { self.restDensity = d; },
+				py::arg("rest_density"),
+				"Set rest_density. See the rest_density property.")
+
+			.def_property_readonly("density", [](GasParticle& self) { return self.density; },
+				"Density computed by the solver this substep (read-only)")
+
+			.def_property("viscosity",
+				[](GasParticle& self) { return self.viscosity; },
+				[](GasParticle& self, float v) { self.viscosity = v; },
+				"Viscosity for this individual particle, overriding GasComponent.viscosity")
+			.def("set_viscosity", [](GasParticle& self, float v) { self.viscosity = v; },
+				py::arg("viscosity"),
+				"Set viscosity. See the viscosity property.")
+
+			.def_property("stiffness",
+				[](GasParticle& self) { return self.stiffness; },
+				[](GasParticle& self, float s) { self.stiffness = s; },
+				"Equation-of-state stiffness for this individual particle, overriding GasComponent.stiffness")
+			.def("set_stiffness", [](GasParticle& self, float s) { self.stiffness = s; },
+				py::arg("stiffness"),
+				"Set stiffness. See the stiffness property.")
+
+			.def_property("gamma",
+				[](GasParticle& self) { return self.gamma; },
+				[](GasParticle& self, float g) { self.gamma = g; },
+				"Polytropic exponent for this individual particle, overriding GasComponent.gamma")
+			.def("set_gamma", [](GasParticle& self, float g) { self.gamma = g; },
+				py::arg("gamma"),
+				"Set gamma. See the gamma property.")
+
+			.def_property("temperature",
+				[](GasParticle& self) { return self.temperature; },
+				[](GasParticle& self, float t) { self.temperature = t; },
+				"Current temperature of this individual particle")
+			.def("set_temperature", [](GasParticle& self, float t) { self.temperature = t; },
+				py::arg("temperature"),
+				"Set temperature. See the temperature property.")
+
+			.def_property("ambient_temperature",
+				[](GasParticle& self) { return self.ambientTemperature; },
+				[](GasParticle& self, float t) { self.ambientTemperature = t; },
+				"Temperature this particle cools/warms toward, overriding GasComponent.ambient_temperature")
+			.def("set_ambient_temperature", [](GasParticle& self, float t) { self.ambientTemperature = t; },
+				py::arg("ambient_temperature"),
+				"Set ambient_temperature. See the ambient_temperature property.")
+
+			.def_property("dissipation_rate",
+				[](GasParticle& self) { return self.dissipationRate; },
+				[](GasParticle& self, float r) { self.dissipationRate = r; },
+				"Rate at which this individual particle fades/dissipates, overriding GasComponent.dissipation_rate")
+			.def("set_dissipation_rate", [](GasParticle& self, float r) { self.dissipationRate = r; },
+				py::arg("dissipation_rate"),
+				"Set dissipation_rate. See the dissipation_rate property.")
+
+			.def_property("thermal_diffusivity",
+				[](GasParticle& self) { return self.thermalDiffusivity; },
+				[](GasParticle& self, float d) { self.thermalDiffusivity = d; },
+				"Heat diffusion rate for this individual particle, overriding GasComponent.thermal_diffusivity")
+			.def("set_thermal_diffusivity", [](GasParticle& self, float d) { self.thermalDiffusivity = d; },
+				py::arg("thermal_diffusivity"),
+				"Set thermal_diffusivity. See the thermal_diffusivity property.")
+
+			.def_property("cooling_rate",
+				[](GasParticle& self) { return self.coolingRate; },
+				[](GasParticle& self, float r) { self.coolingRate = r; },
+				"Cooling rate for this individual particle, overriding GasComponent.cooling_rate")
+			.def("set_cooling_rate", [](GasParticle& self, float r) { self.coolingRate = r; },
+				py::arg("cooling_rate"),
+				"Set cooling_rate. See the cooling_rate property.")
+
+			.def_property("smoothing_radius",
+				[](GasParticle& self) { return self.smoothingRadius; },
+				[](GasParticle& self, float r) {
+					self.smoothingRadius = r;
+					self.poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(r);
+					self.spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(r);
+				},
+				"SPH smoothing radius for this individual particle, overriding GasComponent.smoothing_radius")
+			.def("set_smoothing_radius", [](GasParticle& self, float r) {
+			self.smoothingRadius = r;
+			self.poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(r);
+			self.spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(r);
+				}, py::arg("smoothing_radius"),
+					"Set smoothing_radius. See the smoothing_radius property.")
+
+			.def_property("epsilon",
+				[](GasParticle& self) { return self.epsilon; },
+				[](GasParticle& self, float e) { self.epsilon = e; },
+				"Relaxation parameter (CFM) for this individual particle, overriding GasComponent.epsilon")
+			.def("set_epsilon", [](GasParticle& self, float e) { self.epsilon = e; }, py::arg("epsilon"),
+				"Set epsilon. See the epsilon property.")
+
+			.def_property("vorticity_strength",
+				[](GasParticle& self) { return self.vorticityEps; },
+				[](GasParticle& self, float v) { self.vorticityEps = v; },
+				"Vorticity confinement strength for this individual particle, overriding "
+				"GasComponent.vorticity_strength")
+			.def("set_vorticity_strength", [](GasParticle& self, float v) { self.vorticityEps = v; },
+				py::arg("vorticity_strength"),
+				"Set vorticity_strength. See the vorticity_strength property.")
+
+			.def_property_readonly("lambda", [](GasParticle& self) { return self.lambda; },
+				"Constraint multiplier from the solver's last substep (read-only)")
+
+			.def("__repr__", [](GasParticle& self) {
+			std::ostringstream ss;
+			ss << "GasParticle(position=(" << self.position.x << ", "
+				<< self.position.y << ", " << self.position.z << "), temperature="
+				<< self.temperature << ")";
 			return ss.str();
 				});
 	}
