@@ -295,15 +295,15 @@ public:
 	void ResolveContacts(PotentialContact* contacts, unsigned numContacts);
 	
 	//Fluid collision
-	FluidSoftContact DetectFluidSoftContact(const glm::vec3& particlePos, float radius, const SoftBoundary& soft);
+	FluidSoftContact DetectContinuumSoftContact(const glm::vec3& particlePos, float radius, const SoftBoundary& soft);
 	template<typename BoundaryT, typename ContactT, typename DetectFn>
 	void ResolveFluidBoundaryContactsGeneric(std::vector<ContinuumParticle>& particles, std::vector<int>& indices,
 		std::vector<BoundaryT>& boundaries, std::vector<ContactT>& outContacts, DetectFn detect);
-	void ResolveFluidSoftContacts(float dtSub);
-	void ResolveFluidSoftImpulses(float dtSub);
-	FluidRigidContact DetectFluidRigidContact(const glm::vec3& particlePos, float radius, const RigidBoundary& rigid);
-	void ResolveFluidRigidContacts(float dtSub);
-	void ResolveFluidRigidImpulses(float dtSub);
+	void ResolveContinuumSoftContacts(float dtSub);
+	void ResolveContinuumSoftImpulses(float dtSub);
+	FluidRigidContact DetectContinuumRigidContact(const glm::vec3& particlePos, float radius, const RigidBoundary& rigid);
+	void ResolveContinuumRigidContacts(float dtSub);
+	void ResolveContinuumRigidImpulses(float dtSub);
 	
 	//Soft body collision
 	bool ResolveSoftPointSoftEdgeContacts(PhysicsBody pointBody, PointMass* pointMass,
@@ -343,6 +343,8 @@ public:
 		const glm::vec3& point, const glm::vec3& normal, float penetration);
 	void BroadcastFluidRigidContacts();
 	void BroadcastFluidSoftContacts();
+	void BroadcastGasRigidContacts();
+	void BroadcastGasSoftContacts();
 
 	bool DetectShapeOverlap(Object* objA, TransformComponent* tcA, CollisionShapeEntry& entryA, float rA,
 		Object* objB, TransformComponent* tcB, CollisionShapeEntry& entryB, float rB);

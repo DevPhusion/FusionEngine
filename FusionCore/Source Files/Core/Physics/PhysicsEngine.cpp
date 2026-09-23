@@ -269,7 +269,7 @@ void PhysicsEngine::ResolveContacts(PotentialContact* contacts, unsigned numCont
 	}
 }
 
-FluidSoftContact PhysicsEngine::DetectFluidSoftContact(const glm::vec3& particlePos, float radius, const SoftBoundary& soft) {
+FluidSoftContact PhysicsEngine::DetectContinuumSoftContact(const glm::vec3& particlePos, float radius, const SoftBoundary& soft) {
 	FluidSoftContact contact;
 	const std::vector<SoftEdge>& edges = soft.worldEdges;
 	if (edges.empty()) return contact;
@@ -344,12 +344,12 @@ void PhysicsEngine::ResolveFluidBoundaryContactsGeneric(std::vector<ContinuumPar
 		});
 }
 
-void PhysicsEngine::ResolveFluidSoftContacts(float dtSub) {
+void PhysicsEngine::ResolveContinuumSoftContacts(float dtSub) {
 	ResolveFluidBoundaryContactsGeneric(allContinuumParticles, fluidIndices, softBoundaries, fluidSoftContacts,
 		[&](const glm::vec3& pos, float radius, const SoftBoundary& sb, int idx) -> FluidSoftContact {
 			FluidSoftContact c;
 			if (!sb.valid) return c;
-			c = DetectFluidSoftContact(pos, radius, sb);
+			c = DetectContinuumSoftContact(pos, radius, sb);
 			if (c.hit) c.softIndex = idx;
 			return c;
 		});
@@ -358,13 +358,13 @@ void PhysicsEngine::ResolveFluidSoftContacts(float dtSub) {
 		[&](const glm::vec3& pos, float radius, const SoftBoundary& sb, int idx) -> FluidSoftContact {
 			FluidSoftContact c;
 			if (!sb.valid) return c;
-			c = DetectFluidSoftContact(pos, radius, sb);
+			c = DetectContinuumSoftContact(pos, radius, sb);
 			if (c.hit) c.softIndex = idx;
 			return c;
 		});
 }
 
-void PhysicsEngine::ResolveFluidSoftImpulses(float dtSub) {
+void PhysicsEngine::ResolveContinuumSoftImpulses(float dtSub) {
 	int contactIterations = 4;
 	float beta = 0.2f;
 	float slop = 0.0005f;
@@ -408,7 +408,7 @@ void PhysicsEngine::ResolveFluidSoftImpulses(float dtSub) {
 	}
 }
 
-FluidRigidContact PhysicsEngine::DetectFluidRigidContact(const glm::vec3& particlePos, float radius, const RigidBoundary& rigid) {
+FluidRigidContact PhysicsEngine::DetectContinuumRigidContact(const glm::vec3& particlePos, float radius, const RigidBoundary& rigid) {
 	FluidRigidContact contact;
 	if (rigid.worldEdges.empty()) return contact;
 
@@ -438,23 +438,23 @@ FluidRigidContact PhysicsEngine::DetectFluidRigidContact(const glm::vec3& partic
 	return contact;
 }
 
-void PhysicsEngine::ResolveFluidRigidContacts(float dtSub) {
+void PhysicsEngine::ResolveContinuumRigidContacts(float dtSub) {
 	ResolveFluidBoundaryContactsGeneric(allContinuumParticles, fluidIndices, rigidBoundaries, fluidRigidContacts,
 		[&](const glm::vec3& pos, float radius, const RigidBoundary& rb, int idx) -> FluidRigidContact {
-			FluidRigidContact c = DetectFluidRigidContact(pos, radius, rb);
+			FluidRigidContact c = DetectContinuumRigidContact(pos, radius, rb);
 			if (c.hit) c.rigidIndex = idx;
 			return c;
 		});
 
 	ResolveFluidBoundaryContactsGeneric(allContinuumParticles, gasIndices, rigidBoundaries, fluidRigidContacts,
 		[&](const glm::vec3& pos, float radius, const RigidBoundary& rb, int idx) -> FluidRigidContact {
-			FluidRigidContact c = DetectFluidRigidContact(pos, radius, rb);
+			FluidRigidContact c = DetectContinuumRigidContact(pos, radius, rb);
 			if (c.hit) c.rigidIndex = idx;
 			return c;
 		});
 }
 
-void PhysicsEngine::ResolveFluidRigidImpulses(float dtSub) {
+void PhysicsEngine::ResolveContinuumRigidImpulses(float dtSub) {
 	int contactIterations = 4;
 	float beta = 0.2f;
 	float slop = 0.0005f;
@@ -1507,6 +1507,46 @@ void PhysicsEngine::BroadcastFluidSoftContacts() {
 		if (!notified.insert({ fluidObj, softObj }).second) continue;
 
 		BroadcastCollision(fluidObj, -1, softObj, -1, CollisionType::FluidVsSoft, c.point, c.normal, c.penetration);
+	}
+}
+
+void PhysicsEngine::BroadcastGasRigidContacts() {
+	std::set<std::pair<Object*, Object*>> notified;
+	for (int i : gasIndices) {
+		const FluidRigidContact& c = fluidRigidContacts[i];
+		if (!c.hit) continue;
+
+		Object* gasObj = nullptr;
+		std::visit([&](auto&& p) {
+			using T = std::decay_t<decltype(p)>;
+			if constexpr (std::is_same_v<T, GasParticle*>) gasObj = p->parent;
+			}, allContinuumParticles[i]);
+
+		Object* rigidObj = rigidBoundaries[c.rigidIndex].obj;
+		if (!gasObj || !rigidObj) continue;
+		if (!notified.insert({ gasObj, rigidObj }).second) continue;
+
+		BroadcastCollision(gasObj, -1, rigidObj, ResolutionShapeIdOf(rigidObj), CollisionType::GasVsRigid, c.point, c.normal, c.penetration);
+	}
+}
+
+void PhysicsEngine::BroadcastGasSoftContacts() {
+	std::set<std::pair<Object*, Object*>> notified;
+	for (int i : gasIndices) {
+		const FluidSoftContact& c = fluidSoftContacts[i];
+		if (!c.hit) continue;
+
+		Object* gasObj = nullptr;
+		std::visit([&](auto&& p) {
+			using T = std::decay_t<decltype(p)>;
+			if constexpr (std::is_same_v<T, GasParticle*>) gasObj = p->parent;
+			}, allContinuumParticles[i]);
+
+		Object* softObj = softBoundaries[c.softIndex].obj;
+		if (!gasObj || !softObj) continue;
+		if (!notified.insert({ gasObj, softObj }).second) continue;
+
+		BroadcastCollision(gasObj, -1, softObj, -1, CollisionType::GasVsSoft, c.point, c.normal, c.penetration);
 	}
 }
 
@@ -3224,15 +3264,17 @@ void PhysicsEngine::ResolvePBF(float delta) {
 			}
 		}
 		{
-			TIME_BLOCK("Fluid-Rigid collision");
-			ResolveFluidRigidContacts(dtSub);
+			TIME_BLOCK("Continuum-Rigid collision");
+			ResolveContinuumRigidContacts(dtSub);
 			BroadcastFluidRigidContacts();
+			BroadcastGasRigidContacts();
 		}
 
 		{
-			TIME_BLOCK("Fluid-Soft collision");    
-			ResolveFluidSoftContacts(dtSub);
+			TIME_BLOCK("Continuum-Soft collision");    
+			ResolveContinuumSoftContacts(dtSub);
 			BroadcastFluidSoftContacts();
+			BroadcastGasSoftContacts();
 		}
 
 		{
@@ -3254,13 +3296,13 @@ void PhysicsEngine::ResolvePBF(float delta) {
 		}
 
 		{
-			TIME_BLOCK("Fluid-Rigid collision impulse");
-			ResolveFluidRigidImpulses(dtSub);
+			TIME_BLOCK("Continuum-Rigid collision impulse");
+			ResolveContinuumRigidImpulses(dtSub);
 		}
 
 		{
-			TIME_BLOCK("Fluid-Soft collision impulse");
-			ResolveFluidSoftImpulses(dtSub);
+			TIME_BLOCK("Continuum-Soft collision impulse");
+			ResolveContinuumSoftImpulses(dtSub);
 		}
 
 		{

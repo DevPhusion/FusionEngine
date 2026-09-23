@@ -18,7 +18,9 @@ enum CollisionType {
 	RigidVsSoft,
 	SoftVsSoft,
 	FluidVsRigid,
-	FluidVsSoft
+	FluidVsSoft,
+	GasVsRigid,
+	GasVsSoft
 };
 
 struct CollisionEventData {

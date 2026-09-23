@@ -991,6 +991,8 @@ namespace {
 			.value("SoftVsSoft", CollisionType::SoftVsSoft)
 			.value("FluidVsRigid", CollisionType::FluidVsRigid)
 			.value("FluidVsSoft", CollisionType::FluidVsSoft)
+			.value("GasVsRigid", CollisionType::GasVsRigid)
+			.value("GasVsSoft", CollisionType::GasVsSoft)
 			.export_values();
 
 		py::class_<CollisionEventData>(m, "CollisionEventData",
