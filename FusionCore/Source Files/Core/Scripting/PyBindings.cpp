@@ -2841,13 +2841,11 @@ namespace {
 				[](GasComponent& self, float r) {
 					r = std::max(0.0f, r);
 					self.dissipationRate = r;
-					for (auto* p : self.particles) p->dissipationRate = r;
 				},
 				"Rate at which the gas fades/dissipates over time. Clamped to >= 0.")
 			.def("set_dissipation_rate", [](GasComponent& self, float r) {
 			r = std::max(0.0f, r);
 			self.dissipationRate = r;
-			for (auto* p : self.particles) p->dissipationRate = r;
 				}, py::arg("dissipation_rate"),
 					"Set dissipation_rate. See the dissipation_rate property.")
 
@@ -3764,14 +3762,6 @@ namespace {
 			.def("set_ambient_temperature", [](GasParticle& self, float t) { self.ambientTemperature = t; },
 				py::arg("ambient_temperature"),
 				"Set ambient_temperature. See the ambient_temperature property.")
-
-			.def_property("dissipation_rate",
-				[](GasParticle& self) { return self.dissipationRate; },
-				[](GasParticle& self, float r) { self.dissipationRate = r; },
-				"Rate at which this individual particle fades/dissipates, overriding GasComponent.dissipation_rate")
-			.def("set_dissipation_rate", [](GasParticle& self, float r) { self.dissipationRate = r; },
-				py::arg("dissipation_rate"),
-				"Set dissipation_rate. See the dissipation_rate property.")
 
 			.def_property("thermal_diffusivity",
 				[](GasParticle& self) { return self.thermalDiffusivity; },

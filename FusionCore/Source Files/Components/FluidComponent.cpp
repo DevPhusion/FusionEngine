@@ -477,9 +477,9 @@ void FluidComponent::InitRenderResources() {
 
 	glGenBuffers(1, &instanceVBO);
 	glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-	glBufferData(GL_ARRAY_BUFFER, particles.size() * sizeof(glm::vec3), nullptr, GL_DYNAMIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, particles.size() * sizeof(glm::vec4), nullptr, GL_DYNAMIC_DRAW);
 
-	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec4), (void*)0);
 	glEnableVertexAttribArray(2);
 	glVertexAttribDivisor(2, 1);
 
@@ -512,7 +512,7 @@ void FluidComponent::InitRenderResources() {
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadEBO); 
 
 	glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec4), (void*)0);
 	glEnableVertexAttribArray(2);
 	glVertexAttribDivisor(2, 1);
 
@@ -885,12 +885,12 @@ void FluidComponent::UpdateCollisionLayerMask() {
 void FluidComponent::UpdateInstanceBuffer() {
 	if (!renderInitialized) return;
 
-	std::vector<glm::vec3> positions;
-	positions.reserve(particles.size());
-	for (auto& p : particles) positions.push_back(p->position);
+	std::vector<glm::vec4> instanceData;
+	instanceData.reserve(particles.size());
+	for (auto& p : particles) instanceData.emplace_back(p->position, 1.0f);
 
 	glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, positions.size() * sizeof(glm::vec3), positions.data());
+	glBufferSubData(GL_ARRAY_BUFFER, 0, instanceData.size() * sizeof(glm::vec4), instanceData.data());
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
@@ -939,7 +939,7 @@ void FluidComponent::UpdateParticleTransforms() {
 void FluidComponent::ResizeInstanceBuffer() {
 	if (!renderInitialized) return;
 	glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-	glBufferData(GL_ARRAY_BUFFER, particles.size() * sizeof(glm::vec3), nullptr, GL_DYNAMIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, particles.size() * sizeof(glm::vec4), nullptr, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, heatVBO);
 	glBufferData(GL_ARRAY_BUFFER, particles.size() * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);

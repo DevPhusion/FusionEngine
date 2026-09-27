@@ -67,6 +67,14 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 	}
 
 	{
+		TIME_BLOCK("Gas dissipation");
+		for (int i = 0; i < allObjects->size(); i++) {
+			GasComponent* gc = (*allObjects)[i]->GetComponent<GasComponent>();
+			if (gc && gc->Enabled) gc->UpdateDissipation(delta);
+		}
+	}
+
+	{
 		TIME_BLOCK("Collision");
 		std::vector<PotentialContact> potentialContacts;
 		potentialContacts.reserve(allObjects->size() * 4);
@@ -3144,7 +3152,7 @@ void PhysicsEngine::ResolvePBF(float delta) {
 				[&](int i) {
 					std::visit([&](auto&& p) {
 						if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
-							p->velocity += dtSub * glm::vec3(0.0f, -9.8f * (-1 / p->temperature) * (p->temperature - p->ambientTemperature), 0.0f);
+							p->velocity += dtSub * glm::vec3(0.0f, -9.8f * (p->temperature - p->ambientTemperature) / p->ambientTemperature, 0.0f);
 							p->predictedPosition = p->position + dtSub * p->velocity;
 						}
 					}, allContinuumParticles[i]);
@@ -3363,19 +3371,6 @@ void PhysicsEngine::ResolvePBF(float delta) {
 							p->temperature = std::max(p->temperature, 1.0f);
 						}
 						}, allContinuumParticles[i]);
-				});
-		}
-
-		{
-			TIME_BLOCK("Gas mass dissipation");
-			std::for_each(std::execution::par_unseq, gasIndices.begin(), gasIndices.end(),
-				[&](int i) {
-					std::visit([&](auto&& p) {
-						if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
-							p->mass *= std::exp(-p->dissipationRate * dtSub);
-							p->invMass = 1.0f / p->mass;
-						}
-					}, allContinuumParticles[i]);
 				});
 		}
 	}

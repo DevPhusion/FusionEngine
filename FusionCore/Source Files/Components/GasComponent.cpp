@@ -2,7 +2,6 @@
 #include "../../Header Files/Core/Physics/PhysicsEngine.h"
 #include "../../Header Files/Core/Editor/EditorField.h"
 
-
 GasComponent::GasComponent(Object* parent) : ComponentBase<GasComponent>(parent) {
 	Name = "Gas Component";
 
@@ -131,9 +130,13 @@ void GasComponent::SeedParticles() {
 		p->gamma = gamma;
 		p->temperature = initialTemperature;
 		p->ambientTemperature = ambientTemperature;
-		p->dissipationRate = dissipationRate;
 		p->thermalDiffusivity = thermalDiffusivity;
 		p->coolingRate = coolingRate;
+		p->radiusScale = 1.0f;
+		p->canDissipate = canDissipate;
+		p->driftDir = RandomUnitVector2D();
+		p->hasSplit = false;
+		p->dissipationGeneration = 0;
 		p->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(smoothingRadius);
 		p->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(smoothingRadius);
 		if (cc) {
@@ -165,9 +168,10 @@ GasParticle* GasComponent::AddParticle(glm::vec3 worldPosition) {
 	p->gamma = gamma;
 	p->temperature = initialTemperature;
 	p->ambientTemperature = ambientTemperature;
-	p->dissipationRate = dissipationRate;
 	p->thermalDiffusivity = thermalDiffusivity;
 	p->coolingRate = coolingRate;
+	p->radiusScale = 1.0f;
+	p->canDissipate = canDissipate;
 	p->poly6Coeff = PhysicsEngine::getInstance().Poly6Coefficient(smoothingRadius);
 	p->spikyCoeff = PhysicsEngine::getInstance().SpikyCoefficient(smoothingRadius);
 	if (cc) {
@@ -239,6 +243,84 @@ void GasComponent::RemoveParticle(GasParticle* particle) {
 	}
 
 	ResizeInstanceBuffer();
+}
+
+glm::vec3 GasComponent::RandomUnitVector2D() {
+	static thread_local std::mt19937 rng(std::random_device{}());
+	static thread_local std::uniform_real_distribution<float> dist(0.0f, 2.0f * (float)std::numbers::pi);
+	float angle = dist(rng);
+	return glm::vec3(std::cos(angle), std::sin(angle), 0.0f);
+}
+
+void GasComponent::UpdateDissipation(float delta) {
+	if (!canDissipate || particles.empty()) return;
+
+	float decay = std::exp(-dissipationRate * delta);
+
+	for (int i = (int)particles.size() - 1; i >= 0; --i)
+	{
+		GasParticle* p = particles[i];
+		if (!p->canDissipate) continue;
+
+		if (p->isVisualOnly) {
+			p->position += p->velocity * delta;
+			p->predictedPosition = p->position;
+		}
+
+		p->radiusScale *= decay;
+		p->collisionRadius = collisionRadius * p->radiusScale;
+
+		float shrinkFraction = 1.0f - p->radiusScale;
+		glm::vec3 driftVelocity = p->driftDir * (dissipationSpread * shrinkFraction);
+		float currentSpeed = glm::length(p->velocity);
+		if (currentSpeed < maxDissipationSpeed) {
+			p->velocity += driftVelocity * delta;
+			float newSpeed = glm::length(p->velocity);
+			if (newSpeed > maxDissipationSpeed) {
+				p->velocity *= maxDissipationSpeed / newSpeed;
+			}
+		}
+
+		if (emitWispsOnDissipate && !p->hasSplit &&
+			p->radiusScale <= wispSplitThreshold &&
+			p->dissipationGeneration < maxDissipationGenerations) {
+			p->hasSplit = true;
+			SpawnDissipationWisps(p);
+		}
+
+		if (p->radiusScale < minRadius) {
+			RemoveParticle(p);
+		}
+	}
+}
+
+void GasComponent::SpawnDissipationWisps(GasParticle* source) {
+	for (int w = 0; w < wispCountPerSplit; w++) {
+		glm::vec3 jitter = RandomUnitVector2D() * (collisionRadius * source->radiusScale * 0.75f);
+
+		glm::vec3 inheritedVelocity = source->velocity * 0.3f + RandomUnitVector2D() * (dissipationSpread * 0.2f);
+		float speed = glm::length(inheritedVelocity);
+		if (speed > maxDissipationSpeed) {
+			inheritedVelocity *= maxDissipationSpeed / speed;
+		}
+
+		GasParticle* wisp = new GasParticle();
+		CollisionComponent* cc = parent->GetComponent<CollisionComponent>();
+		wisp->parent = parent;
+		wisp->position = source->position + jitter;
+		wisp->predictedPosition = source->position + jitter;
+		wisp->velocity = inheritedVelocity;
+		wisp->collisionRadius = collisionRadius * wisp->radiusScale;
+		wisp->radiusScale = source->radiusScale * 0.6f;
+		wisp->canDissipate = canDissipate;
+		wisp->driftDir = RandomUnitVector2D();
+		wisp->hasSplit = false;
+		wisp->dissipationGeneration = source->dissipationGeneration + 1;
+		wisp->isVisualOnly = true;
+		particles.push_back(wisp);
+
+		ResizeInstanceBuffer();
+	}
 }
 
 void GasComponent::ProcessInspectorUI() {
@@ -365,10 +447,43 @@ void GasComponent::ProcessInspectorUI() {
 	}
 
 	if (ImGui::TreeNodeEx("Lifecycle", ImGuiTreeNodeFlags_DefaultOpen)) {
-		EditorField::InputFloatScene(parent, "Dissipation Rate", "##DissipationRate", &dissipationRate, [&] {
-			dissipationRate = std::max(0.0f, dissipationRate);
-			for (int i = 0; i < particles.size(); i++) particles[i]->dissipationRate = dissipationRate;
+		EditorField::CheckboxScene(parent, "Can Dissipate", "##CanDissipate", &canDissipate, [&] {
+			for (auto* p : particles) p->canDissipate = canDissipate;
 			});
+
+		if (canDissipate) {
+			EditorField::InputFloatScene(parent, "Min Radius", "##MinRadius", &minRadius, [&] {
+				minRadius = std::max(0.0001f, minRadius);
+				});
+
+			EditorField::InputFloatScene(parent, "Dissipation Rate", "##DissipationRate", &dissipationRate, [&] {
+				dissipationRate = std::max(0.0f, dissipationRate);
+				});
+
+			EditorField::InputFloatScene(parent, "Dissipation Spread", "##DissipationSpread", &dissipationSpread, [&] {
+				dissipationSpread = std::max(0.0f, dissipationSpread);
+				});
+
+			EditorField::InputFloatScene(parent, "Max Dissipation Speed", "##MaxDissipationSpeed", &maxDissipationSpeed, [&] {
+				maxDissipationSpeed = std::max(0.0f, maxDissipationSpeed);
+				});
+
+			EditorField::CheckboxScene(parent, "Emit Wisps", "##EmitWisps", &emitWispsOnDissipate, [] {});
+
+			if (emitWispsOnDissipate) {
+				EditorField::InputFloatScene(parent, "Wisp Split Threshold", "##WispSplitThreshold", &wispSplitThreshold, [&] {
+					wispSplitThreshold = glm::clamp(wispSplitThreshold, 0.0f, 1.0f);
+					});
+
+				EditorField::InputIntScene(parent, "Wisp Count Per Split", "##WispCountPerSplit", &wispCountPerSplit, [&] {
+					wispCountPerSplit = std::max(0, wispCountPerSplit);
+					});
+
+				EditorField::InputIntScene(parent, "Max Dissipation Generations", "##MaxDissipationGenerations", &maxDissipationGenerations, [&] {
+					maxDissipationGenerations = std::max(0, maxDissipationGenerations);
+					});
+			}
+		}
 
 		ImGui::TreePop();
 	}
@@ -431,6 +546,13 @@ void GasComponent::CopyTo(Object* other) {
 	target->initialTemperature = initialTemperature;
 	target->ambientTemperature = ambientTemperature;
 	target->dissipationRate = dissipationRate;
+	target->minRadius = minRadius;
+	target->dissipationSpread = dissipationSpread;
+	target->emitWispsOnDissipate = emitWispsOnDissipate;
+	target->wispSplitThreshold = wispSplitThreshold;
+	target->wispCountPerSplit = wispCountPerSplit;
+	target->maxDissipationGenerations = maxDissipationGenerations;
+	target->maxDissipationSpeed = maxDissipationSpeed;
 	target->noiseScale = noiseScale;
 	target->noiseStrength = noiseStrength;
 	target->riseSpeed = riseSpeed;
@@ -460,7 +582,15 @@ void GasComponent::Serialize(BinaryWriter& w) {
 	w.Write(gamma);
 	w.Write(initialTemperature);
 	w.Write(ambientTemperature);
+	w.Write(canDissipate);
 	w.Write(dissipationRate);
+	w.Write(minRadius);
+	w.Write(dissipationSpread);
+	w.Write(emitWispsOnDissipate);
+	w.Write(wispSplitThreshold);
+	w.Write(wispCountPerSplit);
+	w.Write(maxDissipationGenerations);
+	w.Write(maxDissipationSpeed);
 	w.Write(noiseScale);
 	w.Write(noiseStrength);
 	w.Write(riseSpeed);
@@ -485,7 +615,15 @@ void GasComponent::Deserialize(BinaryReader& r) {
 	gamma = r.Read<float>();
 	initialTemperature = r.Read<float>();
 	ambientTemperature = r.Read<float>();
+	canDissipate = r.Read<bool>();
 	dissipationRate = r.Read<float>();
+	minRadius = r.Read<float>();
+	dissipationSpread = r.Read<float>();
+	emitWispsOnDissipate = r.Read<bool>();
+	wispSplitThreshold = r.Read<float>();
+	wispCountPerSplit = r.Read<int>();
+	maxDissipationGenerations = r.Read<int>();
+	maxDissipationSpeed = r.Read<float>();
 	noiseScale = r.Read<float>();
 	noiseStrength = r.Read<float>();
 	riseSpeed = r.Read<float>();
@@ -574,9 +712,9 @@ void GasComponent::InitRenderResources() {
 
 	glGenBuffers(1, &instanceVBO);
 	glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-	glBufferData(GL_ARRAY_BUFFER, particles.size() * sizeof(glm::vec3), nullptr, GL_DYNAMIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, particles.size() * sizeof(glm::vec4), nullptr, GL_DYNAMIC_DRAW);
 
-	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec4), (void*)0);
 	glEnableVertexAttribArray(2);
 	glVertexAttribDivisor(2, 1);
 
@@ -609,7 +747,7 @@ void GasComponent::InitRenderResources() {
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, quadEBO); // reuse the same 6 indices
 
 	glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-	glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)0);
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(glm::vec4), (void*)0);
 	glEnableVertexAttribArray(2);
 	glVertexAttribDivisor(2, 1);
 
@@ -916,12 +1054,12 @@ void GasComponent::UpdateCollisionLayerMask() {
 void GasComponent::UpdateInstanceBuffer() {
 	if (!renderInitialized) return;
 
-	std::vector<glm::vec3> positions;
-	positions.reserve(particles.size());
-	for (auto& p : particles) positions.push_back(p->position);
+	std::vector<glm::vec4> instanceData;
+	instanceData.reserve(particles.size());
+	for (auto& p : particles) instanceData.emplace_back(p->position, p->radiusScale);
 
 	glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, positions.size() * sizeof(glm::vec3), positions.data());
+	glBufferSubData(GL_ARRAY_BUFFER, 0, instanceData.size() * sizeof(glm::vec4), instanceData.data());
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
@@ -970,7 +1108,7 @@ void GasComponent::UpdateParticleTransforms() {
 void GasComponent::ResizeInstanceBuffer() {
 	if (!renderInitialized) return;
 	glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
-	glBufferData(GL_ARRAY_BUFFER, particles.size() * sizeof(glm::vec3), nullptr, GL_DYNAMIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, particles.size() * sizeof(glm::vec4), nullptr, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, heatVBO);
 	glBufferData(GL_ARRAY_BUFFER, particles.size() * sizeof(float), nullptr, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);

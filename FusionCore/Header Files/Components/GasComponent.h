@@ -2,6 +2,8 @@
 #include "Component.h"
 #include "../Core/Physics/ContinuumParticle.h"
 #include "../Core/Rendering/Shapes.h"
+#include <random>
+#include <numbers>
 
 class GasComponent : public ComponentBase<GasComponent>
 {
@@ -28,9 +30,17 @@ public:
 	float initialTemperature = 300.0f;
 	float ambientTemperature = 300.0f;
 	float dissipationRate = 0.15f;
-
     float thermalDiffusivity = 0.5f;
     float coolingRate = 0.1f;
+
+    bool canDissipate = true;
+    float minRadius = 0.05;
+    float dissipationSpread = 1.5f;
+    bool emitWispsOnDissipate = true;
+    float maxDissipationSpeed = 3.0f;
+    float wispSplitThreshold = 0.5f;
+    int wispCountPerSplit = 2;
+    int maxDissipationGenerations = 2;
 
     glm::vec4 outlineColor = glm::vec4(0.6, 0.6, 0.65, 0.1);
     float metaballThreshold = 0.3f;
@@ -56,6 +66,7 @@ public:
     GasParticle* AddParticle(glm::vec3 worldPosition);
     std::vector<GasParticle*> AddParticles(Shape shape, int particleCount);
     void RemoveParticle(GasParticle* particle);
+    void UpdateDissipation(float delta);
     void InitRenderResources();
     void UpdateInstanceBuffer();
     void UpdateCollisionLayerMask();
@@ -77,6 +88,9 @@ private:
     void DrawComposite();
     void DrawParticlesDebug();
     void DrawVelocityField();
+
+    glm::vec3 RandomUnitVector2D();
+    void SpawnDissipationWisps(GasParticle* source);
 
     void GetShapeBounds(const Shape& shape, glm::vec3& outMin, glm::vec3& outMax);
     bool IsPointInsideShape(const Shape& shape, const glm::vec3& point);

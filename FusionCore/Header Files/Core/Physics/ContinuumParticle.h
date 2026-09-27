@@ -44,10 +44,14 @@ struct GasParticle {
 
     float temperature;
 	float ambientTemperature;
-    float dissipationRate;
-
     float thermalDiffusivity;
     float coolingRate;
+
+    bool canDissipate;
+    float radiusScale;
+    glm::vec3 driftDir;
+    bool hasSplit;
+    int dissipationGeneration;
 
     float invMass;
     float mass;
@@ -63,6 +67,8 @@ struct GasParticle {
 
     uint16_t collisionLayer = 0xFFFF;
     uint16_t collisionMask = 0xFFFF;
+
+    bool isVisualOnly = false;
 };
 
 using ContinuumParticle = std::variant<FluidParticle*, GasParticle*>;
