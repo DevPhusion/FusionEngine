@@ -2849,13 +2849,115 @@ namespace {
 				}, py::arg("dissipation_rate"),
 					"Set dissipation_rate. See the dissipation_rate property.")
 
+				.def_property("can_dissipate",
+					[](GasComponent& self) { return self.canDissipate; },
+					[](GasComponent& self, bool c) {
+						self.canDissipate = c;
+						for (auto* p : self.particles) p->canDissipate = c;
+						EngineManager::getInstance().SceneChangeEvent();
+					},
+					"Whether particles shrink and fade away over time. Applies to all current "
+					"particles. When False, the other dissipation/wisp settings are ignored.")
+				.def("set_can_dissipate", [](GasComponent& self, bool c) {
+				self.canDissipate = c;
+				for (auto* p : self.particles) p->canDissipate = c;
+				EngineManager::getInstance().SceneChangeEvent();
+					}, py::arg("can_dissipate"),
+						"Set can_dissipate. See the can_dissipate property.")
+
+				.def_property("dissipation_rate",
+					[](GasComponent& self) { return self.dissipationRate; },
+					[](GasComponent& self, float r) { self.dissipationRate = std::max(0.0f, r); },
+					"Exponential rate at which each particle's radius scale decays per second "
+					"(only when can_dissipate is True). Clamped to >= 0.")
+				.def("set_dissipation_rate", [](GasComponent& self, float r) {
+				self.dissipationRate = std::max(0.0f, r);
+					}, py::arg("dissipation_rate"),
+						"Set dissipation_rate. See the dissipation_rate property.")
+
+				.def_property("min_radius",
+					[](GasComponent& self) { return self.minRadius; },
+					[](GasComponent& self, float r) { self.minRadius = std::max(0.0001f, r); },
+					"Radius scale (0-1, relative to full size) below which a dissipating particle "
+					"is removed. Clamped to a small positive minimum.")
+				.def("set_min_radius", [](GasComponent& self, float r) {
+				self.minRadius = std::max(0.0001f, r);
+					}, py::arg("min_radius"),
+						"Set min_radius. See the min_radius property.")
+
+				.def_property("dissipation_spread",
+					[](GasComponent& self) { return self.dissipationSpread; },
+					[](GasComponent& self, float s) { self.dissipationSpread = std::max(0.0f, s); },
+					"How strongly dissipating particles drift outward along a random direction "
+					"as they shrink. Clamped to >= 0.")
+				.def("set_dissipation_spread", [](GasComponent& self, float s) {
+				self.dissipationSpread = std::max(0.0f, s);
+					}, py::arg("dissipation_spread"),
+						"Set dissipation_spread. See the dissipation_spread property.")
+
+				.def_property("max_dissipation_speed",
+					[](GasComponent& self) { return self.maxDissipationSpeed; },
+					[](GasComponent& self, float s) { self.maxDissipationSpeed = std::max(0.0f, s); },
+					"Speed cap applied to particles while they drift outward from dissipation. "
+					"Clamped to >= 0.")
+				.def("set_max_dissipation_speed", [](GasComponent& self, float s) {
+				self.maxDissipationSpeed = std::max(0.0f, s);
+					}, py::arg("max_dissipation_speed"),
+						"Set max_dissipation_speed. See the max_dissipation_speed property.")
+
+				.def_property("emit_wisps_on_dissipate",
+					[](GasComponent& self) { return self.emitWispsOnDissipate; },
+					[](GasComponent& self, bool e) { self.emitWispsOnDissipate = e; },
+					"Whether a dissipating particle splits into smaller visual-only wisps once "
+					"it shrinks past wisp_split_threshold")
+				.def("set_emit_wisps_on_dissipate", [](GasComponent& self, bool e) {
+				self.emitWispsOnDissipate = e;
+					}, py::arg("emit_wisps_on_dissipate"),
+						"Set emit_wisps_on_dissipate. See the emit_wisps_on_dissipate property.")
+
+				.def_property("wisp_split_threshold",
+					[](GasComponent& self) { return self.wispSplitThreshold; },
+					[](GasComponent& self, float t) { self.wispSplitThreshold = glm::clamp(t, 0.0f, 1.0f); },
+					"Radius scale (0-1) at or below which a dissipating particle spawns its wisps. "
+					"Clamped to [0, 1].")
+				.def("set_wisp_split_threshold", [](GasComponent& self, float t) {
+				self.wispSplitThreshold = glm::clamp(t, 0.0f, 1.0f);
+					}, py::arg("wisp_split_threshold"),
+						"Set wisp_split_threshold. See the wisp_split_threshold property.")
+
+				.def_property("wisp_count_per_split",
+					[](GasComponent& self) { return self.wispCountPerSplit; },
+					[](GasComponent& self, int c) { self.wispCountPerSplit = std::max(0, c); },
+					"Number of wisps spawned each time a particle splits. Clamped to >= 0.")
+				.def("set_wisp_count_per_split", [](GasComponent& self, int c) {
+				self.wispCountPerSplit = std::max(0, c);
+					}, py::arg("wisp_count_per_split"),
+						"Set wisp_count_per_split. See the wisp_count_per_split property.")
+
+				.def_property("max_dissipation_generations",
+					[](GasComponent& self) { return self.maxDissipationGenerations; },
+					[](GasComponent& self, int g) { self.maxDissipationGenerations = std::max(0, g); },
+					"How many times wisps may themselves split into further wisps. "
+					"0 means only original particles split. Clamped to >= 0.")
+				.def("set_max_dissipation_generations", [](GasComponent& self, int g) {
+				self.maxDissipationGenerations = std::max(0, g);
+					}, py::arg("max_dissipation_generations"),
+						"Set max_dissipation_generations. See the max_dissipation_generations property.")
+
+				.def("reseed", [](GasComponent& self) {
+				self.SeedParticles();
+				self.ResizeInstanceBuffer();
+					}, "Discard all particles (including manually added ones and wisps) and "
+					"re-fill the shape according to desired_particle_count")
+
 			.def_property_readonly("particle_count", [](GasComponent& self) { return self.particles.size(); },
 				"Number of particles currently in this gas")
 
 			.def_property_readonly("particles", [](GasComponent& self) {
 			return self.particles;
 				}, py::return_value_policy::reference,
-				"All GasParticle instances currently owned by this component")
+				"All GasParticle instances currently owned by this component, including "
+				"visual-only wisps spawned by dissipation (check GasParticle.is_visual_only)")
 
 			.def("get_particle", [](GasComponent& self, int index) -> GasParticle* {
 			if (index < 0 || index >= (int)self.particles.size())
@@ -3775,6 +3877,57 @@ namespace {
 				[](GasParticle& self) { return self.coolingRate; },
 				[](GasParticle& self, float r) { self.coolingRate = r; },
 				"Cooling rate for this individual particle, overriding GasComponent.cooling_rate")
+				.def_property("compliance",
+					[](GasParticle& self) { return self.compliance; },
+					[](GasParticle& self, float c) { self.compliance = c; },
+					"Constraint compliance (inverse stiffness) for this individual particle")
+				.def("set_compliance", [](GasParticle& self, float c) { self.compliance = c; },
+					py::arg("compliance"),
+					"Set compliance. See the compliance property.")
+
+				.def_property("can_dissipate",
+					[](GasParticle& self) { return self.canDissipate; },
+					[](GasParticle& self, bool c) { self.canDissipate = c; },
+					"Whether this individual particle shrinks and fades over time, overriding "
+					"GasComponent.can_dissipate")
+				.def("set_can_dissipate", [](GasParticle& self, bool c) { self.canDissipate = c; },
+					py::arg("can_dissipate"),
+					"Set can_dissipate. See the can_dissipate property.")
+
+				.def_property("radius_scale",
+					[](GasParticle& self) { return self.radiusScale; },
+					[](GasParticle& self, float s) { self.radiusScale = s; },
+					"Current size multiplier (1 = full size). Decays toward 0 while dissipating; "
+					"the particle is removed once it drops below GasComponent.min_radius.")
+				.def("set_radius_scale", [](GasParticle& self, float s) { self.radiusScale = s; },
+					py::arg("radius_scale"),
+					"Set radius_scale. See the radius_scale property.")
+
+				.def_property("drift_dir",
+					[](GasParticle& self) { return self.driftDir; },
+					[](GasParticle& self, glm::vec3 d) { self.driftDir = d; },
+					"Direction this particle drifts in while dissipating (unit vector, randomized on seed)")
+				.def("set_drift_dir", [](GasParticle& self, glm::vec3 d) { self.driftDir = d; },
+					py::arg("drift_dir"),
+					"Set drift_dir. See the drift_dir property.")
+
+				.def_property("has_split",
+					[](GasParticle& self) { return self.hasSplit; },
+					[](GasParticle& self, bool s) { self.hasSplit = s; },
+					"Whether this particle has already spawned its dissipation wisps. "
+					"Set to True to prevent it from splitting.")
+				.def("set_has_split", [](GasParticle& self, bool s) { self.hasSplit = s; },
+					py::arg("has_split"),
+					"Set has_split. See the has_split property.")
+
+				.def_property_readonly("dissipation_generation",
+					[](GasParticle& self) { return self.dissipationGeneration; },
+					"How many wisp splits deep this particle is (0 = original particle)")
+
+				.def_property_readonly("is_visual_only",
+					[](GasParticle& self) { return self.isVisualOnly; },
+					"True for wisps spawned by dissipation: they are rendered and drift, but "
+					"aren't part of the physics solver")
 			.def("set_cooling_rate", [](GasParticle& self, float r) { self.coolingRate = r; },
 				py::arg("cooling_rate"),
 				"Set cooling_rate. See the cooling_rate property.")

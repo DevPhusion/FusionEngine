@@ -556,8 +556,8 @@ void GasComponent::CopyTo(Object* other) {
 	target->noiseScale = noiseScale;
 	target->noiseStrength = noiseStrength;
 	target->riseSpeed = riseSpeed;
-	target->thermalDiffusivity;
-	target->coolingRate;
+	target->thermalDiffusivity = thermalDiffusivity;
+	target->coolingRate = coolingRate;
 	target->SeedParticles();
 	target->ResizeInstanceBuffer();
 	target->RebuildQuadGeometry();
