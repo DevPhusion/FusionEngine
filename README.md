@@ -32,8 +32,9 @@ Building from source requires **Visual Studio** (the project is developed and ma
    ```
 
 2. Open the cloned folder in **Visual Studio**.
-3. Build the solution.
-4. Run the resulting executable to launch the editor.
+3. Link python to the project in project settings
+4. Build the solution.
+5. Run the resulting executable to launch the editor.
 
 ## Libraries
 
