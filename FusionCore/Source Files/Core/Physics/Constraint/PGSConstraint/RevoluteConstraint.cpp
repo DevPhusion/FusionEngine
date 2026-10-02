@@ -218,6 +218,10 @@ void RevoluteConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
 	}
 }
 
+void RevoluteConstraint::DrawConstraintGizmo() {
+	return;
+}
+
 void RevoluteConstraint::Serialize(BinaryWriter& w) {
 	Constraint::Serialize(w);
 	w.Write(static_cast<int32_t>(motorMode));

@@ -73,7 +73,13 @@ void Constraint::SetObjectA(PhysicsBody obj)
 
     onDeleteCallbackIdA = obj.obj->AddOnDeleteCallback([this]() { SetObjectA(PhysicsBody()); });
 
-    attachPointA = obj.obj->GetComponent<RenderComponent>()->GetCenter();
+    if (obj.obj->HasComponent<RenderComponent>()) {
+        attachPointA = obj.obj->GetComponent<RenderComponent>()->GetCenter();
+    }
+    else {
+        attachPointA = obj.obj->GetComponent<EditorRenderComponent>()->GetCenter();
+    }
+    
     useCenterA = true;
     attachAEditing = false;
 }
@@ -108,7 +114,12 @@ void Constraint::SetObjectB(PhysicsBody obj)
 
     onDeleteCallbackIdB = obj.obj->AddOnDeleteCallback([this]() { SetObjectB(PhysicsBody()); });
 
-    attachPointB = obj.obj->GetComponent<RenderComponent>()->GetCenter();
+    if (obj.obj->HasComponent<RenderComponent>()) {
+        attachPointB = obj.obj->GetComponent<RenderComponent>()->GetCenter();
+    }
+    else {
+        attachPointB = obj.obj->GetComponent<EditorRenderComponent>()->GetCenter();
+    }
     useCenterB = true;
     attachBEditing = false;
 }
@@ -247,7 +258,13 @@ void Constraint::ProcessInspectorUI(Object* parent)
                 EngineManager::getInstance().SceneChangeEvent();
                 if (useCenter)
                 {
-                    attachPoint = currentObj->GetComponent<RenderComponent>()->GetCenter();
+                    if (currentObj->HasComponent<RenderComponent>()) {
+                        attachPoint = currentObj->GetComponent<RenderComponent>()->GetCenter();
+                    }
+                    else {
+                        attachPoint = currentObj->GetComponent<EditorRenderComponent>()->GetCenter();
+                    }
+                    
                     if (editing) {
                         editing = false;
                         EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
@@ -261,7 +278,7 @@ void Constraint::ProcessInspectorUI(Object* parent)
                 if (!editing)
                 {
                     if (ImGui::Button((std::string("Change Attach Point##") + popupId).c_str())) {
-                        EditorManager::getInstance().BeginEdit({ parent }, true);   // closed by "Confirm" below, not here
+                        EditorManager::getInstance().BeginEdit({ parent }, true);   
                         editing = true;
                         EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::ConstraintEdit);
                     }

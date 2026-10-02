@@ -19,6 +19,7 @@ public:
 	virtual void ProcessInspectorUI(Object* parent);
 	virtual void Serialize(BinaryWriter& w);
 	virtual void Deserialize(BinaryReader& r);
+	virtual void DrawConstraintGizmo();
 
 	MotorMode motorMode = MotorMode::Off;
 	float motorSpeed = 0.0f;

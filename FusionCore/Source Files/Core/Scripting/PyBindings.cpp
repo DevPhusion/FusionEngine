@@ -1384,6 +1384,12 @@ namespace {
 			.def("set_damping", [](SpringConstraint& self, float d) { self.damping = d; }, py::arg("damping"),
 				"Set damping. See the damping property.");
 
+		py::enum_<MotorMode>(m, "MotorMode",
+			"Drive mode of a RevoluteConstraint's motor")
+			.value("Off", MotorMode::Off, "No motor; the joint rotates freely (subject to limits)")
+			.value("Velocity", MotorMode::Velocity, "Drive the joint at a constant relative angular velocity")
+			.value("Position", MotorMode::Position, "Servo the joint toward a target angle");
+
 		py::class_<RevoluteConstraint, Constraint, std::shared_ptr<RevoluteConstraint>>(m, "RevoluteConstraint")
 			.def(py::init([](Object* objectA, Object* objectB) {
 			if (!objectA) {
@@ -1429,7 +1435,131 @@ namespace {
 			return constraint;
 				}), py::arg("object_a"), py::arg("object_b"), py::arg("attach_point_a"), py::arg("attach_point_b"),
 					"Create a revolute constraint pinned at explicit local-space attach points "
-					"on each object.");
+					"on each object.")
+			.def_property("motor_mode",
+				[](RevoluteConstraint& self) { return self.motorMode; },
+				[](RevoluteConstraint& self, MotorMode mode) { self.motorMode = mode; },
+				"Current MotorMode (Off, Velocity, or Position)")
+			.def("set_motor_mode", [](RevoluteConstraint& self, MotorMode mode) { self.motorMode = mode; },
+				py::arg("mode"),
+				"Set motor_mode. See the motor_mode property.")
+
+			.def_property("motor_speed",
+				[](RevoluteConstraint& self) { return self.motorSpeed; },
+				[](RevoluteConstraint& self, float s) { self.motorSpeed = s; },
+				"Target relative angular velocity in radians per second. Only used when "
+				"motor_mode is MotorMode.Velocity.")
+			.def("set_motor_speed", [](RevoluteConstraint& self, float s) { self.motorSpeed = s; },
+				py::arg("motor_speed"),
+				"Set motor_speed. See the motor_speed property.")
+
+			.def_property("target_angle",
+				[](RevoluteConstraint& self) { return self.targetAngle; },
+				[](RevoluteConstraint& self, float a) { self.targetAngle = a; },
+				"Target joint angle in radians, relative to the pose the joint had when its angle "
+				"tracking started (see angle). Only used when motor_mode is MotorMode.Position.")
+			.def("set_target_angle", [](RevoluteConstraint& self, float a) { self.targetAngle = a; },
+				py::arg("target_angle"),
+				"Set target_angle. See the target_angle property.")
+
+			.def_property("servo_gain",
+				[](RevoluteConstraint& self) { return self.servoGain; },
+				[](RevoluteConstraint& self, float g) { self.servoGain = std::max(g, 0.0f); },
+				"Position-motor gain in 1/s: desired speed = gain * angle error, capped by "
+				"max_motor_speed. Clamped to >= 0.")
+			.def("set_servo_gain", [](RevoluteConstraint& self, float g) { self.servoGain = std::max(g, 0.0f); },
+				py::arg("servo_gain"),
+				"Set servo_gain. See the servo_gain property.")
+
+			.def_property("max_motor_speed",
+				[](RevoluteConstraint& self) { return self.maxMotorSpeed; },
+				[](RevoluteConstraint& self, float s) { self.maxMotorSpeed = std::max(s, 0.0f); },
+				"Maximum angular speed (radians per second) the position motor will drive at. "
+				"Clamped to >= 0.")
+			.def("set_max_motor_speed", [](RevoluteConstraint& self, float s) { self.maxMotorSpeed = std::max(s, 0.0f); },
+				py::arg("max_motor_speed"),
+				"Set max_motor_speed. See the max_motor_speed property.")
+
+			.def_property("max_motor_torque",
+				[](RevoluteConstraint& self) { return self.maxMotorTorque; },
+				[](RevoluteConstraint& self, float t) { self.maxMotorTorque = std::max(t, 0.0f); },
+				"Maximum torque the motor may apply (either mode). Clamped to >= 0.")
+			.def("set_max_motor_torque", [](RevoluteConstraint& self, float t) { self.maxMotorTorque = std::max(t, 0.0f); },
+				py::arg("max_motor_torque"),
+				"Set max_motor_torque. See the max_motor_torque property.")
+
+			.def("set_velocity_motor", &RevoluteConstraint::SetVelocityMotor,
+				py::arg("speed"), py::arg("max_torque"),
+				"Enable the motor in velocity mode in one call.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    wheel_joint.set_velocity_motor(6.28, 100.0)  # one rev/sec\n"
+				"    ```")
+			.def("set_position_motor", &RevoluteConstraint::SetPositionMotor,
+				py::arg("target_angle"), py::arg("gain"), py::arg("max_speed"), py::arg("max_torque"),
+				"Enable the motor in position (servo) mode in one call.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    arm_joint.set_position_motor(1.57, 10.0, 5.0, 50.0)\n"
+				"    ```")
+			.def("disable_motor", &RevoluteConstraint::DisableMotor,
+				"Turn the motor off (sets motor_mode to MotorMode.Off)")
+
+			.def_property("limits_enabled",
+				[](RevoluteConstraint& self) { return self.limitsEnabled; },
+				[](RevoluteConstraint& self, bool e) { self.limitsEnabled = e; },
+				"Whether the joint angle is restricted to [lower_limit, upper_limit]")
+			.def("set_limits_enabled", [](RevoluteConstraint& self, bool e) { self.limitsEnabled = e; },
+				py::arg("limits_enabled"),
+				"Set limits_enabled. See the limits_enabled property.")
+
+			.def_property("lower_limit",
+				[](RevoluteConstraint& self) { return self.lowerLimit; },
+				[](RevoluteConstraint& self, float l) {
+					self.lowerLimit = l;
+					self.upperLimit = std::max(self.upperLimit, l);
+				},
+				"Lower joint angle limit in radians, relative to the starting pose. Raising it "
+				"above upper_limit pushes upper_limit up with it.")
+			.def("set_lower_limit", [](RevoluteConstraint& self, float l) {
+			self.lowerLimit = l;
+			self.upperLimit = std::max(self.upperLimit, l);
+				}, py::arg("lower_limit"),
+					"Set lower_limit. See the lower_limit property.")
+
+			.def_property("upper_limit",
+				[](RevoluteConstraint& self) { return self.upperLimit; },
+				[](RevoluteConstraint& self, float u) {
+					self.upperLimit = u;
+					self.lowerLimit = std::min(self.lowerLimit, u);
+				},
+				"Upper joint angle limit in radians, relative to the starting pose. Lowering it "
+				"below lower_limit pulls lower_limit down with it.")
+			.def("set_upper_limit", [](RevoluteConstraint& self, float u) {
+			self.upperLimit = u;
+			self.lowerLimit = std::min(self.lowerLimit, u);
+				}, py::arg("upper_limit"),
+					"Set upper_limit. See the upper_limit property.")
+
+			.def("set_limits", [](RevoluteConstraint& self, float lower, float upper) {
+			if (lower > upper) {
+				throw py::value_error("set_limits: lower must be <= upper");
+			}
+			self.SetLimits(lower, upper);
+				}, py::arg("lower"), py::arg("upper"),
+					"Enable limits and set both bounds (radians) in one call.\n\n"
+					"Example:\n"
+					"    ```python\n"
+					"    door_hinge.set_limits(0.0, 1.57)\n"
+					"    ```")
+			.def("disable_limits", &RevoluteConstraint::DisableLimits,
+				"Disable the joint angle limits")
+
+			.def_property_readonly("angle",
+				[](RevoluteConstraint& self) { return self.GetAngle(); },
+				"Current joint angle in radians, relative to the pose when tracking began, "
+				"unwrapped (can exceed ±pi). Only tracked while a motor or limits are enabled; "
+				"stays 0 until the first solver step after enabling either.");
 
 		py::class_<WeldConstraint, Constraint, std::shared_ptr<WeldConstraint>>(m, "WeldConstraint")
 			.def(py::init([](Object* objectA, Object* objectB, float angularOffset) {

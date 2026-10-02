@@ -128,38 +128,46 @@ void ConstraintComponent::ProcessInspectorUI()
             body.invMass = &pc->inverseMass;
         }
 
+        glm::vec3 center = glm::vec3(0);
+        if (parent->HasComponent<RenderComponent>()) {
+            center = parent->GetComponent<RenderComponent>()->GetCenter();
+        }
+        else {
+            center = parent->GetComponent<EditorRenderComponent>()->GetCenter();
+        }
+
         if (ImGui::MenuItem("Distance Constraint")) {
             EditorField::ActionScene(parent, true, [&] {
                 AddConstraint(std::make_shared<DistanceConstraint>(body, PhysicsBody(),
-                    parent->GetComponent<RenderComponent>()->GetCenter(), glm::vec3(0.0f), 5.0f));
+                    center, glm::vec3(0.0f), 5.0f));
                 }, true);
             ImGui::CloseCurrentPopup();
         }
         if (ImGui::MenuItem("Spring Constraint")) {
             EditorField::ActionScene(parent, true, [&] {
                 AddConstraint(std::make_shared<SpringConstraint>(body, PhysicsBody(),
-                    parent->GetComponent<RenderComponent>()->GetCenter(), glm::vec3(0.0f), 5.0f, 15.0f, 7.0f));
+                    center, glm::vec3(0.0f), 5.0f, 15.0f, 7.0f));
                 }, true);
             ImGui::CloseCurrentPopup();
         }
         if (ImGui::MenuItem("Revolute Constraint")) {
             EditorField::ActionScene(parent, true, [&] {
                 AddConstraint(std::make_shared<RevoluteConstraint>(body, PhysicsBody(),
-                    parent->GetComponent<RenderComponent>()->GetCenter(), glm::vec3(0.0f)));
+                    center, glm::vec3(0.0f)));
                 }, true);
             ImGui::CloseCurrentPopup();
         }
         if (ImGui::MenuItem("Weld Constraint")) {
             EditorField::ActionScene(parent, true, [&] {
                 AddConstraint(std::make_shared<WeldConstraint>(body, PhysicsBody(),
-                    parent->GetComponent<RenderComponent>()->GetCenter(), glm::vec3(0.0f), 0.0f));
+                    center, glm::vec3(0.0f), 0.0f));
                 }, true);
             ImGui::CloseCurrentPopup();
         }
         if (ImGui::MenuItem("Prismatic Constraint")) {
             EditorField::ActionScene(parent, true, [&] {
                 AddConstraint(std::make_shared<PrismaticConstraint>(body, PhysicsBody(),
-                    parent->GetComponent<RenderComponent>()->GetCenter(), glm::vec3(0.0f), glm::vec3(0.0f)));
+                    center, glm::vec3(0.0f), glm::vec3(0.0f)));
                 }, true);
             ImGui::CloseCurrentPopup();
         }
@@ -168,7 +176,6 @@ void ConstraintComponent::ProcessInspectorUI()
         ImGui::Separator();
         ImGui::Spacing();
 
-        // Standard centered close button for modal feel
         if (ImGui::Button("Cancel", ImVec2(120, 0)))
         {
             ImGui::CloseCurrentPopup();
