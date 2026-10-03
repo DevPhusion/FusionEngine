@@ -245,6 +245,7 @@
     <ClInclude Include="Header Files\Components\GasComponent.h" />
     <ClInclude Include="Header Files\Components\AudioComponent.h" />
     <ClInclude Include="Header Files\Core\AudioManager.h" />
+    <ClInclude Include="Header Files\Core\Editor\EditorTheme.h" />
     <ClInclude Include="Header Files\Core\Physics\Collision\BoundingBox.h" />
     <ClInclude Include="Header Files\Components\AgentComponent.h" />
     <ClInclude Include="Header Files\Core\Editor\ConstraintEditGizmos.h" />

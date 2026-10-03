@@ -9,6 +9,10 @@ void EditorManager::Setup(GLFWwindow* window) {
 	ImGuiIO& io = ImGui::GetIO(); (void)io;
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	ImGui::StyleColorsDark();
+
+	EditorTheme::LoadFonts();
+	EditorTheme::Apply();
+
 	ImGui_ImplGlfw_InitForOpenGL(window, false);
 	ImGui_ImplOpenGL3_Init("#version 330");
 

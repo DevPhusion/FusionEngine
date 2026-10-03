@@ -1,17 +1,22 @@
 #include "../../../../Header Files/Core/Editor/Windows/Inspector.h"
 #include "../../../../Header Files/Core/Editor/EditorManager.h"
+#include "../../../../Header Files/Core/Editor/EditorTheme.h"
+#include "../../../../Header Files/Core/Editor/EditorField.h"
 #include "../../../../Header Files/Components/Components.h"
-
+#include <numbers>
+#include <cctype>
+#include <functional>
+#include <algorithm>
+#include <filesystem>
 
 namespace {
     static ImU32 EyeIconColor(bool isHidden) {
-        if (isHidden) return IM_COL32(128, 128, 128, 255);
-        return IM_COL32(255, 255, 255, 255);
+        return ImGui::GetColorU32(isHidden ? ImGuiCol_TextDisabled : ImGuiCol_Text);
     }
 
     static void DrawEyeIcon(ImDrawList* drawList, ImVec2 center, float size, bool isHidden) {
         ImU32 color = EyeIconColor(isHidden);
-        ImU32 bgColor = ImGui::GetColorU32(ImGuiCol_WindowBg);
+        ImU32 bgColor = ImGui::GetColorU32(ImGuiCol_FrameBg);
 
         float rx = size * 0.52f;
         float ry = size * 0.33f;
@@ -46,18 +51,117 @@ namespace {
         bool clicked = ImGui::IsItemClicked();
 
         ImDrawList* drawList = ImGui::GetWindowDrawList();
-        ImVec2 center(pos.x + size * 0.5f, pos.y + size * 0.5f);
-        DrawEyeIcon(drawList, center, size, isHidden);
+        if (ImGui::IsItemHovered())
+            drawList->AddRectFilled(pos, ImVec2(pos.x + size, pos.y + size),
+                ImGui::GetColorU32(ImGuiCol_FrameBgHovered), ImGui::GetStyle().FrameRounding);
 
+        ImVec2 center(pos.x + size * 0.5f, pos.y + size * 0.5f);
+        DrawEyeIcon(drawList, center, size * 0.9f, isHidden);
+
+        return clicked;
+    }
+
+    static bool ContainsNoCase(const char* haystack, const char* needle) {
+        std::string h = haystack, n = needle;
+        std::transform(h.begin(), h.end(), h.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+        std::transform(n.begin(), n.end(), n.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+        return h.find(n) != std::string::npos;
+    }
+
+    static std::string ToLower(std::string v) {
+        std::transform(v.begin(), v.end(), v.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+        return v;
+    }
+
+    static bool StartsWithNoCase(const std::string& text, const std::string& prefix) {
+        return ToLower(text).rfind(ToLower(prefix), 0) == 0;
+    }
+
+    static void FinishAdd(char* searchBuf) {
+        EngineManager::getInstance().SceneChangeEvent();
+        searchBuf[0] = '\0';
+        ImGui::CloseCurrentPopup();
+    }
+
+    template<typename T, typename... Args>
+    static void AddComponentTo(Object* o, Args&&... args) {
+        EditorManager::getInstance().BeginEdit({ o });
+        auto comp = std::make_unique<T>(o, std::forward<Args>(args)...);
+        T* raw = comp.get();
+        o->AddComponent(std::move(comp));
+        raw->Activate();
+        EditorManager::getInstance().EndEdit({ o });
+    }
+
+    struct ComponentEntry {
+        std::string label;
+        std::function<bool(Object*)> available;
+        std::function<void(Object*)> add;
+    };
+
+    template<typename T>
+    static ComponentEntry SimpleEntry(const char* label) {
+        return { label,
+            [](Object* o) { return !o->HasComponent<T>(); },
+            [](Object* o) { AddComponentTo<T>(o); } };
+    }
+
+    static const std::vector<ComponentEntry>& ComponentRegistry() {
+        static const std::vector<ComponentEntry> entries = {
+            { "Render Component",
+              [](Object* o) { return !o->HasComponent<RenderComponent>(); },
+              [](Object* o) { AddComponentTo<RenderComponent>(o, std::vector<float>{}, o->shader, ""); } },
+            SimpleEntry<CameraComponent>("Camera Component"),
+            SimpleEntry<AudioComponent>("Audio Component"),
+            SimpleEntry<RigidBodyComponent>("Rigid Body Component"),
+            SimpleEntry<SoftBodyComponent>("Soft Body Component"),
+            SimpleEntry<CollisionComponent>("Collision Component"),
+            SimpleEntry<ConstraintComponent>("Constraint Component"),
+            SimpleEntry<FractureComponent>("Fracture Component"),
+            SimpleEntry<FluidComponent>("Fluid Component"),
+            SimpleEntry<GasComponent>("Gas Component"),
+            { "Agent Component",
+              [](Object* o) { return !o->HasComponent<AgentComponent>() && PackageManager::getInstance().IsPackageInstalled("rl"); },
+              [](Object* o) { AddComponentTo<AgentComponent>(o); } },
+        };
+        return entries;
+    }
+
+    struct Candidate {
+        std::string key;
+        std::string label;
+        std::string subtitle;
+        std::function<void()> add;
+    };
+
+    static std::vector<std::string> s_recentAdds;
+    static constexpr size_t kMaxRecents = 5;
+
+    static void PushRecent(const std::string& key) {
+        s_recentAdds.erase(std::remove(s_recentAdds.begin(), s_recentAdds.end(), key), s_recentAdds.end());
+        s_recentAdds.insert(s_recentAdds.begin(), key);
+        if (s_recentAdds.size() > kMaxRecents) s_recentAdds.resize(kMaxRecents);
+    }
+
+    static bool DrawCandidateRow(const Candidate& c) {
+        ImGui::PushID(c.key.c_str());
+        bool clicked = ImGui::Selectable("##row");
+        ImVec2 min = ImGui::GetItemRectMin();
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        dl->AddText(min, ImGui::GetColorU32(ImGuiCol_Text), c.label.c_str());
+        if (!c.subtitle.empty()) {
+            float x = min.x + ImGui::CalcTextSize(c.label.c_str()).x + ImGui::GetStyle().ItemSpacing.x;
+            std::string sub = "(" + c.subtitle + ")";
+            dl->AddText(ImVec2(x, min.y), ImGui::GetColorU32(ImGuiCol_TextDisabled), sub.c_str());
+        }
+        ImGui::PopID();
         return clicked;
     }
 }
 
-
 Inspector::Inspector(std::string name) : EditorWindow(name) {
 
 }
-
 
 void Inspector::ProcessWindow() {
     if (hidden) return;
@@ -77,12 +181,16 @@ void Inspector::ProcessWindow() {
         strncpy(objectNameBuffer, selected->name.c_str(), sizeof(objectNameBuffer) - 1);
         objectNameBuffer[sizeof(objectNameBuffer) - 1] = '\0';
 #endif
-        ImGui::Text("Name ");
-        ImGui::SameLine();
-        if (ImGui::InputText("##ObjectName", objectNameBuffer, sizeof(objectNameBuffer))) {
+        const float eyeIconSize = ImGui::GetFrameHeight();
+        const float itemSpacing = ImGui::GetStyle().ItemSpacing.x;
+
+        bool boldPushed = EditorTheme::PushBold();
+        ImGui::SetNextItemWidth(-(eyeIconSize + itemSpacing));
+        if (ImGui::InputTextWithHint("##ObjectName", "Object name", objectNameBuffer, sizeof(objectNameBuffer))) {
             selected->name = std::string(objectNameBuffer);
             EngineManager::getInstance().SceneChangeEvent();
         }
+        EditorTheme::PopBold(boldPushed);
 
         if (ImGui::IsItemDeactivatedAfterEdit()) {
             std::string desiredName = selected->name.empty() ? "Object" : selected->name;
@@ -91,7 +199,6 @@ void Inspector::ProcessWindow() {
         }
 
         ImGui::SameLine();
-        float eyeIconSize = ImGui::GetFrameHeight() * 1.0f;
         if (DrawEyeToggleButton("##InspectorEyeToggle", selected->hidden, eyeIconSize)) {
             if (selected->hidden) selected->Show();
             else selected->Hide();
@@ -109,8 +216,7 @@ void Inspector::ProcessWindow() {
 
             ImGui::PushID(i);
 
-            const float removeButtonWidth = ImGui::CalcTextSize("×").x
-                + ImGui::GetStyle().FramePadding.x * 2.0f;
+            const float removeButtonWidth = ImGui::GetFrameHeight();
             const float checkboxWidth = ImGui::GetFrameHeight();
             const float spacing = ImGui::GetStyle().ItemSpacing.x;
             const float availWidth = ImGui::GetContentRegionAvail().x;
@@ -119,7 +225,8 @@ void Inspector::ProcessWindow() {
                 ImGuiTreeNodeFlags_AllowOverlap |
                 ImGuiTreeNodeFlags_FramePadding |
                 ImGuiTreeNodeFlags_DefaultOpen |
-                ImGuiTreeNodeFlags_SpanAvailWidth;
+                ImGuiTreeNodeFlags_SpanAvailWidth |
+                ImGuiTreeNodeFlags_Framed;
 
             std::string displayName = component->Name;
             ScriptComponent* script = dynamic_cast<ScriptComponent*>(component);
@@ -128,221 +235,133 @@ void Inspector::ProcessWindow() {
                 if (displayName == "") displayName = "Unknown script";
             }
 
+            bool headerBold = EditorTheme::PushBold();
             bool nodeOpen = ImGui::TreeNodeEx("##compnode", flags, "%s", displayName.c_str());
+            EditorTheme::PopBold(headerBold);
+
+            {
+                ImVec2 mn = ImGui::GetItemRectMin();
+                ImVec2 mx = ImGui::GetItemRectMax();
+                ImU32 strip = ImGui::GetColorU32(
+                    (component->CanDisable && !component->Enabled) ? ImVec4(0.30f, 0.30f, 0.30f, 1.0f) : EditorTheme::Accent());
+                ImGui::GetWindowDrawList()->AddRectFilled(mn, ImVec2(mn.x + 3.0f, mx.y), strip,
+                    ImGui::GetStyle().FrameRounding, ImDrawFlags_RoundCornersLeft);
+            }
 
             if (component->CanDisable) {
                 ImGui::SameLine(availWidth - removeButtonWidth - spacing - checkboxWidth);
-                if (ImGui::Checkbox("##enabled", &component->Enabled))
+                EditorField::CheckboxScene(selected, nullptr, "##enabled", &component->Enabled, [&] {
                     component->SetEnabled(component->Enabled);
+                    });
             }
 
             if (component->CanRemove) {
                 ImGui::SameLine(availWidth - removeButtonWidth);
-                ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.15f, 0.15f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.25f, 0.25f, 1.0f));
-                ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.05f, 0.05f, 1.0f));
-                if (ImGui::SmallButton("×"))
+                if (EditorTheme::CloseButton("##remove"))
                     pendingRemoval = i;
-                ImGui::PopStyleColor(3);
             }
 
             if (nodeOpen) {
+                ImGui::Spacing();
                 ImGui::Indent();
                 component->ProcessInspectorUI();
                 ImGui::Unindent();
+                ImGui::Spacing();
                 ImGui::TreePop();
             }
 
-            ImGui::Separator();
             ImGui::PopID();
+            ImGui::Spacing();
         }
 
         if (pendingRemoval != -1) {
-            EngineManager::getInstance().SceneChangeEvent();
             EditorManager::getInstance().BeginEdit({ selected });
             selected->RemoveComponent(pendingRemoval);
             EditorManager::getInstance().EndEdit({ selected });
-
+            EngineManager::getInstance().SceneChangeEvent();
         }
 
-      
         ImGui::Dummy(ImVec2(0.0f, 6.0f));
 
-        const float buttonWidth = 180.0f;
-        ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - buttonWidth) * 0.5f);
-        if (ImGui::Button("+ Add Component", ImVec2(buttonWidth, 0)))
+        const float buttonWidth = 200.0f;
+        ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - buttonWidth) * 0.5f + ImGui::GetCursorPosX());
+        bool addBold = EditorTheme::PushBold();
+        bool openAdd = ImGui::Button("+  Add Component", ImVec2(buttonWidth, 0));
+        EditorTheme::PopBold(addBold);
+        const ImVec2 buttonMin = ImGui::GetItemRectMin();
+        const ImVec2 buttonMax = ImGui::GetItemRectMax();
+        if (openAdd)
             ImGui::OpenPopup("Add Component");
 
-        if (ImGui::BeginPopupModal("Add Component", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings))
+        ImGui::SetNextWindowPos(ImVec2(buttonMin.x - 80.0f, buttonMin.y - 4.0f), ImGuiCond_Always, ImVec2(0.0f, 1.0f));
+        ImGui::SetNextWindowSize(ImVec2(360.0f, 0.0f));
+        if (ImGui::BeginPopup("Add Component", ImGuiWindowFlags_NoSavedSettings))
         {
+            if (ImGui::IsWindowAppearing())
+                ImGui::SetKeyboardFocusHere();
+
             ImGui::SetNextItemWidth(-1);
-            ImGui::InputTextWithHint("##search", "Search...", m_SearchBuffer, sizeof(m_SearchBuffer));
+            bool enterPressed = ImGui::InputTextWithHint("##search", "Search components and scripts...",
+                m_SearchBuffer, sizeof(m_SearchBuffer), ImGuiInputTextFlags_EnterReturnsTrue);
+            const std::string search = m_SearchBuffer;
 
-            ImGui::SeparatorText("Components");
+            ImGui::Spacing();
 
-            std::string search = m_SearchBuffer;
-
-            if (!selected->HasComponent<RenderComponent>() && std::string("Render Component").find(search) != std::string::npos)
-                if (ImGui::MenuItem("Render Component")) {
-                    EditorManager::getInstance().BeginEdit({ selected });
-                    selected->AddComponent(std::make_unique<RenderComponent>(selected, std::vector<float> {}, selected->shader, ""));
-					selected->GetComponent<RenderComponent>()->Activate();
-                    EditorManager::getInstance().EndEdit({ selected });
-                    EngineManager::getInstance().SceneChangeEvent();
-                    m_SearchBuffer[0] = '\0';
-                    ImGui::CloseCurrentPopup();
-                }
-            if (!selected->HasComponent<CameraComponent>() && std::string("Camera Component").find(search) != std::string::npos)
-                if (ImGui::MenuItem("Camera Component")) {
-                    EditorManager::getInstance().BeginEdit({ selected });
-                    selected->AddComponent(std::make_unique<CameraComponent>(selected));
-					selected->GetComponent<CameraComponent>()->Activate();
-                    EditorManager::getInstance().EndEdit({ selected });
-                    EngineManager::getInstance().SceneChangeEvent();
-                    m_SearchBuffer[0] = '\0';
-                    ImGui::CloseCurrentPopup();
-                }
-            if (!selected->HasComponent<AudioComponent>() && std::string("Audio Component").find(search) != std::string::npos)
-                if (ImGui::MenuItem("Audio Component")) {
-                    EditorManager::getInstance().BeginEdit({ selected });
-                    selected->AddComponent(std::make_unique<AudioComponent>(selected));
-					selected->GetComponent<AudioComponent>()->Activate();
-                    EditorManager::getInstance().EndEdit({ selected });
-                    EngineManager::getInstance().SceneChangeEvent();
-                    m_SearchBuffer[0] = '\0';
-                    ImGui::CloseCurrentPopup();
-                }
-            if (!selected->HasComponent<RigidBodyComponent>() && std::string("Rigid Body Component").find(search) != std::string::npos)
-                if (ImGui::MenuItem("Rigid Body Component")) {
-                    EditorManager::getInstance().BeginEdit({ selected });
-                    selected->AddComponent(std::make_unique<RigidBodyComponent>(selected));
-					selected->GetComponent<RigidBodyComponent>()->Activate();
-                    EditorManager::getInstance().EndEdit({ selected });
-                    EngineManager::getInstance().SceneChangeEvent();
-                    m_SearchBuffer[0] = '\0';
-                    ImGui::CloseCurrentPopup();
-                }
-
-            if (!selected->HasComponent<SoftBodyComponent>() && std::string("Soft Body Component").find(search) != std::string::npos)
-                if (ImGui::MenuItem("Soft Body Component")) {
-                    EditorManager::getInstance().BeginEdit({ selected });
-                    selected->AddComponent(std::make_unique<SoftBodyComponent>(selected));
-					selected->GetComponent<SoftBodyComponent>()->Activate();
-                    EditorManager::getInstance().EndEdit({ selected });
-                    EngineManager::getInstance().SceneChangeEvent();
-                    m_SearchBuffer[0] = '\0';
-                    ImGui::CloseCurrentPopup();
-                }
-
-            if (!selected->HasComponent<CollisionComponent>() && std::string("Collision Component").find(search) != std::string::npos)
-                if (ImGui::MenuItem("Collision Component")) {
-                    EditorManager::getInstance().BeginEdit({ selected });
-                    selected->AddComponent(std::make_unique<CollisionComponent>(selected));
-					selected->GetComponent<CollisionComponent>()->Activate();
-                    EditorManager::getInstance().EndEdit({ selected });
-                    EngineManager::getInstance().SceneChangeEvent();
-                    m_SearchBuffer[0] = '\0';
-                    ImGui::CloseCurrentPopup();
-                }
-
-            if (!selected->HasComponent<ConstraintComponent>() && std::string("Constraint Component").find(search) != std::string::npos)
-                if (ImGui::MenuItem("Constraint Component")) {
-                    EditorManager::getInstance().BeginEdit({ selected });
-                    selected->AddComponent(std::make_unique<ConstraintComponent>(selected));
-					selected->GetComponent<ConstraintComponent>()->Activate();
-                    EditorManager::getInstance().EndEdit({ selected });
-                    EngineManager::getInstance().SceneChangeEvent();
-                    m_SearchBuffer[0] = '\0';
-                    ImGui::CloseCurrentPopup();
-                }
-
-            if (!selected->HasComponent<FractureComponent>() && std::string("Fracture Component").find(search) != std::string::npos)
-                if (ImGui::MenuItem("Fracture Component")) {
-                    EditorManager::getInstance().BeginEdit({ selected });
-                    selected->AddComponent(std::make_unique<FractureComponent>(selected));
-					selected->GetComponent<FractureComponent>()->Activate();
-                    EditorManager::getInstance().EndEdit({ selected });
-                    EngineManager::getInstance().SceneChangeEvent();
-                    m_SearchBuffer[0] = '\0';
-                    ImGui::CloseCurrentPopup();
-                }
-            if (!selected->HasComponent<FluidComponent>() && std::string("Fluid Component").find(search) != std::string::npos)
-                if (ImGui::MenuItem("Fluid Component")) {
-                    EditorManager::getInstance().BeginEdit({ selected });
-                    selected->AddComponent(std::make_unique<FluidComponent>(selected));
-                    selected->GetComponent<FluidComponent>()->Activate();
-                    EditorManager::getInstance().EndEdit({ selected });
-                    EngineManager::getInstance().SceneChangeEvent();
-                    m_SearchBuffer[0] = '\0';
-                    ImGui::CloseCurrentPopup();
-                }
-            if (!selected->HasComponent<GasComponent>() && std::string("Gas Component").find(search) != std::string::npos)
-                if (ImGui::MenuItem("Gas Component")) {
-                    EditorManager::getInstance().BeginEdit({ selected });
-                    selected->AddComponent(std::make_unique<GasComponent>(selected));
-					selected->GetComponent<GasComponent>()->Activate();
-                    EditorManager::getInstance().EndEdit({ selected });
-                    EngineManager::getInstance().SceneChangeEvent();
-                    m_SearchBuffer[0] = '\0';
-                    ImGui::CloseCurrentPopup();
-                }
-            if (PackageManager::getInstance().IsPackageInstalled("rl")
-                && !selected->HasComponent<AgentComponent>()
-                && std::string("Agent Component").find(search) != std::string::npos)
-                if (ImGui::MenuItem("Agent Component")) {
-                    EditorManager::getInstance().BeginEdit({ selected });
-                    selected->AddComponent(std::make_unique<AgentComponent>(selected));
-					selected->GetComponent<AgentComponent>()->Activate();
-                    EditorManager::getInstance().EndEdit({ selected });
-                    EngineManager::getInstance().SceneChangeEvent();
-                    m_SearchBuffer[0] = '\0';
-                    ImGui::CloseCurrentPopup();
-                }
-
-
-            const auto& registeredScripts = ScriptManager::getInstance().registeredScripts;
-            if (!registeredScripts.empty()) {
-                ImGui::Spacing();
-                ImGui::SeparatorText("Scripts");
-
-                auto hasScript = [&](const std::string& scriptVirtualPath) {
-                    for (auto& comp : selected->components) {
-                        ScriptComponent* sc = dynamic_cast<ScriptComponent*>(comp.get());
-                        if (sc && sc->sourcePath == scriptVirtualPath)
-                            return true;
-                    }
-                    return false;
-                    };
-
-                for (const std::string& scriptPath : registeredScripts) {
-                    if (hasScript(scriptPath))
-                        continue;
-
-                    std::string scriptDisplayName = std::filesystem::path(scriptPath).stem().string();
-                    if (scriptDisplayName.find(search) == std::string::npos)
-                        continue;
-
-                    ImGui::PushID(scriptPath.c_str());
-                    if (ImGui::MenuItem(scriptDisplayName.c_str())) {
-                        EditorManager::getInstance().BeginEdit({ selected });
-                        selected->AddComponent(std::make_unique<ScriptComponent>(selected, scriptPath));
-                        selected->GetComponent<ScriptComponent>()->Activate();
-                        EditorManager::getInstance().EndEdit({ selected });
-                        EngineManager::getInstance().SceneChangeEvent();
-                        m_SearchBuffer[0] = '\0';
-                        ImGui::CloseCurrentPopup();
-                    }
-                    ImGui::PopID();
-                }
+            std::vector<Candidate> all;
+            for (const ComponentEntry& e : ComponentRegistry()) {
+                if (!e.available(selected)) continue;
+                const ComponentEntry* ep = &e;
+                all.push_back({ "c:" + e.label, e.label, "", [ep, selected] { ep->add(selected); } });
             }
 
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
+            for (const std::string& scriptPath : ScriptManager::getInstance().registeredScripts) {
+                bool alreadyAttached = false;
+                for (auto& comp : selected->components) {
+                    ScriptComponent* sc = dynamic_cast<ScriptComponent*>(comp.get());
+                    if (sc && sc->sourcePath == scriptPath) { alreadyAttached = true; break; }
+                }
+                if (alreadyAttached) continue;
 
-            if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-                m_SearchBuffer[0] = '\0';
-                ImGui::CloseCurrentPopup();
+                std::string relative = scriptPath;
+                if (relative.rfind("res://", 0) == 0) relative.erase(0, 6);
+
+                all.push_back({ "s:" + scriptPath,
+                    std::filesystem::path(scriptPath).stem().string(),
+                    relative,
+                    [selected, scriptPath] { AddComponentTo<ScriptComponent>(selected, scriptPath); } });
+            }
+
+            std::vector<const Candidate*> shown;
+            if (search.empty()) {
+                for (const std::string& key : s_recentAdds)
+                    for (const Candidate& c : all)
+                        if (c.key == key) { shown.push_back(&c); break; }
+            }
+            else {
+                for (const Candidate& c : all)
+                    if (ContainsNoCase(c.label.c_str(), search.c_str()) ||
+                        (!c.subtitle.empty() && ContainsNoCase(c.subtitle.c_str(), search.c_str())))
+                        shown.push_back(&c);
+
+                std::stable_partition(shown.begin(), shown.end(),
+                    [&](const Candidate* c) { return StartsWithNoCase(c->label, search); });
+            }
+
+            const Candidate* picked = nullptr;
+            if (shown.empty()) {
+                ImGui::TextDisabled(search.empty() ? "Type to search components and scripts" : "No results");
+            }
+            else {
+                for (const Candidate* c : shown)
+                    if (DrawCandidateRow(*c)) picked = c;
+                if (enterPressed) picked = shown[0];
+            }
+
+            if (picked) {
+                const std::string key = picked->key;
+                picked->add();
+                PushRecent(key);
+                FinishAdd(m_SearchBuffer);
             }
 
             ImGui::EndPopup();
