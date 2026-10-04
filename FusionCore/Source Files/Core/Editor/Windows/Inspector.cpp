@@ -169,6 +169,7 @@ void Inspector::ProcessWindow() {
     ImGui::SetNextWindowPos(ImVec2(1510, 150), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(400, 880), ImGuiCond_FirstUseEver);
 
+    EditorTheme::ApplyDockClass();
     ImGui::Begin(name.c_str());
 
     if (EditorManager::getInstance().selectedObject != nullptr) {
@@ -208,6 +209,8 @@ void Inspector::ProcessWindow() {
         ImGui::Spacing();
 
         int pendingRemoval = -1;
+        int pendingMoveFrom = -1;
+        int pendingMoveTo = -1;
 
         for (int i = 0; i < static_cast<int>(selected->components.size()); i++)
         {
@@ -226,6 +229,7 @@ void Inspector::ProcessWindow() {
                 ImGuiTreeNodeFlags_FramePadding |
                 ImGuiTreeNodeFlags_DefaultOpen |
                 ImGuiTreeNodeFlags_SpanAvailWidth |
+                ImGuiTreeNodeFlags_OpenOnArrow |
                 ImGuiTreeNodeFlags_Framed;
 
             std::string displayName = component->Name;
@@ -239,13 +243,34 @@ void Inspector::ProcessWindow() {
             bool nodeOpen = ImGui::TreeNodeEx("##compnode", flags, "%s", displayName.c_str());
             EditorTheme::PopBold(headerBold);
 
-            {
-                ImVec2 mn = ImGui::GetItemRectMin();
-                ImVec2 mx = ImGui::GetItemRectMax();
-                ImU32 strip = ImGui::GetColorU32(
-                    (component->CanDisable && !component->Enabled) ? ImVec4(0.30f, 0.30f, 0.30f, 1.0f) : EditorTheme::Accent());
-                ImGui::GetWindowDrawList()->AddRectFilled(mn, ImVec2(mn.x + 3.0f, mx.y), strip,
-                    ImGui::GetStyle().FrameRounding, ImDrawFlags_RoundCornersLeft);
+            // Drag the header to reorder (Transform is fixed at the top)
+            const bool isTransform = dynamic_cast<TransformComponent*>(component) != nullptr;
+
+            if (!isTransform && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoHoldToOpenOthers)) {
+                ImGui::SetDragDropPayload("INSPECTOR_COMPONENT", &i, sizeof(int));
+                ImGui::TextUnformatted(displayName.c_str());
+                ImGui::EndDragDropSource();
+            }
+
+            if (!isTransform && ImGui::BeginDragDropTarget()) {
+                const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("INSPECTOR_COMPONENT",
+                    ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+                if (payload) {
+                    const int from = *static_cast<const int*>(payload->Data);
+                    if (from != i) {
+                        const ImVec2 mn = ImGui::GetItemRectMin();
+                        const ImVec2 mx = ImGui::GetItemRectMax();
+                        const float y = from < i ? mx.y : mn.y;
+                        ImGui::GetWindowDrawList()->AddLine(ImVec2(mn.x, y), ImVec2(mx.x, y),
+                            ImGui::GetColorU32(EditorTheme::Accent()), 2.0f);
+
+                        if (payload->IsDelivery()) {
+                            pendingMoveFrom = from;
+                            pendingMoveTo = i;
+                        }
+                    }
+                }
+                ImGui::EndDragDropTarget();
             }
 
             if (component->CanDisable) {
@@ -277,6 +302,14 @@ void Inspector::ProcessWindow() {
         if (pendingRemoval != -1) {
             EditorManager::getInstance().BeginEdit({ selected });
             selected->RemoveComponent(pendingRemoval);
+            EditorManager::getInstance().EndEdit({ selected });
+            EngineManager::getInstance().SceneChangeEvent();
+        }
+        else if (pendingMoveFrom != -1 && pendingMoveTo != -1 && pendingMoveFrom != pendingMoveTo) {
+            EditorManager::getInstance().BeginEdit({ selected });
+            auto moved = std::move(selected->components[pendingMoveFrom]);
+            selected->components.erase(selected->components.begin() + pendingMoveFrom);
+            selected->components.insert(selected->components.begin() + pendingMoveTo, std::move(moved));
             EditorManager::getInstance().EndEdit({ selected });
             EngineManager::getInstance().SceneChangeEvent();
         }

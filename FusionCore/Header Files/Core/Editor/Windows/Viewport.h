@@ -29,6 +29,7 @@ private:
 	unsigned int fbo = 0;
 	unsigned int depthStencilRBO = 0;
 
+	bool overlayHovered = false;
 	bool isHovered = false;
 	bool isFocused = false;
 

@@ -203,11 +203,16 @@ std::string FileSystem::GetParentVirtualPath(const std::string& virtualPath) con
 bool FileSystem::SubtreeMatchesFilter(const std::string& virtualPath, const std::string& filterLower) const {
 	FileManager& fm = FileManager::getInstance();
 
-	std::string name = ToLower(fm.VirtualToAbsolute(virtualPath).filename().string());
-	if (name.find(filterLower) != std::string::npos)
+	const std::string rawName = fm.VirtualToAbsolute(virtualPath).filename().string();
+	const bool isDir = fm.IsDirectory(virtualPath);
+
+	if (isDir && FileManager::getInstance().IsDevOnlyDirectory(rawName))
+		return false;
+
+	if (ToLower(rawName).find(filterLower) != std::string::npos)
 		return true;
 
-	if (!fm.IsDirectory(virtualPath))
+	if (!isDir)
 		return false;
 
 	for (auto& child : fm.GetDirectoryContents(virtualPath)) {
@@ -216,7 +221,6 @@ bool FileSystem::SubtreeMatchesFilter(const std::string& virtualPath, const std:
 	}
 	return false;
 }
-
 
 void FileSystem::BeginRename(const std::string& virtualPath, const std::string& currentName) {
 	if (virtualPath == FileManager::getInstance().GetRootVirtualPath())
@@ -637,6 +641,7 @@ void FileSystem::ProcessWindow() {
 		renamingPath.clear();
 	}
 
+	EditorTheme::ApplyDockClass();
 	ImGui::Begin(name.c_str());
 
 	ProcessToolbar();

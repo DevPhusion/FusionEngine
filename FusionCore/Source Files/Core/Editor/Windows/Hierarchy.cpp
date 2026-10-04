@@ -289,7 +289,7 @@ void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* re
 		}
 	}
 
-	float eyeIconSize = ImGui::GetFrameHeight() * 0.6f;
+	float eyeIconSize = ImGui::GetFrameHeight() * 0.5f;
 	float rightPadding = ImGui::GetStyle().ScrollbarSize > 0.0f ? ImGui::GetStyle().ScrollbarSize + 2.0f : 4.0f;
 	float iconSpacing = 4.0f;
 
@@ -336,6 +336,7 @@ void Hierarchy::ProcessWindow() {
 	ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(350, 460), ImGuiCond_FirstUseEver);
 
+	EditorTheme::ApplyDockClass();
 	ImGui::Begin(name.c_str());
 
 	ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));

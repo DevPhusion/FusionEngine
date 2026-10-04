@@ -118,6 +118,7 @@ namespace {
 }
 
 void Console::ProcessWindow() {
+	EditorTheme::ApplyDockClass();
 	ImGui::Begin(name.c_str());
 	DrawContent();
 	ImGui::End();

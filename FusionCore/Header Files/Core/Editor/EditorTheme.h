@@ -1,5 +1,6 @@
 #pragma once
 #include "../../../imgui/imgui.h"
+#include "../../../imgui/imgui_internal.h"
 #include "Windows/Console.h"
 
 namespace EditorTheme {
@@ -49,6 +50,13 @@ namespace EditorTheme {
 		return true;
 	}
 	inline void PopBold(bool pushed) { if (pushed) ImGui::PopFont(); }
+
+	inline void ApplyDockClass(ImGuiDockNodeFlags extraOverride = 0) {
+		static ImGuiWindowClass cls;
+		cls.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_NoWindowMenuButton
+			| ImGuiDockNodeFlags_NoCloseButton | extraOverride;
+		ImGui::SetNextWindowClass(&cls);
+	}
 
 	inline void Apply() {
 		ImGuiStyle& s = ImGui::GetStyle();

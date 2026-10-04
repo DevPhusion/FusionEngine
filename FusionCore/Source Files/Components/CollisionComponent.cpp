@@ -495,6 +495,11 @@ void CollisionComponent::DrawLayerMaskUI(const char* label, uint16_t* layer) {
 	const float btnSize = 24.0f;
 	const float gap = 2.0f;
 
+	const bool isMask = (layer == &collisionMask);
+	const ImVec4 onColor = EditorTheme::Accent();
+	const ImVec4 onHover = ImVec4(onColor.x * 1.15f, onColor.y * 1.15f, onColor.z * 1.15f, 1.0f);
+	const ImVec4 onActive = ImVec4(onColor.x * 0.85f, onColor.y * 0.85f, onColor.z * 0.85f, 1.0f);
+
 	for (int i = 0; i < 16; ++i) {
 		int col = i % 8;
 		int row = i / 8;
@@ -504,9 +509,12 @@ void CollisionComponent::DrawLayerMaskUI(const char* label, uint16_t* layer) {
 		));
 
 		bool is_set = (*layer & (1 << i)) != 0;
-		if (is_set)
-			ImGui::PushStyleColor(ImGuiCol_Button,
-				ImGui::GetStyleColorVec4(ImGuiCol_ButtonActive));
+		if (is_set) {
+			ImGui::PushStyleColor(ImGuiCol_Button, onColor);
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, onHover);
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, onActive);
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.05f, 0.07f, 0.08f, 1.0f));
+		}
 
 		ImGui::PushID(label);
 		ImGui::PushID(i);
@@ -527,7 +535,7 @@ void CollisionComponent::DrawLayerMaskUI(const char* label, uint16_t* layer) {
 		ImGui::PopID();
 
 		if (is_set)
-			ImGui::PopStyleColor();
+			ImGui::PopStyleColor(4);
 	}
 
 	ImGui::SetCursorPos(ImVec2(startPos.x, startPos.y + 2 * (btnSize + gap)));
@@ -806,11 +814,9 @@ void CollisionComponent::ProcessInspectorUI() {
 	if (!(parent->HasComponent<RigidBodyComponent>() || parent->HasComponent<SoftBodyComponent>()
 		|| parent->HasComponent<FluidComponent>() || parent->HasComponent<GasComponent>())) {
 		bool staticVal = isStatic;
-		if (ImGui::Checkbox("Static", &staticVal)) {
-			EditorManager::getInstance().BeginEdit({ parent });
+		EditorField::CheckboxScene(parent, "Static", "##Static", &staticVal, [&] {
 			isStatic = staticVal;
-			EditorManager::getInstance().EndEdit({ parent });
-		}
+			});
 		ImGui::Separator();
 	}
 

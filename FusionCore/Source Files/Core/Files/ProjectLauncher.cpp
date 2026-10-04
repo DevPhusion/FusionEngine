@@ -66,6 +66,53 @@ namespace {
 		std::error_code ec;
 		return fs::is_empty(folder, ec) && !ec;
 	}
+
+	const ImVec4 kDanger = ImVec4(0.90f, 0.30f, 0.35f, 1.0f);
+
+	bool AccentButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.26f, 0.27f, 0.29f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, EditorTheme::AccentDim());
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, EditorTheme::Accent());
+		bool pressed = ImGui::Button(label, size);
+		ImGui::PopStyleColor(3);
+		return pressed;
+	}
+
+	bool DangerButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.45f, 0.18f, 0.20f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.58f, 0.22f, 0.25f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.40f, 0.15f, 0.17f, 1.0f));
+		bool pressed = ImGui::Button(label, size);
+		ImGui::PopStyleColor(3);
+		return pressed;
+	}
+
+	void BoldText(const char* text, const ImVec4* color = nullptr) {
+		bool b = EditorTheme::PushBold();
+		if (color) ImGui::PushStyleColor(ImGuiCol_Text, *color);
+		ImGui::TextUnformatted(text);
+		if (color) ImGui::PopStyleColor();
+		EditorTheme::PopBold(b);
+	}
+
+	void FormLabel(const char* label, float column = 110.0f) {
+		ImGui::AlignTextToFramePadding();
+		float x = ImGui::GetCursorPosX();
+		ImGui::TextDisabled("%s", label);
+		ImGui::SameLine(x + column);
+	}
+
+	bool PathField(const char* id, const std::string& value, const char* hint) {
+		char buf[512];
+		std::snprintf(buf, sizeof(buf), "%s", value.c_str());
+		const ImGuiStyle& st = ImGui::GetStyle();
+		float browseW = ImGui::CalcTextSize("Browse").x + st.FramePadding.x * 2.0f;
+		ImGui::SetNextItemWidth(-(browseW + st.ItemSpacing.x));
+		ImGui::InputTextWithHint(id, hint, buf, sizeof(buf), ImGuiInputTextFlags_ReadOnly);
+		ImGui::SameLine();
+		std::string btnId = std::string("Browse##") + id;
+		return ImGui::Button(btnId.c_str());
+	}
 }
 
 void ProjectLauncher::Setup(GLFWwindow* window) {
@@ -251,15 +298,32 @@ void ProjectLauncher::ProcessLoadingProjectDisplay(const std::string& message) {
 
 	ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
 		ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus |
-		ImGuiWindowFlags_NoSavedSettings;
+		ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar;
 
 	ImGui::Begin("##ProjectSetupLoading", nullptr, flags);
 
 	ImVec2 avail = ImGui::GetContentRegionAvail();
-	ImVec2 textSize = ImGui::CalcTextSize(message.c_str());
+	ImVec2 origin = ImGui::GetCursorScreenPos();
+	ImVec2 center(origin.x + avail.x * 0.5f, origin.y + avail.y * 0.5f - 20.0f);
 
-	ImGui::SetCursorPos(ImVec2((avail.x - textSize.x) * 0.5f, (avail.y - textSize.y) * 0.5f));
-	ImGui::TextUnformatted(message.c_str());
+	ImDrawList* dl = ImGui::GetWindowDrawList();
+	const float radius = 16.0f;
+	const float t = (float)ImGui::GetTime();
+	const ImVec4 a = ImVec4(0.75f, 0.76f, 0.78f, 1.0f);
+	for (int i = 0; i < 10; i++) {
+		float angle = t * 6.0f + (float)i * (2.0f * 3.14159265f / 10.0f);
+		float alpha = 0.15f + 0.85f * (float)i / 10.0f;
+		ImVec2 p(center.x + cosf(angle) * radius, center.y + sinf(angle) * radius);
+		dl->AddCircleFilled(p, 3.0f, ImGui::GetColorU32(ImVec4(a.x, a.y, a.z, alpha)));
+	}
+
+	ImVec2 ts = ImGui::CalcTextSize("Setting up project");
+	ImGui::SetCursorScreenPos(ImVec2(center.x - ts.x * 0.5f, center.y + radius + 20.0f));
+	BoldText("Setting up project");
+
+	ImVec2 ms = ImGui::CalcTextSize(message.c_str());
+	ImGui::SetCursorScreenPos(ImVec2(center.x - ms.x * 0.5f, center.y + radius + 44.0f));
+	ImGui::TextDisabled("%s", message.c_str());
 
 	ImGui::End();
 }
@@ -267,159 +331,146 @@ void ProjectLauncher::ProcessLoadingProjectDisplay(const std::string& message) {
 void ProjectLauncher::ProcessNewProjectPopup() {
 	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
 	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowSize(ImVec2(520, 0), ImGuiCond_Always);
 
-	if (ImGui::BeginPopupModal("Create New Project", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
-		ImGui::Text("Project Name");
-		ImGui::SetNextItemWidth(320.0f);
-		ImGui::InputText("##NewProjectName", newProjectNameBuf, IM_ARRAYSIZE(newProjectNameBuf));
+	if (!ImGui::BeginPopupModal("Create New Project", nullptr,
+		ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize)) return;
 
-		ImGui::Dummy(ImVec2(0, 6));
-		ImGui::Text("Project Folder");
-		ImGui::TextWrapped("%s", newProjectFolder.empty() ? "(no folder selected)" : newProjectFolder.c_str());
-		if (ImGui::Button("Browse...")) {
-			if (auto folder = FileDialog::ShowFolderDialog("Choose Project Folder"))
-				newProjectFolder = *folder;
-		}
+	if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
 
-		bool folderNotEmpty = !newProjectFolder.empty() && !IsDirectoryEmpty(newProjectFolder);
-		if (folderNotEmpty) {
-			ImGui::Dummy(ImVec2(0, 6));
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.35f, 0.35f, 1.0f));
-			ImGui::TextWrapped("Folder must be empty.");
-			ImGui::PopStyleColor();
-		}
-		else if (!errorMessage.empty()) {
-			ImGui::Dummy(ImVec2(0, 6));
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.35f, 0.35f, 1.0f));
-			ImGui::TextWrapped("%s", errorMessage.c_str());
-			ImGui::PopStyleColor();
-		}
+	FormLabel("Name");
+	ImGui::SetNextItemWidth(-FLT_MIN);
+	ImGui::InputTextWithHint("##NewProjectName", "My Project", newProjectNameBuf, IM_ARRAYSIZE(newProjectNameBuf));
 
-		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::Separator();
-		ImGui::Dummy(ImVec2(0, 6));
-
-		ImGui::BeginDisabled(folderNotEmpty);
-		if (ImGui::Button("Create", ImVec2(120, 0))) {
-			CreateProjectFromPopup();
-			if (enteredProject)
-				ImGui::CloseCurrentPopup();
-		}
-		ImGui::EndDisabled();
-		ImGui::SameLine();
-		if (ImGui::Button("Cancel", ImVec2(120, 0))) {
-			errorMessage.clear();
-			ImGui::CloseCurrentPopup();
-		}
-
-		ImGui::EndPopup();
+	FormLabel("Folder");
+	if (PathField("##NewProjectFolder", newProjectFolder, "Choose an empty folder...")) {
+		if (auto folder = FileDialog::ShowFolderDialog("Choose Project Folder"))
+			newProjectFolder = *folder;
 	}
+
+	const bool folderNotEmpty = !newProjectFolder.empty() && !IsDirectoryEmpty(newProjectFolder);
+	if (folderNotEmpty) {
+		ImGui::Spacing();
+		ImGui::PushStyleColor(ImGuiCol_Text, kDanger);
+		ImGui::TextWrapped("This folder isn't empty. Choose an empty folder.");
+		ImGui::PopStyleColor();
+	}
+	else if (!errorMessage.empty()) {
+		ImGui::Spacing();
+		ImGui::PushStyleColor(ImGuiCol_Text, kDanger);
+		ImGui::TextWrapped("%s", errorMessage.c_str());
+		ImGui::PopStyleColor();
+	}
+
+	ImGui::Spacing();
+	ImGui::Separator();
+	ImGui::Spacing();
+
+	const ImGuiStyle& st = ImGui::GetStyle();
+	const float btnW = 110.0f;
+	ImGui::SetCursorPosX(ImGui::GetWindowWidth() - btnW * 2.0f - st.ItemSpacing.x - st.WindowPadding.x);
+
+	ImGui::BeginDisabled(folderNotEmpty);
+	bool create = AccentButton("Create", ImVec2(btnW, 0));
+	ImGui::EndDisabled();
+	if (ImGui::IsKeyPressed(ImGuiKey_Enter) && !folderNotEmpty) create = true;
+
+	ImGui::SameLine();
+	bool cancel = ImGui::Button("Cancel", ImVec2(btnW, 0)) || ImGui::IsKeyPressed(ImGuiKey_Escape);
+
+	if (create) {
+		CreateProjectFromPopup();
+		if (errorMessage.empty()) ImGui::CloseCurrentPopup();
+	}
+	if (cancel) {
+		errorMessage.clear();
+		ImGui::CloseCurrentPopup();
+	}
+
+	ImGui::EndPopup();
 }
 
 void ProjectLauncher::ProcessConfigurePackagesPopup() {
 	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
 	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-	ImGui::SetNextWindowSize(ImVec2(480, 420), ImGuiCond_Appearing);
+	ImGui::SetNextWindowSize(ImVec2(560, 480), ImGuiCond_Appearing);
 
-	if (ImGui::BeginPopupModal("Configure Packages", nullptr, ImGuiWindowFlags_NoSavedSettings)) {
-		PackageManager& pm = PackageManager::getInstance();
+	if (!ImGui::BeginPopupModal("Configure Packages", nullptr, ImGuiWindowFlags_NoSavedSettings)) return;
 
-		if (selectedIndex >= 0 && selectedIndex < (int)projects.size())
-			ImGui::TextDisabled("%s", projects[selectedIndex].name.c_str());
-		ImGui::TextWrapped("Selected packages install into this project's own Python "
-			"environment the next time it's opened.");
-		ImGui::Dummy(ImVec2(0, 6));
+	PackageManager& pm = PackageManager::getInstance();
+	const ImGuiStyle& st = ImGui::GetStyle();
 
-		ImGui::SetNextItemWidth(-1.0f);
-		ImGui::InputTextWithHint("##PackageSearch", "Search packages", packageSearchBuf, IM_ARRAYSIZE(packageSearchBuf));
-		std::string search = ToLower(packageSearchBuf);
+	if (selectedIndex >= 0 && selectedIndex < (int)projects.size())
+		BoldText(projects[selectedIndex].name.c_str());
+	ImGui::TextDisabled("Packages install into this project's Python environment the next time it's opened.");
+	ImGui::Spacing();
 
-		ImGui::Dummy(ImVec2(0, 4));
-		ImGui::Separator();
-		ImGui::Dummy(ImVec2(0, 6));
+	ImGui::SetNextItemWidth(-FLT_MIN);
+	ImGui::InputTextWithHint("##PackageSearch", "Search packages...", packageSearchBuf, IM_ARRAYSIZE(packageSearchBuf));
+	const std::string search = ToLower(packageSearchBuf);
+	ImGui::Spacing();
 
-		if (ImGui::BeginTabBar("##PackageTabs")) {
+	const float footerH = ImGui::GetFrameHeight() + st.ItemSpacing.y * 2.0f + 6.0f;
 
-			if (ImGui::BeginTabItem("Selected")) {
-				ImGui::Dummy(ImVec2(0, 4));
-				bool any = false;
+	auto drawList = [&](bool selectedTab) {
+		ImGui::BeginChild(selectedTab ? "##SelList" : "##AvailList", ImVec2(0, -footerH), ImGuiChildFlags_Borders);
+		bool any = false;
 
-				for (auto& def : pm.GetAvailablePackages()) {
-					if (!pm.IsPackageSelected(def.id)) continue;
-					if (!search.empty() && ToLower(def.displayName).find(search) == std::string::npos)
-						continue;
-					any = true;
+		for (auto& def : pm.GetAvailablePackages()) {
+			if (pm.IsPackageSelected(def.id) != selectedTab) continue;
+			if (!search.empty() && ToLower(def.displayName).find(search) == std::string::npos) continue;
+			any = true;
 
-					ImGui::PushID(def.id.c_str());
+			ImGui::PushID(def.id.c_str());
 
-					ImGui::TextUnformatted(def.displayName.c_str());
-					ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-					ImGui::TextWrapped("%s", def.description.c_str());
-					ImGui::PopStyleColor();
+			const float btnW = 90.0f;
+			ImGui::BeginGroup();
+			BoldText(def.displayName.c_str());
+			ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x - btnW - st.ItemSpacing.x * 2.0f + ImGui::GetCursorPosX());
+			ImGui::TextDisabled("%s", def.description.c_str());
+			ImGui::PopTextWrapPos();
+			ImGui::EndGroup();
 
-					ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.45f, 0.18f, 0.18f, 1.0f));
-					ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.55f, 0.22f, 0.22f, 1.0f));
-					ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.40f, 0.15f, 0.15f, 1.0f));
-					if (ImGui::Button("Remove", ImVec2(100, 0)))
-						pm.DeselectPackage(def.id);
-					ImGui::PopStyleColor(3);
+			// Button vertically centered against the text block
+			float blockH = ImGui::GetItemRectSize().y;
+			float rowTop = ImGui::GetItemRectMin().y;
+			ImGui::SameLine(ImGui::GetWindowWidth() - btnW - st.WindowPadding.x);
+			ImGui::SetCursorScreenPos(ImVec2(ImGui::GetCursorScreenPos().x,
+				rowTop + (blockH - ImGui::GetFrameHeight()) * 0.5f));
 
-					ImGui::Dummy(ImVec2(0, 10));
-					ImGui::PopID();
-				}
-
-				if (!any) {
-					ImGui::TextDisabled(search.empty()
-						? "No packages selected for this project yet."
-						: "No selected packages match your search.");
-				}
-				ImGui::EndTabItem();
+			if (selectedTab) {
+				if (DangerButton("Remove", ImVec2(btnW, 0))) pm.DeselectPackage(def.id);
+			}
+			else {
+				if (AccentButton("Install", ImVec2(btnW, 0))) pm.SelectPackage(def.id);
 			}
 
-			if (ImGui::BeginTabItem("Available")) {
-				ImGui::Dummy(ImVec2(0, 4));
-				bool any = false;
-
-				for (auto& def : pm.GetAvailablePackages()) {
-					if (pm.IsPackageSelected(def.id)) continue; 
-					if (!search.empty() && ToLower(def.displayName).find(search) == std::string::npos)
-						continue;
-					any = true;
-
-					ImGui::PushID(def.id.c_str());
-
-					ImGui::TextUnformatted(def.displayName.c_str());
-					ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-					ImGui::TextWrapped("%s", def.description.c_str());
-					ImGui::PopStyleColor();
-
-					if (ImGui::Button("Install", ImVec2(100, 0)))
-						pm.SelectPackage(def.id);
-
-					ImGui::Dummy(ImVec2(0, 10));
-					ImGui::PopID();
-				}
-
-				if (!any) {
-					ImGui::TextDisabled(search.empty()
-						? "All available packages are already selected."
-						: "No available packages match your search.");
-				}
-				ImGui::EndTabItem();
-			}
-
-			ImGui::EndTabBar();
+			ImGui::Spacing();
+			ImGui::Separator();
+			ImGui::Spacing();
+			ImGui::PopID();
 		}
 
-		ImGui::Dummy(ImVec2(0, 10));
-		ImGui::Separator();
-		ImGui::Dummy(ImVec2(0, 6));
+		if (!any) {
+			ImGui::TextDisabled("%s", !search.empty() ? "No packages match your search."
+				: selectedTab ? "No packages selected for this project yet."
+				: "All available packages are already selected.");
+		}
+		ImGui::EndChild();
+		};
 
-		if (ImGui::Button("Close", ImVec2(120, 0)))
-			ImGui::CloseCurrentPopup();
-
-		ImGui::EndPopup();
+	if (ImGui::BeginTabBar("##PackageTabs")) {
+		if (ImGui::BeginTabItem("Selected")) { drawList(true); ImGui::EndTabItem(); }
+		if (ImGui::BeginTabItem("Available")) { drawList(false); ImGui::EndTabItem(); }
+		ImGui::EndTabBar();
 	}
+
+	ImGui::Separator();
+	ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 110.0f - st.WindowPadding.x);
+	if (ImGui::Button("Close", ImVec2(110, 0)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+		ImGui::CloseCurrentPopup();
+
+	ImGui::EndPopup();
 }
 
 void ProjectLauncher::ProcessLauncher() {
@@ -427,8 +478,8 @@ void ProjectLauncher::ProcessLauncher() {
 
 	if (pendingEnterProject) {
 		if (ScriptManager::getInstance().IsBusy()) {
-			ProcessLoadingProjectDisplay("Setting up project: " + ScriptManager::getInstance().GetStatusMessage());
-			return; 
+			ProcessLoadingProjectDisplay(ScriptManager::getInstance().GetStatusMessage());
+			return;
 		}
 		pendingEnterProject = false;
 		enteredProject = true;
@@ -439,116 +490,202 @@ void ProjectLauncher::ProcessLauncher() {
 	ImGui::SetNextWindowSize(viewport->WorkSize);
 
 	ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-		ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus;
+		ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus |
+		ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoScrollbar;
 
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(28.0f, 22.0f));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 	ImGui::Begin("##ProjectLauncher", nullptr, flags);
+	ImGui::PopStyleVar(2);
 
-	ImGui::Dummy(ImVec2(0, 6));
-	ImGui::Indent(8.0f);
-	ImGui::TextUnformatted("Fusion Engine - Projects");
-	ImGui::Unindent(8.0f);
-	ImGui::Dummy(ImVec2(0, 4));
-	ImGui::Separator();
-	ImGui::Dummy(ImVec2(0, 6));
+	const ImGuiStyle& st = ImGui::GetStyle();
 
-	if (ImGui::Button("New Project")) {
-		newProjectNameBuf[0] = '\0';
-		newProjectFolder.clear();
-		errorMessage.clear();
-		ImGui::OpenPopup("Create New Project");
+	{
+		bool b = EditorTheme::PushBold();
+		ImGui::SetWindowFontScale(1.5f);
+		ImGui::TextUnformatted("Fusion Engine");
+		ImGui::SetWindowFontScale(1.0f);
+		EditorTheme::PopBold(b);
+		ImGui::TextDisabled("Create, import and open your projects");
 	}
-	ProcessNewProjectPopup();
+	ImGui::Spacing();
+	ImGui::Spacing();
 
-	ImGui::SameLine(0.0f, 12.0f);
-	if (ImGui::Button("Import"))
-		ImportProject();
+	{
+		const float newW = ImGui::CalcTextSize("+  New Project").x + st.FramePadding.x * 2.0f;
+		const float importW = ImGui::CalcTextSize("Import").x + st.FramePadding.x * 2.0f;
+		const float rightW = importW + newW + st.ItemSpacing.x;
 
-	ImGui::SameLine(0.0f, 12.0f);
-	ImGui::BeginDisabled(selectedIndex < 0);
-	if (ImGui::Button("Remove"))
-		RemoveProject(selectedIndex);
-	ImGui::EndDisabled();
+		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - rightW - st.ItemSpacing.x);
+		ImGui::InputTextWithHint("##Filter", "Search projects...", filterBuf, IM_ARRAYSIZE(filterBuf));
 
-	ImGui::SameLine(0.0f, 12.0f);
-	ImGui::BeginDisabled(selectedIndex < 0);
-	if (ImGui::Button("Configure")) {
-		PackageManager::getInstance().LoadForProject(projects[selectedIndex].folderPath);
-		packageSearchBuf[0] = '\0';
-		ImGui::OpenPopup("Configure Packages");
+		ImGui::SameLine();
+		if (ImGui::Button("Import")) ImportProject();
+
+		ImGui::SameLine();
+		if (AccentButton("+  New Project")) {
+			newProjectNameBuf[0] = '\0';
+			newProjectFolder.clear();
+			errorMessage.clear();
+			ImGui::OpenPopup("Create New Project");
+		}
+		ProcessNewProjectPopup();
 	}
-	ImGui::EndDisabled();
-	ProcessConfigurePackagesPopup();
-
-	ImGui::SameLine(0.0f, 24.0f);
-	ImGui::SetNextItemWidth(220.0f);
-	ImGui::InputTextWithHint("##Filter", "Filter Projects", filterBuf, IM_ARRAYSIZE(filterBuf));
 
 	if (!errorMessage.empty() && !ImGui::IsPopupOpen("Create New Project")) {
-		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.9f, 0.35f, 0.35f, 1.0f));
+		ImGui::Spacing();
+		ImGui::PushStyleColor(ImGuiCol_Text, kDanger);
 		ImGui::TextWrapped("%s", errorMessage.c_str());
 		ImGui::PopStyleColor();
 	}
 
-	ImGui::Dummy(ImVec2(0, 8));
+	ImGui::Spacing();
 
-	ImGui::BeginChild("##ProjectListRegion", ImVec2(0, -40.0f), true);
+	const float footerH = ImGui::GetFrameHeight() + st.ItemSpacing.y + 14.0f;
+	ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
+	ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 0.0f);
+	ImGui::BeginChild("##ProjectListRegion", ImVec2(0, -footerH));
+	ImGui::PopStyleVar();
+	ImGui::PopStyleColor();
 
-	std::string filter = ToLower(filterBuf);
+	const std::string filter = ToLower(filterBuf);
+	int shown = 0;
+	int openIndex = -1, removeIndex = -1, configureIndex = -1;
 
 	for (int i = 0; i < (int)projects.size(); i++) {
 		ProjectEntry& p = projects[i];
-
-		if (!filter.empty() && ToLower(p.name).find(filter) == std::string::npos)
-			continue;
+		if (!filter.empty() && ToLower(p.name).find(filter) == std::string::npos) continue;
+		shown++;
 
 		ImGui::PushID(i);
 
-		bool selected = (selectedIndex == i);
-		ImVec2 rowSize(ImGui::GetContentRegionAvail().x, 48.0f);
+		const float cardH = 64.0f;
+		const float rounding = 8.0f;
+		const float cardW = ImGui::GetContentRegionAvail().x;
+		const bool selected = (selectedIndex == i);
 
-		ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.20f, 0.28f, 0.40f, 0.55f));
-		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.24f, 0.32f, 0.45f, 0.55f));
-		ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(0.24f, 0.32f, 0.45f, 0.65f));
+		const ImVec2 mn = ImGui::GetCursorScreenPos();
+		const ImVec2 mx(mn.x + cardW, mn.y + cardH);
 
-		if (ImGui::Selectable("##row", selected, ImGuiSelectableFlags_AllowDoubleClick, rowSize)) {
-			selectedIndex = i;
-			if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && !p.missing)
-				OpenProjectFile(p.fusionFilePath);
+		ImGui::InvisibleButton("##card", ImVec2(cardW, cardH));
+		const bool hovered = ImGui::IsItemHovered();
+		if (ImGui::IsItemClicked(ImGuiMouseButton_Left) || ImGui::IsItemClicked(ImGuiMouseButton_Right)) selectedIndex = i;
+		if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && !p.missing) openIndex = i;
+
+		if (ImGui::BeginPopupContextItem("##ctx")) {
+			if (ImGui::MenuItem("Open", nullptr, false, !p.missing)) openIndex = i;
+			if (ImGui::MenuItem("Configure Packages...")) configureIndex = i;
+			ImGui::Separator();
+			if (ImGui::MenuItem("Remove from list")) removeIndex = i;
+			ImGui::EndPopup();
 		}
 
-		ImGui::PopStyleColor(3);
+		ImDrawList* dl = ImGui::GetWindowDrawList();
+		
+		const ImVec4 accent = EditorTheme::Accent();
 
-		ImVec2 rectMin = ImGui::GetItemRectMin();
+		const ImVec4 base = ImGui::GetStyleColorVec4(ImGuiCol_FrameBg);
+		const ImVec4 selTint = ImVec4(
+			base.x + (accent.x - base.x) * 0.10f,
+			base.y + (accent.y - base.y) * 0.10f,
+			base.z + (accent.z - base.z) * 0.10f,
+			1.0f);
 
-		ImGui::SetCursorScreenPos(ImVec2(rectMin.x + 12.0f, rectMin.y + 6.0f));
-		if (p.missing) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.85f, 0.35f, 0.35f, 1.0f));
-		ImGui::TextUnformatted(p.name.c_str());
-		if (p.missing) ImGui::PopStyleColor();
+		ImU32 bg = ImGui::GetColorU32(hovered ? ImGuiCol_FrameBgHovered : ImGuiCol_FrameBg);
+		if (selected) bg = ImGui::GetColorU32(selTint);
+		dl->AddRectFilled(mn, mx, bg, rounding);
+		dl->AddRect(mn, mx,
+			selected ? ImGui::GetColorU32(ImVec4(accent.x, accent.y, accent.z, 0.70f)) : ImGui::GetColorU32(ImGuiCol_Border),
+			rounding, 0, 1.0f);
 
-		ImGui::SetCursorScreenPos(ImVec2(rectMin.x + 12.0f, rectMin.y + 26.0f));
-		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
-		ImGui::TextUnformatted(p.folderPath.c_str());
+		const float badge = 40.0f;
+		const ImVec2 bmn(mn.x + 14.0f, mn.y + (cardH - badge) * 0.5f);
+		const ImVec2 bmx(bmn.x + badge, bmn.y + badge);
+		const ImVec4 badgeCol = p.missing ? ImVec4(0.45f, 0.18f, 0.20f, 1.0f)
+			: selected ? ImVec4(0.26f, 0.34f, 0.32f, 1.0f)
+			: ImVec4(0.30f, 0.31f, 0.33f, 1.0f);
+		dl->AddRectFilled(bmn, bmx, ImGui::GetColorU32(badgeCol), 6.0f);
+		char letter[2] = { p.name.empty() ? '?' : (char)std::toupper((unsigned char)p.name[0]), 0 };
+		{
+			bool b = EditorTheme::PushBold();
+			ImVec2 ls = ImGui::CalcTextSize(letter);
+			ImGui::SetCursorScreenPos(ImVec2(bmn.x + (badge - ls.x) * 0.5f, bmn.y + (badge - ls.y) * 0.5f));
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.90f, 0.90f, 0.90f, 1.0f));
+			ImGui::TextUnformatted(letter);
+			ImGui::PopStyleColor();
+			EditorTheme::PopBold(b);
+		}
+
+		const char* rightText = p.missing ? "Missing" : p.lastModifiedText.c_str();
+		const float rightW = ImGui::CalcTextSize(rightText).x;
+		ImGui::SetCursorScreenPos(ImVec2(mx.x - rightW - 18.0f, mn.y + (cardH - ImGui::GetTextLineHeight()) * 0.5f));
+		ImGui::PushStyleColor(ImGuiCol_Text, p.missing ? kDanger : ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+		ImGui::TextUnformatted(rightText);
 		ImGui::PopStyleColor();
 
-		float dateWidth = ImGui::CalcTextSize(p.lastModifiedText.c_str()).x;
-		ImGui::SetCursorScreenPos(ImVec2(rectMin.x + rowSize.x - dateWidth - 12.0f, rectMin.y + 16.0f));
-		ImGui::TextUnformatted(p.lastModifiedText.c_str());
+		const float textX = bmx.x + 14.0f;
+		ImGui::PushClipRect(ImVec2(textX, mn.y), ImVec2(mx.x - rightW - 30.0f, mx.y), true);
+
+		ImGui::SetCursorScreenPos(ImVec2(textX, mn.y + 11.0f));
+		BoldText(p.name.c_str(), p.missing ? &kDanger : nullptr);
+
+		ImGui::SetCursorScreenPos(ImVec2(textX, mn.y + 34.0f));
+		ImGui::TextDisabled("%s", p.folderPath.c_str());
+
+		ImGui::PopClipRect();
+
+		ImGui::SetCursorScreenPos(ImVec2(mn.x, mx.y));
+		ImGui::Dummy(ImVec2(cardW, 8.0f));
 
 		ImGui::PopID();
+	}
 
-		ImGui::SetCursorScreenPos(ImVec2(rectMin.x, rectMin.y + rowSize.y));
-		ImGui::Dummy(ImVec2(rowSize.x, 6.0f));
+	if (shown == 0) {
+		ImGui::Dummy(ImVec2(0, 50.0f));
+		const char* title = projects.empty() ? "No projects yet" : "No projects match your search";
+		const char* sub = projects.empty() ? "Create a new project or import an existing one to get started." : "Try a different search term.";
+		const float w = ImGui::GetContentRegionAvail().x;
+		ImGui::SetCursorPosX((w - ImGui::CalcTextSize(title).x) * 0.5f);
+		BoldText(title);
+		ImGui::SetCursorPosX((w - ImGui::CalcTextSize(sub).x) * 0.5f);
+		ImGui::TextDisabled("%s", sub);
 	}
 
 	ImGui::EndChild();
 
-	ImGui::Dummy(ImVec2(0, 6));
+	ImGui::Separator();
+	ImGui::Spacing();
 
-	bool canOpen = selectedIndex >= 0 && selectedIndex < (int)projects.size() && !projects[selectedIndex].missing;
-	ImGui::BeginDisabled(!canOpen);
-	if (ImGui::Button("Open Project", ImVec2(140, 0)))
-		OpenProjectFile(projects[selectedIndex].fusionFilePath);
+	const bool hasSel = selectedIndex >= 0 && selectedIndex < (int)projects.size();
+	const bool canOpen = hasSel && !projects[selectedIndex].missing;
+
+	ImGui::BeginDisabled(!hasSel);
+	if (ImGui::Button("Configure Packages")) configureIndex = selectedIndex;
+	ImGui::SameLine();
+	if (DangerButton("Remove")) removeIndex = selectedIndex;
 	ImGui::EndDisabled();
+
+	ImGui::SameLine();
+	ImGui::AlignTextToFramePadding();
+	ImGui::TextDisabled("%d project%s", (int)projects.size(), projects.size() == 1 ? "" : "s");
+
+	const float openW = 150.0f;
+	ImGui::SameLine(ImGui::GetWindowWidth() - openW - st.WindowPadding.x);
+	ImGui::BeginDisabled(!canOpen);
+	if (AccentButton("Open Project", ImVec2(openW, 0))) openIndex = selectedIndex;
+	ImGui::EndDisabled();
+
+	if (configureIndex >= 0 && configureIndex < (int)projects.size()) {
+		selectedIndex = configureIndex;
+		PackageManager::getInstance().LoadForProject(projects[configureIndex].folderPath);
+		packageSearchBuf[0] = '\0';
+		ImGui::OpenPopup("Configure Packages");
+	}
+	ProcessConfigurePackagesPopup();
+
+	if (removeIndex >= 0) RemoveProject(removeIndex);
+	else if (openIndex >= 0 && openIndex < (int)projects.size() && !projects[openIndex].missing)
+		OpenProjectFile(projects[openIndex].fusionFilePath);
 
 	ImGui::End();
 }

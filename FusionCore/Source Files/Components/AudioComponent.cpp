@@ -91,9 +91,21 @@ void AudioComponent::CopyTo(Object* other) {
 		target = other->GetComponent<AudioComponent>();
 	}
 
+	for (auto& entry : target->audioEntries) {
+		AudioManager::getInstance().UnloadSound(entry.handle);
+	}
+	target->audioEntries.clear();
+
 	for (const auto& entry : audioEntries) {
 		target->AddAudioTrack(entry.name, entry.audioPath, entry.streaming, entry.loop, entry.volume);
+		if (AudioEntry* copy = target->FindAudioEntry(entry.name)) {
+			copy->spatialAudio = entry.spatialAudio;
+			copy->minDistance = entry.minDistance;
+			copy->maxDistance = entry.maxDistance;
+			target->ApplySpatialSettings(copy);
+		}
 	}
+	target->listener = listener;
 }
 
 void AudioComponent::Serialize(BinaryWriter& w) {
@@ -114,6 +126,12 @@ void AudioComponent::Serialize(BinaryWriter& w) {
 
 void AudioComponent::Deserialize(BinaryReader& r) {
 	Component::Deserialize(r);
+
+	for (auto& entry : audioEntries) {
+		AudioManager::getInstance().UnloadSound(entry.handle);
+	}
+	audioEntries.clear();
+
 	int count = r.Read<int>();
 	for (int i = 0; i < count; i++) {
 		std::string name = r.ReadString();
@@ -143,11 +161,9 @@ void AudioComponent::Deserialize(BinaryReader& r) {
 void AudioComponent::ProcessInspectorUI() {
 	ImGui::Text("Audio Tracks (%d)", (int)audioEntries.size());
 	ImGui::SameLine();
-	if (ImGui::SmallButton("+ Add Track")) {
-		EditorManager::getInstance().BeginEdit({ parent });
+	EditorField::ActionScene(parent, ImGui::SmallButton("+ Add Track"), [&] {
 		AddAudioTrack("Track");
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+	});
 
 	ImGui::Separator();
 
@@ -269,11 +285,9 @@ void AudioComponent::ProcessInspectorUI() {
 		ImGui::Spacing();
 	}
 
-	if (!trackToRemove.empty()) {
-		EditorManager::getInstance().BeginEdit({ parent });
+	EditorField::ActionScene(parent, !trackToRemove.empty(), [&] {
 		RemoveAudioTrack(trackToRemove);
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+		});
 
 	ImGui::Separator();
 

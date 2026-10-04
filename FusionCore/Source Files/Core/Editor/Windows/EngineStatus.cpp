@@ -80,6 +80,46 @@ namespace {
 		return ImGui::CalcTextSize(label).x + ImGui::GetStyle().FramePadding.x * 2.0f;
 	}
 
+	bool SaveSceneIfDirty() {
+		SceneManager& SM = SceneManager::getInstance();
+		return !SM.IsActiveSceneDirty() || SceneTab::SaveActiveScene();
+	}
+
+	bool StartPlayback(bool useMainScene) {
+		EngineManager& EM = EngineManager::getInstance();
+		SceneManager& SM = SceneManager::getInstance();
+
+		if (EM.EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) return true;
+
+		if (EM.EnginePhysicsMode == EngineManager::PhysicsMode::Stop) {
+			if (!SaveSceneIfDirty()) return false;
+
+			EM.editingScenePath = SM.GetCurrentSceneFile();
+
+			const std::string& mainScene = EM.EngineSettings.mainScenePath;
+			if (useMainScene && !mainScene.empty() && SM.GetCurrentSceneFile() != mainScene) {
+				std::error_code ec;
+				if (std::filesystem::exists(mainScene, ec) && !ec) {
+					SM.LoadSceneFromFile(mainScene);
+				}
+			}
+		}
+
+		EM.SwitchPhysicsMode(EngineManager::PhysicsMode::Simulate);
+		return true;
+	}
+
+	void StopPlayback() {
+		EngineManager& EM = EngineManager::getInstance();
+		if (EM.EnginePhysicsMode == EngineManager::PhysicsMode::Stop) return;
+
+		SceneManager& SM = SceneManager::getInstance();
+		if (!EM.editingScenePath.empty()) SM.LoadSceneFromFile(EM.editingScenePath);
+		else SM.NewScene();
+
+		EM.SwitchPhysicsMode(EngineManager::PhysicsMode::Stop);
+	}
+
 	bool SaveCurrentWork() {
 		FileManager& FM = FileManager::getInstance();
 
@@ -133,163 +173,153 @@ void EngineStatus::ProcessWindow() {
 
 	if (hidden) return;
 
-	ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
-	ImGui::SetNextWindowSize(ImVec2(1200, 46), ImGuiCond_FirstUseEver);
+	EngineManager& EM = EngineManager::getInstance();
+	SceneManager& SM = SceneManager::getInstance();
+	FileManager& FM = FileManager::getInstance();
 
-	ImGuiWindowClass statusWindowClass;
-	statusWindowClass.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_AutoHideTabBar;
-	ImGui::SetNextWindowClass(&statusWindowClass);
-
-	ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
-	ImGui::Begin(name.c_str(), nullptr, flags);
-
-	EngineManager::PhysicsMode mode = EngineManager::getInstance().EnginePhysicsMode;
-	bool isStopped = mode == EngineManager::PhysicsMode::Stop;
-	bool isSimulating = mode == EngineManager::PhysicsMode::Simulate;
-
-	const ImGuiStyle& style = ImGui::GetStyle();
-	const float fullWidth = ImGui::GetContentRegionAvail().x;
-	const float rowStartX = ImGui::GetCursorPosX();
-
-	const ImVec4 playGreen(0.30f, 0.80f, 0.35f, 1.0f);
-	const ImVec4 stopRed(0.85f, 0.30f, 0.30f, 1.0f);
-
-	const float iconDim = 20.0f;
-	const float iconBtnW = iconDim + 8.0f;
-	const float playbackGroupW = iconBtnW * 3.0f + style.ItemSpacing.x * 2.0f;
-	const float playbackStartX = rowStartX + (fullWidth - playbackGroupW) * 0.5f;
-
-	const float projectNameWidth = 160.0f;
+	const EngineManager::PhysicsMode mode = EM.EnginePhysicsMode;
+	const bool isStopped = mode == EngineManager::PhysicsMode::Stop;
+	const bool isSimulating = mode == EngineManager::PhysicsMode::Simulate;
 
 	const bool rlPackageInstalled = PackageManager::getInstance().IsPackageInstalled("rl");
+	const bool pythonReady = ScriptManager::getInstance().IsReady();
+	const bool canTrain = !EM.isHeadless && !FM.currentProjectFile.empty() && pythonReady;
+	const bool canSaveAll = isStopped && (!FM.isProjectSaved || SM.IsActiveSceneDirty());
 
-	const float rightGroupW = ButtonWidth("Settings") + style.ItemSpacing.x
-		+ projectNameWidth + style.ItemSpacing.x
-		+ ButtonWidth("Save") + style.ItemSpacing.x
-		+ ButtonWidth("Export") + (rlPackageInstalled ? (style.ItemSpacing.x + ButtonWidth("Train")) : 0.0f);
-	const float rightStartX = rowStartX + fullWidth - rightGroupW;
+	bool openSettings = false, openExport = false, openTrain = false;
 
-	std::string fpsText = std::to_string(EngineManager::getInstance().fps) + " FPS";
-	ImGui::AlignTextToFramePadding();
-	ImGui::TextUnformatted(fpsText.c_str());
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12.0f, 11.0f));
+	const bool barOpen = ImGui::BeginMainMenuBar();
+	if (!barOpen) ImGui::PopStyleVar();
 
-	Spacer(16.0f);
+	if (barOpen) {
+		const float barY = ImGui::GetCursorPosY();
 
-	ImGui::AlignTextToFramePadding();
-	ImGui::TextUnformatted("Gizmo:");
-	ImGui::SameLine();
-	DrawGizmoModeSelector();
-
-	ImGui::SameLine(playbackStartX);
-
-	if (IconButton("play", IconType::Play, isSimulating, iconDim, playGreen)) {
-		if (isStopped) {
-			SceneManager& SM = SceneManager::getInstance();
-
-			if (SM.IsActiveSceneDirty()) {
-				if (!SceneTab::SaveActiveScene()) {
-					ImGui::End();
-					return; 
+		if (ImGui::BeginMenu("File")) {
+			if (ImGui::MenuItem("New Scene", nullptr, false, isStopped)) {
+				if (SaveSceneIfDirty()) SM.NewScene();
+			}
+			if (ImGui::MenuItem("Open Scene...", nullptr, false, isStopped)) {
+				auto opts = FileDialogOptions::ForExtension("Fusion Scene", "fscene", "Open Scene");
+				if (auto path = FileDialog::ShowOpenDialog(opts)) {
+					if (SaveSceneIfDirty()) SM.LoadSceneFromFile(*path);
 				}
 			}
+			if (ImGui::MenuItem("Save Scene", nullptr, false, isStopped && SM.IsActiveSceneDirty())) {
+				SceneTab::SaveActiveScene();
+			}
 
-			EngineManager::getInstance().editingScenePath = SM.GetCurrentSceneFile();
+			ImGui::Separator();
 
-			const std::string& mainScene = EngineManager::getInstance().EngineSettings.mainScenePath;
-			if (!mainScene.empty() && SM.GetCurrentSceneFile() != mainScene) {
-				std::error_code ec;
-				if (std::filesystem::exists(mainScene, ec) && !ec) {
-					SM.LoadSceneFromFile(mainScene);
+			if (ImGui::MenuItem("Open Project...", nullptr, false, isStopped)) {
+				auto opts = FileDialogOptions::ForExtension("Fusion Project", "fusion", "Open Project");
+				if (auto path = FileDialog::ShowOpenDialog(opts)) {
+					if (SaveCurrentWork()) FM.LoadProjectFromFile(*path);   // assumed name
 				}
 			}
-		}
-		EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Simulate);
-	}
-	ImGui::SameLine();
+			if (ImGui::MenuItem("Save Project", nullptr, false,
+				isStopped && !FM.isProjectSaved && !FM.currentProjectFile.empty())) {
+				FM.SaveProjectToFile(FM.currentProjectFile);
+			}
+			if (ImGui::MenuItem("Save All", "Ctrl+S", false, canSaveAll)) {
+				SaveCurrentWork();
+			}
 
-	if (IconButton("pause", IconType::Pause, !isSimulating, iconDim)) {
-		EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Pause);
-	}
-	ImGui::SameLine();
+			ImGui::Separator();
 
-	if (IconButton("stop", IconType::Stop, isStopped, iconDim, stopRed)) {
-		SceneManager& SM = SceneManager::getInstance();
-		const std::string& editingScene = EngineManager::getInstance().editingScenePath;
-
-		if (!editingScene.empty()) {
-			SM.LoadSceneFromFile(editingScene);
-		}
-		else {
-			SM.NewScene();
+			if (ImGui::MenuItem("Exit")) {
+				EM.pendingClose = true;
+			}
+			ImGui::EndMenu();
 		}
 
-		EngineManager::getInstance().SwitchPhysicsMode(EngineManager::PhysicsMode::Stop);
+		if (ImGui::BeginMenu("Project")) {
+			if (ImGui::MenuItem("Engine Settings...")) openSettings = true;
+			if (ImGui::MenuItem("Export Project...", nullptr, false, isStopped)) openExport = true;
+			ImGui::EndMenu();
+		}
+
+		if (ImGui::BeginMenu("Run")) {
+			if (ImGui::MenuItem("Run Project", "F5", false, !isSimulating)) {
+				StartPlayback(true);
+			}
+			if (ImGui::MenuItem("Run Current Scene", "Ctrl+F5", false, !isSimulating)) {
+				StartPlayback(false);
+			}
+			if (ImGui::MenuItem("Pause", nullptr, false, isSimulating)) {
+				EM.SwitchPhysicsMode(EngineManager::PhysicsMode::Pause);
+			}
+			if (ImGui::MenuItem("Stop", "Shift+F5", false, !isStopped)) {
+				StopPlayback();
+			}
+
+			if (rlPackageInstalled) {
+				ImGui::Separator();
+				if (ImGui::MenuItem("Train Model...", nullptr, false, canTrain)) openTrain = true;
+				if (!pythonReady && !FM.currentProjectFile.empty()
+					&& ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+					ImGui::SetTooltip("Python backend is still setting up (%s)",
+						ScriptManager::getInstance().GetStatusMessage().c_str());
+				}
+			}
+			ImGui::EndMenu();
+		}
+
+		const ImVec4 playGreen(0.30f, 0.80f, 0.35f, 1.0f);
+		const ImVec4 stopRed(0.85f, 0.30f, 0.30f, 1.0f);
+		const float iconDim = 22.0f;
+		const float iconBtn = iconDim + 8.0f;
+		const float spacing = ImGui::GetStyle().ItemSpacing.x;
+		const float groupW = iconBtn * 3.0f + spacing * 2.0f;
+		const float centerX = (ImGui::GetWindowWidth() - groupW) * 0.5f;
+		const float btnY = barY + (ImGui::GetFrameHeight() - iconBtn) * 0.5f;
+
+		ImGui::SameLine(std::max(centerX, ImGui::GetCursorPosX() + 24.0f));
+		ImGui::SetCursorPosY(btnY);
+
+		ImGui::SameLine(std::max(centerX, ImGui::GetCursorPosX() + 24.0f));
+		ImGui::SetCursorPosY(btnY);
+		if (IconButton("play", IconType::Play, isSimulating, iconDim, playGreen)) StartPlayback(true);
+
+		ImGui::SameLine();
+		ImGui::SetCursorPosY(btnY);
+		if (IconButton("pause", IconType::Pause, !isSimulating, iconDim)) {
+			EM.SwitchPhysicsMode(EngineManager::PhysicsMode::Pause);
+		}
+
+		ImGui::SameLine();
+		ImGui::SetCursorPosY(btnY);
+		if (IconButton("stop", IconType::Stop, isStopped, iconDim, stopRed)) StopPlayback();
+
+		char fpsBuf[32];
+		std::snprintf(fpsBuf, sizeof(fpsBuf), "%.0f FPS", (float)EM.fps);
+		const std::string projectName = GetProjectDisplayName();
+		const float gap = 16.0f;
+		const float rightW = ImGui::CalcTextSize(fpsBuf).x + gap + ImGui::CalcTextSize(projectName.c_str()).x;
+
+		ImGui::SameLine(ImGui::GetWindowWidth() - rightW - 24.0f);
+		ImGui::SetCursorPosY(barY);
+		ImGui::AlignTextToFramePadding();
+		ImGui::TextDisabled("%s", fpsBuf);
+		ImGui::SameLine(0.0f, gap);
+		ImGui::AlignTextToFramePadding();
+		if (!FM.isProjectSaved) ImGui::TextColored(ImVec4(0.95f, 0.65f, 0.25f, 1.0f), "%s", projectName.c_str());
+		else ImGui::TextUnformatted(projectName.c_str());
+
+		ImGui::PopStyleVar();
+		ImGui::EndMainMenuBar();
 	}
 
-	ImGui::SameLine(rightStartX);
-
-	if (ImGui::Button("Settings"))
-		ImGui::OpenPopup("Settings");
+	if (openSettings) ImGui::OpenPopup("Settings");
 	ProcessSettingsPopup();
 
-	ImGui::SameLine();
-
-	bool saveDisabled = !isStopped || FileManager::getInstance().isProjectSaved;
-	ImGui::BeginDisabled(saveDisabled);
-	if (ImGui::Button("Save")) {
-		SaveCurrentWork();
-	}
-
-	ImGui::EndDisabled();
-
-	ImGui::SameLine();
-	if (ImGui::Button("Export"))
-		ImGui::OpenPopup("Export Project");
+	if (openExport) ImGui::OpenPopup("Export Project");
 	ProcessExportPopup();
 
 	if (rlPackageInstalled) {
-		ImGui::SameLine();
-		{
-			bool disableHeadless = EngineManager::getInstance().isHeadless
-				|| FileManager::getInstance().currentProjectFile.empty()
-				|| !ScriptManager::getInstance().IsReady();
-
-			ImGui::BeginDisabled(disableHeadless);
-			if (ImGui::Button("Train"))
-				ImGui::OpenPopup("Train Settings");
-			ImGui::EndDisabled();
-
-			if (!ScriptManager::getInstance().IsReady()
-				&& !FileManager::getInstance().currentProjectFile.empty()
-				&& ImGui::IsItemHovered()) {
-				ImGui::SetTooltip("Python backend is still setting up (%s)",
-					ScriptManager::getInstance().GetStatusMessage().c_str());
-			}
-		}
+		if (openTrain) ImGui::OpenPopup("Train Settings");
 		ProcessTrainSettingsPopup();
 	}
-
-	ImGui::SameLine();
-	{
-		char projectNameBuf[128];
-		std::string displayName = GetProjectDisplayName();
-#if defined(_MSC_VER)
-		strcpy_s(projectNameBuf, displayName.c_str());
-#else
-		strncpy(projectNameBuf, displayName.c_str(), sizeof(projectNameBuf) - 1);
-		projectNameBuf[sizeof(projectNameBuf) - 1] = '\0';
-#endif
-		bool dirty = !FileManager::getInstance().isProjectSaved;
-		const ImVec4 unsavedColor(0.95f, 0.65f, 0.25f, 1.0f);
-		const ImVec4 savedColor = ImGui::GetStyleColorVec4(ImGuiCol_Text);
-
-		ImGui::PushStyleColor(ImGuiCol_Text, dirty ? unsavedColor : savedColor);
-		ImGui::SetNextItemWidth(projectNameWidth);
-		ImGui::InputText("##ProjectName", projectNameBuf, IM_ARRAYSIZE(projectNameBuf), ImGuiInputTextFlags_ReadOnly);
-		ImGui::PopStyleColor();
-	}
-
-	ImGui::End();
 }
 
 void EngineStatus::DrawGizmoModeSelector() {
@@ -321,66 +351,85 @@ void EngineStatus::DrawGizmoModeSelector() {
 void EngineStatus::ProcessSettingsPopup() {
 	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
 	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowSize(ImVec2(700, 460), ImGuiCond_Appearing);
 
-	if (ImGui::BeginPopupModal("Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings))
-	{
-		Settings& settings = EngineManager::getInstance().EngineSettings;
+	if (!ImGui::BeginPopupModal("Settings", nullptr, ImGuiWindowFlags_NoSavedSettings)) return;
 
-		ImGui::SeparatorText("General");
+	EngineManager& EM = EngineManager::getInstance();
+	Settings& settings = EM.EngineSettings;
+	const ImGuiStyle& style = ImGui::GetStyle();
 
-		EditorField::CheckboxEngine("Draw background grid: ", "##Draw background grid", &settings.drawBackgroundGrid);
+	static int category = 0;
+	static const char* categories[] = { "General", "Physics", "Viewport", "Debug Draw" };
+	const float footerH = ImGui::GetFrameHeight() + style.ItemSpacing.y * 2.0f + 6.0f;
 
-		EditorField::ColorEdit4Engine("Background color: ", "##Background color", &settings.backgroundColor.x);
+	// Sidebar
+	ImGui::BeginChild("##SettingsCategories", ImVec2(160, -footerH), ImGuiChildFlags_Borders);
+	ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.0f, 0.5f));
+	for (int i = 0; i < IM_ARRAYSIZE(categories); i++) {
+		if (ImGui::Selectable(categories[i], category == i, 0, ImVec2(0, ImGui::GetFrameHeight() + 4.0f)))
+			category = i;
+	}
+	ImGui::PopStyleVar();
+	ImGui::EndChild();
 
-		ImGui::Text("Main scene: ");
-		ImGui::SameLine();
+	ImGui::SameLine();
+
+	// Content
+	ImGui::BeginChild("##SettingsContent", ImVec2(0, -footerH));
+
+	bool boldPushed = EditorTheme::PushBold();
+	ImGui::TextUnformatted(categories[category]);
+	EditorTheme::PopBold(boldPushed);
+	ImGui::Separator();
+	ImGui::Spacing();
+
+	switch (category) {
+	case 0: { // General
+		ImGui::SeparatorText("Project");
+
+		EditorField::Detail::Label("Main scene");
 		{
 			char sceneBuf[256];
-			std::string current = settings.mainScenePath;
 #if defined(_MSC_VER)
-			strcpy_s(sceneBuf, current.c_str());
+			strcpy_s(sceneBuf, settings.mainScenePath.c_str());
 #else
-			strncpy(sceneBuf, current.c_str(), sizeof(sceneBuf) - 1);
+			strncpy(sceneBuf, settings.mainScenePath.c_str(), sizeof(sceneBuf) - 1);
 			sceneBuf[sizeof(sceneBuf) - 1] = '\0';
 #endif
-			ImGui::SetNextItemWidth(220.0f);
-			ImGui::InputText("##Main scene", sceneBuf, IM_ARRAYSIZE(sceneBuf), ImGuiInputTextFlags_ReadOnly);
+			const float browseW = ImGui::CalcTextSize("Browse").x + style.FramePadding.x * 2.0f;
+			ImGui::SetNextItemWidth(-(browseW + style.ItemSpacing.x));
+			ImGui::InputTextWithHint("##MainScene", "None (plays current scene)", sceneBuf,
+				IM_ARRAYSIZE(sceneBuf), ImGuiInputTextFlags_ReadOnly);
 			ImGui::SameLine();
 			if (ImGui::Button("Browse##MainScene")) {
 				auto opts = FileDialogOptions::ForExtension("Fusion Scene", "fscene", "Choose Main Scene");
 				if (auto path = FileDialog::ShowOpenDialog(opts)) {
 					settings.mainScenePath = *path;
-					EngineManager::getInstance().EngineChangeEvent();
+					EM.EngineChangeEvent();
 				}
 			}
 		}
 
-		ImGui::Text("Game resolution: ");
-		ImGui::SameLine();
-		{
-			int res[2] = {
-				(int)EngineManager::getInstance().resolutionWidth,
-				(int)EngineManager::getInstance().resolutionHeight
-			};
-			ImGui::SetNextItemWidth(160.0f);
-			if (ImGui::InputInt2("##Game resolution", res)) {
-				EngineManager::getInstance().SetGameResolution(
-					(float)std::max(1, res[0]),
-					(float)std::max(1, res[1]));
-				EngineManager::getInstance().EngineChangeEvent();
-			}
-		}
+		ImGui::Spacing();
+		ImGui::SeparatorText("Game View");
 
-		ImGui::Text("Broad phase mode: ");
-		ImGui::SameLine();
-		{
-			const char* modeLabels[] = { "AABB", "Bounding Circle" };
-			int current = static_cast<int>(settings.broadPhaseMode);
-			ImGui::SetNextItemWidth(180.0f);
-			if (EditorField::ComboEngine(nullptr, "##BroadPhaseMode", &current, modeLabels, IM_ARRAYSIZE(modeLabels))) {
+		int res[2] = { (int)EM.resolutionWidth, (int)EM.resolutionHeight };
+		EditorField::InputInt2Engine("Game resolution", "##GameResolution", res, [&] {
+			EM.SetGameResolution((float)std::max(1, res[0]), (float)std::max(1, res[1]));
+			});
+		break;
+	}
+
+	case 1: { // Physics
+		ImGui::SeparatorText("Collision");
+
+		const char* modeLabels[] = { "AABB", "Bounding Circle" };
+		int current = static_cast<int>(settings.broadPhaseMode);
+		EditorField::ComboEngine("Broad phase mode", "##BroadPhaseMode", &current, modeLabels,
+			IM_ARRAYSIZE(modeLabels), [&] {
 				PhysicsEngine::getInstance().SetBroadPhaseMode(static_cast<BroadPhaseMode>(current));
-			}
-		}
+			});
 		if (ImGui::IsItemHovered()) {
 			ImGui::SetTooltip(
 				"AABB is more efficient for wide or tall objects.\n"
@@ -389,49 +438,61 @@ void EngineStatus::ProcessSettingsPopup() {
 		}
 
 		ImGui::Spacing();
-		ImGui::SeparatorText("Debug");
+		ImGui::SeparatorText("Interaction");
+		EditorField::CheckboxEngine("Physics interact", "##PhysicsInteract", &settings.physicsInteract);
+		break;
+	}
 
-		EditorField::CheckboxEngine("Physics interact: ", "##Physics interact", &settings.physicsInteract);
-		EditorField::CheckboxEngine("Draw object wire frame: ", "##Draw object wire frame", &settings.drawObjectWireframe);
-		EditorField::CheckboxEngine("Draw broad phase bounding area: ", "##Draw broad phase bounding area", &settings.drawBroadPhaseBounds);
-		EditorField::CheckboxEngine("Draw collision shapes: ", "##Draw collision shapes", &settings.drawCollisionShapes);
-		EditorField::CheckboxEngine("Draw collision normals: ", "##Draw collision normals", &settings.drawCollisionNormals);
-		EditorField::CheckboxEngine("Draw contact points: ", "##Draw contact points", &settings.drawContactPoints);
-		EditorField::CheckboxEngine("Draw soft body point masses: ", "##Draw soft body point masses", &settings.drawSoftBodyPointMasses);
-		EditorField::CheckboxEngine("Draw soft body springs: ", "##Draw soft body springs", &settings.drawSoftBodySprings);
-		EditorField::CheckboxEngine("Draw virtual soft body proxies: ", "##Draw virtual soft body proxies", &settings.drawVirtualSoftBodyProxies);
-		EditorField::CheckboxEngine("Draw fluids as particles: ", "##Draw fluids as particles", &settings.drawFluidsAsParticles);
+	case 2: { // Viewport
+		ImGui::SeparatorText("Appearance");
+		EditorField::CheckboxEngine("Background grid", "##DrawGrid", &settings.drawBackgroundGrid);
+		EditorField::ColorEdit4Engine("Background color", "##BackgroundColor", &settings.backgroundColor.x);
+		break;
+	}
+
+	case 3: { // Debug Draw
+		ImGui::SeparatorText("Objects");
+		EditorField::CheckboxEngine("Object wireframe", "##DrawWireframe", &settings.drawObjectWireframe);
+
+		ImGui::Spacing();
+		ImGui::SeparatorText("Collision");
+		EditorField::CheckboxEngine("Broad phase bounds", "##DrawBroadPhase", &settings.drawBroadPhaseBounds);
+		EditorField::CheckboxEngine("Collision shapes", "##DrawCollisionShapes", &settings.drawCollisionShapes);
+		EditorField::CheckboxEngine("Collision normals", "##DrawCollisionNormals", &settings.drawCollisionNormals);
+		EditorField::CheckboxEngine("Contact points", "##DrawContactPoints", &settings.drawContactPoints);
+
+		ImGui::Spacing();
+		ImGui::SeparatorText("Soft Bodies");
+		EditorField::CheckboxEngine("Point masses", "##DrawPointMasses", &settings.drawSoftBodyPointMasses);
+		EditorField::CheckboxEngine("Springs", "##DrawSprings", &settings.drawSoftBodySprings);
+		EditorField::CheckboxEngine("Virtual proxies", "##DrawProxies", &settings.drawVirtualSoftBodyProxies);
+
+		ImGui::Spacing();
+		ImGui::SeparatorText("Fluids & Gas");
+		EditorField::CheckboxEngine("Draw as particles", "##DrawFluidGasParticles", &settings.drawFluidsAsParticles);
 
 		ImGui::BeginDisabled(!settings.drawFluidsAsParticles);
-		ImGui::Indent();
-
-		ImGui::Text("Fluid heatmap: ");
-		ImGui::SameLine();
-		{
-			const char* heatmapLabels[] = { "None", "Velocity", "Density" };
-			int current = static_cast<int>(settings.fluidHeatmapMode);
-			ImGui::SetNextItemWidth(140.0f);
-			if (EditorField::ComboEngine(nullptr, "##Fluid heatmap", &current, heatmapLabels, IM_ARRAYSIZE(heatmapLabels))) {
-				settings.fluidHeatmapMode = static_cast<FluidHeatmapMode>(current);
-			}
-		}
-
-		EditorField::CheckboxEngine("Draw velocity vector field: ", "##Draw velocity vector field", &settings.drawFluidsVelocityField);
-
-		ImGui::Unindent();
+		const char* heatmapLabels[] = { "None", "Velocity", "Density" };
+		int heat = static_cast<int>(settings.fluidHeatmapMode);
+		EditorField::ComboEngine("Heatmap", "##FluidGasHeatmap", &heat, heatmapLabels,
+			IM_ARRAYSIZE(heatmapLabels), [&] {
+				settings.fluidHeatmapMode = static_cast<FluidHeatmapMode>(heat);
+			});
+		EditorField::CheckboxEngine("Velocity vector field", "##DrawFluidGasVelocity", &settings.drawFluidsVelocityField);
 		ImGui::EndDisabled();
-
-		ImGui::Spacing();
-		ImGui::Separator();
-		ImGui::Spacing();
-
-		if (ImGui::Button("Close", ImVec2(120, 0)))
-		{
-			ImGui::CloseCurrentPopup();
-		}
-
-		ImGui::EndPopup();
+		break;
 	}
+	}
+
+	ImGui::EndChild();
+
+	ImGui::Separator();
+	ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 120.0f - style.WindowPadding.x);
+	if (ImGui::Button("Close", ImVec2(120, 0))) {
+		ImGui::CloseCurrentPopup();
+	}
+
+	ImGui::EndPopup();
 }
 
 void EngineStatus::ProcessExportPopup() {
@@ -1321,5 +1382,10 @@ void EngineStatus::OnInteractModeChanged() {
 void EngineStatus::OnKeyButtonPressed(int key, int scancode, int action, int mods) {
 	if (InputManager::getInstance().keys[GLFW_KEY_LEFT_CONTROL] && InputManager::getInstance().keys[GLFW_KEY_S]) {
 		SaveCurrentWork();
+	}
+
+	if (action == GLFW_PRESS && key == GLFW_KEY_F5) {
+		if (mods & GLFW_MOD_SHIFT) StopPlayback();
+		else StartPlayback(!(mods & GLFW_MOD_CONTROL));
 	}
 }

@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <functional>
 #include <cfloat>
+#include <cmath>
 
 namespace EditorField {
 
@@ -80,6 +81,129 @@ namespace EditorField {
 			dl->AddText(ImVec2(p.x + (size - ts.x) * 0.5f, p.y + (size - ts.y) * 0.5f),
 				IM_COL32(18, 20, 26, 255), name);
 			ImGui::Dummy(ImVec2(size, size));
+		}
+
+		inline float WrapDegrees(float d) {
+			d = std::fmod(d + 180.0f, 360.0f);
+			if (d < 0.0f) d += 360.0f;
+			return d - 180.0f;
+		}
+
+		inline bool AngleControl(const char* id, float* radians, bool* activated, bool* deactivated) {
+			constexpr float kPi = 3.14159265358979f;
+			constexpr const char* kPopup = "##anglePopup";
+
+			ImGui::PushID(id);
+			ImGuiStorage* st = ImGui::GetStateStorage();
+			const ImGuiID editingKey = ImGui::GetID("##editing");
+			const ImGuiID wasOpenKey = ImGui::GetID("##wasOpen");
+
+			bool editing = st->GetBool(editingKey);
+			bool changed = false;
+			bool anyActive = false;
+
+			auto markChanged = [&]() {
+				if (!editing) { editing = true; *activated = true; }
+				changed = true;
+				};
+
+			ImGui::SetNextItemWidth(-FLT_MIN);
+			float deg = *radians * 180.0f / kPi;
+			if (ImGui::DragFloat("##deg", &deg, 0.5f, 0.0f, 0.0f, "%.1f\xC2\xB0", ImGuiSliderFlags_NoInput)) {
+				*radians = WrapDegrees(deg) * kPi / 180.0f;
+				markChanged();
+			}
+			anyActive |= ImGui::IsItemActive();
+
+			if (ImGui::IsItemActivated())
+				st->SetBool(wasOpenKey, ImGui::IsPopupOpen(kPopup));  
+
+			if (ImGui::IsItemDeactivated() && !ImGui::IsItemDeactivatedAfterEdit() && !st->GetBool(wasOpenKey))
+				ImGui::OpenPopup(kPopup);
+
+			const ImVec2 fieldMin = ImGui::GetItemRectMin();
+			const ImVec2 fieldMax = ImGui::GetItemRectMax();
+
+			ImGui::SetNextWindowPos(ImVec2(fieldMin.x, fieldMax.y + 4.0f));
+			if (ImGui::BeginPopup(kPopup)) {
+				const float D = 180.0f;
+				const float R = D * 0.5f - 4.0f;
+
+				const ImVec2 p = ImGui::GetCursorScreenPos();
+				ImGui::InvisibleButton("##dial", ImVec2(D, D));
+				const bool hovered = ImGui::IsItemHovered();
+				const bool held = ImGui::IsItemActive();
+				anyActive |= held;
+
+				const ImVec2 c(p.x + D * 0.5f, p.y + D * 0.5f);
+
+				if (held) {
+					const ImGuiIO& io = ImGui::GetIO();
+					const float dx = io.MousePos.x - c.x;
+					const float dy = io.MousePos.y - c.y;
+					if (dx * dx + dy * dy > 1.0f) {
+						float a = std::atan2(-dy, dx);   
+						if (io.KeyCtrl) {                
+							const float step = 15.0f * kPi / 180.0f;
+							a = std::round(a / step) * step;
+						}
+						if (a != *radians) { *radians = a; markChanged(); }
+					}
+				}
+
+				ImDrawList* dl = ImGui::GetWindowDrawList();
+				dl->AddCircleFilled(c, R, ImGui::GetColorU32(ImGuiCol_FrameBg), 64);
+				dl->AddCircle(c, R, ImGui::GetColorU32(hovered || held ? ImGuiCol_SeparatorHovered : ImGuiCol_Border), 64, 1.5f);
+
+				const ImU32 tickCol = ImGui::GetColorU32(ImGuiCol_TextDisabled);
+				for (int i = 0; i < 24; i++) {
+					const float a = (float)i * 15.0f * kPi / 180.0f;
+					const ImVec2 dir(std::cos(a), -std::sin(a));
+					const float len = (i % 3 == 0) ? 9.0f : 5.0f;
+					dl->AddLine(ImVec2(c.x + dir.x * (R - len), c.y + dir.y * (R - len)),
+						ImVec2(c.x + dir.x * R, c.y + dir.y * R), tickCol, 1.0f);
+				}
+
+				static const int labels[] = { 0, 45, 90, 135, 180, -135, -90, -45 };
+				for (int l : labels) {
+					const float a = (float)l * kPi / 180.0f;
+					char buf[8];
+					std::snprintf(buf, sizeof(buf), "%d", l);
+					const ImVec2 ts = ImGui::CalcTextSize(buf);
+					const float tr = R - 22.0f;
+					dl->AddText(ImVec2(c.x + std::cos(a) * tr - ts.x * 0.5f, c.y - std::sin(a) * tr - ts.y * 0.5f),
+						ImGui::GetColorU32(ImGuiCol_Text), buf);
+				}
+
+				const ImU32 accent = ImGui::GetColorU32(EditorTheme::Accent());
+				const float nr = R - 36.0f;
+				const ImVec2 tip(c.x + std::cos(*radians) * nr, c.y - std::sin(*radians) * nr);
+				dl->AddLine(c, tip, accent, 2.5f);
+				dl->AddCircleFilled(tip, 4.0f, accent);
+				dl->AddCircleFilled(c, 3.0f, accent);
+
+				ImGui::Spacing();
+				ImGui::SetNextItemWidth(D);
+				float typed = *radians * 180.0f / kPi;
+				if (ImGui::InputFloat("##typed", &typed, 0.0f, 0.0f, "%.1f",
+					ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
+					*radians = WrapDegrees(typed) * kPi / 180.0f;
+					markChanged();
+				}
+				anyActive |= ImGui::IsItemActive();
+
+				ImGui::TextDisabled("Ctrl: snap to 15\xC2\xB0");
+				ImGui::EndPopup();
+			}
+
+			if (editing && !anyActive) {
+				editing = false;
+				*deactivated = true;
+			}
+			st->SetBool(editingKey, editing);
+
+			ImGui::PopID();
+			return changed;
 		}
 
 		template<typename AxisWidget, typename OnActivated, typename OnChanged, typename OnDeactivated>
@@ -214,11 +338,32 @@ namespace EditorField {
 	}
 
 	template<typename Target, typename OnChange>
-	bool SliderAngleScene(Target&& target, const char* label, const char* id, float* radians,
-		float degMin, float degMax, OnChange&& onChange) {
-		return Wrap(std::forward<Target>(target), label,
-			[&] { return ImGui::SliderAngle(id, radians, degMin, degMax); },
-			std::forward<OnChange>(onChange));
+	bool InputAngleScene(Target&& target, const char* label, const char* id, float* radians, OnChange&& onChange) {
+		std::vector<Object*> targets = Detail::ToTargets(std::forward<Target>(target));
+
+		Detail::Label(label);
+		bool activated = false, deactivated = false;
+		bool changed = Detail::AngleControl(id, radians, &activated, &deactivated);
+
+		if (activated) EditorManager::getInstance().BeginEdit(targets, false);
+		if (changed) {
+			onChange();
+			EngineManager::getInstance().SceneChangeEvent();
+		}
+		if (deactivated) EditorManager::getInstance().EndEdit(targets);
+		return changed;
+	}
+
+	inline bool InputAngleEngine(const char* label, const char* id, float* radians,
+		const std::function<void()>& onChange = nullptr) {
+		Detail::Label(label);
+		bool activated = false, deactivated = false;
+		bool changed = Detail::AngleControl(id, radians, &activated, &deactivated);
+		if (changed) {
+			EngineManager::getInstance().EngineChangeEvent();
+			if (onChange) onChange();
+		}
+		return changed;
 	}
 
 	template<typename Target, typename OnChange>

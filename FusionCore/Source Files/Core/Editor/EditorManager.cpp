@@ -87,21 +87,21 @@ void EditorManager::ProcessDockSpace() {
 		ImGui::DockBuilderSetNodeSize(dockspaceId, viewport->WorkSize);
 
 		ImGuiID dockMain = dockspaceId;
-		ImGuiID dockTop = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Up, 0.04f, nullptr, &dockMain);
 		ImGuiID dockLeft = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Left, 0.18f, nullptr, &dockMain);
 		ImGuiID dockRight = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Right, 0.25f, nullptr, &dockMain);
 		ImGuiID dockBot = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Down, 0.3f, nullptr, &dockMain);
 		ImGuiID dockLeftBottom = ImGui::DockBuilderSplitNode(dockLeft, ImGuiDir_Down, 0.5f, nullptr, &dockLeft);
-		ImGuiID dockSceneTabs = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Up, 0.05f, nullptr, &dockMain);
+		const float tabBarH = ImGui::GetFontSize() + ImGui::GetStyle().FramePadding.y * 2.0f;
+		const float centerH = viewport->WorkSize.y * 0.7f;   
+		ImGuiID dockSceneTabs = ImGui::DockBuilderSplitNode(dockMain, ImGuiDir_Up, tabBarH / centerH, nullptr, &dockMain);
 
-		ImGui::DockBuilderDockWindow("Status", dockTop);
 		ImGui::DockBuilderDockWindow("Hierarchy", dockLeft);
 		ImGui::DockBuilderDockWindow("Inspector", dockRight);
 		ImGui::DockBuilderDockWindow("Console", dockBot);
 		ImGui::DockBuilderDockWindow("Profiler", dockBot);
 		ImGui::DockBuilderDockWindow("File System", dockLeftBottom);
-		ImGui::DockBuilderDockWindow("Scene Tabs", dockSceneTabs);
 		ImGui::DockBuilderDockWindow("Viewport", dockMain);
+		ImGui::DockBuilderDockWindow("Scene Tabs", dockSceneTabs);
 
 		ImGui::DockBuilderFinish(dockspaceId);
 

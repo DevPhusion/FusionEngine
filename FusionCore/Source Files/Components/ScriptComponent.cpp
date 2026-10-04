@@ -595,8 +595,10 @@ void ScriptComponent::ProcessInspectorUI() {
 		std::visit([&](auto&& value) {
 			using T = std::decay_t<decltype(value)>;
 
-			ImGui::Text("%s", prop.name.c_str());
-			ImGui::SameLine();
+			if constexpr (!std::is_same_v<T, bool>) {
+				ImGui::Text("%s", prop.name.c_str());
+				ImGui::SameLine();
+			}
 
 			if constexpr (std::is_same_v<T, std::string>) {
 				if (prop.displayType == ExportType::File) {
@@ -692,9 +694,8 @@ void ScriptComponent::ProcessInspectorUI() {
 						});
 			}
 			else if constexpr (std::is_same_v<T, bool>) {
-				EditorField::CheckboxScene(parent, nullptr, "##val", &value, [&] {
+				EditorField::CheckboxScene(parent, prop.name.c_str(), "##val", &value, [&] {
 					SetInstanceAttrFromVariant(prop.name, prop.value);
-					EngineManager::getInstance().SceneChangeEvent();
 					});
 			}
 			else if constexpr (std::is_same_v<T, glm::vec2>) {

@@ -1,6 +1,7 @@
 #pragma once
 #include "../EditorWindow.h"
 #include "../../SceneManager.h"
+#include "../../../../imgui/imgui_internal.h"
 #include <string>
 
 class SceneTab : public EditorWindow

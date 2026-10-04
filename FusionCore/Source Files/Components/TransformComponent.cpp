@@ -55,7 +55,7 @@ void TransformComponent::ProcessInspectorUI() {
 		});
 
 	float rotationRad = this->rotation;
-	EditorField::SliderAngleScene(parent, "Rotation ", "## Rotation", &rotationRad, -180.0f, 180.0f, [&] {
+	EditorField::InputAngleScene(parent, "Rotation ", "## Rotation", &rotationRad, [&] {
 		Rotate(rotationRad);
 		});
 

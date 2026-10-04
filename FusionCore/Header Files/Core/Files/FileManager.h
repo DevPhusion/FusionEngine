@@ -65,6 +65,7 @@ public:
 	std::vector<FileSystemEntry> GetDirectoryContents(const std::string& virtualPath) const;
 	bool IsDirectory(const std::string& virtualPath) const;
 	bool VirtualPathExists(const std::string& virtualPath) const;
+	static bool IsDevOnlyDirectory(const std::string& dirName);
 
 	std::filesystem::path VirtualToAbsolute(const std::string& virtualPath) const;
 	std::string AbsoluteToVirtual(const std::filesystem::path& absolutePath) const;

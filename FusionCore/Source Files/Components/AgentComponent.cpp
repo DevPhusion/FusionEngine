@@ -221,8 +221,6 @@ void AgentComponent::ProcessInspectorUI() {
 
 	ImGui::Separator();
 
-	ImGui::Text("Observation");
-	ImGui::SameLine();
 	bool useCustom = useCustomObservationSpace;
 	EditorField::CheckboxScene(parent, "Observation", "##ObsSpaceCustom", &useCustom, [&] {
 		useCustomObservationSpace = useCustom;

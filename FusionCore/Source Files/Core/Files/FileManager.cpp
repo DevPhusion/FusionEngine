@@ -10,15 +10,6 @@
 
 namespace fs = std::filesystem;
 
-namespace {
-	bool IsExcludedFromScriptScan(const std::string& dirName) {
-		static const std::vector<std::string> excluded = {
-			".venv", "venv", "__pycache__", ".git", ".vs", ".vscode", "typings", "site-packages"
-		};
-		return std::find(excluded.begin(), excluded.end(), dirName) != excluded.end();
-	}
-}
-
 FileManager::~FileManager() {
 	ClearThumbnailCache();
 }
@@ -56,7 +47,7 @@ void FileManager::ProcessScriptInSubtree(const std::string& virtualPath, const s
 	}
 
 	fs::path absDir = VirtualToAbsolute(virtualPath);
-	if (IsExcludedFromScriptScan(absDir.filename().string()))
+	if (IsDevOnlyDirectory(absDir.filename().string()))
 		return;
 
 	std::error_code ec;
@@ -173,6 +164,15 @@ bool FileManager::IsDirectory(const std::string& virtualPath) const {
 bool FileManager::VirtualPathExists(const std::string& virtualPath) const {
 	std::error_code ec;
 	return fs::exists(VirtualToAbsolute(virtualPath), ec);
+}
+
+bool FileManager::IsDevOnlyDirectory(const std::string& dirName) {
+	static const std::unordered_set<std::string> devOnly = {
+		".venv", "venv", "site-packages", "__pycache__", "node_modules",
+		".git", ".vs", ".vscode", "typings", "PythonStubs",
+		"obj", "x64", "Debug"
+	};
+	return devOnly.count(dirName) > 0;
 }
 
 std::vector<FileSystemEntry> FileManager::GetDirectoryContents(const std::string& virtualPath) const {

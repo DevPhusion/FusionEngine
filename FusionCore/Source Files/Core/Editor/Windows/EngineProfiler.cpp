@@ -1,5 +1,24 @@
 #include "../../../../Header Files/Core/Editor/Windows/EngineProfiler.h"
+#include "../../../../Header Files/Core/Editor/EditorField.h"
+#include "../../../../Header Files/Core/Editor/EditorTheme.h"
 #include <functional>
+
+namespace {
+	bool ToggleButton(const char* label, bool active, bool disabled = false) {
+		ImGui::BeginDisabled(disabled);
+		if (active) {
+			const ImVec4 a = EditorTheme::Accent();
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(a.x, a.y, a.z, 0.25f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(a.x, a.y, a.z, 0.35f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(a.x, a.y, a.z, 0.45f));
+			ImGui::PushStyleColor(ImGuiCol_Text, a);
+		}
+		bool pressed = ImGui::Button(label);
+		if (active) ImGui::PopStyleColor(4);
+		ImGui::EndDisabled();
+		return pressed;
+	}
+}
 
 EngineProfiler::EngineProfiler(std::string name) : EditorWindow(name) {}
 
@@ -16,21 +35,41 @@ void EngineProfiler::ProcessWindow() {
 		UpdateTrackedSeries(snapshot, (float)(now - startTime));
 	}
 
-	if (!trackedSeries.empty()) {
-		if (ImGui::Button(graphView ? "Back to Table" : "View Graph"))
-			graphView = !graphView;
-		ImGui::SameLine();
-		if (ImGui::Button("Clear Tracked")) {
-			trackedSeries.clear();
-			graphView = false;
-		}
+	const ImGuiStyle& style = ImGui::GetStyle();
+	const bool hasTracked = !trackedSeries.empty();
+
+	if (ToggleButton("Table", !graphView)) graphView = false;
+	ImGui::SameLine(0.0f, 2.0f);
+	if (ToggleButton("Graph", graphView && hasTracked, !hasTracked)) graphView = true;
+	if (!hasTracked && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+		ImGui::SetTooltip("Tick the Track box on one or more tasks to graph them");
+
+	if (hasTracked) {
+		const float clearTrackedW = ImGui::CalcTextSize("Clear Tracked").x + style.FramePadding.x * 2.0f;
+		const float clearDataW = ImGui::CalcTextSize("Clear Data").x + style.FramePadding.x * 2.0f;
+		char countBuf[32];
+		std::snprintf(countBuf, sizeof(countBuf), "%d tracked", (int)trackedSeries.size());
+		const float countW = ImGui::CalcTextSize(countBuf).x;
+		const float total = countW + clearDataW + clearTrackedW + style.ItemSpacing.x * 3.0f;
+
+		ImGui::SameLine(ImGui::GetWindowContentRegionMax().x - total);
+		ImGui::AlignTextToFramePadding();
+		ImGui::TextDisabled("%s", countBuf);
 		ImGui::SameLine();
 		if (ImGui::Button("Clear Data")) {
 			for (auto& [key, series] : trackedSeries)
 				ClearSeriesData(series);
 		}
-		ImGui::Separator();
+		ImGui::SameLine();
+		if (ImGui::Button("Clear Tracked")) {
+			trackedSeries.clear();
+			graphView = false;
+		}
 	}
+
+	ImGui::Spacing();
+	ImGui::Separator();
+	ImGui::Spacing();
 
 	if (graphView && !trackedSeries.empty())
 		DrawGraphView();
@@ -41,11 +80,20 @@ void EngineProfiler::ProcessWindow() {
 }
 
 void EngineProfiler::DrawTableView() {
-	if (ImGui::BeginTable("ProfilerTable", 4, ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_RowBg)) {
-		ImGui::TableSetupColumn("Task");
-		ImGui::TableSetupColumn("Total (ms)");
-		ImGui::TableSetupColumn("Calls / Avg (ms)");
-		ImGui::TableSetupColumn("Track");
+	if (snapshot.empty()) {
+		ImGui::TextDisabled("No profiling data yet.");
+		return;
+	}
+
+	const ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV |
+		ImGuiTableFlags_ScrollY | ImGuiTableFlags_PadOuterX;
+
+	if (ImGui::BeginTable("ProfilerTable", 4, flags)) {
+		ImGui::TableSetupScrollFreeze(0, 1);
+		ImGui::TableSetupColumn("Task", ImGuiTableColumnFlags_WidthStretch);
+		ImGui::TableSetupColumn("Total (ms)", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+		ImGui::TableSetupColumn("Calls / Avg (ms)", ImGuiTableColumnFlags_WidthFixed, 140.0f);
+		ImGui::TableSetupColumn("Track", ImGuiTableColumnFlags_WidthFixed, 56.0f);
 		ImGui::TableHeadersRow();
 
 		std::vector<std::string> pathStack;
@@ -58,27 +106,37 @@ void EngineProfiler::DrawTableView() {
 
 void EngineProfiler::DrawNode(const ProfileNode& node, std::vector<std::string>& pathStack) {
 	pathStack.push_back(node.label);
-	std::string key = MakeKey(pathStack);
+	const std::string key = MakeKey(pathStack);
+	const bool isTracked = trackedSeries.find(key) != trackedSeries.end();
 
-	ImGui::TableNextRow();
+	ImGui::TableNextRow(0, ImGui::GetFrameHeight() + 2.0f);
+	if (isTracked) {
+		const ImVec4 a = EditorTheme::Accent();
+		ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg1, ImGui::GetColorU32(ImVec4(a.x, a.y, a.z, 0.10f)));
+	}
+
+	ImGui::PushID(key.c_str());
+
 	ImGui::TableSetColumnIndex(0);
-
-	ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanFullWidth;
+	ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding |
+		ImGuiTreeNodeFlags_DefaultOpen;
 	if (node.children.empty())
 		flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
 
-	bool open = ImGui::TreeNodeEx(node.label.c_str(), flags);
+	bool open = ImGui::TreeNodeEx("##node", flags, "%s", node.label.c_str());
 
 	ImGui::TableSetColumnIndex(1);
+	ImGui::AlignTextToFramePadding();
 	ImGui::Text("%.3f", node.totalMs);
+
 	ImGui::TableSetColumnIndex(2);
-	ImGui::Text("%d / %.3f", node.calls, node.AvgMs());
+	ImGui::AlignTextToFramePadding();
+	ImGui::TextDisabled("%d / %.3f", node.calls, node.AvgMs());
 
 	ImGui::TableSetColumnIndex(3);
-	bool isTracked = trackedSeries.find(key) != trackedSeries.end();
-	std::string checkboxId = "##track_" + key;
-	if (ImGui::Checkbox(checkboxId.c_str(), &isTracked)) {
-		if (isTracked) {
+	bool tracked = isTracked;
+	if (EditorField::Detail::DrawCheckbox("##track", &tracked)) {
+		if (tracked) {
 			TrackedSeries series;
 			series.path = pathStack;
 			series.displayName = key;
@@ -92,6 +150,8 @@ void EngineProfiler::DrawNode(const ProfileNode& node, std::vector<std::string>&
 		}
 	}
 
+	ImGui::PopID();
+
 	if (open && !node.children.empty()) {
 		for (auto& [label, child] : node.children)
 			DrawNode(*child, pathStack);
@@ -102,10 +162,15 @@ void EngineProfiler::DrawNode(const ProfileNode& node, std::vector<std::string>&
 }
 
 void EngineProfiler::DrawGraphView() {
+	const ImGuiStyle& style = ImGui::GetStyle();
+
+	const float rowH = ImGui::GetFrameHeight() + 2.0f;
+	const float legendH = std::min(rowH * (float)trackedSeries.size() + style.WindowPadding.y * 2.0f, 150.0f);
+
 	if (ImGui::BeginTabBar("ProfilerGraphMetric")) {
 
 		auto drawPlot = [&](const char* plotId, const char* yLabel, ScrollingBuffer TrackedSeries::* member) {
-			if (ImPlot::BeginPlot(plotId, ImVec2(-1, -1))) {
+			if (ImPlot::BeginPlot(plotId, ImVec2(-1, -(legendH + style.ItemSpacing.y)), ImPlotFlags_NoTitle)) {
 				ImPlot::SetupAxes("Time (s)", yLabel, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
 				for (auto& [key, series] : trackedSeries) {
 					ScrollingBuffer& buf = series.*member;
@@ -140,25 +205,36 @@ void EngineProfiler::DrawGraphView() {
 		ImGui::EndTabBar();
 	}
 
-	ImGui::Separator();
-	ImGui::Text("Tracked Tasks:");
-	for (auto it = trackedSeries.begin(); it != trackedSeries.end(); ) {
-		ImGui::ColorButton(("##color_" + it->first).c_str(), it->second.color,
-			ImGuiColorEditFlags_NoTooltip | ImGuiColorEditFlags_NoBorder, ImVec2(12, 12));
+	ImGui::BeginChild("##ProfilerLegend", ImVec2(0, legendH), ImGuiChildFlags_Borders);
+
+	std::string toRemove;
+	for (auto& [key, series] : trackedSeries) {
+		ImGui::PushID(key.c_str());
+
+		const ImVec2 p = ImGui::GetCursorScreenPos();
+		const float h = ImGui::GetFrameHeight();
+		ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(p.x + 7.0f, p.y + h * 0.5f), 5.0f,
+			ImGui::GetColorU32(series.color));
+		ImGui::Dummy(ImVec2(16.0f, h));
 		ImGui::SameLine();
-		ImGui::TextUnformatted(it->second.displayName.c_str());
+
+		ImGui::AlignTextToFramePadding();
+		ImGui::TextUnformatted(series.displayName.c_str());
+
+		const float resetW = ImGui::CalcTextSize("Reset").x + style.FramePadding.x * 2.0f;
+		const float actionsW = resetW + style.ItemSpacing.x + h;
+		ImGui::SameLine(ImGui::GetContentRegionMax().x - actionsW);
+		if (ImGui::Button("Reset")) ClearSeriesData(series);
 		ImGui::SameLine();
-		std::string resetId = "Reset##" + it->first;
-		if (ImGui::Button(resetId.c_str()))
-			ClearSeriesData(it->second);
-		ImGui::SameLine();
-		std::string removeId = "Remove##" + it->first;
-		if (ImGui::Button(removeId.c_str())) {
-			it = trackedSeries.erase(it);
-			continue;
-		}
-		++it;
+		if (EditorTheme::CloseButton("##remove")) toRemove = key;
+
+		ImGui::PopID();
 	}
+
+	ImGui::EndChild();
+
+	if (!toRemove.empty())
+		trackedSeries.erase(toRemove);
 
 	if (trackedSeries.empty())
 		graphView = false;
