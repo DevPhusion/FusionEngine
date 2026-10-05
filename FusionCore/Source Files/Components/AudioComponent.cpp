@@ -161,9 +161,9 @@ void AudioComponent::Deserialize(BinaryReader& r) {
 void AudioComponent::ProcessInspectorUI() {
 	ImGui::Text("Audio Tracks (%d)", (int)audioEntries.size());
 	ImGui::SameLine();
-	EditorField::ActionScene(parent, ImGui::SmallButton("+ Add Track"), [&] {
+	if (EditorField::AddButton("+ Add Track", true)) {
 		AddAudioTrack("Track");
-	});
+	}
 
 	ImGui::Separator();
 
@@ -171,12 +171,15 @@ void AudioComponent::ProcessInspectorUI() {
 	for (auto& entry : audioEntries) {
 		ImGui::PushID((void*)&entry);
 
+		const float closeSize = ImGui::GetFrameHeight();
+		const float rightX = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - closeSize;
+
 		bool open = ImGui::TreeNodeEx((void*)&entry,
 			ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_AllowOverlap,
 			"%s", entry.name.c_str());
 
-		ImGui::SameLine();
-		if (ImGui::SmallButton("Remove")) {
+		ImGui::SameLine(rightX);
+		if (EditorField::CloseButton("##removeTrack")) {
 			trackToRemove = entry.name;
 		}
 

@@ -111,6 +111,61 @@ Hierarchy::Hierarchy(std::string name) {
 	InputManager::getInstance().SetKeyButtonCallback([this](int key, int scancode, int action, int mods) {this->OnKeyPressed(key, scancode, action, mods);}, 999);
 }
 
+void Hierarchy::PlaceRelative(Object* dragged, Object* ref, bool after) {
+	auto& all = ObjectManager::getInstance().allObjects;
+
+	auto findIdx = [&](Object* o) -> int {
+		for (int i = 0; i < (int)all.size(); i++)
+			if (all[i].get() == o) return i;
+		return -1;
+		};
+
+	int from = findIdx(dragged);
+	if (from < 0) return;
+	std::unique_ptr<Object> moved = std::move(all[from]);
+	all.erase(all.begin() + from);
+
+	int to = findIdx(ref);
+	if (to < 0) { all.push_back(std::move(moved)); return; }
+	all.insert(all.begin() + (after ? to + 1 : to), std::move(moved));
+
+	if (dragged->parent) {
+		auto& kids = dragged->parent->children;
+		kids.erase(std::remove(kids.begin(), kids.end(), dragged), kids.end());
+		auto it = std::find(kids.begin(), kids.end(), ref);
+		if (it == kids.end()) kids.push_back(dragged);
+		else kids.insert(after ? it + 1 : it, dragged);
+	}
+}
+
+void Hierarchy::ApplyHierarchyMove(const PendingMove& m) {
+	Object* dragged = m.dragged;
+	Object* target = m.target;
+	if (!dragged || !target || dragged == target || dragged->parent == nullptr) return;
+
+	Object* newParent = (m.zone == DropZone::Child) ? target : target->parent;
+	if (!newParent) return;
+
+	for (Object* p = newParent; p != nullptr; p = p->parent)
+		if (p == dragged) return;
+
+	if (dragged->parent != newParent)
+		dragged->SetParent(newParent);
+
+	if (m.zone == DropZone::Child) {
+		Object* lastSibling = nullptr;
+		for (int i = (int)newParent->children.size() - 1; i >= 0; i--) {
+			if (newParent->children[i] != dragged) { lastSibling = newParent->children[i]; break; }
+		}
+		if (lastSibling) PlaceRelative(dragged, lastSibling, true);
+	}
+	else {
+		PlaceRelative(dragged, target, m.zone == DropZone::After);
+	}
+
+	EngineManager::getInstance().SceneChangeEvent();
+}
+
 void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* renameBuffer) {
 	if (currentObj == nullptr) return;
 	if (currentObj->hideInHierarchy) return;
@@ -159,6 +214,8 @@ void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* re
 	std::string hiddenId = "##node_row_" + std::to_string(currentObj->id);
 	ImGui::SetNextItemAllowOverlap();
 	bool nodeOpen = ImGui::TreeNodeEx(hiddenId.c_str(), item_flags | ImGuiTreeNodeFlags_AllowOverlap);
+	const ImVec2 rowMin = ImGui::GetItemRectMin();
+	const ImVec2 rowMax = ImGui::GetItemRectMax();
 
 	if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
 		currentObj->GetComponent<MouseInteractComponent>()->SetSelectedPolygon(currentObj, true);
@@ -225,22 +282,38 @@ void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* re
 	}
 
 	if (ImGui::BeginDragDropTarget()) {
-		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("HIERARCHY_OBJECT")) {
+		const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("HIERARCHY_OBJECT",
+			ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
+		if (payload) {
 			Object* dragged = *(Object**)payload->Data;
 			if (dragged != nullptr && dragged != currentObj) {
-				bool isDescendant = false;
-				Object* p = currentObj;
-				while (p != nullptr) {
-					if (p == dragged) {
-						isDescendant = true;
-						break;
-					}
-					p = p->parent;
+				const float h = rowMax.y - rowMin.y;
+				const float y = ImGui::GetMousePos().y - rowMin.y;
+				const bool expandedWithKids = nodeOpen && !children.empty();
+
+				DropZone zone = DropZone::Child;
+				if (!isRoot) {
+					if (y < h * 0.25f) zone = DropZone::Before;
+					else if (y > h * 0.75f && !expandedWithKids) zone = DropZone::After;
 				}
 
-				if (!isDescendant) {
-					dragged->SetParent(currentObj);
-					EngineManager::getInstance().SceneChangeEvent();
+				Object* newParent = (zone == DropZone::Child) ? currentObj : currentObj->parent;
+				bool valid = newParent != nullptr;
+				for (Object* p = newParent; valid && p != nullptr; p = p->parent)
+					if (p == dragged) valid = false;
+
+				if (valid) {
+					ImDrawList* dl = ImGui::GetWindowDrawList();
+					const ImU32 col = ImGui::GetColorU32(EditorTheme::Accent());
+					if (zone == DropZone::Before)
+						dl->AddLine(ImVec2(rowMin.x, rowMin.y), ImVec2(rowMax.x, rowMin.y), col, 2.0f);
+					else if (zone == DropZone::After)
+						dl->AddLine(ImVec2(rowMin.x, rowMax.y), ImVec2(rowMax.x, rowMax.y), col, 2.0f);
+					else
+						dl->AddRect(rowMin, rowMax, col, 3.0f, 0, 1.5f);
+
+					if (payload->IsDelivery())
+						pendingMove = { dragged, currentObj, zone };
 				}
 			}
 		}
@@ -371,6 +444,11 @@ void Hierarchy::ProcessWindow() {
 	}
 	else {
 		ImGui::TextDisabled("Empty scene — use + to add a root object");
+	}
+
+	if (pendingMove.dragged) {
+		ApplyHierarchyMove(pendingMove);
+		pendingMove = PendingMove();
 	}
 
 	ImGui::PopStyleVar();

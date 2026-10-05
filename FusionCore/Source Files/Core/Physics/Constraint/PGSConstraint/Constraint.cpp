@@ -6,6 +6,7 @@
 #include "../../../../../Header Files/Core/Editor/EditorManager.h"
 #include "../../../../../Header Files/Core/Editor/ConstraintEditGizmos.h"
 #include "../../../../../Header Files/Core/Rendering/Renderer.h"
+#include "../../../../../Header Files/Core/Editor/EditorField.h"
 #include <algorithm>
 
 Constraint::Constraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB)
@@ -251,27 +252,23 @@ void Constraint::ProcessInspectorUI(Object* parent)
             if (currentObj == nullptr) return;
 
             bool centerFlag = useCenter;
-            if (ImGui::Checkbox((std::string("Use Object Center##") + popupId).c_str(), &centerFlag))
-            {
-                EditorManager::getInstance().BeginEdit({ parent }, true);
-                useCenter = centerFlag;
-                EngineManager::getInstance().SceneChangeEvent();
-                if (useCenter)
-                {
-                    if (currentObj->HasComponent<RenderComponent>()) {
-                        attachPoint = currentObj->GetComponent<RenderComponent>()->GetCenter();
+            EditorField::CheckboxScene(std::vector<Object*>{ parent }, "Use Object Center",
+                (std::string("##UseCenter") + popupId).c_str(), & useCenter, [&] {
+                    if (useCenter)
+                    {
+                        if (currentObj->HasComponent<RenderComponent>()) {
+                            attachPoint = currentObj->GetComponent<RenderComponent>()->GetCenter();
+                        }
+                        else {
+                            attachPoint = currentObj->GetComponent<EditorRenderComponent>()->GetCenter();
+                        }
+
+                        if (editing) {
+                            editing = false;
+                            EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
+                        }
                     }
-                    else {
-                        attachPoint = currentObj->GetComponent<EditorRenderComponent>()->GetCenter();
-                    }
-                    
-                    if (editing) {
-                        editing = false;
-                        EngineManager::getInstance().SwitchInteractMode(EngineManager::InteractMode::EditorSelect);
-                    }
-                }
-                EditorManager::getInstance().EndEdit({ parent });
-            }
+                }, true);
 
             if (!useCenter)
             {
@@ -386,11 +383,9 @@ void Constraint::ProcessInspectorUI(Object* parent)
 
     ImGui::Spacing();
 
-    ImGui::Text("Beta ");
-    ImGui::SameLine();
-    if (ImGui::DragFloat("##beta", &beta, 0.001f, 0.0f, 1.0f)) {
-        EngineManager::getInstance().SceneChangeEvent();
-    }
+    EditorField::Wrap(std::vector<Object*>{ parent }, "Beta",
+        [&] { return ImGui::DragFloat("##beta", &beta, 0.001f, 0.0f, 1.0f); },
+        [&] {}, true);
     if (ImGui::IsItemActivated()) {
         EditorManager::getInstance().BeginEdit({ parent }, true);
     }
@@ -398,15 +393,8 @@ void Constraint::ProcessInspectorUI(Object* parent)
         EditorManager::getInstance().EndEdit({ parent });
     }
 
-    ImGui::Text("Draw constraint ");
-    ImGui::SameLine();
-    bool drawFlag = canDrawConstraint;
-    if (ImGui::Checkbox("##Draw constraint", &drawFlag)) {
-        EditorManager::getInstance().BeginEdit({ parent }, true);
-        canDrawConstraint = drawFlag;
-        EngineManager::getInstance().SceneChangeEvent();
-        EditorManager::getInstance().EndEdit({ parent });
-    }
+    EditorField::CheckboxScene(std::vector<Object*>{ parent }, "Draw constraint", "##DrawConstraint",
+        & canDrawConstraint, [&] {}, true);
 }
 
 void Constraint::CopyBaseFieldsFrom(const Constraint* src) {

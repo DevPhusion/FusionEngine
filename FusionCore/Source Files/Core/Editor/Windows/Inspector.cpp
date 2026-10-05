@@ -282,7 +282,7 @@ void Inspector::ProcessWindow() {
 
             if (component->CanRemove) {
                 ImGui::SameLine(availWidth - removeButtonWidth);
-                if (EditorTheme::CloseButton("##remove"))
+                if (EditorField::CloseButton("##remove"))
                     pendingRemoval = i;
             }
 

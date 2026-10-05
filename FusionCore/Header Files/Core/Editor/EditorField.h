@@ -18,15 +18,6 @@ namespace EditorField {
 		inline std::vector<Object*> ToTargets(Object* o) { return { o }; }
 		inline std::vector<Object*> ToTargets(std::vector<Object*> v) { return v; }
 
-		inline void Label(const char* label) {
-			if (!label) return;
-			ImGui::AlignTextToFramePadding();
-			const float startX = ImGui::GetCursorPosX();
-			const float column = EditorTheme::LabelColumnWidth();
-			ImGui::TextUnformatted(label);
-			ImGui::SameLine(startX + column);
-		}
-
 		inline bool DrawCheckbox(const char* id, bool* v) {
 			const float frame = ImGui::GetFrameHeight();
 			const float box = ImGui::GetFontSize() + 4.0f;
@@ -81,6 +72,20 @@ namespace EditorField {
 			dl->AddText(ImVec2(p.x + (size - ts.x) * 0.5f, p.y + (size - ts.y) * 0.5f),
 				IM_COL32(18, 20, 26, 255), name);
 			ImGui::Dummy(ImVec2(size, size));
+		}
+
+		inline float LabelColumnWidth() {
+			float w = ImGui::GetContentRegionAvail().x * 0.36f;
+			return w < 90.0f ? 90.0f : w;
+		}
+
+		inline void Label(const char* label) {
+			if (!label) return;
+			ImGui::AlignTextToFramePadding();
+			const float startX = ImGui::GetCursorPosX();
+			const float column = LabelColumnWidth();
+			ImGui::TextUnformatted(label);
+			ImGui::SameLine(startX + column);
 		}
 
 		inline float WrapDegrees(float d) {
@@ -524,4 +529,70 @@ namespace EditorField {
 		return triggered;
 	}
 
+	inline bool AddButton(const char* label, bool compact = false) {
+		ImGui::PushStyleColor(ImGuiCol_Button, EditorTheme::AccentDim());
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, EditorTheme::Accent());
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, EditorTheme::Accent());
+		bool pressed = compact ? ImGui::SmallButton(label) : ImGui::Button(label);
+		ImGui::PopStyleColor(3);
+		return pressed;
+	}
+
+	inline bool DangerButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
+		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.45f, 0.18f, 0.20f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.58f, 0.22f, 0.25f, 1.0f));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.40f, 0.15f, 0.17f, 1.0f));
+		bool pressed = ImGui::Button(label, size);
+		ImGui::PopStyleColor(3);
+		return pressed;
+	}
+
+	inline bool CloseButton(const char* id) {
+		const float size = ImGui::GetFrameHeight();
+		ImVec2 p = ImGui::GetCursorScreenPos();
+		bool pressed = ImGui::InvisibleButton(id, ImVec2(size, size));
+		const bool hovered = ImGui::IsItemHovered();
+		const bool held = ImGui::IsItemActive();
+		ImDrawList* dl = ImGui::GetWindowDrawList();
+
+		if (hovered || held) {
+			dl->AddRectFilled(p, ImVec2(p.x + size, p.y + size),
+				held ? IM_COL32(179, 46, 61, 255) : IM_COL32(230, 77, 89, 217), ImGui::GetStyle().FrameRounding);
+		}
+
+		ImVec2 c(p.x + size * 0.5f, p.y + size * 0.5f);
+		const float r = 4.0f;
+		ImU32 col = hovered || held ? IM_COL32(255, 255, 255, 255) : ImGui::GetColorU32(ImGuiCol_TextDisabled);
+		dl->AddLine(ImVec2(c.x - r, c.y - r), ImVec2(c.x + r, c.y + r), col, 1.6f);
+		dl->AddLine(ImVec2(c.x - r, c.y + r), ImVec2(c.x + r, c.y - r), col, 1.6f);
+
+		return pressed;
+	}
+
+	inline bool ToggleButton(const char* label, bool active, bool disabled = false) {
+		ImGui::BeginDisabled(disabled);
+		if (active) {
+			const ImVec4 a = EditorTheme::Accent();
+			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(a.x, a.y, a.z, 0.25f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(a.x, a.y, a.z, 0.35f));
+			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(a.x, a.y, a.z, 0.45f));
+			ImGui::PushStyleColor(ImGuiCol_Text, a);
+		}
+		bool pressed = ImGui::Button(label);
+		if (active) ImGui::PopStyleColor(4);
+		ImGui::EndDisabled();
+		return pressed;
+	}
+
+	inline void BoldText(const char* text, const ImVec4* color = nullptr) {
+		bool b = EditorTheme::PushBold();
+		if (color) ImGui::PushStyleColor(ImGuiCol_Text, *color);
+		ImGui::TextUnformatted(text);
+		if (color) ImGui::PopStyleColor();
+		EditorTheme::PopBold(b);
+	}
+
+	inline bool Checkbox(const char* id, bool* v) {
+		return Detail::DrawCheckbox(id, v);
+	}
 }

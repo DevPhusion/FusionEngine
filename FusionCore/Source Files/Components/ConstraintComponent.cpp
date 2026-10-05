@@ -95,7 +95,7 @@ void ConstraintComponent::ProcessInspectorUI()
 {
     ImGui::Text("Constraints");
 
-    if (ImGui::Button("+ Add Constraint"))
+    if (EditorField::AddButton("+ Add Constraint"))
         ImGui::OpenPopup("Add Constraint");
 
     if (ImGui::BeginPopupModal("Add Constraint", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings))
@@ -220,24 +220,16 @@ void ConstraintComponent::ProcessInspectorUI()
 
         ImGui::PushID(i);
 
-        const float removeButtonWidth = ImGui::CalcTextSize("×").x
-            + ImGui::GetStyle().FramePadding.x * 2.0f;
-        const float availWidth = ImGui::GetContentRegionAvail().x;
+        const float closeSize = ImGui::GetFrameHeight();
+        const float rightX = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - closeSize;
 
         bool nodeOpen = ImGui::TreeNodeEx("##node",
             ImGuiTreeNodeFlags_AllowOverlap | ImGuiTreeNodeFlags_FramePadding | ImGuiTreeNodeFlags_DefaultOpen,
             "%s [%d]", c->Name.c_str(), i);
 
-        ImGui::SameLine(availWidth - removeButtonWidth);
-
-        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.15f, 0.15f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.25f, 0.25f, 1.0f));
-        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.5f, 0.05f, 0.05f, 1.0f));
-
-        if (ImGui::SmallButton("×"))
+        ImGui::SameLine(rightX);
+        if (EditorField::CloseButton("##removeConstraint"))
             pendingRemoval = i;
-
-        ImGui::PopStyleColor(3);
 
         if (nodeOpen)
         {

@@ -23,6 +23,7 @@ void EditorManager::Setup(GLFWwindow* window) {
 	AddWindow(new EngineProfiler("Profiler"));
 	AddWindow(new FileSystem("File System"));
 	AddWindow(new SceneTab("Scene Tabs"));
+	AddWindow(new DocsWindow("Documentation"));
 
 	gameViewport = new Viewport("Viewport"); 
 	AddWindow(gameViewport);

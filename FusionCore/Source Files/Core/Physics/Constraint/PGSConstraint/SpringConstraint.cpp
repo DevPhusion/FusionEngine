@@ -1,5 +1,6 @@
 #include "../../../../../Header Files/Core/Physics/Constraint/PGSConstraint/SpringConstraint.h"
 #include "../../../../../Header Files/Core/Rendering/Renderer.h"
+#include "../../../../../Header Files/Core/Editor/EditorField.h"
 
 SpringConstraint::SpringConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB,
 	float length, float stiffness, float damping) :
@@ -86,29 +87,19 @@ void SpringConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
 void SpringConstraint::ProcessInspectorUI(Object* parent) {
 	Constraint::ProcessInspectorUI(parent);
 
-	ImGui::Text("Rest length ");
-	ImGui::SameLine();
-	if (ImGui::InputFloat("##Distance", &length, 0.0f, 0.0f, "%.3f m")) {
-		EngineManager::getInstance().SceneChangeEvent();
-	}
-	if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent }, true);
-	if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
+	const std::vector<Object*> targets{ parent };
 
-	ImGui::Text("Stiffness ");
-	ImGui::SameLine();
-	if (ImGui::InputFloat("##Stiffness", &stiffness, 0.0f, 0.0f, "%.3f N/m")) {
-		EngineManager::getInstance().SceneChangeEvent();
-	}
-	if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent }, true);
-	if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
+	EditorField::Wrap(targets, "Rest length",
+		[&] { return ImGui::InputFloat("##RestLength", &length, 0.0f, 0.0f, "%.3f m"); },
+		[&] {}, true);
 
-	ImGui::Text("Damping ");
-	ImGui::SameLine();
-	if (ImGui::InputFloat("##Damping", &damping, 0.0f, 0.0f, "%.3f Ns/m")) {
-		EngineManager::getInstance().SceneChangeEvent();
-	}
-	if (ImGui::IsItemActivated()) EditorManager::getInstance().BeginEdit({ parent }, true);
-	if (ImGui::IsItemDeactivatedAfterEdit()) EditorManager::getInstance().EndEdit({ parent });
+	EditorField::Wrap(targets, "Stiffness",
+		[&] { return ImGui::InputFloat("##Stiffness", &stiffness, 0.0f, 0.0f, "%.3f N/m"); },
+		[&] {}, true);
+
+	EditorField::Wrap(targets, "Damping",
+		[&] { return ImGui::InputFloat("##Damping", &damping, 0.0f, 0.0f, "%.3f Ns/m"); },
+		[&] {}, true);
 }
 
 void GenerateSegment(glm::vec2 start, glm::vec2 end, float thickness,

@@ -3,6 +3,7 @@
 #include "../../../../Header Files/Core/Files/FileDialog.h"
 #include "../../../../Header Files/Core/Editor/HeadlessMonitor.h"
 #include "../../../../Header Files/Core/Editor/EditorField.h"
+#include "../../../../Header Files/Core/Editor/Windows/DocsWindow.h" 
 #include <filesystem>
 
 namespace {
@@ -265,6 +266,16 @@ void EngineStatus::ProcessWindow() {
 			ImGui::EndMenu();
 		}
 
+		if (ImGui::BeginMenu("Help")) {
+			if (ImGui::MenuItem("Online Documentation")) {
+				DocsWindow::OpenUrl(DocsWindow::kDocsUrl);
+			}
+			if (ImGui::MenuItem("Quick Search")) {
+				DocsWindow::Open();
+			}
+			ImGui::EndMenu();
+		}
+
 		const ImVec4 playGreen(0.30f, 0.80f, 0.35f, 1.0f);
 		const ImVec4 stopRed(0.85f, 0.30f, 0.30f, 1.0f);
 		const float iconDim = 22.0f;
@@ -385,7 +396,7 @@ void EngineStatus::ProcessSettingsPopup() {
 	ImGui::Spacing();
 
 	switch (category) {
-	case 0: { // General
+	case 0: { 
 		ImGui::SeparatorText("Project");
 
 		EditorField::Detail::Label("Main scene");
@@ -421,7 +432,7 @@ void EngineStatus::ProcessSettingsPopup() {
 		break;
 	}
 
-	case 1: { // Physics
+	case 1: { 
 		ImGui::SeparatorText("Collision");
 
 		const char* modeLabels[] = { "AABB", "Bounding Circle" };
@@ -450,7 +461,7 @@ void EngineStatus::ProcessSettingsPopup() {
 		break;
 	}
 
-	case 3: { // Debug Draw
+	case 3: { 
 		ImGui::SeparatorText("Objects");
 		EditorField::CheckboxEngine("Object wireframe", "##DrawWireframe", &settings.drawObjectWireframe);
 

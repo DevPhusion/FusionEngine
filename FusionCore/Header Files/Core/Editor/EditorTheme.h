@@ -169,26 +169,4 @@ namespace EditorTheme {
 		c[ImGuiCol_DockingEmptyBg] = bg0;
 #endif
 	}
-
-	inline bool CloseButton(const char* id) {
-		const float size = ImGui::GetFrameHeight();
-		ImVec2 p = ImGui::GetCursorScreenPos();
-		bool pressed = ImGui::InvisibleButton(id, ImVec2(size, size));
-		const bool hovered = ImGui::IsItemHovered();
-		const bool held = ImGui::IsItemActive();
-		ImDrawList* dl = ImGui::GetWindowDrawList();
-
-		if (hovered || held) {
-			dl->AddRectFilled(p, ImVec2(p.x + size, p.y + size),
-				held ? IM_COL32(179, 46, 61, 255) : IM_COL32(230, 77, 89, 217), ImGui::GetStyle().FrameRounding);
-		}
-
-		ImVec2 c(p.x + size * 0.5f, p.y + size * 0.5f);
-		const float r = 4.0f;
-		ImU32 col = hovered || held ? IM_COL32(255, 255, 255, 255) : ImGui::GetColorU32(ImGuiCol_TextDisabled);
-		dl->AddLine(ImVec2(c.x - r, c.y - r), ImVec2(c.x + r, c.y + r), col, 1.6f);
-		dl->AddLine(ImVec2(c.x - r, c.y + r), ImVec2(c.x + r, c.y - r), col, 1.6f);
-
-		return pressed;
-	}
 }

@@ -3,23 +3,6 @@
 #include "../../../../Header Files/Core/Editor/EditorTheme.h"
 #include <functional>
 
-namespace {
-	bool ToggleButton(const char* label, bool active, bool disabled = false) {
-		ImGui::BeginDisabled(disabled);
-		if (active) {
-			const ImVec4 a = EditorTheme::Accent();
-			ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(a.x, a.y, a.z, 0.25f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(a.x, a.y, a.z, 0.35f));
-			ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(a.x, a.y, a.z, 0.45f));
-			ImGui::PushStyleColor(ImGuiCol_Text, a);
-		}
-		bool pressed = ImGui::Button(label);
-		if (active) ImGui::PopStyleColor(4);
-		ImGui::EndDisabled();
-		return pressed;
-	}
-}
-
 EngineProfiler::EngineProfiler(std::string name) : EditorWindow(name) {}
 
 void EngineProfiler::ProcessWindow() {
@@ -38,9 +21,9 @@ void EngineProfiler::ProcessWindow() {
 	const ImGuiStyle& style = ImGui::GetStyle();
 	const bool hasTracked = !trackedSeries.empty();
 
-	if (ToggleButton("Table", !graphView)) graphView = false;
+	if (EditorField::ToggleButton("Table", !graphView)) graphView = false;
 	ImGui::SameLine(0.0f, 2.0f);
-	if (ToggleButton("Graph", graphView && hasTracked, !hasTracked)) graphView = true;
+	if (EditorField::ToggleButton("Graph", graphView && hasTracked, !hasTracked)) graphView = true;
 	if (!hasTracked && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
 		ImGui::SetTooltip("Tick the Track box on one or more tasks to graph them");
 
@@ -135,7 +118,7 @@ void EngineProfiler::DrawNode(const ProfileNode& node, std::vector<std::string>&
 
 	ImGui::TableSetColumnIndex(3);
 	bool tracked = isTracked;
-	if (EditorField::Detail::DrawCheckbox("##track", &tracked)) {
+	if (EditorField::Checkbox("##track", &tracked)) {
 		if (tracked) {
 			TrackedSeries series;
 			series.path = pathStack;
@@ -226,7 +209,7 @@ void EngineProfiler::DrawGraphView() {
 		ImGui::SameLine(ImGui::GetContentRegionMax().x - actionsW);
 		if (ImGui::Button("Reset")) ClearSeriesData(series);
 		ImGui::SameLine();
-		if (EditorTheme::CloseButton("##remove")) toRemove = key;
+		if (EditorField::CloseButton("##remove")) toRemove = key;
 
 		ImGui::PopID();
 	}

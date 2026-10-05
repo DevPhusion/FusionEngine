@@ -1,4 +1,5 @@
 #include "../../../Header Files/Core/Files/ProjectLauncher.h"
+#include "../../../Header Files/Core/Editor/EditorField.h"
 
 namespace fs = std::filesystem;
 
@@ -67,6 +68,21 @@ namespace {
 		return fs::is_empty(folder, ec) && !ec;
 	}
 
+	void OpenFolderInExplorer(const std::string& folderPath) {
+		std::error_code ec;
+		if (folderPath.empty() || !fs::is_directory(folderPath, ec)) return;
+
+#ifdef _WIN32
+		ShellExecuteW(nullptr, L"open", fs::path(folderPath).wstring().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+#elif defined(__APPLE__)
+		std::string cmd = "open \"" + folderPath + "\" >/dev/null 2>&1 &";
+		std::system(cmd.c_str());
+#else
+		std::string cmd = "xdg-open \"" + folderPath + "\" >/dev/null 2>&1 &";
+		std::system(cmd.c_str());
+#endif
+	}
+
 	const ImVec4 kDanger = ImVec4(0.90f, 0.30f, 0.35f, 1.0f);
 
 	bool AccentButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
@@ -76,23 +92,6 @@ namespace {
 		bool pressed = ImGui::Button(label, size);
 		ImGui::PopStyleColor(3);
 		return pressed;
-	}
-
-	bool DangerButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
-		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.45f, 0.18f, 0.20f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.58f, 0.22f, 0.25f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.40f, 0.15f, 0.17f, 1.0f));
-		bool pressed = ImGui::Button(label, size);
-		ImGui::PopStyleColor(3);
-		return pressed;
-	}
-
-	void BoldText(const char* text, const ImVec4* color = nullptr) {
-		bool b = EditorTheme::PushBold();
-		if (color) ImGui::PushStyleColor(ImGuiCol_Text, *color);
-		ImGui::TextUnformatted(text);
-		if (color) ImGui::PopStyleColor();
-		EditorTheme::PopBold(b);
 	}
 
 	void FormLabel(const char* label, float column = 110.0f) {
@@ -112,6 +111,44 @@ namespace {
 		ImGui::SameLine();
 		std::string btnId = std::string("Browse##") + id;
 		return ImGui::Button(btnId.c_str());
+	}
+
+	const ImVec4 kBadgePalette[] = {
+		ImVec4(0.85f, 0.46f, 0.32f, 1.0f),  // orange
+		ImVec4(0.38f, 0.42f, 0.88f, 1.0f),  // indigo
+		ImVec4(0.80f, 0.60f, 0.16f, 1.0f),  // amber
+		ImVec4(0.70f, 0.32f, 0.72f, 1.0f),  // magenta
+		ImVec4(0.28f, 0.54f, 0.84f, 1.0f),  // blue
+		ImVec4(0.22f, 0.62f, 0.72f, 1.0f),  // cyan
+		ImVec4(0.58f, 0.40f, 0.82f, 1.0f),  // violet
+		ImVec4(0.84f, 0.42f, 0.58f, 1.0f),  // rose
+	};
+
+	ImVec4 BadgeColorFor(const std::string& key) {
+		unsigned int h = 2166136261u;
+		for (unsigned char c : key) { h ^= c; h *= 16777619u; }
+		return kBadgePalette[h % (sizeof(kBadgePalette) / sizeof(kBadgePalette[0]))];
+	}
+
+	std::string BadgeInitials(const std::string& name) {
+		std::string stem = fs::path(name).stem().string();
+		if (stem.empty()) stem = name;
+
+		std::string out;
+		bool startOfWord = true;
+		for (unsigned char c : stem) {
+			if (c == ' ' || c == '_' || c == '-' || c == '.') { startOfWord = true; continue; }
+			if (startOfWord && out.size() < 2) out += (char)std::toupper(c);
+			startOfWord = false;
+		}
+		if (out.size() < 2) {
+			out.clear();
+			for (unsigned char c : stem) {
+				if (std::isalnum(c)) out += (char)std::toupper(c);
+				if (out.size() == 2) break;
+			}
+		}
+		return out.empty() ? "?" : out;
 	}
 }
 
@@ -319,7 +356,7 @@ void ProjectLauncher::ProcessLoadingProjectDisplay(const std::string& message) {
 
 	ImVec2 ts = ImGui::CalcTextSize("Setting up project");
 	ImGui::SetCursorScreenPos(ImVec2(center.x - ts.x * 0.5f, center.y + radius + 20.0f));
-	BoldText("Setting up project");
+	EditorField::BoldText("Setting up project");
 
 	ImVec2 ms = ImGui::CalcTextSize(message.c_str());
 	ImGui::SetCursorScreenPos(ImVec2(center.x - ms.x * 0.5f, center.y + radius + 44.0f));
@@ -401,7 +438,7 @@ void ProjectLauncher::ProcessConfigurePackagesPopup() {
 	const ImGuiStyle& st = ImGui::GetStyle();
 
 	if (selectedIndex >= 0 && selectedIndex < (int)projects.size())
-		BoldText(projects[selectedIndex].name.c_str());
+		EditorField::BoldText(projects[selectedIndex].name.c_str());
 	ImGui::TextDisabled("Packages install into this project's Python environment the next time it's opened.");
 	ImGui::Spacing();
 
@@ -425,7 +462,7 @@ void ProjectLauncher::ProcessConfigurePackagesPopup() {
 
 			const float btnW = 90.0f;
 			ImGui::BeginGroup();
-			BoldText(def.displayName.c_str());
+			EditorField::BoldText(def.displayName.c_str());
 			ImGui::PushTextWrapPos(ImGui::GetContentRegionAvail().x - btnW - st.ItemSpacing.x * 2.0f + ImGui::GetCursorPosX());
 			ImGui::TextDisabled("%s", def.description.c_str());
 			ImGui::PopTextWrapPos();
@@ -439,7 +476,7 @@ void ProjectLauncher::ProcessConfigurePackagesPopup() {
 				rowTop + (blockH - ImGui::GetFrameHeight()) * 0.5f));
 
 			if (selectedTab) {
-				if (DangerButton("Remove", ImVec2(btnW, 0))) pm.DeselectPackage(def.id);
+				if (EditorField::DangerButton("Remove", ImVec2(btnW, 0))) pm.DeselectPackage(def.id);
 			}
 			else {
 				if (AccentButton("Install", ImVec2(btnW, 0))) pm.SelectPackage(def.id);
@@ -575,6 +612,9 @@ void ProjectLauncher::ProcessLauncher() {
 		if (ImGui::BeginPopupContextItem("##ctx")) {
 			if (ImGui::MenuItem("Open", nullptr, false, !p.missing)) openIndex = i;
 			if (ImGui::MenuItem("Configure Packages...")) configureIndex = i;
+			if (ImGui::MenuItem("Open Folder in Explorer")) {
+				OpenFolderInExplorer(p.folderPath);
+			}
 			ImGui::Separator();
 			if (ImGui::MenuItem("Remove from list")) removeIndex = i;
 			ImGui::EndPopup();
@@ -601,17 +641,18 @@ void ProjectLauncher::ProcessLauncher() {
 		const float badge = 40.0f;
 		const ImVec2 bmn(mn.x + 14.0f, mn.y + (cardH - badge) * 0.5f);
 		const ImVec2 bmx(bmn.x + badge, bmn.y + badge);
-		const ImVec4 badgeCol = p.missing ? ImVec4(0.45f, 0.18f, 0.20f, 1.0f)
-			: selected ? ImVec4(0.26f, 0.34f, 0.32f, 1.0f)
-			: ImVec4(0.30f, 0.31f, 0.33f, 1.0f);
-		dl->AddRectFilled(bmn, bmx, ImGui::GetColorU32(badgeCol), 6.0f);
-		char letter[2] = { p.name.empty() ? '?' : (char)std::toupper((unsigned char)p.name[0]), 0 };
+		const ImVec4 badgeCol = p.missing ? ImVec4(0.45f, 0.18f, 0.20f, 1.0f) : BadgeColorFor(p.folderPath);
+		dl->AddRectFilled(bmn, bmx, ImGui::GetColorU32(badgeCol), 7.0f);
+		if (selected)
+			dl->AddRect(bmn, bmx, IM_COL32(255, 255, 255, 110), 7.0f, 0, 1.5f);   // light ring so it pops
+
 		{
+			const std::string initials = BadgeInitials(p.name);
 			bool b = EditorTheme::PushBold();
-			ImVec2 ls = ImGui::CalcTextSize(letter);
+			ImVec2 ls = ImGui::CalcTextSize(initials.c_str());
 			ImGui::SetCursorScreenPos(ImVec2(bmn.x + (badge - ls.x) * 0.5f, bmn.y + (badge - ls.y) * 0.5f));
-			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.90f, 0.90f, 0.90f, 1.0f));
-			ImGui::TextUnformatted(letter);
+			ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 0.95f));
+			ImGui::TextUnformatted(initials.c_str());
 			ImGui::PopStyleColor();
 			EditorTheme::PopBold(b);
 		}
@@ -627,7 +668,7 @@ void ProjectLauncher::ProcessLauncher() {
 		ImGui::PushClipRect(ImVec2(textX, mn.y), ImVec2(mx.x - rightW - 30.0f, mx.y), true);
 
 		ImGui::SetCursorScreenPos(ImVec2(textX, mn.y + 11.0f));
-		BoldText(p.name.c_str(), p.missing ? &kDanger : nullptr);
+		EditorField::BoldText(p.name.c_str(), p.missing ? &kDanger : nullptr);
 
 		ImGui::SetCursorScreenPos(ImVec2(textX, mn.y + 34.0f));
 		ImGui::TextDisabled("%s", p.folderPath.c_str());
@@ -646,7 +687,7 @@ void ProjectLauncher::ProcessLauncher() {
 		const char* sub = projects.empty() ? "Create a new project or import an existing one to get started." : "Try a different search term.";
 		const float w = ImGui::GetContentRegionAvail().x;
 		ImGui::SetCursorPosX((w - ImGui::CalcTextSize(title).x) * 0.5f);
-		BoldText(title);
+		EditorField::BoldText(title);
 		ImGui::SetCursorPosX((w - ImGui::CalcTextSize(sub).x) * 0.5f);
 		ImGui::TextDisabled("%s", sub);
 	}
@@ -662,7 +703,7 @@ void ProjectLauncher::ProcessLauncher() {
 	ImGui::BeginDisabled(!hasSel);
 	if (ImGui::Button("Configure Packages")) configureIndex = selectedIndex;
 	ImGui::SameLine();
-	if (DangerButton("Remove")) removeIndex = selectedIndex;
+	if (EditorField::DangerButton("Remove")) removeIndex = selectedIndex;
 	ImGui::EndDisabled();
 
 	ImGui::SameLine();

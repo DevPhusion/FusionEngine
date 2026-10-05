@@ -13,6 +13,12 @@
 #include <ctime>
 #include <cctype>
 
+#ifdef _WIN32
+#define NOMINMAX
+#include <windows.h>
+#include <shellapi.h>
+#endif
+
 struct ProjectEntry {
 	std::string name;               
 	std::string folderPath;         

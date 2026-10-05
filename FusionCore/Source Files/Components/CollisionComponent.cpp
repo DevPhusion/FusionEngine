@@ -822,7 +822,7 @@ void CollisionComponent::ProcessInspectorUI() {
 
 	ImGui::Text("Collision Shapes (%d)", (int)shapes.size());
 	ImGui::SameLine();
-	if (ImGui::SmallButton("+ Add Shape")) {
+	if (EditorField::AddButton("+ Add Shape", true)) {
 		EditorManager::getInstance().BeginEdit({ parent });
 		PolygonShape poly;
 		poly.vertices = {};
@@ -842,14 +842,18 @@ void CollisionComponent::ProcessInspectorUI() {
 		std::string label = entry.name;
 		if (isInvalid) label += " [!]";
 		if (isInvalid) ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.65f, 0.2f, 1.0f));
+		
+		const float closeSize = ImGui::GetFrameHeight();
+		const float rightX = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - closeSize;
+
 		bool open = ImGui::TreeNodeEx((void*)(intptr_t)entry.id,
 			ImGuiTreeNodeFlags_Framed | ImGuiTreeNodeFlags_AllowOverlap,
 			"%s", label.c_str());
 
 		if (isInvalid) ImGui::PopStyleColor();
 
-		ImGui::SameLine();
-		if (ImGui::SmallButton("Remove")) {
+		ImGui::SameLine(rightX);
+		if (EditorField::CloseButton("##removeShape")) {
 			shapeToRemove = entry.id;
 		}
 

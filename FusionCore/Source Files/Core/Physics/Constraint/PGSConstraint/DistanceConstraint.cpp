@@ -1,5 +1,6 @@
 #include "../../../../../Header Files/Core/Physics/Constraint/PGSConstraint/DistanceConstraint.h"
 #include "../../../../../Header Files/Core/Rendering/Renderer.h"
+#include "../../../../../Header Files/Core/Editor/EditorField.h"
 
 DistanceConstraint::DistanceConstraint(PhysicsBody objectA, PhysicsBody objectB, glm::vec3 attachPointA, glm::vec3 attachPointB, 
 	float distance, bool extendable, bool retractable) :
@@ -65,37 +66,14 @@ void DistanceConstraint::Prepare(std::vector<SolverRow>& rows, float delta) {
 void DistanceConstraint::ProcessInspectorUI(Object* parent) {
 	Constraint::ProcessInspectorUI(parent);
 
-	ImGui::Text("Distance ");
-	ImGui::SameLine();
-	if (ImGui::InputFloat("##Distance", &distance, 0.0f, 0.0f, "%.3f m")) {
-		EngineManager::getInstance().SceneChangeEvent();
-	}
-	if (ImGui::IsItemActivated()) {
-		EditorManager::getInstance().BeginEdit({ parent }, true);
-	}
-	if (ImGui::IsItemDeactivatedAfterEdit()) {
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+	const std::vector<Object*> targets{ parent };
 
-	ImGui::Text("Retractable ");
-	ImGui::SameLine();
-	bool retractFlag = retractable;
-	if (ImGui::Checkbox("##Retractable ", &retractFlag)) {
-		EditorManager::getInstance().BeginEdit({ parent }, true);
-		retractable = retractFlag;
-		EngineManager::getInstance().SceneChangeEvent();
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+	EditorField::Wrap(targets, "Distance",
+		[&] { return ImGui::InputFloat("##Distance", &distance, 0.0f, 0.0f, "%.3f m"); },
+		[&] {}, true);
 
-	ImGui::Text("Extendable ");
-	ImGui::SameLine();
-	bool extendFlag = extendable;
-	if (ImGui::Checkbox("##Extendable ", &extendFlag)) {
-		EditorManager::getInstance().BeginEdit({ parent }, true);
-		extendable = extendFlag;
-		EngineManager::getInstance().SceneChangeEvent();
-		EditorManager::getInstance().EndEdit({ parent });
-	}
+	EditorField::CheckboxScene(targets, "Retractable", "##Retractable", &retractable, [&] {}, true);
+	EditorField::CheckboxScene(targets, "Extendable", "##Extendable", &extendable, [&] {}, true);
 }
 
 void DistanceConstraint::DrawConstraintGizmo() {
