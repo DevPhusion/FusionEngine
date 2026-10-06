@@ -5,11 +5,56 @@
 #include "../../../Header Files/Core/Scripting/ScriptManager.h"
 #include "../../../Header Files/Core/Rendering/Renderer.h"
 #include "../../../Header Files/Core/Camera.h"
+#include "../../../Header Files/Core/Editor/EditorField.h"
 #include <filesystem>
 #include <pybind11/embed.h>
 #include <GLFW/glfw3.h>
 
 namespace py = pybind11;
+
+namespace {
+	void StatusPill(const char* text, const ImVec4& color, bool pulse) {
+		const ImGuiStyle& st = ImGui::GetStyle();
+		const float h = ImGui::GetFrameHeight();
+		const float dotR = 4.0f;
+		const ImVec2 ts = ImGui::CalcTextSize(text);
+		const float w = ts.x + dotR * 2.0f + 28.0f;
+
+		const ImVec2 p = ImGui::GetCursorScreenPos();
+		ImDrawList* dl = ImGui::GetWindowDrawList();
+		dl->AddRectFilled(p, ImVec2(p.x + w, p.y + h), ImGui::GetColorU32(ImVec4(color.x, color.y, color.z, 0.16f)), h * 0.5f);
+
+		float alpha = 1.0f;
+		if (pulse) alpha = 0.55f + 0.45f * (0.5f + 0.5f * sinf((float)ImGui::GetTime() * 4.0f));
+		dl->AddCircleFilled(ImVec2(p.x + 14.0f, p.y + h * 0.5f), dotR, ImGui::GetColorU32(ImVec4(color.x, color.y, color.z, alpha)));
+		dl->AddText(ImVec2(p.x + 14.0f + dotR + 8.0f, p.y + (h - ts.y) * 0.5f), ImGui::GetColorU32(color), text);
+		ImGui::Dummy(ImVec2(w, h));
+	}
+
+	float StatusPillWidth(const char* text) {
+		return ImGui::CalcTextSize(text).x + 8.0f + 28.0f;
+	}
+
+	void Banner(const char* id, const ImVec4& color, const char* title, const std::string& text) {
+		const ImGuiStyle& st = ImGui::GetStyle();
+		const float pad = 12.0f;
+		const float wrapW = ImGui::GetContentRegionAvail().x - pad * 2.0f;
+		const ImVec2 ts = ImGui::CalcTextSize(text.c_str(), nullptr, false, wrapW);
+		const float h = pad * 2.0f + ImGui::GetTextLineHeight() + st.ItemSpacing.y + ts.y;
+
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(color.x, color.y, color.z, 0.10f));
+		ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(color.x, color.y, color.z, 0.45f));
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(pad, pad));
+		ImGui::BeginChild(id, ImVec2(0, h), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar);
+		EditorField::BoldText(title, &color);
+		ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_Text));
+		ImGui::TextWrapped("%s", text.c_str());
+		ImGui::PopStyleColor();
+		ImGui::EndChild();
+		ImGui::PopStyleVar();
+		ImGui::PopStyleColor(2);
+	}
+}
 
 HeadlessMonitor::~HeadlessMonitor() {
 	if (trainingThread.joinable())
@@ -339,105 +384,112 @@ void HeadlessMonitor::ProcessMonitorWindow() {
 	ImGui::SetNextWindowSize(viewport->WorkSize);
 
 	ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-		ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus;
+		ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoBringToFrontOnFocus |
+		ImGuiWindowFlags_NoSavedSettings;
 
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(16, 12));
+	const float kPad = 24.0f;
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(kPad, 18.0f));
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 	ImGui::Begin("##HeadlessMonitor", nullptr, flags);
-	ImGui::PopStyleVar();
+	ImGui::PopStyleVar(2);
 
-	ImGui::PushFont(ImGui::GetIO().Fonts->Fonts.Size > 1 ? ImGui::GetIO().Fonts->Fonts[1] : ImGui::GetFont());
-	ImGui::TextColored(ImVec4(0.92f, 0.92f, 0.95f, 1.0f), "Training");
-	ImGui::PopFont();
-	ImGui::SameLine();
-	ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.55f, 1.0f), "- %s", projectDisplayName.c_str());
+	const ImGuiStyle& st = ImGui::GetStyle();
+	const bool isTraining = IsTraining();
+	const bool stopping = IsStopRequested();
+	const bool failed = !GetTrainingError().empty();
 
-	ImGui::Dummy(ImVec2(0, 6));
+	{
+		const float rowTop = ImGui::GetCursorPosY();
+
+		ImGui::SetWindowFontScale(1.4f);
+		EditorField::BoldText("Training");
+		ImGui::SetWindowFontScale(1.0f);
+		const float rowH = ImGui::GetItemRectSize().y;
+
+		ImGui::SameLine(0.0f, 12.0f);
+		ImGui::AlignTextToFramePadding();
+		ImGui::TextDisabled("%s", projectDisplayName.c_str());
+
+		const char* pillText = isTraining ? (stopping ? "Stopping" : "Training") : (failed ? "Failed" : "Finished");
+		const ImVec4 pillColor = isTraining ? (stopping ? ImVec4(0.95f, 0.65f, 0.25f, 1.0f) : EditorTheme::Accent())
+			: (failed ? EditorTheme::Danger() : ImVec4(0.65f, 0.67f, 0.70f, 1.0f));
+
+		const char* btnText = isTraining ? (stopping ? "Stopping..." : "Stop & Save") : "Back to Editor";
+		const float btnW = ImGui::CalcTextSize(btnText).x + st.FramePadding.x * 2.0f + 16.0f;
+		const float total = StatusPillWidth(pillText) + st.ItemSpacing.x + btnW;
+
+		ImGui::SameLine(ImGui::GetWindowWidth() - total - kPad);
+		ImGui::SetCursorPosY(rowTop + (rowH - ImGui::GetFrameHeight()) * 0.5f);
+		StatusPill(pillText, pillColor, isTraining && !stopping);
+
+		ImGui::SameLine();
+		if (isTraining) {
+			ImGui::BeginDisabled(stopping);
+			if (EditorField::DangerButton(btnText, ImVec2(btnW, 0))) RequestStop();
+			ImGui::EndDisabled();
+		}
+		else {
+			if (EditorField::AddButton(btnText)) End();
+		}
+	}
+
+	ImGui::Spacing();
 	ImGui::Separator();
-	ImGui::Dummy(ImVec2(0, 6));
+	ImGui::Spacing();
 
-	ImGui::PushStyleColor(ImGuiCol_Tab, ImVec4(0.13f, 0.14f, 0.17f, 1.0f));
-	ImGui::PushStyleColor(ImGuiCol_TabHovered, ImVec4(0.20f, 0.35f, 0.50f, 1.0f));
-	ImGui::PushStyleColor(ImGuiCol_TabActive, ImVec4(0.18f, 0.30f, 0.44f, 1.0f));
-
-	bool liveTabActiveThisFrame = false;
-
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(14.0f, 6.0f));
 	if (ImGui::BeginTabBar("##HeadlessMonitorTabs")) {
 		if (ImGui::BeginTabItem("Training Monitor")) {
+			ImGui::PopStyleVar();
+			ImGui::Spacing();
 			DrawTrainingMonitorTab();
+			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(14.0f, 6.0f));
 			ImGui::EndTabItem();
 		}
-		if (ImGui::BeginTabItem("Live Training View")) {
-			liveTabActiveThisFrame = true;
-			EngineManager::getInstance().liveTrainingRenderActive = IsTraining();
-
+		if (ImGui::BeginTabItem("Live View")) {
+			EngineManager::getInstance().liveTrainingRenderActive = isTraining;
+			ImGui::PopStyleVar();
+			ImGui::Spacing();
 			DrawLiveTrainingViewTab();
+			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(14.0f, 6.0f));
 			ImGui::EndTabItem();
 		}
 		if (ImGui::BeginTabItem("Console")) {
+			ImGui::PopStyleVar();
+			ImGui::Spacing();
 			headlessConsole.DrawContent();
+			ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(14.0f, 6.0f));
 			ImGui::EndTabItem();
 		}
 		ImGui::EndTabBar();
 	}
-	ImGui::PopStyleColor(3);
+	ImGui::PopStyleVar();
 
 	ImGui::End();
 }
 
 void HeadlessMonitor::DrawTrainingMonitorTab() {
-	bool isTraining = IsTraining();
-
-	ImGui::Dummy(ImVec2(0, 8));
-
-	ImVec4 statusColor = isTraining ? ImVec4(0.30f, 0.80f, 0.45f, 1.0f) : ImVec4(0.85f, 0.40f, 0.40f, 1.0f);
-	ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(statusColor.x, statusColor.y, statusColor.z, 0.15f));
-	ImGui::PushStyleColor(ImGuiCol_Text, statusColor);
-	ImGui::Button(isTraining ? "  Training  " : "  Finished  ");
-	ImGui::PopStyleColor(2);
+	const ImGuiStyle& st = ImGui::GetStyle();
+	const bool isTraining = IsTraining();
 
 	if (isTraining) {
-		ImGui::SameLine(0.0f, 14.0f);
-		ImGui::TextColored(ImVec4(0.55f, 0.75f, 0.95f, 1.0f), "%s", GetTrainingStatus().c_str());
-
-		ImGui::SameLine(0.0f, 14.0f);
-		bool stopping = IsStopRequested();
-		ImGui::BeginDisabled(stopping);
-		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f, 0.22f, 0.22f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.65f, 0.28f, 0.28f, 1.0f));
-		if (ImGui::Button(stopping ? "Stopping..." : "Stop && Save")) {
-			RequestStop();
-		}
-		ImGui::PopStyleColor(2);
-		ImGui::EndDisabled();
-	}
-	else {
-		ImGui::SameLine(0.0f, 14.0f);
-		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.20f, 0.35f, 0.50f, 1.0f));
-		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.42f, 0.60f, 1.0f));
-		if (ImGui::Button("Back to Editor")) {
-			End();
-		}
-		ImGui::PopStyleColor(2);
+		ImGui::TextDisabled("%s", GetTrainingStatus().c_str());
+		ImGui::Spacing();
 	}
 
-	std::string trainErr = GetTrainingError();
+	const std::string trainErr = GetTrainingError();
 	if (!trainErr.empty()) {
-		ImGui::Dummy(ImVec2(0, 8));
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.30f, 0.10f, 0.10f, 0.35f));
-		ImGui::BeginChild("##trainErr", ImVec2(0, 0), true, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoScrollbar);
-		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.55f, 0.55f, 1.0f));
-		ImGui::TextWrapped("Training failed: %s", trainErr.c_str());
-		ImGui::PopStyleColor();
-		ImGui::EndChild();
-		ImGui::PopStyleColor();
+		Banner("##trainErr", EditorTheme::Danger(), "Training failed", trainErr);
+		ImGui::Spacing();
 	}
-
-	ImGui::Dummy(ImVec2(0, 10));
 
 	std::lock_guard<std::mutex> lock(metricsMutex);
 
 	if (metricSeries.empty()) {
-		ImGui::TextDisabled(isTraining ? "Waiting for first rollout..." : "No training metrics recorded.");
+		ImGui::Dummy(ImVec2(0, 40.0f));
+		const char* msg = isTraining ? "Waiting for the first rollout..." : "No training metrics were recorded.";
+		ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(msg).x) * 0.5f);
+		ImGui::TextDisabled("%s", msg);
 		return;
 	}
 
@@ -448,161 +500,109 @@ void HeadlessMonitor::DrawTrainingMonitorTab() {
 		sections[section].push_back(key);
 	}
 
-	const float plotWidth = ImGui::GetContentRegionAvail().x * 0.5f - 16.0f;
-	const ImVec2 plotSize(plotWidth, 140.0f);
-
-	static const ImVec4 kAccents[] = {
-		ImVec4(0.35f, 0.65f, 0.95f, 1.0f), 
-		ImVec4(0.55f, 0.85f, 0.55f, 1.0f), 
-		ImVec4(0.90f, 0.70f, 0.35f, 1.0f),
-		ImVec4(0.80f, 0.55f, 0.90f, 1.0f), 
+	static const ImVec4 kLineColors[] = {
+		ImVec4(0.36f, 0.70f, 0.62f, 1.0f),
+		ImVec4(0.45f, 0.62f, 0.88f, 1.0f),
+		ImVec4(0.88f, 0.68f, 0.38f, 1.0f),
+		ImVec4(0.72f, 0.55f, 0.85f, 1.0f),
 	};
+
+	const float avail = ImGui::GetContentRegionAvail().x;
+	const float minCardW = 380.0f;
+	const int cols = std::max(1, (int)((avail + st.ItemSpacing.x) / (minCardW + st.ItemSpacing.x)));
+	const float cardW = (avail - st.ItemSpacing.x * (cols - 1)) / (float)cols;
+	const float cardH = 210.0f;
+
 	int sectionIdx = 0;
-
 	for (auto& [section, keys] : sections) {
-		ImVec4 accent = kAccents[sectionIdx % 4];
-		sectionIdx++;
+		const ImVec4 lineColor = kLineColors[sectionIdx++ % 4];
 
-		ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(accent.x, accent.y, accent.z, 0.12f));
-		ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(accent.x, accent.y, accent.z, 0.20f));
-		ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(accent.x, accent.y, accent.z, 0.25f));
-		ImGui::PushStyleColor(ImGuiCol_Text, accent);
+		std::string header = section + "##section_" + section;
+		bool bold = EditorTheme::PushBold();
+		const bool open = ImGui::CollapsingHeader(header.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+		EditorTheme::PopBold(bold);
+		if (!open) continue;
 
-		std::string headerLabel = section + "/";
-		bool open = ImGui::CollapsingHeader(headerLabel.c_str(), ImGuiTreeNodeFlags_DefaultOpen);
+		ImGui::Spacing();
+		int col = 0;
+		for (auto& key : keys) {
+			MetricBuffer& buf = metricSeries[key];
+			if (buf.data.empty()) continue;
 
-		ImGui::PopStyleColor(4);
+			std::string label = key;
+			size_t slash = key.find('/');
+			if (slash != std::string::npos) label = key.substr(slash + 1);
 
-		if (open) {
-			ImGui::Dummy(ImVec2(0, 4));
-			int col = 0;
-			for (auto& key : keys) {
-				MetricBuffer& buf = metricSeries[key];
-				if (buf.data.empty()) continue;
+			if (col % cols != 0) ImGui::SameLine();
+			col++;
 
-				std::string label = key;
-				size_t slash = key.find('/');
-				if (slash != std::string::npos) label = key.substr(slash + 1);
+			ImGui::BeginChild(("##card_" + key).c_str(), ImVec2(cardW, cardH), ImGuiChildFlags_Borders,
+				ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
 
-				if (col % 2 != 0) ImGui::SameLine(0.0f, 16.0f);
-				col++;
+			char valueText[32];
+			const float last = buf.data.back().y;
+			if (std::abs(last) >= 1000.0f) std::snprintf(valueText, sizeof(valueText), "%.0f", last);
+			else std::snprintf(valueText, sizeof(valueText), "%.4g", last);
 
-				ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(1.0f, 1.0f, 1.0f, 0.03f));
-				ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(1.0f, 1.0f, 1.0f, 0.08f));
-				ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.0f);
-				ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(10, 10));
+			EditorField::BoldText(label.c_str());
+			ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::CalcTextSize(valueText).x - st.WindowPadding.x);
+			ImGui::PushStyleColor(ImGuiCol_Text, lineColor);
+			ImGui::TextUnformatted(valueText);
+			ImGui::PopStyleColor();
 
-				ImGui::BeginChild(("##card_" + key).c_str(), ImVec2(plotSize.x + 20, plotSize.y + 50), true);
+			ImPlot::PushStyleColor(ImPlotCol_FrameBg, ImVec4(0, 0, 0, 0));
+			ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImGui::GetStyleColorVec4(ImGuiCol_FrameBg));
+			ImPlot::PushStyleColor(ImPlotCol_PlotBorder, ImGui::GetStyleColorVec4(ImGuiCol_Border));
+			ImPlot::PushStyleColor(ImPlotCol_AxisGrid, ImVec4(1, 1, 1, 0.06f));
+			ImPlot::PushStyleColor(ImPlotCol_AxisText, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
 
-				ImGui::TextColored(ImVec4(0.95f, 0.95f, 0.96f, 1.0f), "%s", label.c_str());
-				ImGui::SameLine();
-				if (std::abs(buf.data.back().y) >= 1000.0f)
-					ImGui::TextColored(accent, "%.0f", buf.data.back().y);
-				else
-					ImGui::TextColored(accent, "%.4g", buf.data.back().y);
+			if (ImPlot::BeginPlot(("##plot_" + key).c_str(), ImVec2(-1, -1),
+				ImPlotFlags_NoTitle | ImPlotFlags_NoLegend | ImPlotFlags_NoMenus)) {
+				ImPlot::SetupAxes("timesteps", nullptr, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
 
-				ImGui::Dummy(ImVec2(0, 4));
+				ImPlotSpec spec;
+				spec.Offset = buf.offset;
+				spec.Stride = sizeof(ImVec2);
+				spec.LineColor = lineColor;
+				spec.LineWeight = 2.0f;
 
-				ImPlot::PushStyleColor(ImPlotCol_FrameBg, ImVec4(0.15f, 0.15f, 0.17f, 1.0f));
-				ImPlot::PushStyleColor(ImPlotCol_PlotBg, ImVec4(0.15f, 0.15f, 0.17f, 1.0f));
-				ImPlot::PushStyleColor(ImPlotCol_PlotBorder, ImVec4(1, 1, 1, 0.06f));
-				ImPlot::PushStyleColor(ImPlotCol_AxisGrid, ImVec4(1, 1, 1, 0.06f));
-				ImPlot::PushStyleColor(ImPlotCol_AxisText, ImVec4(0.65f, 0.68f, 0.72f, 1.0f));
-				ImPlot::PushStyleColor(ImPlotCol_AxisBg, ImVec4(0, 0, 0, 0));
-				ImPlot::PushStyleColor(ImPlotCol_AxisBgHovered, ImVec4(1, 1, 1, 0.06f));
-				ImPlot::PushStyleColor(ImPlotCol_AxisBgActive, ImVec4(1, 1, 1, 0.10f));
-
-				std::string plotId = "##plot_" + key;
-				if (ImPlot::BeginPlot(plotId.c_str(), plotSize,
-					ImPlotFlags_NoTitle | ImPlotFlags_NoLegend | ImPlotFlags_NoMenus)) {
-					ImPlot::SetupAxes("timesteps", nullptr, ImPlotAxisFlags_AutoFit, ImPlotAxisFlags_AutoFit);
-
-					ImPlotSpec spec;
-					spec.Offset = buf.offset;
-					spec.Stride = sizeof(ImVec2);
-					spec.LineColor = accent;
-					spec.LineWeight = 2.0f;
-
-					ImPlot::PlotLine(label.c_str(),
-						&buf.data[0].x, &buf.data[0].y,
-						(int)buf.data.size(), spec);
-
-					ImPlot::EndPlot();
-				}
-				ImPlot::PopStyleColor(8);
-
-				ImGui::EndChild();
-
-				ImGui::PopStyleVar(2);
-				ImGui::PopStyleColor(2);
+				ImPlot::PlotLine(label.c_str(), &buf.data[0].x, &buf.data[0].y, (int)buf.data.size(), spec);
+				ImPlot::EndPlot();
 			}
-			ImGui::Dummy(ImVec2(0, 8));
+			ImPlot::PopStyleColor(5);
+
+			ImGui::EndChild();
 		}
+		ImGui::Spacing();
 	}
 }
 
 void HeadlessMonitor::DrawLiveTrainingViewTab() {
-	ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.0f, 0.0f, 0.0f, 0.0f));
-	ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(1.0f, 1.0f, 1.0f, 0.04f));
-	ImGui::PushStyleColor(ImGuiCol_HeaderActive, ImVec4(1.0f, 1.0f, 1.0f, 0.06f));
-	ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.80f, 0.25f, 1.0f));
+	Banner("##LiveViewWarning", ImVec4(0.95f, 0.65f, 0.25f, 1.0f), "",
+		"This view renders the agent in real time so you can watch its behavior. Rendering every step can slow "
+		"training down, and the slightly different timing may affect results. For the fastest, most consistent "
+		"training, stay on the Training Monitor or Console tab and check in here only occasionally.");
+	ImGui::Spacing();
 
-	bool warningOpen = ImGui::CollapsingHeader("Warning##LiveViewWarningHeader");
-
-	ImGui::PopStyleColor(4);
-
-	if (warningOpen) {
-		const char* warningText =
-			"This view renders the agent's training in real time so you can watch its behavior. "
-			"Rendering every step can slow down training and, because timing/state differs slightly "
-			"from headless stepping, may also affect training results. For fastest and most consistent "
-			"training, prefer running headless (stay on the Training Monitor or Console tab) and only "
-			"check in here occasionally.";
-
-		const float horizontalPadding = 24.0f;
-		const float verticalPadding = 16.0f;
-		float wrapWidth = ImGui::GetContentRegionAvail().x - horizontalPadding;
-		ImVec2 textSize = ImGui::CalcTextSize(warningText, nullptr, false, wrapWidth);
-		float boxHeight = textSize.y + verticalPadding;
-
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.45f, 0.34f, 0.05f, 0.18f));
-		ImGui::PushStyleColor(ImGuiCol_Border, ImVec4(0.85f, 0.65f, 0.15f, 0.55f));
-		ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 1.5f);
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12, 10));
-
-		ImGui::BeginChild("##LiveViewWarningBox", ImVec2(0, boxHeight), true, ImGuiWindowFlags_NoScrollbar);
-
-		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.80f, 0.25f, 1.0f));
-		ImGui::TextWrapped("%s", warningText);
-		ImGui::PopStyleColor();
-
-		ImGui::EndChild();
-
-		ImGui::PopStyleVar(2);
-		ImGui::PopStyleColor(2);
-	}
-
-	ImGui::Dummy(ImVec2(0, 8));
-
-	if (!IsTraining()) {
-		ImGui::TextDisabled("Training isn't running -- nothing to display.");
+	Viewport* gameViewport = EditorManager::getInstance().gameViewport;
+	if (!IsTraining() || !gameViewport) {
+		ImGui::Dummy(ImVec2(0, 40.0f));
+		const char* msg = "Training isn't running, so there is nothing to display.";
+		ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(msg).x) * 0.5f);
+		ImGui::TextDisabled("%s", msg);
 		return;
 	}
 
-	Viewport* gameViewport = EditorManager::getInstance().gameViewport;
-	GLuint tex = gameViewport->colorTexture;
+	const float aspect = (float)gameViewport->textureWidth / (float)gameViewport->textureHeight;
+	const ImVec2 avail = ImGui::GetContentRegionAvail();
+	float w = avail.x;
+	float h = w / aspect;
+	if (h > avail.y) { h = avail.y; w = h * aspect; }
 
-	float aspect = (float)gameViewport->textureWidth / (float)gameViewport->textureHeight;
-	ImVec2 avail = ImGui::GetContentRegionAvail();
-	float displayWidth = avail.x;
-	float displayHeight = displayWidth / aspect;
-	if (displayHeight > avail.y) { displayHeight = avail.y; displayWidth = displayHeight * aspect; }
+	const ImVec2 cursor = ImGui::GetCursorPos();
+	ImGui::SetCursorPos(ImVec2(cursor.x + (avail.x - w) * 0.5f, cursor.y + (avail.y - h) * 0.5f));
 
-	ImVec2 cursor = ImGui::GetCursorPos();
-	ImGui::SetCursorPos(ImVec2(
-		cursor.x + (avail.x - displayWidth) * 0.5f,
-		cursor.y + (avail.y - displayHeight) * 0.5f
-	));
-
-	ImGui::Image((ImTextureID)(intptr_t)tex, ImVec2(displayWidth, displayHeight), ImVec2(0, 1), ImVec2(1, 0));
+	const ImVec2 p = ImGui::GetCursorScreenPos();
+	ImGui::Image((ImTextureID)(intptr_t)gameViewport->colorTexture, ImVec2(w, h), ImVec2(0, 1), ImVec2(1, 0));
+	ImGui::GetWindowDrawList()->AddRect(p, ImVec2(p.x + w, p.y + h), ImGui::GetColorU32(ImGuiCol_Border), 4.0f);
 }
