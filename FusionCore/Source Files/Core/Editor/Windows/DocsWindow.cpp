@@ -9,6 +9,10 @@
 #include <deque>
 #include <set>
 #include <sstream>
+#include <cstdint>
+#include <cstring>
+#include <filesystem>
+#include <fstream>
 
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
@@ -25,6 +29,29 @@
 #endif
 
 namespace {
+
+	std::filesystem::path CacheDir() {
+		namespace fs = std::filesystem;
+		fs::path exeDir;
+#if defined(_WIN32)
+		char buf[MAX_PATH];
+		DWORD n = GetModuleFileNameA(nullptr, buf, MAX_PATH);
+		if (n > 0 && n < MAX_PATH) exeDir = fs::path(buf).parent_path();
+#else
+		std::error_code ec;
+		exeDir = fs::read_symlink("/proc/self/exe", ec).parent_path();
+		if (ec) exeDir.clear();
+#endif
+		if (exeDir.empty()) exeDir = fs::current_path();
+		return exeDir / "Resources" / "Document";
+	}
+
+	constexpr char kCacheMagic[4] = { 'F', 'D', 'O', 'C' };
+	constexpr uint32_t kCacheVersion = 1;
+	constexpr uint32_t kMaxStringLen = 64u * 1024u * 1024u;  
+
+	void WriteU32(std::ostream& o, uint32_t v) { o.write((const char*)&v, sizeof(v)); }
+	void WriteStr(std::ostream& o, const std::string& s) { WriteU32(o, (uint32_t)s.size()); o.write(s.data(), (std::streamsize)s.size()); }
 
 	bool HttpGet(const std::string& url, std::string& out) {
 		out.clear();
@@ -687,7 +714,7 @@ void DocsWindow::StartCrawl() {
 
 void DocsWindow::ReloadCrawl() {
 	StopCrawl();
-	{ std::lock_guard<std::mutex> lock(mtx); pages.clear(); status = "Reloading..."; }
+	{ std::lock_guard<std::mutex> lock(mtx); status = "Reloading..."; }
 	crawlStarted = true;
 	worker = std::thread([this] { Crawl(kDocsUrl); });
 }
@@ -700,8 +727,14 @@ void DocsWindow::StopCrawl() {
 
 void DocsWindow::Crawl(std::string base) {
 	constexpr size_t kMaxPages = 300;
+
+	if (PageCount() == 0) LoadCache();    
+
 	std::deque<std::string> queue{ base };
 	std::set<std::string> seen{ base };
+	std::set<std::string> failed;
+	std::vector<std::shared_ptr<Page>> fresh;
+	bool baseReached = false;
 
 	while (!queue.empty() && !cancel && seen.size() <= kMaxPages) {
 		std::string url = queue.front();
@@ -709,42 +742,41 @@ void DocsWindow::Crawl(std::string base) {
 
 		{
 			std::lock_guard<std::mutex> lock(mtx);
-			status = "Indexing (" + std::to_string(pages.size()) + " pages)...";
+			status = "Updating documentation (" + std::to_string(fresh.size()) + " pages)...";
 		}
 
 		std::string html;
-		if (!HttpGet(url, html)) continue;
-
-		auto page = std::make_shared<Page>();
-		page->url = url;
-		page->blocks = ParseBlocks(html, url);
-		page->text = HtmlToText(ExtractContent(html));
-		page->lower = ToLower(page->text);
-
-		for (const Block& b : page->blocks) {
-			if (b.type != Block::Type::Heading) continue;
-			for (const Run& r : b.runs) page->title += r.text;
-			break;
-		}
-		if (page->title.empty()) page->title = CleanText(ExtractTitle(html));
-		if (page->title.empty()) page->title = url;
+		if (!HttpGet(url, html)) { failed.insert(url); continue; }
+		if (url == base) baseReached = true;
 
 		for (auto& link : ExtractLinks(html, url)) {
 			if (link.rfind(base, 0) != 0 || !LooksLikePage(link)) continue;
 			if (seen.insert(link).second) queue.push_back(link);
 		}
-
-		std::lock_guard<std::mutex> lock(mtx);
-		pages.push_back(std::move(page));
+		fresh.push_back(BuildPage(url, html));
 	}
 
-	std::lock_guard<std::mutex> lock(mtx);
-	status = pages.empty()
-		? "Could not load documentation (offline, or the site renders with JavaScript)."
-		: "Ready (" + std::to_string(pages.size()) + " pages)";
-}
+	if (cancel) return;
 
-// ----- index queries -----
+	if (!baseReached || fresh.empty()) {
+		std::lock_guard<std::mutex> lock(mtx);
+		status = pages.empty()
+			? "Could not load documentation (offline, and no saved copy exists)."
+			: "Offline - using saved documentation (" + std::to_string(pages.size()) + " pages)";
+		return;
+	}
+
+	std::vector<std::shared_ptr<Page>> merged = std::move(fresh);
+	{
+		std::lock_guard<std::mutex> lock(mtx);
+		for (auto& old : pages)
+			if (failed.count(old->url)) merged.push_back(old);
+		pages = merged;
+		version++;
+		status = "Ready (" + std::to_string(pages.size()) + " pages)";
+	}
+	SaveCache(merged);
+}
 
 int DocsWindow::PageCount() {
 	std::lock_guard<std::mutex> lock(mtx);
@@ -760,6 +792,81 @@ std::shared_ptr<DocsWindow::Page> DocsWindow::FindPage(const std::string& url) {
 	std::lock_guard<std::mutex> lock(mtx);
 	for (auto& p : pages) if (p->url == url) return p;
 	return nullptr;
+}
+
+std::shared_ptr<DocsWindow::Page> DocsWindow::BuildPage(const std::string& url, const std::string& html) {
+	auto page = std::make_shared<Page>();
+	page->url = url;
+	page->content = ExtractContent(html);          
+	page->blocks = ParseBlocks(page->content, url);
+	page->text = HtmlToText(page->content);
+	page->lower = ToLower(page->text);
+
+	for (const Block& b : page->blocks) {
+		if (b.type != Block::Type::Heading) continue;
+		for (const Run& r : b.runs) page->title += r.text;
+		break;
+	}
+	if (page->title.empty()) page->title = CleanText(ExtractTitle(html));
+	if (page->title.empty()) page->title = url;
+	return page;
+}
+
+bool DocsWindow::LoadCache() {
+	std::ifstream in(CacheDir() / "docs_cache.bin", std::ios::binary);
+	if (!in) return false;
+
+	char magic[4] = {};
+	uint32_t ver = 0, count = 0;
+	in.read(magic, 4);
+	in.read((char*)&ver, 4);
+	in.read((char*)&count, 4);
+	if (!in || std::memcmp(magic, kCacheMagic, 4) != 0 || ver != kCacheVersion || count > 100000) return false;
+
+	auto readStr = [&](std::string& s) {
+		uint32_t len = 0;
+		in.read((char*)&len, 4);
+		if (!in || len > kMaxStringLen) return false;
+		s.resize(len);
+		if (len) in.read(&s[0], len);
+		return (bool)in;
+		};
+
+	std::vector<std::shared_ptr<Page>> loaded;
+	for (uint32_t i = 0; i < count; i++) {
+		std::string url, content;
+		if (!readStr(url) || !readStr(content)) return false;   
+		loaded.push_back(BuildPage(url, content));
+	}
+	if (loaded.empty()) return false;
+
+	std::lock_guard<std::mutex> lock(mtx);
+	pages = std::move(loaded);
+	version++;
+	status = "Saved documentation (" + std::to_string(pages.size()) + " pages) - checking for updates...";
+	return true;
+}
+
+void DocsWindow::SaveCache(const std::vector<std::shared_ptr<Page>>& list) {
+	namespace fs = std::filesystem;
+	std::error_code ec;
+	const fs::path dir = CacheDir();
+	fs::create_directories(dir, ec);          
+	if (ec) return;
+
+	const fs::path finalPath = dir / "docs_cache.bin";
+	const fs::path tmpPath = dir / "docs_cache.bin.tmp";
+	{
+		std::ofstream out(tmpPath, std::ios::binary | std::ios::trunc);
+		if (!out) return;
+		out.write(kCacheMagic, 4);
+		WriteU32(out, kCacheVersion);
+		WriteU32(out, (uint32_t)list.size());
+		for (const auto& p : list) { WriteStr(out, p->url); WriteStr(out, p->content); }
+		if (!out) { out.close(); fs::remove(tmpPath, ec); return; }
+	}
+	fs::rename(tmpPath, finalPath, ec);      
+	if (ec) fs::remove(tmpPath, ec);
 }
 
 std::vector<DocsWindow::Result> DocsWindow::Search(const std::string& queryStr, int maxResults) {
@@ -841,7 +948,7 @@ void DocsWindow::ResetView() {
 	history.clear();
 	heights.clear();
 	autoSelected = false;
-	lastPageCount = -1;
+	lastVersion = -1;
 }
 
 
@@ -1055,11 +1162,17 @@ void DocsWindow::ProcessWindow() {
 
 	const ImGuiStyle& style = ImGui::GetStyle();
 
-	const int pageCount = PageCount();
-	if (lastQuery != query || lastPageCount != pageCount) {
+	const int ver = version.load();
+	if (lastQuery != query || lastVersion != ver) {
+		if (selectedPage) {
+			if (auto p = FindPage(selectedPage->url); p && p != selectedPage) {
+				selectedPage = p;     
+				heights.clear();
+			}
+		}
 		results = Search(query);
 		lastQuery = query;
-		lastPageCount = pageCount;
+		lastVersion = ver;
 	}
 
 	if (!autoSelected && !selectedPage) {

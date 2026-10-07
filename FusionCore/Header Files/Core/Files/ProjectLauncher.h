@@ -25,7 +25,9 @@ struct ProjectEntry {
 	std::string fusionFilePath;     
 	std::string lastModifiedText;   
 	long long lastModifiedTime = 0; 
-	bool missing = false;           
+	bool missing = false;   
+	std::string version = "unknown";
+	bool hasVersion = false;
 };
 
 class ProjectLauncher {
@@ -60,6 +62,12 @@ private:
 
 	char packageSearchBuf[128] = {};
 
+	bool versionWarningRequested = false;
+	std::string versionWarningName;
+	std::string versionWarningValue = "unknown";
+	std::string pendingOpenPath;
+	bool versionWarningHasValue = false;
+
 	std::string ConfigFilePath() const;
 	void LoadProjectList();
 	void SaveProjectList();
@@ -73,6 +81,9 @@ private:
 	void ProcessNewProjectPopup();
 	void ProcessConfigurePackagesPopup();
 	void ProcessLoadingProjectDisplay(const std::string& message);
+	void ProcessVersionWarningPopup();
+	void RequestOpenProject(const std::string& fusionFilePath, const std::string& name,
+		bool hasVersion, const std::string& version);
 	void RemoveProject(int index);
 	void SortProjects();
 };

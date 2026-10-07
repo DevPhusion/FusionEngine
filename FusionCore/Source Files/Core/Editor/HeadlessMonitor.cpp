@@ -578,7 +578,7 @@ void HeadlessMonitor::DrawTrainingMonitorTab() {
 }
 
 void HeadlessMonitor::DrawLiveTrainingViewTab() {
-	Banner("##LiveViewWarning", ImVec4(0.95f, 0.65f, 0.25f, 1.0f), "",
+	Banner("##LiveViewWarning", ImVec4(0.95f, 0.65f, 0.25f, 1.0f), "Note",
 		"This view renders the agent in real time so you can watch its behavior. Rendering every step can slow "
 		"training down, and the slightly different timing may affect results. For the fastest, most consistent "
 		"training, stay on the Training Monitor or Console tab and check in here only occasionally.");

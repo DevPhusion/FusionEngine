@@ -281,7 +281,7 @@ bool FileManager::CreateScene(const std::string& parentVirtualPath, const std::s
 
 	BinaryWriter w(out);
 	w.Write(SceneManager::getInstance().sceneMagicByte);
-	w.Write(SceneManager::getInstance().sceneVersion);
+	w.WriteString(SceneManager::getInstance().sceneVersion);
 	w.Write(static_cast<uint32_t>(0));
 	w.Write(static_cast<uint32_t>(0));
 
@@ -449,6 +449,18 @@ void FileManager::ClearThumbnailCache() {
 	thumbnailCache.clear();
 }
 
+bool FileManager::ReadProjectVersion(const std::string& path, std::string& outVersion) {
+	std::ifstream in(path, std::ios::binary);
+	if (!in.is_open()) return false;
+
+	BinaryReader r(in);
+	uint32_t magic = r.Read<uint32_t>();
+	if (!in || magic != magicByte) return false;
+
+	outVersion = r.ReadString();
+	return (bool)in;
+}
+
 void FileManager::SaveProjectToFile(const std::string& path) {
 	std::ofstream out(path, std::ios::binary);
 	if (!out.is_open()) {
@@ -458,7 +470,7 @@ void FileManager::SaveProjectToFile(const std::string& path) {
 
 	BinaryWriter w(out);
 	w.Write(magicByte);
-	w.Write(version);
+	w.WriteString(version);
 
 	EngineManager::getInstance().SerializeEngineSettings(w);
 	ProjectExportManager::getInstance().SerializeExportConfiguration(w);
@@ -505,10 +517,9 @@ void FileManager::LoadProjectFromStream(std::istream& in) {
 		return;
 	}
 
-	uint32_t ver = r.Read<uint32_t>();
+	std::string ver = r.ReadString();
 	if (ver != version) {
-		Console::PrintError("LoadProject: unsupported .fusion file version {}").Format((int)ver);
-		return;
+		Console::PrintWarning("LoadProject: file version {} differs from engine version {}, loading anyway").Format(ver, version);
 	}
 
 	EngineManager::getInstance().DeserializeEngineSettings(r);

@@ -341,7 +341,7 @@ void FileSystem::DrawNode(const FileSystemEntry& entry, int depth) {
 	}
 	if (rowDoubleClicked && !isRenaming && !toggledOpen && entry.iconType == ResourceIconType::Scene
 		&& EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Stop) {
-		SceneManager::getInstance().OpenSceneTab(entry.absolutePath.string());
+		RequestOpenScene(entry.absolutePath);
 	}
 
 	bool isRoot = entry.virtualPath == FileManager::getInstance().GetRootVirtualPath();
@@ -467,6 +467,7 @@ void FileSystem::ProcessFilterBar() {
 	ProcessCreateFolderPopup();
 	ProcessCreateScriptPopup();
 	ProcessCreateScenePopup();
+	ProcessSceneVersionPopup();
 }
 
 void FileSystem::ProcessCreateFolderPopup() {
@@ -499,6 +500,69 @@ void FileSystem::ProcessCreateFolderPopup() {
 
 		ImGui::EndPopup();
 	}
+}
+
+void FileSystem::RequestOpenScene(const std::filesystem::path& absPath) {
+	SceneManager& sm = SceneManager::getInstance();
+	const std::string path = absPath.string();
+
+	if (sm.FindSceneByPath(path) == -1) {
+		std::string v;
+		const bool has = sm.ReadSceneVersion(path, v);
+		if (!has || v != SceneManager::sceneVersion) {
+			pendingSceneOpenPath = path;
+			pendingSceneVersion = v;
+			pendingSceneHasVersion = has;
+			sceneVersionPopupRequested = true;
+			return;
+		}
+	}
+	sm.OpenSceneTab(path);
+}
+
+void FileSystem::ProcessSceneVersionPopup() {
+	if (sceneVersionPopupRequested) {
+		ImGui::OpenPopup("Scene Version Mismatch");
+		sceneVersionPopupRequested = false;
+	}
+
+	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowSize(ImVec2(460, 0), ImGuiCond_Always);
+
+	if (!ImGui::BeginPopupModal("Scene Version Mismatch", nullptr,
+		ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize)) return;
+
+	const std::string& engineV = SceneManager::sceneVersion;
+	const std::string sceneV = pendingSceneHasVersion ? pendingSceneVersion : "unknown";
+	const std::string fileName = std::filesystem::path(pendingSceneOpenPath).filename().string();
+
+	ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.95f, 0.78f, 0.20f, 1.0f));
+	ImGui::TextWrapped("The version of \"%s\" (%s) does not match this engine (%s).",
+		fileName.c_str(), sceneV.c_str(), engineV.c_str());
+	ImGui::PopStyleColor();
+
+	ImGui::Spacing();
+	ImGui::TextWrapped("Opening it may cause data corruption or crashes. Saving it afterwards will overwrite the file.");
+
+	ImGui::Spacing();
+	ImGui::Separator();
+	ImGui::Spacing();
+
+	const ImGuiStyle& st = ImGui::GetStyle();
+	ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 130.0f * 2.0f - st.ItemSpacing.x - st.WindowPadding.x);
+	if (ImGui::Button("Open Anyway", ImVec2(130, 0))) {
+		SceneManager::getInstance().OpenSceneTab(pendingSceneOpenPath);
+		pendingSceneOpenPath.clear();
+		ImGui::CloseCurrentPopup();
+	}
+	ImGui::SameLine();
+	if (ImGui::Button("Cancel", ImVec2(130, 0)) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+		pendingSceneOpenPath.clear();
+		ImGui::CloseCurrentPopup();
+	}
+
+	ImGui::EndPopup();
 }
 
 void FileSystem::ProcessCreateScriptPopup() {

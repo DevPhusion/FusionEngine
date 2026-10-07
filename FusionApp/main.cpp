@@ -5,6 +5,11 @@
 #define NOMINMAX
 #include <windows.h>
 #include <filesystem>
+#include <dwmapi.h>
+#pragma comment(lib, "dwmapi.lib")
+
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
 #include "../FusionCore/Header Files/Core/InputManager.h"
 #include "../FusionCore/Header Files/Core/Rendering/Renderer.h"
 #include "../FusionCore/Header Files/Core/Physics/PhysicsEngine.h"
@@ -49,6 +54,28 @@ namespace {
 	}
 }
 
+void ApplyDarkTitleBar(GLFWwindow* window) {
+	HWND hwnd = glfwGetWin32Window(window);
+	if (!hwnd) return;
+
+	constexpr DWORD kUseImmersiveDarkMode = 20;   
+	constexpr DWORD kBorderColor = 34;            
+	constexpr DWORD kCaptionColor = 35;           
+	constexpr DWORD kTextColor = 36;              
+
+	BOOL dark = TRUE;
+	if (FAILED(DwmSetWindowAttribute(hwnd, kUseImmersiveDarkMode, &dark, sizeof(dark))))
+		DwmSetWindowAttribute(hwnd, 19, &dark, sizeof(dark));
+
+	const ImVec4 bg = ImGui::GetStyle().Colors[ImGuiCol_WindowBg];
+	COLORREF caption = RGB((int)(bg.x * 255.0f + 0.5f), (int)(bg.y * 255.0f + 0.5f), (int)(bg.z * 255.0f + 0.5f));
+	COLORREF text = RGB(220, 220, 220);
+
+	DwmSetWindowAttribute(hwnd, kCaptionColor, &caption, sizeof(caption));
+	DwmSetWindowAttribute(hwnd, kBorderColor, &caption, sizeof(caption));
+	DwmSetWindowAttribute(hwnd, kTextColor, &text, sizeof(text));
+}
+
 int main(int argc, char* argv[]) {
 	SetWorkingDirectoryToExePath();
 
@@ -90,6 +117,7 @@ int main(int argc, char* argv[]) {
 
 	Renderer::getInstance().Setup(&ObjectManager::getInstance().allObjects);
 	EditorManager::getInstance().Setup(window);
+	ApplyDarkTitleBar(window);
 
 	InputManager::getInstance().Setup(window);
 	EngineManager::getInstance().Setup(window);

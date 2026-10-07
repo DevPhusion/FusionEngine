@@ -45,11 +45,13 @@ public:
 	static constexpr const char* kResourceDragDropPayloadType = "RESOURCE_VPATH";
 
 	static constexpr uint32_t magicByte = 0x4E535546;
-	static constexpr uint32_t version = 1;
+	static constexpr std::string version = "v0.2";
 
 	bool isProjectSaved = false;
 	std::string currentProjectFile = "";
 	std::string currentProjectDirectory = "";
+
+	bool ReadProjectVersion(const std::string& path, std::string&outVersion);
 
 	void ProcessScriptInSubtree(const std::string& virtualPath, const std::function<void(const std::string&)>& callback) const;
 

@@ -48,6 +48,7 @@ private:
 
 	struct Page {
 		std::string url, title, text, lower;   
+		std::string content;
 		std::vector<Block> blocks;            
 	};
 
@@ -64,7 +65,8 @@ private:
 	bool focusNext = false;
 	char query[128] = "";
 	std::string lastQuery;
-	int lastPageCount = -1;
+	int lastVersion = -1;
+	std::atomic<int> version{ 0 };
 	std::vector<Result> results;
 
 	std::shared_ptr<Page> selectedPage;
@@ -93,6 +95,10 @@ private:
 	std::vector<Result> Search(const std::string& query, int maxResults = 500);
 
 	static std::vector<Block> ParseBlocks(const std::string& html, const std::string& pageUrl);
+
+	static std::shared_ptr<Page> BuildPage(const std::string& url, const std::string& html);
+	bool LoadCache();
+	void SaveCache(const std::vector<std::shared_ptr<Page>>& list);
 
 	void DrawRuns(const Runs& runs, float wrap, bool forceBold, std::string& clicked);
 	void DrawBlock(const Block& b, int index, std::string& clicked);

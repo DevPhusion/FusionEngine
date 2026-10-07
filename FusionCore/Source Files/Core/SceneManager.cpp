@@ -106,10 +106,9 @@ bool SceneManager::ParseSceneObjects(const std::string& path, std::vector<std::u
 		return false;
 	}
 
-	uint32_t ver = r.Read<uint32_t>();
+	std::string ver = r.ReadString();
 	if (ver != sceneVersion) {
-		Console::PrintError("AddScene: unsupported .fscene file version {}").Format((int)ver);
-		return false;
+		Console::PrintWarning("AddScene: file version {} differs from engine version {}, loading anyway").Format(ver, sceneVersion);
 	}
 
 	uint32_t objectCount = r.Read<uint32_t>();
@@ -265,6 +264,21 @@ void SceneManager::CloseSceneTab(int index, bool discardUnsaved) {
 	}
 }
 
+bool SceneManager::ReadSceneVersion(const std::string& path, std::string& outVersion) const {
+	std::string virtualPath = NormalizeToVirtualPath(path);
+	fs::path absPath = FileManager::getInstance().VirtualToAbsolute(virtualPath);
+
+	std::ifstream in(absPath, std::ios::binary);
+	if (!in.is_open()) return false;
+
+	BinaryReader r(in);
+	uint32_t magic = r.Read<uint32_t>();
+	if (!in || magic != sceneMagicByte) return false;
+
+	outVersion = r.ReadString();
+	return (bool)in;
+}
+
 void SceneManager::SaveScene(const std::string& path) {
 	std::string virtualPath = NormalizeToVirtualPath(path);
 	fs::path absPath = FileManager::getInstance().VirtualToAbsolute(virtualPath);
@@ -277,7 +291,7 @@ void SceneManager::SaveScene(const std::string& path) {
 
 	BinaryWriter w(out);
 	w.Write(sceneMagicByte);
-	w.Write(sceneVersion);
+	w.WriteString(sceneVersion);
 
 	auto& objects = ObjectManager::getInstance().allObjects;
 
@@ -357,10 +371,9 @@ void SceneManager::LoadSceneFromFile(const std::string& path) {
 		return;
 	}
 
-	uint32_t ver = r.Read<uint32_t>();
+	std::string ver = r.ReadString();
 	if (ver != sceneVersion) {
-		Console::PrintError("LoadScene: unsupported .fscene file version {}").Format((int)ver);
-		return;
+		Console::PrintWarning("LoadScene: file version {} differs from engine version {}, loading anyway").Format(ver, sceneVersion);
 	}
 
 	ClearLiveScene();
@@ -535,10 +548,9 @@ bool SceneManager::ParseTopLevelSceneObjects(const std::string& path, std::vecto
 		return false;
 	}
 
-	uint32_t ver = r.Read<uint32_t>();
+	std::string ver = r.ReadString();
 	if (ver != sceneVersion) {
-		Console::PrintError("ParseTopLevelSceneObjects: unsupported .fscene file version {}").Format((int)ver);
-		return false;
+		Console::PrintWarning("ParseTopLevelSceneObjects: file version {} differs from engine version {}, loading anyway").Format(ver, sceneVersion);
 	}
 
 	uint32_t objectCount = r.Read<uint32_t>();

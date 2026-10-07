@@ -26,7 +26,7 @@ public:
 	void operator=(const SceneManager&) = delete;
 
 	static constexpr uint32_t sceneMagicByte = 0x4A52504A;
-	static constexpr uint32_t sceneVersion = 1;
+	static constexpr std::string sceneVersion = "v0.2";
 
 	std::string NormalizeToVirtualPath(const std::string& path) const;
 
@@ -41,6 +41,7 @@ public:
 	OpenScene& GetScene(int index) { return openScenes[index]; }
 	int FindSceneByPath(const std::string& path) const;
 
+	bool ReadSceneVersion(const std::string& path, std::string& outVersion) const;
 	void SaveScene(const std::string& path);        
 	bool SaveActiveScene();                           
 	void LoadSceneFromFile(const std::string& path);  

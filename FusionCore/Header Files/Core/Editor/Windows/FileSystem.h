@@ -40,6 +40,14 @@ private:
 	std::string GetParentVirtualPath(const std::string& virtualPath) const;
 	bool SubtreeMatchesFilter(const std::string& virtualPath, const std::string& filterLower) const;
 
+	void RequestOpenScene(const std::filesystem::path& absPath);
+	void ProcessSceneVersionPopup();
+	
+	bool sceneVersionPopupRequested = false;
+	std::string pendingSceneOpenPath;
+	std::string pendingSceneVersion = "unknown";
+	bool pendingSceneHasVersion = false;
+
 	std::string selectedPath;
 	std::set<std::string> expandedPaths;
 

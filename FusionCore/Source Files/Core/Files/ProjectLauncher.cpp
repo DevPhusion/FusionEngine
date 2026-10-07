@@ -84,6 +84,7 @@ namespace {
 	}
 
 	const ImVec4 kDanger = ImVec4(0.90f, 0.30f, 0.35f, 1.0f);
+	const ImVec4 kWarning = ImVec4(0.95f, 0.78f, 0.20f, 1.0f);
 
 	bool AccentButton(const char* label, ImVec2 size = ImVec2(0, 0)) {
 		ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.26f, 0.27f, 0.29f, 1.0f));
@@ -201,6 +202,7 @@ bool ProjectLauncher::RefreshEntry(ProjectEntry& entry) {
 	fs::path fusionFile;
 	if (!FindFusionFileInFolder(entry.folderPath, fusionFile)) {
 		entry.missing = true;
+		entry.hasVersion = false;
 		entry.fusionFilePath.clear();
 		entry.lastModifiedText = "Missing";
 		return false;
@@ -208,6 +210,7 @@ bool ProjectLauncher::RefreshEntry(ProjectEntry& entry) {
 
 	entry.fusionFilePath = fusionFile.string();
 	entry.missing = false;
+	entry.hasVersion = FileManager::getInstance().ReadProjectVersion(entry.fusionFilePath, entry.version);
 
 	std::error_code ec;
 	auto writeTime = fs::last_write_time(fusionFile, ec);
@@ -242,6 +245,19 @@ void ProjectLauncher::AddProjectFolder(const std::string& folderPath, const std:
 	projects.push_back(entry);
 	SortProjects();
 	SaveProjectList();
+}
+
+void ProjectLauncher::RequestOpenProject(const std::string& fusionFilePath, const std::string& name,
+	bool hasVersion, const std::string& version) {
+	if (!hasVersion || version != FileManager::version) {
+		pendingOpenPath = fusionFilePath;
+		versionWarningName = name;
+		versionWarningValue = version;
+		versionWarningHasValue = hasVersion;
+		versionWarningRequested = true;
+		return;
+	}
+	OpenProjectFile(fusionFilePath);
 }
 
 void ProjectLauncher::RemoveProject(int index) {
@@ -365,6 +381,50 @@ void ProjectLauncher::ProcessLoadingProjectDisplay(const std::string& message) {
 	ImGui::End();
 }
 
+void ProjectLauncher::ProcessVersionWarningPopup() {
+	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+	ImGui::SetNextWindowSize(ImVec2(460, 0), ImGuiCond_Always);
+
+	if (!ImGui::BeginPopupModal("Version Mismatch", nullptr,
+		ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_AlwaysAutoResize)) return;
+
+	const std::string& engineV = FileManager::version;
+	const std::string projV = versionWarningHasValue ? versionWarningValue : "unknown";
+
+	ImGui::PushStyleColor(ImGuiCol_Text, kWarning);
+	ImGui::TextWrapped("The version of \"%s\" (%s) does not match this engine (%s).",
+		versionWarningName.c_str(), projV.c_str(), engineV.c_str());
+	ImGui::PopStyleColor();
+
+	ImGui::Spacing();
+	ImGui::TextWrapped("Opening it may cause data corruption or crashes. Saving it afterwards will overwrite the file.");
+
+	ImGui::Spacing();
+	ImGui::Separator();
+	ImGui::Spacing();
+
+	const ImGuiStyle& st = ImGui::GetStyle();
+	ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 130.0f * 2.0f - st.ItemSpacing.x - st.WindowPadding.x);
+
+	bool openAnyway = ImGui::Button("Open Anyway", ImVec2(130, 0));
+	ImGui::SameLine();
+	bool cancel = ImGui::Button("Cancel", ImVec2(130, 0)) || ImGui::IsKeyPressed(ImGuiKey_Escape);
+
+	if (openAnyway) {
+		std::string path = std::move(pendingOpenPath);
+		pendingOpenPath.clear();
+		ImGui::CloseCurrentPopup();
+		OpenProjectFile(path);
+	}
+	else if (cancel) {
+		pendingOpenPath.clear();
+		ImGui::CloseCurrentPopup();
+	}
+
+	ImGui::EndPopup();
+}
+
 void ProjectLauncher::ProcessNewProjectPopup() {
 	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
 	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
@@ -468,7 +528,6 @@ void ProjectLauncher::ProcessConfigurePackagesPopup() {
 			ImGui::PopTextWrapPos();
 			ImGui::EndGroup();
 
-			// Button vertically centered against the text block
 			float blockH = ImGui::GetItemRectSize().y;
 			float rowTop = ImGui::GetItemRectMin().y;
 			ImGui::SameLine(ImGui::GetWindowWidth() - btnW - st.WindowPadding.x);
@@ -578,7 +637,8 @@ void ProjectLauncher::ProcessLauncher() {
 
 	ImGui::Spacing();
 
-	const float footerH = ImGui::GetFrameHeight() + st.ItemSpacing.y + 14.0f;
+	const float footerH = ImGui::GetFrameHeight() + st.ItemSpacing.y + 14.0f
+		+ ImGui::GetTextLineHeight() + st.ItemSpacing.y;
 	ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0, 0, 0, 0));
 	ImGui::PushStyleVar(ImGuiStyleVar_ChildBorderSize, 0.0f);
 	ImGui::BeginChild("##ProjectListRegion", ImVec2(0, -footerH));
@@ -658,14 +718,37 @@ void ProjectLauncher::ProcessLauncher() {
 		}
 
 		const char* rightText = p.missing ? "Missing" : p.lastModifiedText.c_str();
-		const float rightW = ImGui::CalcTextSize(rightText).x;
-		ImGui::SetCursorScreenPos(ImVec2(mx.x - rightW - 18.0f, mn.y + (cardH - ImGui::GetTextLineHeight()) * 0.5f));
+		const float dateW = ImGui::CalcTextSize(rightText).x;
+		const float textY = mn.y + (cardH - ImGui::GetTextLineHeight()) * 0.5f;
+		const float dateX = mx.x - dateW - 18.0f;
+
+		ImGui::SetCursorScreenPos(ImVec2(dateX, textY));
 		ImGui::PushStyleColor(ImGuiCol_Text, p.missing ? kDanger : ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
 		ImGui::TextUnformatted(rightText);
 		ImGui::PopStyleColor();
 
+		float rightmostLeft = dateX;   
+
+		if (!p.missing) {
+			const bool mismatch = !p.hasVersion || p.version != FileManager::version;
+			const std::string vText = p.hasVersion ? p.version : "?";
+			const ImVec2 vSize = ImGui::CalcTextSize(vText.c_str());
+			const ImVec2 vPos(dateX - 16.0f - vSize.x, textY);
+
+			ImGui::SetCursorScreenPos(vPos);
+			ImGui::PushStyleColor(ImGuiCol_Text, mismatch ? kWarning : ImGui::GetStyleColorVec4(ImGuiCol_Text));
+			ImGui::TextUnformatted(vText.c_str());
+			ImGui::PopStyleColor();
+
+			if (mismatch && ImGui::IsWindowHovered() &&
+				ImGui::IsMouseHoveringRect(vPos, ImVec2(vPos.x + vSize.x, vPos.y + vSize.y))) {
+				ImGui::SetTooltip("Version doesn't match the engine (%s).", FileManager::version.c_str());
+			}
+			rightmostLeft = vPos.x;
+		}
+
 		const float textX = bmx.x + 14.0f;
-		ImGui::PushClipRect(ImVec2(textX, mn.y), ImVec2(mx.x - rightW - 30.0f, mx.y), true);
+		ImGui::PushClipRect(ImVec2(textX, mn.y), ImVec2(rightmostLeft - 14.0f, mx.y), true);
 
 		ImGui::SetCursorScreenPos(ImVec2(textX, mn.y + 11.0f));
 		EditorField::BoldText(p.name.c_str(), p.missing ? &kDanger : nullptr);
@@ -716,6 +799,11 @@ void ProjectLauncher::ProcessLauncher() {
 	if (AccentButton("Open Project", ImVec2(openW, 0))) openIndex = selectedIndex;
 	ImGui::EndDisabled();
 
+	const std::string engineText = "Official Release " + FileManager::version;
+	const float w = ImGui::CalcTextSize(engineText.c_str()).x;
+	ImGui::SetCursorPosX(ImGui::GetWindowWidth() - w - st.WindowPadding.x);
+	ImGui::TextDisabled("%s", engineText.c_str());
+
 	if (configureIndex >= 0 && configureIndex < (int)projects.size()) {
 		selectedIndex = configureIndex;
 		PackageManager::getInstance().LoadForProject(projects[configureIndex].folderPath);
@@ -724,9 +812,17 @@ void ProjectLauncher::ProcessLauncher() {
 	}
 	ProcessConfigurePackagesPopup();
 
+	if (versionWarningRequested) {
+		ImGui::OpenPopup("Version Mismatch");
+		versionWarningRequested = false;
+	}
+	ProcessVersionWarningPopup();
+
 	if (removeIndex >= 0) RemoveProject(removeIndex);
-	else if (openIndex >= 0 && openIndex < (int)projects.size() && !projects[openIndex].missing)
-		OpenProjectFile(projects[openIndex].fusionFilePath);
+	else if (openIndex >= 0 && openIndex < (int)projects.size() && !projects[openIndex].missing) {
+		const ProjectEntry& p = projects[openIndex];
+		RequestOpenProject(p.fusionFilePath, p.name, p.hasVersion, p.version);
+	}
 
 	ImGui::End();
 }
