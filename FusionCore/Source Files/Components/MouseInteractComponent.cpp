@@ -1,6 +1,8 @@
 #include "../../Header Files/Components/MouseInteractComponent.h"
 
 bool MouseInteractComponent::ObjectSelected = false;
+bool MouseInteractComponent::PressArbitrated = false;
+std::vector<MouseInteractComponent*> MouseInteractComponent::Instances;
 
 MouseInteractComponent::MouseInteractComponent(Object* parent) : ComponentBase<MouseInteractComponent>(parent) {
 	Name = "Mouse Interact Component";
@@ -43,11 +45,14 @@ void MouseInteractComponent::UnregisterCallbacks() {
 void MouseInteractComponent::Activate() {
 	Component::Activate();
 	RegisterCallbacks();
+	if (std::find(Instances.begin(), Instances.end(), this) == Instances.end())
+		Instances.push_back(this);
 }
 
 void MouseInteractComponent::Deactivate() {
 	Component::Deactivate();
 	UnregisterCallbacks();
+	Instances.erase(std::remove(Instances.begin(), Instances.end(), this), Instances.end());
 
 	if (Selected) {
 		Selected = false;
@@ -95,49 +100,99 @@ void MouseInteractComponent::SetSelectedPolygon(Object* obj, bool enable) {
 
 }
 
+bool MouseInteractComponent::IsCursorInside() {
+	if (!parent || !Enabled) return false;
+	TransformComponent* t = parent->GetComponent<TransformComponent>();
+	if (!t) return false;
+
+	glm::vec3 mousePos = t->GetTransformedPoint(glm::vec3(InputManager::glX, InputManager::glY, 0), true);
+	if (parent->HasComponent<RenderComponent>())
+		return parent->GetComponent<RenderComponent>()->IsInsideShape(mousePos);
+	if (parent->HasComponent<EditorRenderComponent>())
+		return parent->GetComponent<EditorRenderComponent>()->IsInsideShape(mousePos);
+	return false;
+}
+
+float MouseInteractComponent::CursorDistance() {
+	TransformComponent* t = parent->GetComponent<TransformComponent>();
+	glm::vec3 origin = t->ProjectToWorld(glm::vec3(0.0f));
+	return glm::length(glm::vec2(origin) - glm::vec2(InputManager::glX, InputManager::glY));
+}
+
+int MouseInteractComponent::HierarchyDepth() {
+	int depth = 0;
+	for (Object* p = parent->parent; p; p = p->parent) depth++;
+	return depth;
+}
+
+MouseInteractComponent* MouseInteractComponent::PickUnderCursor() {
+	constexpr float eps = 1e-3f;
+	Object* selected = EditorManager::getInstance().selectedObject;
+
+	MouseInteractComponent* best = nullptr;
+	float bestDist = 0.0f;
+	int bestDepth = 0;
+
+	for (MouseInteractComponent* c : Instances) {
+		if (!c->IsCursorInside()) continue;
+
+		if (selected && c->parent == selected) return c;
+
+		float d = c->CursorDistance();
+		int depth = c->HierarchyDepth();
+
+		bool better = !best
+			|| d < bestDist - eps
+			|| (std::fabs(d - bestDist) <= eps && depth < bestDepth);
+
+		if (better) {
+			best = c;
+			bestDist = d;
+			bestDepth = depth;
+		}
+	}
+	return best;
+}
+
+void MouseInteractComponent::ApplyMouseSelection() {
+	Selected = true;
+	ObjectSelected = true;
+
+	if (EngineManager::getInstance().EngineSettings.physicsInteract
+		&& EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) {
+		if (parent->HasComponent<RigidBodyComponent>())
+			parent->GetComponent<RigidBodyComponent>()->isDragging = true;
+		if (parent->HasComponent<SoftBodyComponent>())
+			parent->GetComponent<SoftBodyComponent>()->isDragging = true;
+	}
+	SetSelectedPolygon(parent, true);
+	EditorManager::getInstance().BeginEdit({ parent });
+	isEditingViaMouse = true;
+}
+
 void MouseInteractComponent::FindSelectedPolygon(int button, int action, int mods) {
+	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_RELEASE) {
+		PressArbitrated = false;
+	}
+
 	if (EngineManager::getInstance().EngineInteractMode != EngineManager::InteractMode::EditorSelect || !Enabled) {
 		return;
 	}
 
 	if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
+		if (ObjectSelected || PressArbitrated) return;
+		if (parent == nullptr) return;
 
-		if (ObjectSelected) {
-			return;
-		}
+		PressArbitrated = true;
+		MouseInteractComponent* winner = PickUnderCursor();
 
-		if (parent == nullptr)
-			return;
-
-		glm::vec3 mousePos = parent->GetComponent<TransformComponent>()->GetTransformedPoint(glm::vec3(InputManager::glX, InputManager::glY, 0), true);
-
-		bool inside = false;
-		if (parent->HasComponent<RenderComponent>()) {
-			inside = parent->GetComponent<RenderComponent>()->IsInsideShape(mousePos);
-		}
-		else if (parent->HasComponent<EditorRenderComponent>()) {
-			inside = parent->GetComponent<EditorRenderComponent>()->IsInsideShape(mousePos);
-		}
-
-		if (inside) {
-			Selected = true;
-			ObjectSelected = true;
-
-			if (EngineManager::getInstance().EngineSettings.physicsInteract
-				&& EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate) {
-				if (parent->HasComponent<RigidBodyComponent>()) {
-					parent->GetComponent<RigidBodyComponent>()->isDragging = true;
-				}
-				if (parent->HasComponent<SoftBodyComponent>()) {
-					parent->GetComponent<SoftBodyComponent>()->isDragging = true;
-				}
-			}
-			SetSelectedPolygon(parent, true);
-			EditorManager::getInstance().BeginEdit({ parent });
-			isEditingViaMouse = true;   
+		if (winner) {
+			winner->ApplyMouseSelection();
 		}
 		else {
-			SetSelectedPolygon(parent, false);
+			for (MouseInteractComponent* c : Instances) {
+				if (c->parent) c->SetSelectedPolygon(c->parent, false);
+			}
 		}
 	}
 
@@ -188,6 +243,7 @@ void MouseInteractComponent::DragPolygon(double xpos, double ypos) {
 		}
 		Selected = false;
 		ObjectSelected = false;
+		PressArbitrated = false;
 
 		if (EngineManager::getInstance().EngineSettings.physicsInteract && parent->HasComponent<RigidBodyComponent>()) {
 			parent->GetComponent<RigidBodyComponent>()->isDragging = false;

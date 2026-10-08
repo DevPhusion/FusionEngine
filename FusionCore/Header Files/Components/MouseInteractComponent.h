@@ -15,7 +15,9 @@ public:
     MouseInteractComponent(Object* parent);
     MouseInteractComponent() = default;
 
-    static bool ObjectSelected; //prevent multiple selection;
+    static bool ObjectSelected; 
+    static std::vector<MouseInteractComponent*> Instances; 
+    static bool PressArbitrated;
     bool Selected;
     bool Inspectable = true;
 
@@ -34,6 +36,12 @@ public:
     void SetSelectedPolygon(Object* obj, bool enable);
     void OnPhysicsModeChanged();
 private:
+    bool IsCursorInside();
+    float CursorDistance();
+    int HierarchyDepth();
+    void ApplyMouseSelection();
+    static MouseInteractComponent* PickUnderCursor();
+
     bool isEditingViaMouse = false;
     std::vector<int> mouseButtonCallbackID;
     std::vector<int> cursorPosCallbackID;

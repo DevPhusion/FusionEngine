@@ -104,6 +104,53 @@ namespace {
 		}
 		return false;
 	}
+
+	static ImTextureID GetObjectIcon() {
+		static GLuint tex = 0;
+		static bool tried = false;
+		if (tried) return (ImTextureID)(intptr_t)tex;
+		tried = true;
+
+		int w = 0, h = 0, channels = 0;
+		stbi_uc* data = stbi_load("Resources/Images/Object.png", &w, &h, &channels, 4);
+		if (!data) return (ImTextureID)(intptr_t)0;
+
+		for (int i = 0; i < w * h; i++) {
+			data[i * 4 + 0] = 255;
+			data[i * 4 + 1] = 255;
+			data[i * 4 + 2] = 255;
+		}
+
+		glGenTextures(1, &tex);
+		glBindTexture(GL_TEXTURE_2D, tex);
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+		glGenerateMipmap(GL_TEXTURE_2D);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glBindTexture(GL_TEXTURE_2D, 0);
+
+		stbi_image_free(data);
+		return (ImTextureID)(intptr_t)tex;
+	}
+
+	static void DrawObjectIcon(bool isHidden) {
+		const float size = ImGui::GetFontSize();
+		const float gap = 4.0f;
+		ImVec2 pos = ImGui::GetCursorScreenPos();
+
+		ImTextureID icon = GetObjectIcon();
+		if (icon) {
+			ImU32 tint = ImGui::GetColorU32(isHidden ? ImGuiCol_TextDisabled : ImGuiCol_Text);
+			ImGui::GetWindowDrawList()->AddImage(icon, pos, ImVec2(pos.x + size, pos.y + size),
+				ImVec2(0, 1), ImVec2(1, 0), tint);
+		}
+
+		ImGui::Dummy(ImVec2(size, size));   
+		ImGui::SameLine(0.0f, gap);
+	}
 }
 
 Hierarchy::Hierarchy(std::string name) {
@@ -321,6 +368,8 @@ void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* re
 	}
 
 	ImGui::SameLine();
+
+	DrawObjectIcon(currentObj->hidden);
 
 	if (isRenamingThisNode) {
 		if (IsRenaming) {
