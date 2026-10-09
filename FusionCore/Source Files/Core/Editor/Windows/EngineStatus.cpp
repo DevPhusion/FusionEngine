@@ -4,6 +4,7 @@
 #include "../../../../Header Files/Core/Editor/HeadlessMonitor.h"
 #include "../../../../Header Files/Core/Editor/EditorField.h"
 #include "../../../../Header Files/Core/Editor/Windows/DocsWindow.h" 
+#include "../../../../Header Files/Core/Editor/Windows/SettingsWindow.h"
 #include <filesystem>
 
 namespace {
@@ -187,7 +188,7 @@ void EngineStatus::ProcessWindow() {
 	const bool canTrain = !EM.isHeadless && !FM.currentProjectFile.empty() && pythonReady;
 	const bool canSaveAll = isStopped && (!FM.isProjectSaved || SM.IsActiveSceneDirty());
 
-	bool openSettings = false, openExport = false, openTrain = false;
+	bool openExport = false, openTrain = false;
 
 	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(12.0f, 11.0f));
 	const bool barOpen = ImGui::BeginMainMenuBar();
@@ -235,7 +236,7 @@ void EngineStatus::ProcessWindow() {
 		}
 
 		if (ImGui::BeginMenu("Project")) {
-			if (ImGui::MenuItem("Engine Settings...")) openSettings = true;
+			if (ImGui::MenuItem("Settings...")) SettingsWindow::Open();
 			if (ImGui::MenuItem("Export Project...", nullptr, false, isStopped)) openExport = true;
 			ImGui::EndMenu();
 		}
@@ -321,9 +322,6 @@ void EngineStatus::ProcessWindow() {
 		ImGui::EndMainMenuBar();
 	}
 
-	if (openSettings) ImGui::OpenPopup("Settings");
-	ProcessSettingsPopup();
-
 	if (openExport) ImGui::OpenPopup("Export Project");
 	ProcessExportPopup();
 
@@ -357,153 +355,6 @@ void EngineStatus::DrawGizmoModeSelector() {
 	modeButton("Rotate", GizmosMode::Rotate);
 	ImGui::SameLine();
 	modeButton("Scale", GizmosMode::Scale);
-}
-
-void EngineStatus::ProcessSettingsPopup() {
-	ImVec2 center = ImGui::GetMainViewport()->GetCenter();
-	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
-	ImGui::SetNextWindowSize(ImVec2(700, 460), ImGuiCond_Appearing);
-
-	if (!ImGui::BeginPopupModal("Settings", nullptr, ImGuiWindowFlags_NoSavedSettings)) return;
-
-	EngineManager& EM = EngineManager::getInstance();
-	Settings& settings = EM.EngineSettings;
-	const ImGuiStyle& style = ImGui::GetStyle();
-
-	static int category = 0;
-	static const char* categories[] = { "General", "Physics", "Viewport", "Debug Draw" };
-	const float footerH = ImGui::GetFrameHeight() + style.ItemSpacing.y * 2.0f + 6.0f;
-
-	// Sidebar
-	ImGui::BeginChild("##SettingsCategories", ImVec2(160, -footerH), ImGuiChildFlags_Borders);
-	ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.0f, 0.5f));
-	for (int i = 0; i < IM_ARRAYSIZE(categories); i++) {
-		if (ImGui::Selectable(categories[i], category == i, 0, ImVec2(0, ImGui::GetFrameHeight() + 4.0f)))
-			category = i;
-	}
-	ImGui::PopStyleVar();
-	ImGui::EndChild();
-
-	ImGui::SameLine();
-
-	// Content
-	ImGui::BeginChild("##SettingsContent", ImVec2(0, -footerH));
-
-	bool boldPushed = EditorTheme::PushBold();
-	ImGui::TextUnformatted(categories[category]);
-	EditorTheme::PopBold(boldPushed);
-	ImGui::Separator();
-	ImGui::Spacing();
-
-	switch (category) {
-	case 0: { 
-		ImGui::SeparatorText("Project");
-
-		EditorField::Detail::Label("Main scene");
-		{
-			char sceneBuf[256];
-#if defined(_MSC_VER)
-			strcpy_s(sceneBuf, settings.mainScenePath.c_str());
-#else
-			strncpy(sceneBuf, settings.mainScenePath.c_str(), sizeof(sceneBuf) - 1);
-			sceneBuf[sizeof(sceneBuf) - 1] = '\0';
-#endif
-			const float browseW = ImGui::CalcTextSize("Browse").x + style.FramePadding.x * 2.0f;
-			ImGui::SetNextItemWidth(-(browseW + style.ItemSpacing.x));
-			ImGui::InputTextWithHint("##MainScene", "None (plays current scene)", sceneBuf,
-				IM_ARRAYSIZE(sceneBuf), ImGuiInputTextFlags_ReadOnly);
-			ImGui::SameLine();
-			if (ImGui::Button("Browse##MainScene")) {
-				auto opts = FileDialogOptions::ForExtension("Fusion Scene", "fscene", "Choose Main Scene");
-				if (auto path = FileDialog::ShowOpenDialog(opts)) {
-					settings.mainScenePath = *path;
-					EM.EngineChangeEvent();
-				}
-			}
-		}
-
-		ImGui::Spacing();
-		ImGui::SeparatorText("Game View");
-
-		int res[2] = { (int)EM.resolutionWidth, (int)EM.resolutionHeight };
-		EditorField::InputInt2Engine("Game resolution", "##GameResolution", res, [&] {
-			EM.SetGameResolution((float)std::max(1, res[0]), (float)std::max(1, res[1]));
-			});
-		break;
-	}
-
-	case 1: { 
-		ImGui::SeparatorText("Collision");
-
-		const char* modeLabels[] = { "AABB", "Bounding Circle" };
-		int current = static_cast<int>(settings.broadPhaseMode);
-		EditorField::ComboEngine("Broad phase mode", "##BroadPhaseMode", &current, modeLabels,
-			IM_ARRAYSIZE(modeLabels), [&] {
-				PhysicsEngine::getInstance().SetBroadPhaseMode(static_cast<BroadPhaseMode>(current));
-			});
-		if (ImGui::IsItemHovered()) {
-			ImGui::SetTooltip(
-				"AABB is more efficient for wide or tall objects.\n"
-				"Bounding Circle can be cheaper/tighter for roughly round objects.\n"
-				"Switching rebuilds the broad phase for every collidable object.");
-		}
-
-		ImGui::Spacing();
-		ImGui::SeparatorText("Interaction");
-		EditorField::CheckboxEngine("Physics interact", "##PhysicsInteract", &settings.physicsInteract);
-		break;
-	}
-
-	case 2: { // Viewport
-		ImGui::SeparatorText("Appearance");
-		EditorField::CheckboxEngine("Background grid", "##DrawGrid", &settings.drawBackgroundGrid);
-		EditorField::ColorEdit4Engine("Background color", "##BackgroundColor", &settings.backgroundColor.x);
-		break;
-	}
-
-	case 3: { 
-		ImGui::SeparatorText("Objects");
-		EditorField::CheckboxEngine("Object wireframe", "##DrawWireframe", &settings.drawObjectWireframe);
-
-		ImGui::Spacing();
-		ImGui::SeparatorText("Collision");
-		EditorField::CheckboxEngine("Broad phase bounds", "##DrawBroadPhase", &settings.drawBroadPhaseBounds);
-		EditorField::CheckboxEngine("Collision shapes", "##DrawCollisionShapes", &settings.drawCollisionShapes);
-		EditorField::CheckboxEngine("Collision normals", "##DrawCollisionNormals", &settings.drawCollisionNormals);
-		EditorField::CheckboxEngine("Contact points", "##DrawContactPoints", &settings.drawContactPoints);
-
-		ImGui::Spacing();
-		ImGui::SeparatorText("Soft Bodies");
-		EditorField::CheckboxEngine("Point masses", "##DrawPointMasses", &settings.drawSoftBodyPointMasses);
-		EditorField::CheckboxEngine("Springs", "##DrawSprings", &settings.drawSoftBodySprings);
-		EditorField::CheckboxEngine("Virtual proxies", "##DrawProxies", &settings.drawVirtualSoftBodyProxies);
-
-		ImGui::Spacing();
-		ImGui::SeparatorText("Fluids & Gas");
-		EditorField::CheckboxEngine("Draw as particles", "##DrawFluidGasParticles", &settings.drawFluidsAsParticles);
-
-		ImGui::BeginDisabled(!settings.drawFluidsAsParticles);
-		const char* heatmapLabels[] = { "None", "Velocity", "Density" };
-		int heat = static_cast<int>(settings.fluidHeatmapMode);
-		EditorField::ComboEngine("Heatmap", "##FluidGasHeatmap", &heat, heatmapLabels,
-			IM_ARRAYSIZE(heatmapLabels), [&] {
-				settings.fluidHeatmapMode = static_cast<FluidHeatmapMode>(heat);
-			});
-		EditorField::CheckboxEngine("Velocity vector field", "##DrawFluidGasVelocity", &settings.drawFluidsVelocityField);
-		ImGui::EndDisabled();
-		break;
-	}
-	}
-
-	ImGui::EndChild();
-
-	ImGui::Separator();
-	ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 120.0f - style.WindowPadding.x);
-	if (ImGui::Button("Close", ImVec2(120, 0))) {
-		ImGui::CloseCurrentPopup();
-	}
-
-	ImGui::EndPopup();
 }
 
 void EngineStatus::ProcessExportPopup() {

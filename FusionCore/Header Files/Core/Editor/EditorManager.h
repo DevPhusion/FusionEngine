@@ -8,6 +8,7 @@
 #include "Windows/Viewport.h"
 #include "Windows/SceneTab.h"
 #include "Windows/DocsWindow.h"
+#include "Windows/SettingsWindow.h"
 #include "../EngineManager.h"
 #include "EditorTheme.h"
 #include "../../../imgui/implot.h"

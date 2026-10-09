@@ -1,6 +1,7 @@
 #include "../../../../Header Files/Core/Editor/Windows/Viewport.h"
 #include "../../../../Header Files/Core/EngineManager.h"
 #include "../../../../Header Files/Core/Rendering/Renderer.h"
+#include "../../../../Header Files/Components/MouseInteractComponent.h"
 #include "../../../../imgui/imgui.h"
 
 namespace {
@@ -87,7 +88,9 @@ namespace {
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(pad, pad));
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0.0f, gap));
 		ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, 6.0f);
-		ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.10f, 0.10f, 0.10f, 0.88f));
+		ImVec4 overlayBg = EditorTheme::currentTheme.bg0;
+		overlayBg.w = 0.88f;
+		ImGui::PushStyleColor(ImGuiCol_ChildBg, overlayBg);
 
 		bool hovered = false;
 		if (ImGui::BeginChild("##GizmoToolbar", size, ImGuiChildFlags_Borders,
@@ -108,6 +111,51 @@ namespace {
 		ImGui::PopStyleVar(3);
 		return hovered;
 	}
+
+	static ImTextureID GetObjectIcon() {
+		static GLuint tex = 0;
+		static bool tried = false;
+		if (tried) return (ImTextureID)(intptr_t)tex;
+		tried = true;
+
+		int w = 0, h = 0, channels = 0;
+		stbi_uc* data = stbi_load("Resources/Images/Object.png", &w, &h, &channels, 4);
+		if (!data) return (ImTextureID)(intptr_t)0;
+
+		for (int i = 0; i < w * h; i++) {
+			data[i * 4 + 0] = 255;
+			data[i * 4 + 1] = 255;
+			data[i * 4 + 2] = 255;
+		}
+
+		glGenTextures(1, &tex);
+		glBindTexture(GL_TEXTURE_2D, tex);
+		glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+		glGenerateMipmap(GL_TEXTURE_2D);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glBindTexture(GL_TEXTURE_2D, 0);
+
+		stbi_image_free(data);
+		return (ImTextureID)(intptr_t)tex;
+	}
+
+	static void DrawObjectIcon(ImU32 tint) {
+		const float size = ImGui::GetTextLineHeight();
+		ImVec2 pos = ImGui::GetCursorScreenPos();
+
+		ImTextureID icon = GetObjectIcon();
+		if (icon) {
+			ImGui::GetWindowDrawList()->AddImage(icon, pos, ImVec2(pos.x + size, pos.y + size),
+				ImVec2(0, 1), ImVec2(1, 0), tint);
+		}
+		ImGui::Dummy(ImVec2(size, size));
+		ImGui::SameLine(0.0f, 4.0f);
+	}
+
 }
 
 Viewport::Viewport(std::string name) : EditorWindow(name) {
@@ -212,6 +260,49 @@ void Viewport::ProcessWindow() {
 		overlayHovered = showOverlay
 			? DrawGizmoToolbar(ImVec2(panelPos.x + 10.0f, panelPos.y + 10.0f))
 			: false;
+
+		if (showOverlay && isHovered && !overlayHovered
+			&& !ImGui::IsMouseDown(ImGuiMouseButton_Left)
+			&& !ImGui::IsMouseDown(ImGuiMouseButton_Right)
+			&& !(Renderer::getInstance().gizmos && Renderer::getInstance().gizmos->isDragging)
+			&& EngineManager::getInstance().EngineInteractMode == EngineManager::InteractMode::EditorSelect) {
+
+			std::vector<Object*> under = MouseInteractComponent::GetObjectsUnderCursor();
+			if (!under.empty()) {
+				ImGui::SetNextWindowBgAlpha(0.1f);   
+				ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(6.0f, 3.0f));
+				ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 0.0f));
+				ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+				Object* selected = EditorManager::getInstance().selectedObject;
+				const ImVec4 accent = EditorTheme::Accent();
+
+				ImGui::BeginTooltip();
+				for (Object* obj : under) {
+					const bool isSelected = (obj == selected);
+					const float iconSize = ImGui::GetTextLineHeight();
+					const float rowW = iconSize + 4.0f + ImGui::CalcTextSize(obj->name.c_str()).x;
+
+					if (isSelected) {
+						ImVec2 p = ImGui::GetCursorScreenPos();
+						ImGui::GetWindowDrawList()->AddRectFilled(
+							ImVec2(p.x - 3.0f, p.y - 1.0f),
+							ImVec2(p.x + rowW + 3.0f, p.y + iconSize + 1.0f),
+							ImGui::GetColorU32(ImVec4(accent.x, accent.y, accent.z, 0.25f)),
+							3.0f);
+					}
+
+					const ImU32 tint = isSelected ? ImGui::GetColorU32(accent)
+						: ImGui::GetColorU32(ImGuiCol_Text);
+					DrawObjectIcon(tint);
+
+					if (isSelected) ImGui::PushStyleColor(ImGuiCol_Text, accent);
+					ImGui::TextUnformatted(obj->name.c_str());
+					if (isSelected) ImGui::PopStyleColor();
+				}
+				ImGui::EndTooltip();
+				ImGui::PopStyleVar(3);
+			}
+		}
 	}
 	else {
 		panelSize = ImVec2(0, 0);               

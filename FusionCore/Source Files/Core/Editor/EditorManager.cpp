@@ -10,6 +10,7 @@ void EditorManager::Setup(GLFWwindow* window) {
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	ImGui::StyleColorsDark();
 
+	ThemeManager::getInstance().Initialize();
 	EditorTheme::LoadFonts();
 	EditorTheme::Apply();
 
@@ -24,6 +25,7 @@ void EditorManager::Setup(GLFWwindow* window) {
 	AddWindow(new FileSystem("File System"));
 	AddWindow(new SceneTab("Scene Tabs"));
 	AddWindow(new DocsWindow("Documentation"));
+	AddWindow(new SettingsWindow("Settings"));
 
 	gameViewport = new Viewport("Viewport"); 
 	AddWindow(gameViewport);

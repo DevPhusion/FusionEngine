@@ -125,6 +125,25 @@ int MouseInteractComponent::HierarchyDepth() {
 	return depth;
 }
 
+std::vector<Object*> MouseInteractComponent::GetObjectsUnderCursor() {
+	std::vector<MouseInteractComponent*> hits;
+	for (MouseInteractComponent* c : Instances) {
+		if (!c->parent || c->parent->hidden) continue;
+		if (c->IsCursorInside()) hits.push_back(c);
+	}
+
+	std::sort(hits.begin(), hits.end(), [](MouseInteractComponent* a, MouseInteractComponent* b) {
+		float da = a->CursorDistance(), db = b->CursorDistance();
+		if (std::fabs(da - db) > 1e-3f) return da < db;
+		return a->HierarchyDepth() < b->HierarchyDepth();
+		});
+
+	std::vector<Object*> result;
+	result.reserve(hits.size());
+	for (MouseInteractComponent* c : hits) result.push_back(c->parent);
+	return result;
+}
+
 MouseInteractComponent* MouseInteractComponent::PickUnderCursor() {
 	constexpr float eps = 1e-3f;
 	Object* selected = EditorManager::getInstance().selectedObject;

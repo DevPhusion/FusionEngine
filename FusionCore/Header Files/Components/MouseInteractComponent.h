@@ -29,6 +29,8 @@ public:
     virtual void Serialize(BinaryWriter& w);
     virtual void Deserialize(BinaryReader& r);
 
+    static std::vector<Object*> GetObjectsUnderCursor();
+
     void RegisterCallbacks();
     void UnregisterCallbacks();
     void FindSelectedPolygon(int button, int action, int mods);
