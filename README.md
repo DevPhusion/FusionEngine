@@ -151,7 +151,7 @@ Fusion Engine is under active development. These are some upcoming features plan
 | Rendering optimization | Completed | ![100%](https://img.shields.io/badge/Progress-100%25-brightgreen) |
 | Gas / Smoke simulation | Completed | ![100%](https://img.shields.io/badge/Progress-100%25-brightgreen) |
 | Actuators for revolute constraint | Completed |  ![100%](https://img.shields.io/badge/Progress-100%25-brightgreen) |
-| Editor UI update and themes | In Development | ![85%](https://img.shields.io/badge/Progress-88%25-yellow) |
+| Editor UI update and themes | In Development | ![95%](https://img.shields.io/badge/Progress-95%25-brightgreen) |
 
 ## Contact
 
