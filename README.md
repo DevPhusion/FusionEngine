@@ -69,7 +69,7 @@ The engine core is organized into the following systems:
 
 ## Physics Engine
 
-The physics engine is the core of Fusion Engine. Unlike most 2D engines, which simulate rigid bodies only, Fusion Engine is a multi-physics engine that simulates **rigid bodies, soft bodies, and fluids**, either standalone or combined in a single unified simulation (for example, a rigid boat floating on a fluid surface, or a soft body compressing under a rigid weight).
+The physics engine is the core of Fusion Engine. Unlike most 2D engines, which simulate rigid bodies only, Fusion Engine is a multi-physics engine that simulates **rigid bodies, soft bodies, fluids and gases**, either standalone or combined in a single unified simulation (for example, a rigid boat floating on a fluid surface, or a soft body compressing under a rigid weight).
 
 **Demo:** Multiphysics simulation of rigid body, soft body and fluid dynamics
 
@@ -79,7 +79,8 @@ Each physics domain uses a different, purpose-built solver, bridged together thr
 
 - **Rigid body — Projected Gauss Seidel (PGS) solver.** Constraints are described using Jacobian matrices, the same general approach used by Box2D. Supports contact constraints as well as joints such as Weld, Revolute, and Prismatic constraints, with contact caching for solver stability.
 - **Soft body — Extended Position Based Dynamics (XPBD).** Chosen over a pure force-based mass-spring approach for its stability, area constraints are used to help soft bodies maintain their shapes. For inflatable objects such as tires or balloons, there is an option to use gases and pressure to simulate them.
-- **Fluids — Position Based Fluids (PBF).** Chosen because it operates in position space (integrating naturally with XPBD) while remaining fast. 
+- **Fluids — Position Based Fluids (PBF).** Chosen because it operates in position space (integrating naturally with XPBD) while remaining fast.
+- **Gases - Extended PBF** Chosen because fluids already uses it, PBF is simply extended to support gas simulation via changing the constraint formula.
 
 Collision handling varies by object pairing:
 
