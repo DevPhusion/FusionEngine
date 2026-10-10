@@ -2,7 +2,7 @@
 
 Fusion Engine is a custom 2D game engine designed for building lightweight, reinforcement learning (RL) training environments. The engine uses python as its native scripting language with direct integration with Gymnasium and Stable-Baseline3 for RL training. The core architecture of the engine is inspired by Unity and Godot engine but designed with the main goal of creating RL environments instead of games. 
 
-<img width="1913" height="986" alt="Fusion Engine editor showing a project being edited" src="https://github.com/user-attachments/assets/45fedd5e-b4b0-4758-b92b-3718e8a44d3f" />
+<img width="1902" height="977" alt="Fusion Engine editor showing a project being edited" src="https://github.com/user-attachments/assets/ba17224a-cf3f-4c2d-a64c-11109d354fb5" />
 
 ## Platform Support
 
@@ -49,6 +49,8 @@ Fusion Engine is built on top of the following open-source libraries:
 | [ImPlot](https://github.com/epezent/implot) | ImGui-based plotting library, used to render live training statistics and graphs during RL training. |
 | [GLM](https://github.com/g-truc/glm) | Header-only math library (vectors, matrices, transforms) used throughout the rendering and physics engines. |
 | [pybind11](https://github.com/pybind/pybind11) | Bridges the C++ engine core with Python, exposing engine functionality to the scripting and RL API. |
+| [miniaudio](https://github.com/mackron/miniaudio) | Audio library to handle the audio system in the engine. |
+| [json](https://github.com/nlohmann/json) | Library for writing and reading from JSON file |
 
 ## Architecture
 
