@@ -190,6 +190,13 @@ void InputManager::OnKeyButton(GLFWwindow* window, int key, int scancode, int ac
 		ImGui_ImplGlfw_KeyCallback(window, key, scancode, action, mods);
 	}
 
+	if (action == GLFW_RELEASE) {
+		auto it = keys.find(key);
+		if (it != keys.end() && it->second) {
+			it->second = false;
+			keysJustReleased.insert(key);
+		}
+	}
 
 	if (ImGui::GetCurrentContext() && ImGui::GetIO().WantTextInput) {
 		return;
@@ -198,10 +205,6 @@ void InputManager::OnKeyButton(GLFWwindow* window, int key, int scancode, int ac
 	if (action == GLFW_PRESS) {
 		keys[key] = true;
 		keysJustPressed.insert(key);
-	}
-	else if (action == GLFW_RELEASE) {
-		keys[key] = false;
-		keysJustReleased.insert(key);
 	}
 
 	if (EditorManager::getInstance().WindowTyped) {

@@ -32,6 +32,7 @@ public:
 	virtual void CopyTo(Object* other);
 	virtual void Serialize(BinaryWriter& w);
 	virtual void Deserialize(BinaryReader& r);
+	virtual void PostLoad();
 
 	glm::mat4 GetWorldMatrix(bool includeScale = true);
 	// model space -> screen space (inverse: screen space -> model space) 
@@ -44,7 +45,9 @@ public:
 	void SetOriginTransform(glm::mat4 transform);
 	void SetRotationCenter(glm::vec3 rotation_center);
 	void Rotate(float angle);
+	void RotateAroundPivot(glm::vec3 pivot, float delta);
 	void Scale(glm::vec3 scale);
+	void ScaleAroundPivot(glm::vec3 pivot, glm::vec3 ratio, float pivotRotation);
 	int AddTransformCallback(std::function<void()> func);
 	void RemoveTransformCallback(int ID);
 	void ProcessTransform();

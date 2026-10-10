@@ -480,7 +480,7 @@ void FileSystem::ProcessCreateFolderPopup() {
 	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 
 	if (ImGui::BeginPopupModal("New Folder", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-		ImGui::InputText("##NewFolderName", newFolderNameBuf, IM_ARRAYSIZE(newFolderNameBuf));
+		ImGui::InputTextWithHint("##NewFolderName", "Folder name...", newFolderNameBuf, IM_ARRAYSIZE(newFolderNameBuf));
 
 		if (ImGui::Button("Create", ImVec2(100, 0))) {
 			std::string folderName = newFolderNameBuf;
@@ -575,7 +575,7 @@ void FileSystem::ProcessCreateScriptPopup() {
 	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 
 	if (ImGui::BeginPopupModal("New Script", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-		ImGui::InputTextWithHint("##NewScriptName", "script_name", newScriptNameBuf, IM_ARRAYSIZE(newScriptNameBuf));
+		ImGui::InputTextWithHint("##NewScriptName", "Script name...", newScriptNameBuf, IM_ARRAYSIZE(newScriptNameBuf));
 
 		if (ImGui::Button("Create", ImVec2(100, 0))) {
 			std::string scriptName = newScriptNameBuf;
@@ -608,7 +608,7 @@ void FileSystem::ProcessCreateScenePopup() {
 	ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 
 	if (ImGui::BeginPopupModal("New Scene", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-		ImGui::InputTextWithHint("##NewSceneName", "scene_name", newSceneNameBuf, IM_ARRAYSIZE(newSceneNameBuf));
+		ImGui::InputTextWithHint("##NewSceneName", "Scene name...", newSceneNameBuf, IM_ARRAYSIZE(newSceneNameBuf));
 
 		if (ImGui::Button("Create", ImVec2(100, 0))) {
 			std::string sceneName = newSceneNameBuf;

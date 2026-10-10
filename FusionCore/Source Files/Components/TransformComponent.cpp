@@ -48,6 +48,14 @@ void TransformComponent::Deserialize(BinaryReader& r) {
 	pendingScale = r.Read<glm::vec3>();
 }
 
+void TransformComponent::PostLoad() {
+	if (!parent->HasComponent<RenderComponent>()) {
+		rotation = pendingRotation;
+		size = pendingScale;
+		worldMatrixDirty = true;
+	}
+}
+
 void TransformComponent::ProcessInspectorUI() {
 	float position[] = { worldPosition.x, worldPosition.y };
 	EditorField::InputFloat2Scene(parent, "Position ", "## Position", position, [&] {
@@ -184,8 +192,47 @@ void TransformComponent::SetOriginTransform(glm::mat4 transform) {
 
 void TransformComponent::Rotate(float angle)
 {
+	const float delta = angle - rotation;
 	rotation = angle;
 	worldMatrixDirty = true;
+	EngineManager::getInstance().SceneChangeEvent();
+	if (FileManager::getInstance().IsRestoring()) return;
+	for (const auto& [id, func] : transformCallback) {
+		func();
+	}
+
+	if (delta != 0.0f) {
+		const glm::vec3 pivot = GetWorldPosition();
+		for (Object* child : parent->children) {
+			if (TransformComponent* ct = child->GetComponent<TransformComponent>()) {
+				ct->RotateAroundPivot(pivot, delta);
+			}
+		}
+	}
+}
+
+void TransformComponent::RotateAroundPivot(glm::vec3 pivot, float delta) {
+	const glm::vec3 p = GetWorldPosition();
+	const float c = cosf(delta), s = sinf(delta);
+	const glm::vec3 rel = p - pivot;
+	const glm::vec3 newP(pivot.x + rel.x * c - rel.y * s,
+		pivot.y + rel.x * s + rel.y * c,
+		p.z);
+
+	rotation += delta;
+	worldMatrixDirty = true;
+
+	OriginTransform = glm::translate(glm::mat4(1.0f), newP - p) * OriginTransform;
+	worldMatrixDirty = true;
+	prevPos = worldPosition;
+	worldPosition = GetWorldPosition();   
+
+	for (Object* child : parent->children) {
+		if (TransformComponent* ct = child->GetComponent<TransformComponent>()) {
+			ct->RotateAroundPivot(pivot, delta);
+		}
+	}
+
 	EngineManager::getInstance().SceneChangeEvent();
 	if (FileManager::getInstance().IsRestoring()) return;
 	for (const auto& [id, func] : transformCallback) {
@@ -194,6 +241,7 @@ void TransformComponent::Rotate(float angle)
 }
 
 void TransformComponent::Scale(glm::vec3 scale) {
+	const glm::vec3 oldSize = size;
 	size = scale;
 	worldMatrixDirty = true;
 	EngineManager::getInstance().SceneChangeEvent();
@@ -201,8 +249,63 @@ void TransformComponent::Scale(glm::vec3 scale) {
 	for (const auto& [id, func] : transformCallback) {
 		func();
 	}
+
+	const float eps = 1e-6f;
+	const glm::vec3 ratio(
+		fabsf(oldSize.x) > eps ? scale.x / oldSize.x : 1.0f,
+		fabsf(oldSize.y) > eps ? scale.y / oldSize.y : 1.0f,
+		fabsf(oldSize.z) > eps ? scale.z / oldSize.z : 1.0f);
+
+	if (ratio != glm::vec3(1.0f)) {
+		const glm::vec3 pivot = GetWorldPosition();
+		for (Object* child : parent->children) {
+			if (TransformComponent* ct = child->GetComponent<TransformComponent>()) {
+				ct->ScaleAroundPivot(pivot, ratio, rotation);
+			}
+		}
+	}
+
 	RigidBodyComponent* pc = parent->GetComponent<RigidBodyComponent>();
 	if (pc) {
+		pc->CalculateInertia();
+	}
+}
+
+void TransformComponent::ScaleAroundPivot(glm::vec3 pivot, glm::vec3 ratio, float pivotRotation) {
+	const glm::vec3 p = GetWorldPosition();
+
+	const float c = cosf(pivotRotation), s = sinf(pivotRotation);
+	const glm::vec3 rel = p - pivot;
+	glm::vec3 local(rel.x * c + rel.y * s,
+		-rel.x * s + rel.y * c,
+		rel.z);
+	local *= ratio;
+	const glm::vec3 newRel(local.x * c - local.y * s,
+		local.x * s + local.y * c,
+		local.z);
+	const glm::vec3 newP = pivot + newRel;
+
+	size *= ratio;
+	worldMatrixDirty = true;
+
+	OriginTransform = glm::translate(glm::mat4(1.0f), newP - p) * OriginTransform;
+	worldMatrixDirty = true;
+	prevPos = worldPosition;
+	worldPosition = GetWorldPosition();
+
+	for (Object* child : parent->children) {
+		if (TransformComponent* ct = child->GetComponent<TransformComponent>()) {
+			ct->ScaleAroundPivot(pivot, ratio, pivotRotation);
+		}
+	}
+
+	EngineManager::getInstance().SceneChangeEvent();
+	if (FileManager::getInstance().IsRestoring()) return;
+	for (const auto& [id, func] : transformCallback) {
+		func();
+	}
+
+	if (RigidBodyComponent* pc = parent->GetComponent<RigidBodyComponent>()) {
 		pc->CalculateInertia();
 	}
 }

@@ -29,6 +29,7 @@ public:
 private:
 	PendingMove pendingMove;
 
+	void OpenAddObjectWindow(Object* parent);
 	void PlaceRelative(Object* dragged, Object* ref, bool after);
 	void ApplyHierarchyMove(const PendingMove& m);
 	void DrawObjectNode(Object* currentObj, char* filter_buffer, char* renameBuffer);

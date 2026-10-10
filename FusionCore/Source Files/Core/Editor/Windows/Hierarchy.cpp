@@ -213,6 +213,15 @@ void Hierarchy::ApplyHierarchyMove(const PendingMove& m) {
 	EngineManager::getInstance().SceneChangeEvent();
 }
 
+void Hierarchy::OpenAddObjectWindow(Object* parent) {
+	if (addObjectWindow == nullptr) {
+		addObjectWindow = new AddObjectWindow("Add Object");
+		EditorManager::getInstance().AddWindow(addObjectWindow);
+	}
+	addObjectWindow->Show();           
+	addObjectWindow->parent = parent;  
+}
+
 void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* renameBuffer) {
 	if (currentObj == nullptr) return;
 	if (currentObj->hideInHierarchy) return;
@@ -286,15 +295,7 @@ void Hierarchy::DrawObjectNode(Object* currentObj, char* filter_buffer, char* re
 		currentObj->GetComponent<MouseInteractComponent>()->SetSelectedPolygon(currentObj, true);
 
 		if (ImGui::MenuItem("Add Child")) {
-			if (addObjectWindow == nullptr) {
-				addObjectWindow = new AddObjectWindow("Add Object");
-				EditorManager::getInstance().AddWindow(addObjectWindow);
-				addObjectWindow->parent = currentObj;
-			}
-			else {
-				addObjectWindow->Show();
-				addObjectWindow->parent = currentObj;
-			}
+			OpenAddObjectWindow(currentObj);
 		}
 		if (ImGui::MenuItem("Rename")) {
 			IsRenaming = true;
@@ -467,14 +468,7 @@ void Hierarchy::ProcessWindow() {
 	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(4.0f, 0.0f));
 
 	if (ImGui::Button("+", ImVec2(24, 24))) {
-		if (addObjectWindow == nullptr) {
-			addObjectWindow = new AddObjectWindow("Add Object");
-			EditorManager::getInstance().AddWindow(addObjectWindow);
-		}
-		else {
-			addObjectWindow->Show();
-			addObjectWindow->parent = nullptr; 
-		}
+		OpenAddObjectWindow(nullptr);
 	}
 
 	ImGui::PopStyleColor(3);
@@ -511,6 +505,12 @@ void Hierarchy::OnKeyPressed(int key, int scancode, int action, int mods) {
 			EditorManager::getInstance().SetSelectedObject(nullptr);
 			ObjectManager::getInstance().RemoveObject(obj);
 		}
+	}
+	if (key == GLFW_KEY_A && action == GLFW_PRESS && (mods & GLFW_MOD_CONTROL)) {
+		if (EngineManager::getInstance().EngineInteractMode != EngineManager::InteractMode::AddVertex) {
+			OpenAddObjectWindow(EditorManager::getInstance().selectedObject); 
+		}
+		return;
 	}
 	if (InputManager::getInstance().keys[GLFW_KEY_LEFT_CONTROL] && InputManager::getInstance().keys[GLFW_KEY_D]) {
 		if (EditorManager::getInstance().selectedObject != nullptr) {

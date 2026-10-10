@@ -98,25 +98,28 @@ void SceneTab::ProcessTabBar() {
 			if (i == focusIndex)
 				flags |= ImGuiTabItemFlags_SetSelected;
 
+			const bool dirty = scene.isDirty;
+
 			std::string label = scene.displayName;
-			if (scene.isDirty) label += "*";
+			if (dirty) label += "*";
 			label += "###scene" + std::to_string(scene.uid);
 
 			const ImVec4 unsavedColor(0.95f, 0.65f, 0.25f, 1.0f);
-			if (scene.isDirty) ImGui::PushStyleColor(ImGuiCol_Text, unsavedColor);
+			if (dirty) ImGui::PushStyleColor(ImGuiCol_Text, unsavedColor);
 
 			const bool visible = ImGui::BeginTabItem(label.c_str(), &open, flags);
 
-			if (visible) {
-				if (ImGui::IsItemActivated() && i != SM.GetActiveIndex())
-					SM.SwitchToScene(i);
-				ImGui::EndTabItem();
-			}
+			const bool pressed = ImGui::IsItemActivated();
 
-			if (scene.isDirty) ImGui::PopStyleColor();
+			if (visible)
+				ImGui::EndTabItem();
+
+			if (dirty) ImGui::PopStyleColor();
 
 			if (!open)
 				closeRequestedIndex = i;
+			else if (pressed && i != SM.GetActiveIndex())
+				SM.SwitchToScene(i);
 		}
 
 		if (ImGui::TabItemButton("+", ImGuiTabItemFlags_Trailing | ImGuiTabItemFlags_NoTooltip))
