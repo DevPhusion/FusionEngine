@@ -4,6 +4,21 @@ Fusion Engine is a custom 2D game engine designed for building lightweight, rein
 
 <img width="1902" height="977" alt="Fusion Engine editor showing a project being edited" src="https://github.com/user-attachments/assets/ba17224a-cf3f-4c2d-a64c-11109d354fb5" />
 
+## Table of Contents
+
+- [Platform Support](#platform-support)
+- [Installation](#installation)
+  - [Option 1: Official Release (compiled executable)](#option-1-official-release-compiled-executable)
+  - [Option 2: Build from Source](#option-2-build-from-source)
+- [Libraries](#libraries)
+- [Architecture](#architecture)
+- [Physics Engine](#physics-engine)
+- [Scripting](#scripting)
+- [AI Training Features](#ai-training-features)
+- [Documentation](#documentation)
+- [Upcoming Features](#upcoming-features)
+- [Contact](#contact)
+
 ## Platform Support
 
 > **Note:** Fusion Engine currently only supports **Windows**. There is no macOS or Linux support at this time.
@@ -123,20 +138,6 @@ Key RL capabilities:
   - **Round-based episodes.** Agents share one scene and can't be reset independently, so when **any** agent ends its episode, the whole scene resets and every agent reports done for that step. Each agent still tracks its own episode reward and length for the training monitor.
   - **Shared configuration.** All agents are expected to use the same action and observation space configuration, since they share one policy.
 - **Model training.** Training itself is handled through Stable-Baselines3, letting you choose the algorithm, policy, number of timesteps, save location, and whether to resume from an existing model, directly from the editor.
-
-## Project Files
-
-| Extension | Description |
-|---|---|
-| `.fusion` | Project save file (settings, main scene path) |
-| `.fscene` | Serialized scene file (objects and components) |
-
-Exported projects encrypt Python scripts and project files using a per-export XOR key:
-
-```
-final_binary = secret_key XOR raw_binary
-raw_binary   = secret_key XOR final_binary
-```
 
 ## Documentation
 
