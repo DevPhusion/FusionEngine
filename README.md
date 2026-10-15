@@ -86,9 +86,9 @@ The engine core is organized into the following systems:
 
 The physics engine is the core of Fusion Engine. Unlike most 2D engines, which simulate rigid bodies only, Fusion Engine is a multi-physics engine that simulates **rigid bodies, soft bodies, fluids and gases**, either standalone or combined in a single unified simulation (for example, a rigid boat floating on a fluid surface, or a soft body compressing under a rigid weight).
 
-**Demo:** Multiphysics simulation of rigid body, soft body and fluid dynamics
+**Demo:** Video showcasing the physics enigne features
 
-https://github.com/user-attachments/assets/8f7cdf5f-0487-47e7-92c1-7d028b895245
+https://github.com/user-attachments/assets/439fdc38-f4fb-4681-a0c1-768ab8f8bcad
 
 Each physics domain uses a different, purpose-built solver, bridged together through an impulse-based coupling layer:
 
