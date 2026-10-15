@@ -125,7 +125,7 @@ Reinforcement learning support is delivered as an installable **package** rather
 
 **Demo:** RL agent learning to play Flappy Bird
 
-https://github.com/user-attachments/assets/18549414-6475-4695-be27-09421f8e3032
+[https://github.com/user-attachments/assets/18549414-6475-4695-be27-09421f8e3032](https://github.com/user-attachments/assets/a8d39540-615f-483c-909a-7230695bcf6f)
 
 Key RL capabilities:
 
