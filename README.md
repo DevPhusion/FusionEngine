@@ -2,7 +2,22 @@
 
 Fusion Engine is a custom 2D game engine designed for building lightweight, reinforcement learning (RL) training environments. The engine uses python as its native scripting language with direct integration with Gymnasium and Stable-Baseline3 for RL training. The core architecture of the engine is inspired by Unity and Godot engine but designed with the main goal of creating RL environments instead of games. 
 
-<img width="1913" height="986" alt="Fusion Engine editor showing a project being edited" src="https://github.com/user-attachments/assets/45fedd5e-b4b0-4758-b92b-3718e8a44d3f" />
+<img width="1902" height="977" alt="Fusion Engine editor showing a project being edited" src="https://github.com/user-attachments/assets/ba17224a-cf3f-4c2d-a64c-11109d354fb5" />
+
+## Table of Contents
+
+- [Platform Support](#platform-support)
+- [Installation](#installation)
+  - [Option 1: Official Release (compiled executable)](#option-1-official-release-compiled-executable)
+  - [Option 2: Build from Source](#option-2-build-from-source)
+- [Libraries](#libraries)
+- [Architecture](#architecture)
+- [Physics Engine](#physics-engine)
+- [Scripting](#scripting)
+- [AI Training Features](#ai-training-features)
+- [Documentation](#documentation)
+- [Upcoming Features](#upcoming-features)
+- [Contact](#contact)
 
 ## Platform Support
 
@@ -49,6 +64,8 @@ Fusion Engine is built on top of the following open-source libraries:
 | [ImPlot](https://github.com/epezent/implot) | ImGui-based plotting library, used to render live training statistics and graphs during RL training. |
 | [GLM](https://github.com/g-truc/glm) | Header-only math library (vectors, matrices, transforms) used throughout the rendering and physics engines. |
 | [pybind11](https://github.com/pybind/pybind11) | Bridges the C++ engine core with Python, exposing engine functionality to the scripting and RL API. |
+| [miniaudio](https://github.com/mackron/miniaudio) | Audio library to handle the audio system in the engine. |
+| [json](https://github.com/nlohmann/json) | Library for writing and reading from JSON file |
 
 ## Architecture
 
@@ -67,23 +84,25 @@ The engine core is organized into the following systems:
 
 ## Physics Engine
 
-The physics engine is the core of Fusion Engine. Unlike most 2D engines, which simulate rigid bodies only, Fusion Engine is a multi-physics engine that simulates **rigid bodies, soft bodies, and fluids**, either standalone or combined in a single unified simulation (for example, a rigid boat floating on a fluid surface, or a soft body compressing under a rigid weight).
+The physics engine is the core of Fusion Engine. Unlike most 2D engines, which simulate rigid bodies only, Fusion Engine is a multi-physics engine that simulates **rigid bodies, soft bodies, fluids and gases**, either standalone or combined in a single unified simulation (for example, a rigid boat floating on a fluid surface, or a soft body compressing under a rigid weight).
 
-**Demo:** Multiphysics simulation of rigid body, soft body and fluid dynamics
+**Demo:** Video showcasing the physics enigne features
 
-https://github.com/user-attachments/assets/8f7cdf5f-0487-47e7-92c1-7d028b895245
+https://github.com/user-attachments/assets/439fdc38-f4fb-4681-a0c1-768ab8f8bcad
 
 Each physics domain uses a different, purpose-built solver, bridged together through an impulse-based coupling layer:
 
 - **Rigid body — Projected Gauss Seidel (PGS) solver.** Constraints are described using Jacobian matrices, the same general approach used by Box2D. Supports contact constraints as well as joints such as Weld, Revolute, and Prismatic constraints, with contact caching for solver stability.
 - **Soft body — Extended Position Based Dynamics (XPBD).** Chosen over a pure force-based mass-spring approach for its stability, area constraints are used to help soft bodies maintain their shapes. For inflatable objects such as tires or balloons, there is an option to use gases and pressure to simulate them.
-- **Fluids — Position Based Fluids (PBF).** Chosen because it operates in position space (integrating naturally with XPBD) while remaining fast. 
+- **Fluids — Position Based Fluids (PBF).** Chosen because it operates in position space (integrating naturally with XPBD) while remaining fast.
+- **Gases - Extended PBF** Chosen because fluids already uses it, PBF is simply extended to support gas simulation via changing the constraint formula.
 
 Collision handling varies by object pairing:
 
 - **Rigid–Rigid:** Separating Axis Theorem (SAT) for narrow-phase detection, Sutherland–Hodgman line clipping for contact point generation, and impulse-based resolution.
 - **Rigid–Soft and Soft–Soft:** Ray casting for collision detection, with direct positional correction for soft–soft collisions and a mixed impulse/positional approach for mixed cases.
 - **Fluid–Rigid and Fluid–Soft:** Ray casting-based detection, combined with buoyancy handling for fluid–rigid interactions.
+- **Gas-Rigid and Gas-Soft:** Ray casting-based detection
 
 Broad-phase collision culling uses a Bounding Area Hierarchy (BAH). All three solvers (PGS, XPBD, PBF) run within a shared physics processing loop each frame, with the solvers unified through the impulse bridge described above.
 
@@ -106,29 +125,19 @@ Reinforcement learning support is delivered as an installable **package** rather
 
 **Demo:** RL agent learning to play Flappy Bird
 
-https://github.com/user-attachments/assets/18549414-6475-4695-be27-09421f8e3032
+[https://github.com/user-attachments/assets/18549414-6475-4695-be27-09421f8e3032](https://github.com/user-attachments/assets/a8d39540-615f-483c-909a-7230695bcf6f)
 
 Key RL capabilities:
 
 - **Agent** Attaching an agent component to an entity marks it as trainable. Combined with a script, it exposes observations, rewards, and actions through both the Python API and the editor inspector. Action and observation spaces follow Gymnasium's space types — `Discrete`, `MultiDiscrete`, `Box`, and `MultiBinary` — with `Box` used as the default observation space.
+- **Multi-agent training (self-play).** A scene can contain any number of agent components. When more than one is enabled, the engine automatically switches to multi-agent mode: every agent becomes one row of a shared vectorized environment, and all of them feed experience into a **single shared policy**, so you still get one output model. Agents are ordered by their unique `agent_id`, and each one keeps its own observations, rewards, and actions. This suits competitive or cooperative setups such as two agents facing each other, where each agent is trained against copies of the same evolving policy.
 - **Headless training.** During training, rendering and standard physics/editor processing are disabled ("headless mode") so the simulation isn't capped by OpenGL's 60 FPS rendering limit, significantly speeding up training. The editor instead displays a training monitor (refreshed at a fixed 30 Hz) showing live training statistics. Communication between the training thread and the main thread is synchronized using mutexes for thread safety.
 - **Live view.** An optional live view lets you watch the agent train in real time; this can slow down training and is intended for debugging/observation rather than production training runs.
-- **Environment implementation.** Any scene built in the engine can act as a Gymnasium-compatible environment. The engine implements the standard `init`, `step`, and `reset` functions: `init` applies the agent's configured action/observation spaces, `step` advances the simulation and accumulates reward and observations, and `reset` reloads the scene.
+- **Environment implementation.** Any scene built in the engine can act as a Gymnasium-compatible environment. The engine implements the standard `init`, `step`, and `reset` functions: `init` applies the agent's configured action/observation spaces, `step` advances the simulation and accumulates reward and observations (taking one action per agent and returning per-agent observations, rewards, and done flags), and `reset` reloads the scene.
+  - **Single vs. multi-agent.** With one agent, the scene is exposed as a standard single-agent Gymnasium environment. With several, the scene is stepped exactly **once** per training step and each agent receives its own action, so agents stay in sync within the shared simulation.
+  - **Round-based episodes.** Agents share one scene and can't be reset independently, so when **any** agent ends its episode, the whole scene resets and every agent reports done for that step. Each agent still tracks its own episode reward and length for the training monitor.
+  - **Shared configuration.** All agents are expected to use the same action and observation space configuration, since they share one policy.
 - **Model training.** Training itself is handled through Stable-Baselines3, letting you choose the algorithm, policy, number of timesteps, save location, and whether to resume from an existing model, directly from the editor.
-
-## Project Files
-
-| Extension | Description |
-|---|---|
-| `.fusion` | Project save file (settings, main scene path) |
-| `.fscene` | Serialized scene file (objects and components) |
-
-Exported projects encrypt Python scripts and project files using a per-export XOR key:
-
-```
-final_binary = secret_key XOR raw_binary
-raw_binary   = secret_key XOR final_binary
-```
 
 ## Documentation
 
@@ -142,16 +151,7 @@ The full design document covers the engine's mathematics, physics solvers, ECS, 
 
 ## Upcoming Features
 
-Fusion Engine is under active development. These are some upcoming features planned for version 0.2
-
-| Feature | Status | Progress |
-|---|---|---|
-| Multiple agent training | Completed | ![100%](https://img.shields.io/badge/Progress-100%25-brightgreen) |
-| Sound / Audio support | Completed | ![100%](https://img.shields.io/badge/Progress-100%25-brightgreen) |
-| Rendering optimization | Completed | ![100%](https://img.shields.io/badge/Progress-100%25-brightgreen) |
-| Gas / Smoke simulation | Completed | ![100%](https://img.shields.io/badge/Progress-100%25-brightgreen) |
-| Actuators for revolute constraint | Completed |  ![100%](https://img.shields.io/badge/Progress-100%25-brightgreen) |
-| Editor UI update and themes | In Development | ![95%](https://img.shields.io/badge/Progress-95%25-brightgreen) |
+All features planned for version 0.2 have been completed. Fusion Engine remains under active development, and new features will be listed here as they are planned.
 
 ## Contact
 
