@@ -1,11 +1,15 @@
 #pragma once
-#include "../EditorWindow.h"            
+#include "../EditorWindow.h"     
+#include "../../../../stb_image.h"
 #include <string>
 #include <vector>
 #include <memory>
 #include <mutex>
 #include <thread>
 #include <atomic>
+#include <deque>
+#include <unordered_map>
+#include <condition_variable>
 
 class DocsWindow : public EditorWindow {
 public:
@@ -35,7 +39,7 @@ private:
 	};
 
 	struct Block {
-		enum class Type { Paragraph, Heading, Code, Table, Rule };
+		enum class Type { Paragraph, Heading, Code, Table, Rule, Image };
 		Type type = Type::Paragraph;
 		int level = 0;            
 		int indent = 0;           
@@ -44,6 +48,22 @@ private:
 		Runs runs;                
 		std::string code;         
 		std::vector<TableRow> rows;
+		std::string imageUrl;
+		std::string alt;
+	};
+
+	struct ImageEntry {
+		enum class State { Loading, Ready, Failed };
+		State state = State::Loading;
+		int w = 0, h = 0;
+		ImTextureData* tex = nullptr;     
+	};
+
+	struct DecodedImage {
+		std::string url;
+		int w = 0, h = 0;
+		bool ok = false;
+		std::vector<unsigned char> rgba;
 	};
 
 	struct Page {
@@ -60,7 +80,6 @@ private:
 
 	static DocsWindow* instance;
 
-	
 	bool open = false;
 	bool focusNext = false;
 	char query[128] = "";
@@ -83,6 +102,15 @@ private:
 	std::thread worker;
 	std::atomic<bool> cancel{ false };
 	bool crawlStarted = false;
+
+	std::unordered_map<std::string, ImageEntry> images;   
+	std::mutex imgMtx;
+	std::condition_variable imgCv;
+	std::deque<std::string> imgQueue;
+	std::vector<DecodedImage> imgDone;
+	std::thread imgWorker;
+	std::atomic<bool> imgStop{ false };
+
 
 	void StartCrawl();
 	void ReloadCrawl();
@@ -107,4 +135,9 @@ private:
 	void SelectPage(const std::shared_ptr<Page>& page, bool pushHistory);
 	void OpenLink(const std::string& url);
 	void ResetView();
+
+	ImageEntry& RequestImage(const std::string& url);
+	void PumpImages();
+	void ImageLoop();
+	void FreeImages();
 };

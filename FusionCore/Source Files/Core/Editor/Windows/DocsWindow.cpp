@@ -1,5 +1,5 @@
-#include "../../../../Header Files/Core/Editor/Windows/DocsWindow.h"  
-#include "../../../../Header Files/Core/Editor/EditorTheme.h"         
+#include "../../../../Header Files/Core/Editor/Windows/DocsWindow.h"
+#include "../../../../Header Files/Core/Editor/EditorTheme.h"
 #include <algorithm>
 #include <cctype>
 #include <cfloat>
@@ -13,6 +13,10 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <functional>
+#include <iterator>
+#include <unordered_map>
+#include <condition_variable>
 
 #if defined(_WIN32)
 #ifndef WIN32_LEAN_AND_MEAN
@@ -48,7 +52,7 @@ namespace {
 
 	constexpr char kCacheMagic[4] = { 'F', 'D', 'O', 'C' };
 	constexpr uint32_t kCacheVersion = 1;
-	constexpr uint32_t kMaxStringLen = 64u * 1024u * 1024u;  
+	constexpr uint32_t kMaxStringLen = 64u * 1024u * 1024u;
 
 	void WriteU32(std::ostream& o, uint32_t v) { o.write((const char*)&v, sizeof(v)); }
 	void WriteStr(std::ostream& o, const std::string& s) { WriteU32(o, (uint32_t)s.size()); o.write(s.data(), (std::streamsize)s.size()); }
@@ -156,8 +160,8 @@ namespace {
 
 	std::string CleanText(std::string s) {
 		s = DecodeEntities(s);
-		ReplaceAll(s, "\xC2\xB6", "");     
-		ReplaceAll(s, "\xC2\xA0", " ");   
+		ReplaceAll(s, "\xC2\xB6", "");
+		ReplaceAll(s, "\xC2\xA0", " ");
 #if IMGUI_VERSION_NUM < 19200
 		ReplaceAll(s, "\xE2\x80\x94", "-");
 		ReplaceAll(s, "\xE2\x80\x93", "-");
@@ -366,11 +370,25 @@ namespace {
 
 	ImVec4 AdmonitionColor(int kind) {
 		switch (kind) {
-		case 1:  return ImVec4(0.95f, 0.65f, 0.25f, 1.0f);   // warning
-		case 2:  return ImVec4(0.90f, 0.35f, 0.35f, 1.0f);   // danger
-		case 3:  return ImVec4(0.35f, 0.80f, 0.45f, 1.0f);   // tip
-		default: return ImVec4(0.30f, 0.55f, 0.95f, 1.0f);   // note
+		case 1:  return ImVec4(0.95f, 0.65f, 0.25f, 1.0f);
+		case 2:  return ImVec4(0.90f, 0.35f, 0.35f, 1.0f);
+		case 3:  return ImVec4(0.35f, 0.80f, 0.45f, 1.0f);
+		default: return ImVec4(0.30f, 0.55f, 0.95f, 1.0f);
 		}
+	}
+
+	bool IsRasterImage(const std::string& url) {
+		size_t slash = url.find_last_of('/');
+		size_t dot = url.find_last_of('.');
+		if (dot == std::string::npos || (slash != std::string::npos && dot < slash)) return false;
+		std::string ext = ToLower(url.substr(dot));
+		return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".bmp";
+	}
+
+	std::filesystem::path ImageCachePath(const std::string& url) {
+		char name[32];
+		std::snprintf(name, sizeof(name), "%016zx.img", std::hash<std::string>{}(url));
+		return CacheDir() / "Images" / name;
 	}
 }
 
@@ -386,7 +404,7 @@ std::vector<DocsWindow::Block> DocsWindow::ParseBlocks(const std::string& html, 
 		bool inPre = false;
 		std::string preText;
 		std::vector<ListLevel> lists;
-		std::vector<int> containers;     // admonition kind per open div/details (-1 = plain)
+		std::vector<int> containers;
 		int pendingBullet = 0;
 		bool inTable = false;
 		Block table;
@@ -534,6 +552,23 @@ std::vector<DocsWindow::Block> DocsWindow::ParseBlocks(const std::string& html, 
 				if (!selfClose) { skipTag = name; skipDepth = 1; }
 				continue;
 			}
+		}
+
+		if (name == "img") {
+			if (!closing && !s.inTable) {
+				const std::string src = Resolve(pageUrl, DecodeEntities(AttrValue(attrs, "src")));
+				if (!src.empty() && IsRasterImage(src)) {
+					s.Flush();
+					Block b;
+					b.type = Block::Type::Image;
+					b.imageUrl = src;
+					b.alt = CleanText(AttrValue(attrs, "alt"));
+					b.indent = (int)s.lists.size();
+					b.admonition = s.Admon();
+					s.blocks.push_back(std::move(b));
+				}
+			}
+			continue;
 		}
 
 		if (name == "br") {
@@ -684,6 +719,13 @@ DocsWindow::DocsWindow(std::string name) : EditorWindow(name) {
 
 DocsWindow::~DocsWindow() {
 	StopCrawl();
+	{
+		std::lock_guard<std::mutex> lock(imgMtx);
+		imgStop = true;
+	}
+	imgCv.notify_all();
+	if (imgWorker.joinable()) imgWorker.join();
+	FreeImages();
 	if (instance == this) instance = nullptr;
 }
 
@@ -703,7 +745,7 @@ void DocsWindow::Open() {
 	if (!instance) return;
 	instance->open = true;
 	instance->focusNext = true;
-	instance->StartCrawl();   
+	instance->StartCrawl();
 }
 
 void DocsWindow::StartCrawl() {
@@ -728,7 +770,7 @@ void DocsWindow::StopCrawl() {
 void DocsWindow::Crawl(std::string base) {
 	constexpr size_t kMaxPages = 300;
 
-	if (PageCount() == 0) LoadCache();    
+	if (PageCount() == 0) LoadCache();
 
 	std::deque<std::string> queue{ base };
 	std::set<std::string> seen{ base };
@@ -797,7 +839,7 @@ std::shared_ptr<DocsWindow::Page> DocsWindow::FindPage(const std::string& url) {
 std::shared_ptr<DocsWindow::Page> DocsWindow::BuildPage(const std::string& url, const std::string& html) {
 	auto page = std::make_shared<Page>();
 	page->url = url;
-	page->content = ExtractContent(html);          
+	page->content = ExtractContent(html);
 	page->blocks = ParseBlocks(page->content, url);
 	page->text = HtmlToText(page->content);
 	page->lower = ToLower(page->text);
@@ -835,7 +877,7 @@ bool DocsWindow::LoadCache() {
 	std::vector<std::shared_ptr<Page>> loaded;
 	for (uint32_t i = 0; i < count; i++) {
 		std::string url, content;
-		if (!readStr(url) || !readStr(content)) return false;   
+		if (!readStr(url) || !readStr(content)) return false;
 		loaded.push_back(BuildPage(url, content));
 	}
 	if (loaded.empty()) return false;
@@ -851,7 +893,7 @@ void DocsWindow::SaveCache(const std::vector<std::shared_ptr<Page>>& list) {
 	namespace fs = std::filesystem;
 	std::error_code ec;
 	const fs::path dir = CacheDir();
-	fs::create_directories(dir, ec);          
+	fs::create_directories(dir, ec);
 	if (ec) return;
 
 	const fs::path finalPath = dir / "docs_cache.bin";
@@ -865,7 +907,7 @@ void DocsWindow::SaveCache(const std::vector<std::shared_ptr<Page>>& list) {
 		for (const auto& p : list) { WriteStr(out, p->url); WriteStr(out, p->content); }
 		if (!out) { out.close(); fs::remove(tmpPath, ec); return; }
 	}
-	fs::rename(tmpPath, finalPath, ec);      
+	fs::rename(tmpPath, finalPath, ec);
 	if (ec) fs::remove(tmpPath, ec);
 }
 
@@ -939,7 +981,7 @@ void DocsWindow::SelectPage(const std::shared_ptr<Page>& page, bool pushHistory)
 
 void DocsWindow::OpenLink(const std::string& url) {
 	if (auto p = FindPage(url)) SelectPage(p, true);
-	else OpenUrl(url);   
+	else OpenUrl(url);
 }
 
 void DocsWindow::ResetView() {
@@ -950,7 +992,6 @@ void DocsWindow::ResetView() {
 	autoSelected = false;
 	lastVersion = -1;
 }
-
 
 void DocsWindow::DrawRuns(const Runs& runs, float wrap, bool forceBold, std::string& clicked) {
 	wrap = std::max(wrap, 50.0f);
@@ -1102,6 +1143,26 @@ void DocsWindow::DrawBlock(const Block& b, int idx, std::string& clicked) {
 	case Block::Type::Rule:
 		ImGui::Separator();
 		break;
+
+	case Block::Type::Image: {
+		ImageEntry& e = RequestImage(b.imageUrl);
+		const float avail = ImGui::GetContentRegionAvail().x;
+
+		if (e.state == ImageEntry::State::Ready) {
+			const float s = std::min(1.0f, avail / (float)e.w);
+			ImGui::Image(e.tex->GetTexRef(), ImVec2(e.w * s, e.h * s), ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
+		}
+		else {
+			const ImVec2 p = ImGui::GetCursorScreenPos();
+			const ImVec2 sz(avail, 60.0f);
+			dl->AddRect(p, ImVec2(p.x + sz.x, p.y + sz.y), ImGui::GetColorU32(ImGuiCol_Border), 4.0f);
+			const char* msg = e.state == ImageEntry::State::Failed ? "Image unavailable" : "Loading image...";
+			const std::string label = b.alt.empty() ? msg : (std::string(msg) + " - " + b.alt);
+			dl->AddText(ImVec2(p.x + 10.0f, p.y + 20.0f), ImGui::GetColorU32(ImGuiCol_TextDisabled), label.c_str());
+			ImGui::Dummy(sz);
+		}
+		break;
+	}
 	}
 
 	if (ind > 0.0f) ImGui::Unindent(ind);
@@ -1160,13 +1221,15 @@ void DocsWindow::ProcessWindow() {
 		return;
 	}
 
+	PumpImages();
+
 	const ImGuiStyle& style = ImGui::GetStyle();
 
 	const int ver = version.load();
 	if (lastQuery != query || lastVersion != ver) {
 		if (selectedPage) {
 			if (auto p = FindPage(selectedPage->url); p && p != selectedPage) {
-				selectedPage = p;     
+				selectedPage = p;
 				heights.clear();
 			}
 		}
@@ -1249,4 +1312,100 @@ void DocsWindow::ProcessWindow() {
 	if (ImGui::Button("Close", ImVec2(100, 0))) open = false;
 
 	ImGui::End();
+}
+
+DocsWindow::ImageEntry& DocsWindow::RequestImage(const std::string& url) {
+	auto it = images.find(url);
+	if (it != images.end()) return it->second;
+
+	if (!imgWorker.joinable()) imgWorker = std::thread([this] { ImageLoop(); });
+	{
+		std::lock_guard<std::mutex> lock(imgMtx);
+		imgQueue.push_back(url);
+	}
+	imgCv.notify_one();
+	return images[url];
+}
+
+void DocsWindow::ImageLoop() {
+	namespace fs = std::filesystem;
+	for (;;) {
+		std::string url;
+		{
+			std::unique_lock<std::mutex> lk(imgMtx);
+			imgCv.wait(lk, [&] { return imgStop.load() || !imgQueue.empty(); });
+			if (imgStop) return;
+			url = std::move(imgQueue.front());
+			imgQueue.pop_front();
+		}
+
+		DecodedImage d;
+		d.url = url;
+
+		std::string bytes;
+		const fs::path file = ImageCachePath(url);
+		bool fromDisk = false;
+		{
+			std::ifstream in(file, std::ios::binary);
+			if (in) {
+				bytes.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+				fromDisk = !bytes.empty();
+			}
+		}
+		if (!fromDisk && !HttpGet(url, bytes)) bytes.clear();
+
+		if (!bytes.empty()) {
+			int comp = 0;
+			unsigned char* px = stbi_load_from_memory((const stbi_uc*)bytes.data(), (int)bytes.size(), &d.w, &d.h, &comp, 4);
+			if (px) {
+				d.rgba.assign(px, px + (size_t)d.w * d.h * 4);
+				stbi_image_free(px);
+				d.ok = true;
+				if (!fromDisk) {
+					std::error_code ec;
+					fs::create_directories(file.parent_path(), ec);
+					std::ofstream out(file, std::ios::binary | std::ios::trunc);
+					if (out) out.write(bytes.data(), (std::streamsize)bytes.size());
+				}
+			}
+		}
+
+		std::lock_guard<std::mutex> lock(imgMtx);
+		imgDone.push_back(std::move(d));
+	}
+}
+
+void DocsWindow::PumpImages() {
+	std::vector<DecodedImage> done;
+	{
+		std::lock_guard<std::mutex> lock(imgMtx);
+		done.swap(imgDone);
+	}
+	if (done.empty()) return;
+
+	for (DecodedImage& d : done) {
+		ImageEntry& e = images[d.url];
+		if (!d.ok) { e.state = ImageEntry::State::Failed; continue; }
+
+		ImTextureData* t = IM_NEW(ImTextureData)();
+		t->Create(ImTextureFormat_RGBA32, d.w, d.h);
+		std::memcpy(t->GetPixels(), d.rgba.data(), d.rgba.size());
+		ImGui::RegisterUserTexture(t);
+
+		e.tex = t;
+		e.w = d.w;
+		e.h = d.h;
+		e.state = ImageEntry::State::Ready;
+	}
+	heights.clear();
+}
+
+void DocsWindow::FreeImages() {
+	for (auto& kv : images) {
+		if (kv.second.tex) {
+			ImGui::UnregisterUserTexture(kv.second.tex);
+			IM_DELETE(kv.second.tex);
+		}
+	}
+	images.clear();
 }
