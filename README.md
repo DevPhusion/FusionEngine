@@ -151,7 +151,13 @@ The full design document covers the engine's mathematics, physics solvers, ECS, 
 
 ## Upcoming Features
 
-All features planned for version 0.2 have been completed. Fusion Engine remains under active development, and new features will be listed here as they are planned.
+Fusion Engine is under active development. These are some upcoming features planned for version 0.2
+
+| Feature | Status | Progress |
+|---|---|---|
+| GUI Engine | In Development | ![0%](https://img.shields.io/badge/Progress-0%25-red) |
+| Improve physics engine stability | In Development | ![0%](https://img.shields.io/badge/Progress-0%25-red) |
+| Tilemap | In Development | ![0%](https://img.shields.io/badge/Progress-0%25-red) |
 
 ## Contact
 
