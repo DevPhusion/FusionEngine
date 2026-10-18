@@ -2251,7 +2251,7 @@ namespace {
 
 			.def_property_readonly("acceleration", [](SoftBodyComponent& self) {
 			if (!self.CenterPM) return glm::vec3(0.0f);
-			return self.CenterPM->baseAcceleration + self.CenterPM->acceleration;
+			return PhysicsEngine::PS().gravity + self.CenterPM->acceleration;
 				},
 				"Current acceleration of the center point mass (gravity + accumulated forces)")
 
@@ -3708,21 +3708,9 @@ namespace {
 				"Set velocity. See the velocity property.")
 
 			.def_property_readonly("acceleration", [](PointMass& self) {
-			return self.baseAcceleration + self.acceleration;
+			return PhysicsEngine::PS().gravity + self.acceleration;
 				},
 				"Total acceleration this frame (gravity/base + accumulated forces)")
-
-			.def_property("base_acceleration",
-				[](PointMass& self) { return self.baseAcceleration; },
-				[](PointMass& self, glm::vec3 a) { self.baseAcceleration = a; },
-				"Persistent acceleration such as gravity.\n\n"
-				"Example:\n"
-				"    ```python\n"
-				"    Vector3(0, -9.8, 0)\n"
-				"    ```")
-			.def("set_base_acceleration", [](PointMass& self, glm::vec3 a) { self.baseAcceleration = a; },
-				py::arg("base_acceleration"),
-				"Set base_acceleration. See the base_acceleration property.")
 
 			.def_property("mass",
 				[](PointMass& self) { return 1.0f / self.inverseMass; },

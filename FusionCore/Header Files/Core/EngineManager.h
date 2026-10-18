@@ -2,6 +2,7 @@
 #include "InputManager.h"
 #include "Files/ProjectLauncher.h"
 #include "Physics/Collision/BroadPhaseHandle.h"
+#include "Physics/PhysicsSettings.h"   
 #include <fstream>
 #include <stdexcept>
 #include <memory>
@@ -26,6 +27,9 @@ struct Settings {
 	std::string mainScenePath = "";
 
 	BroadPhaseMode broadPhaseMode = BroadPhaseMode::AABB;
+
+	//Physics
+	PhysicsSettings physics;
 
 	// Debug
 	bool physicsInteract = false;

@@ -118,6 +118,8 @@ void EngineManager::SerializeEngineSettings(BinaryWriter& w) {
 	w.Write(s.drawFluidsAsParticles);
 	w.Write(s.drawFluidsVelocityField);
 	w.Write(static_cast<uint32_t>(s.fluidHeatmapMode));
+
+	s.physics.Serialize(w);
 }
 
 void EngineManager::DeserializeEngineSettings(BinaryReader& r) {
@@ -145,6 +147,8 @@ void EngineManager::DeserializeEngineSettings(BinaryReader& r) {
 	s.drawFluidsAsParticles = r.Read<bool>();
 	s.drawFluidsVelocityField = r.Read<bool>();
 	s.fluidHeatmapMode = static_cast<FluidHeatmapMode>(r.Read<uint32_t>());
+
+	s.physics.Deserialize(r);
 }
 
 void EngineManager::SwitchInteractMode(InteractMode mode) {

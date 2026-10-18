@@ -6,7 +6,7 @@
 RigidBodyComponent::RigidBodyComponent(Object* parent) : ComponentBase<RigidBodyComponent>(parent) {
 	Name = "Rigid Body Component";
 	this->inverseMass = 1;
-	this->acceleration = glm::vec3(0.0f, -9.8f, 0.0f);
+	this->acceleration = glm::vec3(0);
 	this->velocity = glm::vec3(0);
 	this->netForce = glm::vec3(0);
 	CalculateInertia();
@@ -106,7 +106,9 @@ void RigidBodyComponent::IntegrateVelocities(float delta) {
 		ProcessDragForce();
 	}
 
-	glm::vec3 resultingAcc = acceleration;
+	const auto& ps = EngineManager::getInstance().EngineSettings.physics;
+
+	glm::vec3 resultingAcc = acceleration + ps.gravity;
 	resultingAcc += netForce * inverseMass;
 
 	float angularAcc = Torque * inverseInertia;
@@ -117,8 +119,8 @@ void RigidBodyComponent::IntegrateVelocities(float delta) {
 	velocity *= powf(linearDamping, delta);
 	angularVelocity *= powf(angularDamping, delta);
 
-	if (glm::length(velocity) < 0.001f) velocity = glm::vec3(0.0f);
-	if (std::abs(angularVelocity) < 0.001f) angularVelocity = 0.0f;
+	if (glm::length(velocity) < ps.rigidSleepLinear) velocity = glm::vec3(0.0f);
+	if (std::abs(angularVelocity) < ps.rigidSleepAngular) angularVelocity = 0.0f;
 
 	netAcceleration = glm::vec2(resultingAcc.x, resultingAcc.y);
 	netForceDisplay = glm::vec2(netForce.x, netForce.y);
@@ -153,8 +155,9 @@ void RigidBodyComponent::ClearAccumulators() {
 void RigidBodyComponent::ProcessDragForce() {
 	TransformComponent* trans = parent->GetComponent<TransformComponent>();
 
-	float scaledK = 150.0f * (1.0f / inverseMass);
-	float scaledC = 24.7f * (1.0f / inverseMass);
+	const auto& ps = EngineManager::getInstance().EngineSettings.physics;
+	float scaledK = ps.dragStiffness * (1.0f / inverseMass);  
+	float scaledC = ps.dragDamping * (1.0f / inverseMass);
 
 	// project to model space
 	glm::vec3 modelPos = trans->GetTransformedPoint(glm::vec3(InputManager::glX, InputManager::glY, 0), true);

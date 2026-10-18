@@ -294,7 +294,7 @@ FluidSoftContact PhysicsEngine::DetectContinuumSoftContact(const glm::vec3& part
 	if (centerInside) {
 		contact.hit = true;
 		contact.normal = best.normal;
-		contact.penetration = glm::min(radius + best.dist, radius * 3.0f);
+		contact.penetration = glm::min(radius + best.dist, radius * PS().fluidPenetrationClamp);
 		contact.point = best.point;
 		contact.edgeIdx = best.edgeIdx;
 		contact.edgeT = best.edgeT;
@@ -304,7 +304,7 @@ FluidSoftContact PhysicsEngine::DetectContinuumSoftContact(const glm::vec3& part
 	if (best.dist < radius) {
 		contact.hit = true;
 		contact.normal = best.normal;
-		contact.penetration = glm::min(radius - best.dist, radius * 3.0f);
+		contact.penetration = glm::min(radius + best.dist, radius * PS().fluidPenetrationClamp);
 		contact.point = best.point;
 		contact.edgeIdx = best.edgeIdx;
 		contact.edgeT = best.edgeT;
@@ -342,7 +342,7 @@ void PhysicsEngine::ResolveFluidBoundaryContactsGeneric(std::vector<ContinuumPar
 				}
 				if (!best.hit) best.penetration = 0.0f;
 
-				const float positionCorrectionFactor = 0.2f;
+				const float positionCorrectionFactor = PS().fluidPositionCorrection;
 				if (best.hit) {
 					p->predictedPosition += best.normal * (best.penetration * positionCorrectionFactor);
 				}
@@ -373,11 +373,12 @@ void PhysicsEngine::ResolveContinuumSoftContacts(float dtSub) {
 }
 
 void PhysicsEngine::ResolveContinuumSoftImpulses(float dtSub) {
-	int contactIterations = 4;
-	float beta = 0.2f;
-	float slop = 0.0005f;
-	float restitution = 0.0f;
-	const float maxBiasVelocity = 2.0f;
+	const auto& ps = PS();
+	int contactIterations = ps.fluidContactIterations;
+	float beta = ps.fluidContactBeta;
+	float slop = ps.fluidContactSlop;
+	float restitution = ps.fluidContactRestitution;
+	const float maxBiasVelocity = ps.fluidMaxBiasVelocity;
 
 	for (int iter = 0; iter < contactIterations; iter++) {
 		for (int i : fluidIndices) {
@@ -432,7 +433,7 @@ FluidRigidContact PhysicsEngine::DetectContinuumRigidContact(const glm::vec3& pa
 	if (centerInside) {
 		contact.hit = true;
 		contact.normal = best.normal;
-		contact.penetration = glm::min(radius + best.dist, radius * 3.0f);
+		contact.penetration = glm::min(radius + best.dist, radius * PS().fluidPenetrationClamp);
 		contact.point = best.point;
 		return contact;
 	}
@@ -463,11 +464,12 @@ void PhysicsEngine::ResolveContinuumRigidContacts(float dtSub) {
 }
 
 void PhysicsEngine::ResolveContinuumRigidImpulses(float dtSub) {
-	int contactIterations = 4;
-	float beta = 0.2f;
-	float slop = 0.0005f;
-	float restitution = 0.0f;
-	const float maxBiasVelocity = 2.0f;
+	const auto& ps = PS();
+	int contactIterations = ps.fluidContactIterations;
+	float beta = ps.fluidContactBeta;
+	float slop = ps.fluidContactSlop;
+	float restitution = ps.fluidContactRestitution;
+	const float maxBiasVelocity = ps.fluidMaxBiasVelocity;
 
 	for (int iter = 0; iter < contactIterations; iter++) {
 		for (int i : fluidIndices) {
@@ -590,11 +592,8 @@ bool PhysicsEngine::ResolveSoftPointSoftEdgeContacts(PhysicsBody pointBody, Poin
 	cp.id = ContactID();
 	allContactPoints.push_back(cp);  
 
-	XPBDContactConstraint* constraint = new XPBDContactConstraint(
-		pointBody, nearPM->body,
-		contactNormal, vertexRadius,     
-		0.0001f,                            
-		0.6f, 0.4f);                  
+	XPBDContactConstraint* constraint = new XPBDContactConstraint(pointBody, nearPM->body, contactNormal, vertexRadius,
+		PS().softSoftCompliance, PS().softSoftStaticFriction, PS().softSoftDynamicFriction);
 	RegisterXPBDConstraint(constraint);
 
 	return true;
@@ -681,7 +680,7 @@ void PhysicsEngine::ResolveSoftRigidContacts(float dtSub) {
 }
 
 void PhysicsEngine::ApplySoftRigidPositionCorrection() {
-	const float positionCorrectionFactor = 0.2f;
+	const float positionCorrectionFactor = PS().srPositionCorrection;
 	for (size_t i = 0; i < allSoftBodyPointMasses.size(); i++) {
 		SoftRigidContact& c = softRigidContacts[i];
 		if (!c.hit) continue;
@@ -692,13 +691,14 @@ void PhysicsEngine::ApplySoftRigidPositionCorrection() {
 }
 
 void PhysicsEngine::ResolveSoftRigidImpulses(float dtSub) {
-	int contactIterations = 4;
-	float beta = 0.2f;
-	float slop = 0.0005f;
-	float restitution = 0.2f;
-	const float maxBiasVelocity = 2.0f;
-	const float staticFriction = 0.4f;
-	const float dynamicFriction = 0.6f;
+	const auto& ps = PS();
+	int contactIterations = ps.srContactIterations;
+	float beta = ps.srBeta;
+	float slop = ps.srSlop;
+	float restitution = ps.softRigidRestitution;
+	const float maxBiasVelocity = ps.srMaxBiasVelocity;
+	const float staticFriction = ps.srStaticFriction;
+	const float dynamicFriction = ps.srDynamicFriction;
 
 
 	for (auto& c : softRigidContacts) {
@@ -832,7 +832,7 @@ RigidSoftContact PhysicsEngine::DetectRigidSoftContact(const glm::vec3& vertexPo
 }
 
 void PhysicsEngine::ResolveRigidSoftContacts(float dtSub) {
-	const float rigidVertexRadius = 0.01f;   
+	const float rigidVertexRadius = PS().rigidVertexRadius;
 
 	if (rigidSoftContacts.size() != rigidVertices.size())
 		rigidSoftContacts.resize(rigidVertices.size());
@@ -866,13 +866,14 @@ void PhysicsEngine::ResolveRigidSoftContacts(float dtSub) {
 }
 
 void PhysicsEngine::ResolveRigidSoftImpulses(float dtSub) {
-	int contactIterations = 4;
-	float beta = 0.2f;
-	float slop = 0.0005f;
-	float restitution = 0.0f;
-	const float maxBiasVelocity = 2.0f;
-	const float staticFriction = 0.4f;
-	const float dynamicFriction = 0.6f;
+	const auto& ps = PS();
+	int contactIterations = ps.srContactIterations;
+	float beta = ps.srBeta;
+	float slop = ps.srSlop;
+	float restitution = ps.rigidSoftRestitution;
+	const float maxBiasVelocity = ps.srMaxBiasVelocity;
+	const float staticFriction = ps.srStaticFriction;
+	const float dynamicFriction = ps.srDynamicFriction;
 
 	for (auto& c : rigidSoftContacts) {
 		c.accumNormalImpulse = 0.0f;
@@ -1018,8 +1019,8 @@ bool PhysicsEngine::ResolveCircleCircleContacts(PhysicsBody bodyA, PhysicsBody b
 			: (bodyB.obj->GetComponent<CollisionComponent>() ? bodyB.obj->GetComponent<CollisionComponent>()->isStatic : true);
 		rigidContactRecords.push_back(rec);
 
-		ContactConstraint* constraint = new ContactConstraint(
-			bodyA, bodyB, cPoint, cPoint, ContactID(), normal, penetration, 0.2f, 0.4f, 0.6f);
+		ContactConstraint* constraint = new ContactConstraint(bodyA, bodyB, cPoint, cPoint, ContactID(), normal, penetration,
+			PS().contactBeta, PS().contactStaticFriction, PS().contactDynamicFriction);
 		RegisterPGSConstraint(constraint);
 
 		return true;
@@ -1181,7 +1182,7 @@ bool PhysicsEngine::ResolveCirclePolygonContacts(PhysicsBody circle, PhysicsBody
 			circle, polygon,
 			contactPoint, contactPoint,
 			ContactID(), contactNormal, penetration,
-			0.2f, 0.4f, 0.6f);
+			PS().contactBeta, PS().contactStaticFriction, PS().contactDynamicFriction);
 		constraint->SetInitialImpulse(cachedLambda);
 		RegisterPGSConstraint(constraint);
 	}
@@ -1233,7 +1234,9 @@ bool PhysicsEngine::ResolvePolygonPolygonContacts(PhysicsBody bodyA, PhysicsBody
 				}
 			}
 
-			ContactConstraint* constraint = new ContactConstraint(bodyA, bodyB, points[j].point, points[j].point, points[j].id, points[j].normal, points[j].penetration, 0.2f, 0.4f, 0.6f);
+			ContactConstraint* constraint = new ContactConstraint(bodyA, bodyB, points[j].point, points[j].point, points[j].id,
+				points[j].normal, points[j].penetration,
+				PS().contactBeta, PS().contactStaticFriction, PS().contactDynamicFriction);
 			constraint->SetInitialImpulse(cachedLambda);
 			RegisterPGSConstraint(constraint);
 		}
@@ -1244,8 +1247,8 @@ bool PhysicsEngine::ResolvePolygonPolygonContacts(PhysicsBody bodyA, PhysicsBody
 }
 
 void PhysicsEngine::ApplyRigidPositionCorrection() {
-	const float positionCorrectionFactor = 0.2f;
-	const float slop = 0.005f;
+	const float positionCorrectionFactor = PS().rigidPositionCorrection;
+	const float slop = PS().rigidSlop;
 	for (auto& c : rigidContactRecords) {
 		float correction = std::max(c.penetration - slop, 0.0f) * positionCorrectionFactor;
 		if (correction <= 0.0f) continue;
@@ -1979,6 +1982,7 @@ void PhysicsEngine::ComputeFluidSurfaceQualification() {
 	
 	fluidBoundsMin = glm::vec3(INFINITY);
 	fluidBoundsMax = glm::vec3(-INFINITY);
+	const int minN = PS().buoyancyMinNeighbours;
 	for (int i : fluidIndices) {
 		std::visit([&](auto&& p) {
 			using T = std::decay_t<decltype(p)>;
@@ -2004,9 +2008,9 @@ void PhysicsEngine::ComputeFluidSurfaceQualification() {
 								}
 							}
 							}, allContinuumParticles[j]);
-						if (neighborCount >= buoyancyMinNeighbours) break;
+						if (neighborCount >= minN) break;
 					}
-					fluidSurfaceQualifies[i] = neighborCount >= buoyancyMinNeighbours;
+					fluidSurfaceQualifies[i] = neighborCount >= minN;
 				}
 				else if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
 					fluidSurfaceQualifies[i] = false; 
@@ -2477,7 +2481,7 @@ void PhysicsEngine::ResolvePGSConstraintsForSubstep(float dtSub, float frameDelt
 		return solverRows[a].bias > solverRows[b].bias;
 		});
 
-	const int velocityIterations = 8;
+	const int velocityIterations = PS().pgsSubstepIterations;   
 	for (int i = 0; i < velocityIterations; i++) {
 		for (int idx : sortedIndices) {
 			auto& row = solverRows[idx];
@@ -2543,7 +2547,7 @@ void PhysicsEngine::ResolvePGSConstraints(float delta) {
 		}
 	}
 
-	const int velocityIterations = 30;
+	const int velocityIterations = PS().pgsFrameIterations;
 	{
 		TIME_BLOCK("PGS solve");
 		for (int i = 0; i < velocityIterations; i++) {
@@ -2650,7 +2654,7 @@ void PhysicsEngine::UnRegisterTemporaryXPBDConstraint() {
 }
 
 void PhysicsEngine::ResolveXPBDConstraints(float delta) {
-	int substeps = 8;
+	int substeps = PS().xpbdSubsteps;
 	float dtSub = delta / substeps;
 
 	GenerateRigidBoundaries();       
@@ -2675,7 +2679,7 @@ void PhysicsEngine::ResolveXPBDConstraints(float delta) {
 				if (pm->sb->isDragging) pm->ProcessDragForce();
 
 				pm->prevPos = pm->worldPos;
-				pm->velocity += (pm->baseAcceleration + pm->acceleration) * dtSub;
+				pm->velocity += (PS().gravity + pm->acceleration) * dtSub;
 				pm->worldPos += pm->velocity * dtSub;
 				pm->acceleration = glm::vec3(0);
 			}
@@ -2694,7 +2698,7 @@ void PhysicsEngine::ResolveXPBDConstraints(float delta) {
 
 		for (auto* constraint : registeredXPBDConstraints) constraint->ResetLambda();
 
-		const int posIterations = 4;
+		const int posIterations = PS().xpbdPositionIterations;
 		for (int it = 0; it < posIterations; it++) {
 			{
 				TIME_BLOCK("Solve position");
@@ -2720,7 +2724,7 @@ void PhysicsEngine::ResolveXPBDConstraints(float delta) {
 		}
 
 		{
-			TIME_BLOCK("Rigid-Soft contact");  
+			TIME_BLOCK("Rigid-Soft contact");
 			ResolveRigidSoftContacts(dtSub);
 		}
 
@@ -2748,12 +2752,12 @@ void PhysicsEngine::ResolveXPBDConstraints(float delta) {
 		}
 
 		{
-			TIME_BLOCK("Soft-Rigid position correction");   
+			TIME_BLOCK("Soft-Rigid position correction");
 			ApplySoftRigidPositionCorrection();
 		}
 
 		{
-			TIME_BLOCK("Rigid-Soft position correction");   
+			TIME_BLOCK("Rigid-Soft position correction");
 			ApplyRigidSoftPositionCorrection();
 		}
 
@@ -2851,7 +2855,7 @@ void PhysicsEngine::SolvePBFPosition(int particleIdx, std::vector<int>& neighbou
 		float poly6Coeff = pi->poly6Coeff;
 		float spikyCoeff = pi->spikyCoeff;
 
-		float deltaQ = 0.2f * h;
+		float deltaQ = PS().pbfSCorrDeltaQ * h;
 		float wq = Poly6Kernel(poly6Coeff, h2, deltaQ * deltaQ);
 		bool wqValid = wq > 1e-8f;
 
@@ -2869,7 +2873,7 @@ void PhysicsEngine::SolvePBFPosition(int particleIdx, std::vector<int>& neighbou
 						float w = Poly6Kernel(poly6Coeff, h2, r2);
 						float x = w / wq;
 						float x2 = x * x;
-						sCorr = -0.1f * (x2 * x2);
+						sCorr = -PS().pbfSCorrK * (x2 * x2);
 					}
 
 					glm::vec3 grad = SpikyGradientKernel(spikyCoeff, h, r, rVec);
@@ -3037,8 +3041,8 @@ bool PhysicsEngine::FindLocalFluidSurface(const glm::vec3& bMin, const glm::vec3
 }
 
 void PhysicsEngine::ApplyRigidBuoyancy(float dtSub) {
-	const float linearDragCoeff = 8.0f;   
-	const float angularDragCoeff = 0.8f; 
+	const float linearDragCoeff = PS().buoyancyLinearDrag;     
+	const float angularDragCoeff = PS().buoyancyAngularDrag;
 
 	for (auto& b : rigidBoundaries) {
 		if (!b.surfaceValid || !b.rb) continue;
@@ -3047,7 +3051,7 @@ void PhysicsEngine::ApplyRigidBuoyancy(float dtSub) {
 		glm::vec3 centroid(0.0f);
 		if (!ComputeSubmergedRegion(b.worldEdges, b.surfaceY, area, centroid)) continue;
 
-		glm::vec3 F(0.0f, b.rho0 * 9.8f * area, 0.0f);
+		glm::vec3 F(0.0f, b.rho0 * -PS().gravity.y * area, 0.0f);
 		glm::vec3 r = centroid - b.worldCenter;
 		float torque = r.x * F.y - r.y * F.x;
 
@@ -3065,7 +3069,7 @@ void PhysicsEngine::ApplyRigidBuoyancy(float dtSub) {
 }
 
 void PhysicsEngine::ApplySoftBuoyancy(float dtSub) {
-	const float linearDragCoeff = 8.0f; 
+	const float linearDragCoeff = PS().buoyancyLinearDrag;
 
 	for (auto& b : softBoundaries) {
 		if (!b.surfaceValid) continue;
@@ -3078,7 +3082,7 @@ void PhysicsEngine::ApplySoftBuoyancy(float dtSub) {
 		glm::vec3 centroid(0.0f);
 		if (!ComputeSubmergedRegion(edges, b.surfaceY, area, centroid)) continue;
 
-		float totalForceY = b.rho0 * 9.8f * area;
+		float totalForceY = b.rho0 * -PS().gravity.y * area;
 
 		float submergedFraction = glm::clamp(area / std::max(b.totalArea, 1e-6f), 0.0f, 1.0f);
 
@@ -3106,7 +3110,7 @@ void PhysicsEngine::ApplySoftBuoyancy(float dtSub) {
 void PhysicsEngine::ResolvePBF(float delta) {
 	if (allContinuumParticles.empty()) return;
 
-	int pbfSubsteps = 2;
+	int pbfSubsteps = PS().pbfSubsteps;
 	float dtSub = delta / pbfSubsteps;
 
 	GenerateRigidBoundaries();
@@ -3144,7 +3148,7 @@ void PhysicsEngine::ResolvePBF(float delta) {
 			std::for_each(std::execution::par_unseq, fluidIndices.begin(), fluidIndices.end(),
 				[&](int i) {
 					std::visit([&](auto&& p) {
-						p->velocity += dtSub * glm::vec3(0.0f, -9.8f, 0.0f);
+						p->velocity += dtSub * PS().gravity;
 						p->predictedPosition = p->position + dtSub * p->velocity;
 					}, allContinuumParticles[i]);
 				});
@@ -3152,7 +3156,8 @@ void PhysicsEngine::ResolvePBF(float delta) {
 				[&](int i) {
 					std::visit([&](auto&& p) {
 						if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
-							p->velocity += dtSub * glm::vec3(0.0f, -9.8f * (p->temperature - p->ambientTemperature) / p->ambientTemperature, 0.0f);
+							p->velocity += dtSub * glm::vec3(0.0f,
+								PS().gravity.y * (p->temperature - p->ambientTemperature) / p->ambientTemperature, 0.0f);
 							p->predictedPosition = p->position + dtSub * p->velocity;
 						}
 					}, allContinuumParticles[i]);
@@ -3225,7 +3230,7 @@ void PhysicsEngine::ResolvePBF(float delta) {
 			ApplySoftBuoyancy(dtSub);
 		}
 
-		int solveIterations = 4;
+		int solveIterations = PS().pbfSolveIterations;
 		{
 			TIME_BLOCK("Solve PBF");
 			for (int iter = 0; iter < solveIterations; iter++)
@@ -3368,7 +3373,7 @@ void PhysicsEngine::ResolvePBF(float delta) {
 					std::visit([&](auto&& p) {
 						if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
 							p->temperature += thermalDeltas[i] * dtSub;
-							p->temperature = std::max(p->temperature, 1.0f);
+							p->temperature = std::max(p->temperature, PS().gasMinTemperature);
 						}
 						}, allContinuumParticles[i]);
 				});
@@ -3509,10 +3514,10 @@ Object* PhysicsEngine::CreateFractureShard(Object* source, const std::vector<glm
 	float shardMass;
 	if (srcRB) {
 		float sourceMass = 1.0f / srcRB->inverseMass;
-		shardMass = std::max(sourceMass * (shardArea / sourceArea), 0.001f);
+		shardMass = std::max(sourceMass * (shardArea / sourceArea), PS().fractureMinShardMass);
 	}
 	else {
-		shardMass = std::max(shardArea * source->GetComponent<FractureComponent>()->restDensity, 0.001f);
+		shardMass = std::max(shardArea * source->GetComponent<FractureComponent>()->restDensity, PS().fractureMinShardMass);
 	}
 
 	glm::vec3 r = worldCentroid - source->GetComponent<TransformComponent>()->GetWorldPosition();
@@ -3616,7 +3621,7 @@ std::vector<glm::vec3> PhysicsEngine::GenerateFractureSeeds(const std::vector<gl
 	std::uniform_real_distribution<float> ux(bmin.x, bmax.x);
 	std::uniform_real_distribution<float> uy(bmin.y, bmax.y);
 
-	float minSeedDist = glm::length(bmax - bmin) * 0.15f;
+	float minSeedDist = glm::length(bmax - bmin) * PS().fractureSeedMinDistance;
 	int attempts = 0;
 	while ((int)seeds.size() < count && attempts < count * 50) {
 		attempts++;

@@ -166,7 +166,7 @@ void SoftBodyComponent::ApplyGasPressure() {
 	centroid /= (float)edgeCount; 
 
 	float restDensity = gasAmount / area;
-	const float maxForcePerEdge = 50.0f;
+	const float maxForcePerEdge = EngineManager::getInstance().EngineSettings.physics.softGasMaxForcePerEdge;
 
 	for (int i = 0; i < edgeCount; i++) {
 		PointMass* pmA = MassAggregate[i].get();
@@ -210,7 +210,7 @@ void SoftBodyComponent::ProcessInspectorUI() {
 
 	ImGui::Text("Acceleration ");
 	ImGui::SameLine();
-	glm::vec3 finalAccel = CenterPM->baseAcceleration + CenterPM->acceleration;
+	glm::vec3 finalAccel = EngineManager::getInstance().EngineSettings.physics.gravity + CenterPM->acceleration;
 	float accel[2] = { finalAccel.x, finalAccel.y };
 	ImGui::InputFloat2("##Acceleration", accel, "%.3f m/s", ImGuiInputTextFlags_ReadOnly);
 
@@ -488,6 +488,8 @@ void SoftBodyComponent::BuildMassAggregate() {
 	RenderComponent* rc = parent->GetComponent<RenderComponent>();
 	TransformComponent* tc = parent->GetComponent<TransformComponent>();
 
+	const auto& ps = EngineManager::getInstance().EngineSettings.physics;
+
 	EngineManager::getInstance().SceneChangeEvent();
 
 	int physicsPointCount = (int)rc->points.size();
@@ -567,7 +569,7 @@ void SoftBodyComponent::BuildMassAggregate() {
 		for (int i = 0; i < MassAggregate.size() - 1; i++)
 			massBody.push_back(MassAggregate[i]->body);
 
-		areaConstraint = new XPBDAreaConstraint(massBody, 0.0f);
+		areaConstraint = new XPBDAreaConstraint(massBody, ps.softAreaCompliance);
 		PhysicsEngine::getInstance().RegisterXPBDConstraint(areaConstraint);
 
 		for (int i = 0; i < edgeCount; i++)
@@ -575,8 +577,7 @@ void SoftBodyComponent::BuildMassAggregate() {
 			PointMass* pmA = MassAggregate[i].get();
 			PointMass* pmB = MassAggregate[(i + 1) % edgeCount].get();
 
-			XPBDTriAreaConstraint* triConstraint = new XPBDTriAreaConstraint(
-				CenterPM->body, pmA->body, pmB->body, 0.001f);
+			XPBDTriAreaConstraint* triConstraint = new XPBDTriAreaConstraint(CenterPM->body, pmA->body, pmB->body, ps.softTriAreaCompliance);
 			PhysicsEngine::getInstance().RegisterXPBDConstraint(triConstraint);
 			triAreaConstraints.push_back(triConstraint);
 		}

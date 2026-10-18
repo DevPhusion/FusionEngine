@@ -31,7 +31,6 @@ public:
 	float inverseMass = 1.0f; 
 	float linearDamping = 0.995f;
 	glm::vec3 velocity = glm::vec3(0);
-	glm::vec3 baseAcceleration = glm::vec3(0, -9.8f, 0);
 	glm::vec3 acceleration = glm::vec3(0);
 
 	//Simply to satisfy the PhysicsBody interface, pm can't rotate

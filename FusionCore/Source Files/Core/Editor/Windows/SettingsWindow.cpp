@@ -139,10 +139,33 @@ void SettingsWindow::DrawGeneral() {
 }
 
 void SettingsWindow::DrawPhysics() {
-	Settings& settings = EngineManager::getInstance().EngineSettings;
+	EngineManager& EM = EngineManager::getInstance();
+	Settings& settings = EM.EngineSettings;
+	PhysicsSettings& p = settings.physics;
+
+	auto F = [&](const char* label, const char* id, float& v, float speed, float mn, float mx,
+		const char* fmt, const char* tip = nullptr) {
+			EditorField::Detail::Label(label);
+			ImGui::SetNextItemWidth(-FLT_MIN);
+			ImGui::DragFloat(id, &v, speed, mn, mx, fmt, ImGuiSliderFlags_AlwaysClamp);
+			if (tip && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
+			if (ImGui::IsItemDeactivatedAfterEdit()) EM.EngineChangeEvent();
+		};
+	auto I = [&](const char* label, const char* id, int& v, int mn, int mx, const char* tip = nullptr) {
+		EditorField::Detail::Label(label);
+		ImGui::SetNextItemWidth(-FLT_MIN);
+		ImGui::DragInt(id, &v, 0.2f, mn, mx, "%d", ImGuiSliderFlags_AlwaysClamp);
+		if (tip && ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
+		if (ImGui::IsItemDeactivatedAfterEdit()) EM.EngineChangeEvent();
+		};
+
+	if (ImGui::Button("Reset all physics to defaults")) {
+		p = PhysicsSettings();
+		EM.EngineChangeEvent();
+	}
+	ImGui::Spacing();
 
 	ImGui::SeparatorText("Collision");
-
 	const char* modeLabels[] = { "AABB", "Bounding Circle" };
 	int current = static_cast<int>(settings.broadPhaseMode);
 	EditorField::ComboEngine("Broad phase mode", "##BroadPhaseMode", &current, modeLabels,
@@ -159,6 +182,85 @@ void SettingsWindow::DrawPhysics() {
 	ImGui::Spacing();
 	ImGui::SeparatorText("Interaction");
 	EditorField::CheckboxEngine("Physics interact", "##PhysicsInteract", &settings.physicsInteract);
+	F("Drag stiffness", "##DragK", p.dragStiffness, 1.0f, 0.0f, 10000.0f, "%.1f", "Mouse drag spring constant (scaled by mass).");
+	F("Drag damping", "##DragC", p.dragDamping, 0.1f, 0.0f, 1000.0f, "%.2f", "Mouse drag damping (scaled by mass).");
+
+	ImGui::Spacing();
+	ImGui::SeparatorText("World");
+	{
+		EditorField::Detail::Label("Gravity");
+		ImGui::SetNextItemWidth(-FLT_MIN);
+		float g[2] = { p.gravity.x, p.gravity.y };
+		if (ImGui::DragFloat2("##Gravity", g, 0.05f, -100.0f, 100.0f, "%.2f m/s²")) {
+			p.gravity.x = g[0]; p.gravity.y = g[1];
+		}
+		if (ImGui::IsItemDeactivatedAfterEdit()) EM.EngineChangeEvent();
+	}
+
+	if (ImGui::CollapsingHeader("Rigid Body Solver (PGS)")) {
+		I("Iterations (frame)", "##PgsIter", p.pgsFrameIterations, 1, 200, "Velocity iterations for rigid contacts each frame.");
+		I("Iterations (substep)", "##PgsSubIter", p.pgsSubstepIterations, 1, 200, "Iterations for constraints solved inside soft body substeps.");
+		F("Contact bias factor", "##CBeta", p.contactBeta, 0.005f, 0.0f, 1.0f, "%.3f", "Baumgarte-style penetration recovery. Higher = faster push-out, more jitter.");
+		F("Static friction", "##CSF", p.contactStaticFriction, 0.01f, 0.0f, 5.0f, "%.3f");
+		F("Dynamic friction", "##CDF", p.contactDynamicFriction, 0.01f, 0.0f, 5.0f, "%.3f");
+		F("Position correction", "##RPC", p.rigidPositionCorrection, 0.005f, 0.0f, 1.0f, "%.3f", "Fraction of penetration removed by direct position projection.");
+		F("Slop", "##RSlop", p.rigidSlop, 0.0005f, 0.0f, 0.1f, "%.4f", "Penetration tolerated before correction.");
+		F("Sleep linear threshold", "##SleepL", p.rigidSleepLinear, 0.0001f, 0.0f, 1.0f, "%.4f m/s", "Below this speed velocity snaps to zero.");
+		F("Sleep angular threshold", "##SleepA", p.rigidSleepAngular, 0.0001f, 0.0f, 1.0f, "%.4f rad/s");
+	}
+
+	if (ImGui::CollapsingHeader("Soft Body (XPBD)")) {
+		I("Substeps", "##XSub", p.xpbdSubsteps, 1, 64);
+		I("Position iterations", "##XIter", p.xpbdPositionIterations, 1, 64);
+		F("Area compliance", "##SAC", p.softAreaCompliance, 0.0001f, 0.0f, 10.0f, "%.5f", "Applied when a soft body is rebuilt (Reset shape / restart).");
+		F("Triangle area compliance", "##STAC", p.softTriAreaCompliance, 0.0001f, 0.0f, 10.0f, "%.5f", "Applied when a soft body is rebuilt (Reset shape / restart).");
+		F("Gas max force / edge", "##GasMax", p.softGasMaxForcePerEdge, 0.5f, 0.0f, 10000.0f, "%.1f");
+		F("Soft-soft compliance", "##SSC", p.softSoftCompliance, 0.00001f, 0.0f, 1.0f, "%.6f");
+		F("Soft-soft friction A", "##SSFA", p.softSoftStaticFriction, 0.01f, 0.0f, 5.0f, "%.3f");
+		F("Soft-soft friction B", "##SSFB", p.softSoftDynamicFriction, 0.01f, 0.0f, 5.0f, "%.3f");
+	}
+
+	if (ImGui::CollapsingHeader("Soft <-> Rigid Contacts")) {
+		I("Iterations", "##SRIter", p.srContactIterations, 1, 64);
+		F("Bias factor", "##SRBeta", p.srBeta, 0.005f, 0.0f, 1.0f, "%.3f");
+		F("Slop", "##SRSlop", p.srSlop, 0.0001f, 0.0f, 0.1f, "%.4f");
+		F("Max bias velocity", "##SRMaxB", p.srMaxBiasVelocity, 0.05f, 0.0f, 100.0f, "%.2f");
+		F("Restitution (soft vs rigid)", "##SRRest", p.softRigidRestitution, 0.01f, 0.0f, 1.0f, "%.3f");
+		F("Restitution (rigid vs soft)", "##RSRest", p.rigidSoftRestitution, 0.01f, 0.0f, 1.0f, "%.3f");
+		F("Static friction", "##SRSF", p.srStaticFriction, 0.01f, 0.0f, 5.0f, "%.3f");
+		F("Dynamic friction", "##SRDF", p.srDynamicFriction, 0.01f, 0.0f, 5.0f, "%.3f");
+		F("Position correction", "##SRPC", p.srPositionCorrection, 0.005f, 0.0f, 1.0f, "%.3f");
+		F("Rigid vertex radius", "##RVR", p.rigidVertexRadius, 0.001f, 0.0f, 1.0f, "%.4f");
+	}
+
+	if (ImGui::CollapsingHeader("Fluid & Gas (PBF)")) {
+		I("Substeps", "##PbfSub", p.pbfSubsteps, 1, 32);
+		I("Solver iterations", "##PbfIter", p.pbfSolveIterations, 1, 32);
+		F("Tension correction (k)", "##SCorrK", p.pbfSCorrK, 0.005f, 0.0f, 5.0f, "%.3f", "Artificial pressure that prevents particle clumping.");
+		F("Tension correction dq", "##SCorrDQ", p.pbfSCorrDeltaQ, 0.005f, 0.01f, 1.0f, "%.3f", "Fraction of smoothing radius.");
+		F("Gas min temperature", "##GasMinT", p.gasMinTemperature, 0.1f, 0.01f, 10000.0f, "%.2f");
+	}
+
+	if (ImGui::CollapsingHeader("Fluid Boundary Contacts")) {
+		I("Iterations", "##FCIter", p.fluidContactIterations, 1, 64);
+		F("Bias factor", "##FCBeta", p.fluidContactBeta, 0.005f, 0.0f, 1.0f, "%.3f");
+		F("Slop", "##FCSlop", p.fluidContactSlop, 0.0001f, 0.0f, 0.1f, "%.4f");
+		F("Restitution", "##FCRest", p.fluidContactRestitution, 0.01f, 0.0f, 1.0f, "%.3f");
+		F("Max bias velocity", "##FCMaxB", p.fluidMaxBiasVelocity, 0.05f, 0.0f, 100.0f, "%.2f");
+		F("Position correction", "##FCPC", p.fluidPositionCorrection, 0.005f, 0.0f, 1.0f, "%.3f");
+		F("Penetration clamp", "##FCClamp", p.fluidPenetrationClamp, 0.05f, 0.1f, 20.0f, "%.2f x radius");
+	}
+
+	if (ImGui::CollapsingHeader("Buoyancy")) {
+		F("Linear drag", "##BLD", p.buoyancyLinearDrag, 0.1f, 0.0f, 500.0f, "%.2f");
+		F("Angular drag", "##BAD", p.buoyancyAngularDrag, 0.01f, 0.0f, 100.0f, "%.3f");
+		I("Surface min neighbours", "##BMN", p.buoyancyMinNeighbours, 1, 64, "Particles need this many neighbours to count as the fluid surface.");
+	}
+
+	if (ImGui::CollapsingHeader("Fracture")) {
+		F("Seed min distance", "##FSD", p.fractureSeedMinDistance, 0.005f, 0.0f, 1.0f, "%.3f", "Fraction of the object's bounding-box diagonal.");
+		F("Min shard mass", "##FMM", p.fractureMinShardMass, 0.0005f, 0.00001f, 10.0f, "%.4f kg");
+	}
 }
 
 void SettingsWindow::DrawViewport() {

@@ -214,6 +214,8 @@ public:
 		return instance;
 	}
 
+	static const PhysicsSettings& PS() { return EngineManager::getInstance().EngineSettings.physics; }
+
 	void Setup(std::vector<std::unique_ptr<Object>>* objects);
 	void ProcessPhysics(float delta);
 
@@ -420,7 +422,6 @@ public:
 	std::vector<char> fluidSurfaceQualifies;
 	glm::vec3 fluidBoundsMin = glm::vec3(INFINITY);
 	glm::vec3 fluidBoundsMax = glm::vec3(-INFINITY);
-	int buoyancyMinNeighbours = 4;
 	float Poly6Coefficient(float h);
 	float SpikyCoefficient(float h);
 	float Poly6Kernel(float poly6Coeff, float h2, float r2);
