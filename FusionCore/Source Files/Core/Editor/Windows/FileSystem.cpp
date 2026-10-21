@@ -385,7 +385,7 @@ void FileSystem::DrawNode(const FileSystemEntry& entry, int depth) {
 	else if (entry.iconType == ResourceIconType::Image) {
 		unsigned int tex = FileManager::getInstance().GetOrLoadThumbnail(entry.absolutePath);
 		if (tex != 0)
-			dl->AddImage((ImTextureID)(intptr_t)tex, iconPos, ImVec2(iconPos.x + iconSize, iconPos.y + iconSize));
+			dl->AddImage((ImTextureID)(intptr_t)tex, iconPos, ImVec2(iconPos.x + iconSize, iconPos.y + iconSize), ImVec2(0, 1), ImVec2(1, 0));
 		else
 			DrawFileIcon(dl, iconPos, iconSize, IM_COL32(120, 170, 230, 255));
 	}
