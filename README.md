@@ -151,7 +151,7 @@ The full design document covers the engine's mathematics, physics solvers, ECS, 
 
 ## Upcoming Features
 
-Fusion Engine is under active development. These are some upcoming features planned for version 0.2
+Fusion Engine is under active development. These are some upcoming features planned for version 0.3
 
 | Feature | Status | Progress |
 |---|---|---|
