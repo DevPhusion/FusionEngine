@@ -1,6 +1,7 @@
 #include "../../../../Header Files/Core/Editor/Windows/FileSystem.h"
 #include "../../../../Header Files/Core/Files/FileDialog.h"
 #include "../../../../Header Files/Core/SceneManager.h"
+#include "../../../../Header Files/Core/ResourceManager.h"
 #include <algorithm>
 #include <cctype>
 
@@ -108,13 +109,10 @@ namespace {
 		float stemTopY = pos.y + size * 0.40f;
 		float stemX = headCenter.x + noteHeadRadiusX * 0.85f;
 
-		// Notehead, drawn as a slightly rotated filled ellipse.
 		dl->AddEllipseFilled(headCenter, ImVec2(noteHeadRadiusX, noteHeadRadiusY), glyphColor, -0.35f);
 
-		// Stem.
 		dl->AddLine(ImVec2(stemX, headCenter.y), ImVec2(stemX, stemTopY), glyphColor, stemThickness);
 
-		// Flag.
 		dl->AddBezierQuadratic(
 			ImVec2(stemX, stemTopY),
 			ImVec2(stemX + bodyW * 0.22f, stemTopY + size * 0.06f),
@@ -130,6 +128,21 @@ namespace {
 #else
 		std::string command = "code " + args + " >/dev/null 2>&1 &";
 		std::system(command.c_str());
+#endif
+	}
+
+	void OpenFolderInExplorer(const std::string& folderPath) {
+		std::error_code ec;
+		if (folderPath.empty() || !fs::is_directory(folderPath, ec)) return;
+
+#ifdef _WIN32
+		ShellExecuteW(nullptr, L"open", fs::path(folderPath).wstring().c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+#elif defined(__APPLE__)
+		std::string cmd = "open \"" + folderPath + "\" >/dev/null 2>&1 &";
+		std::system(cmd.c_str());
+#else
+		std::string cmd = "xdg-open \"" + folderPath + "\" >/dev/null 2>&1 &";
+		std::system(cmd.c_str());
 #endif
 	}
 }
@@ -254,6 +267,8 @@ void FileSystem::CommitRename() {
 	if (selectedPath == oldPath) {
 		SelectPath(newVirtualPath);
 	}
+	if (EditorManager::getInstance().selectedAssetPath == oldPath)
+		EditorManager::getInstance().SetSelectedAsset(newVirtualPath);
 }
 
 void FileSystem::CancelRename() {
@@ -338,6 +353,9 @@ void FileSystem::DrawNode(const FileSystemEntry& entry, int depth) {
 	}
 	if (rowDoubleClicked && !isRenaming && !toggledOpen && entry.iconType == ResourceIconType::Script) {
 		OpenPathInVSCode(FileManager::getInstance().currentProjectDirectory, entry.absolutePath);
+	}
+	if (rowDoubleClicked && !isRenaming && !toggledOpen && ResourceManager::IsResourceType(entry.iconType)) {
+		EditorManager::getInstance().SetSelectedAsset(entry.virtualPath);
 	}
 	if (rowDoubleClicked && !isRenaming && !toggledOpen && entry.iconType == ResourceIconType::Scene
 		&& EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Stop) {
@@ -641,6 +659,15 @@ void FileSystem::ProcessEntryContextMenu(const FileSystemEntry& entry) {
 	}
 
 	if (entry.isDirectory) {
+		if (ImGui::MenuItem("Reveal in File Explorer")) {
+			if (isRoot) {
+				OpenFolderInExplorer(FileManager::getInstance().GetResourcesRoot().string());
+			}
+			else {
+				OpenFolderInExplorer(entry.absolutePath.string());
+			}
+		}
+
 		if (ImGui::BeginMenu("Add")) {
 			if (ImGui::MenuItem("Folder...")) {
 				newFolderTargetPath = entry.virtualPath;

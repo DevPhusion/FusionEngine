@@ -3,6 +3,7 @@
 #include "../../../../Header Files/Core/Editor/EditorTheme.h"
 #include "../../../../Header Files/Core/Editor/EditorField.h"
 #include "../../../../Header Files/Components/Components.h"
+#include "../../../../Header Files/Core/ResourceManager.h"
 #include <numbers>
 #include <cctype>
 #include <functional>
@@ -398,6 +399,17 @@ void Inspector::ProcessWindow() {
             }
 
             ImGui::EndPopup();
+        }
+    }
+    else if (!EditorManager::getInstance().selectedAssetPath.empty()) {
+        EditorManager& em = EditorManager::getInstance();
+        if (Resource* res = ResourceManager::getInstance().GetResource(em.selectedAssetPath)) {
+            res->ProcessInspectorUI();
+        }
+        else {
+            ImGui::TextDisabled("File no longer exists:");
+            ImGui::TextWrapped("%s", em.selectedAssetPath.c_str());
+            if (ImGui::Button("Clear")) em.selectedAssetPath.clear();
         }
     }
 

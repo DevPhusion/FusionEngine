@@ -7,6 +7,7 @@
 #include "../../../Header Files/Core/SceneManager.h"
 #include "../../../Header Files/Core/Files/Export/ExportPackageReader.h"
 #include "../../../Header Files/Core/Editor/HeadlessMonitor.h"
+#include "../../../Header Files/Core/ResourceManager.h"
 
 namespace fs = std::filesystem;
 
@@ -126,6 +127,7 @@ void FileManager::SetupResourcesFolder() {
 
 	fs::path previousRoot = resourcesRoot;
 	resourcesRoot = resDir;
+	ResourceManager::getInstance().Clear();
 	ClearThumbnailCache();
 	resourceGeneration++;
 
@@ -293,7 +295,7 @@ bool FileManager::DeleteResource(const std::string& virtualPath) {
 	std::error_code ec;
 	if (!fs::exists(target, ec)) return false;
 
-	thumbnailCache.erase(target.string());
+	ResourceManager::getInstance().Invalidate(virtualPath);
 
 	std::vector<std::string> scriptsRemoved;
 	ProcessScriptInSubtree(virtualPath, [&](const std::string& scriptVirtualPath) {
@@ -340,7 +342,7 @@ bool FileManager::RenameResource(const std::string& virtualPath, const std::stri
 	std::error_code ec;
 	if (fs::exists(dest, ec)) return false;
 
-	thumbnailCache.erase(source.string());
+	ResourceManager::getInstance().Invalidate(virtualPath);
 
 	std::vector<std::string> scriptsBefore;
 	ProcessScriptInSubtree(virtualPath, [&](const std::string& scriptVirtualPath) {
@@ -387,7 +389,7 @@ bool FileManager::MoveResource(const std::string& virtualPath, const std::string
 	fs::path dest = destDir / source.filename();
 	if (fs::exists(dest, ec)) return false;
 
-	thumbnailCache.erase(source.string());
+	ResourceManager::getInstance().Invalidate(virtualPath);
 
 	std::vector<std::string> scriptsBefore;
 	ProcessScriptInSubtree(virtualPath, [&](const std::string& scriptVirtualPath) {
@@ -437,6 +439,17 @@ unsigned int FileManager::GetOrLoadThumbnail(const std::filesystem::path& imageA
 
 	thumbnailCache[key] = texId;
 	return texId;
+}
+
+void FileManager::InvalidateThumbnail(const std::filesystem::path& imageAbsolutePath) {
+	auto it = thumbnailCache.find(imageAbsolutePath.string());
+	if (it == thumbnailCache.end()) return;
+
+	if (it->second != 0) {
+		GLuint id = it->second;
+		glDeleteTextures(1, &id);
+	}
+	thumbnailCache.erase(it);
 }
 
 void FileManager::ClearThumbnailCache() {

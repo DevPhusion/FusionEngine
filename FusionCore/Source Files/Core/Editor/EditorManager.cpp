@@ -53,7 +53,14 @@ void EditorManager::AddWindow(EditorWindow* window) {
 }
 
 void EditorManager::SetSelectedObject(Object* object) {
+	if (object != nullptr)
+		selectedAssetPath.clear();
 	this->selectedObject = object;
+}
+
+void EditorManager::SetSelectedAsset(const std::string& virtualPath) {
+	SetSelectedObject(nullptr);
+	this->selectedAssetPath = virtualPath;
 }
 
 void EditorManager::ProcessDockSpace() {

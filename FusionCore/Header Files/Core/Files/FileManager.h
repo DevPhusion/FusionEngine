@@ -47,6 +47,8 @@ public:
 	static constexpr uint32_t magicByte = 0x4E535546;
 	static constexpr std::string version = "v0.2";
 
+	static ResourceIconType ClassifyExtension(const std::string& extensionLower);
+
 	bool isProjectSaved = false;
 	std::string currentProjectFile = "";
 	std::string currentProjectDirectory = "";
@@ -81,6 +83,7 @@ public:
 	bool MoveResource(const std::string& virtualPath, const std::string& destDirVirtualPath);
 
 	unsigned int GetOrLoadThumbnail(const std::filesystem::path& imageAbsolutePath);
+	void InvalidateThumbnail(const std::filesystem::path& imageAbsolutePath);   
 	void ClearThumbnailCache();
 
 	void SaveProjectToFile(const std::string& path);
@@ -100,7 +103,6 @@ private:
 	FileManager() = default;
 	~FileManager();
 
-	static ResourceIconType ClassifyExtension(const std::string& extensionLower);
 
 	std::filesystem::path resourcesRoot;
 	std::unordered_map<std::string, unsigned int> thumbnailCache;

@@ -36,6 +36,7 @@ public:
 	}
 
 	Object* selectedObject;
+	std::string selectedAssetPath;
 	Viewport* gameViewport = nullptr;
 
 	std::vector<EditorWindow*> Windows;
@@ -45,6 +46,7 @@ public:
 	void Setup(GLFWwindow* window);
 	void AddWindow(EditorWindow* window);
 	void SetSelectedObject(Object* object);
+	void SetSelectedAsset(const std::string& virtualPath);
 	void ProcessEditor();
 	void ProcessDockSpace();
 
