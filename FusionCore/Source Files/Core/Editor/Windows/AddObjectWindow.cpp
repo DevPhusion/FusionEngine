@@ -56,7 +56,7 @@ void AddObjectWindow::RefreshSceneList() {
 				if (FileManager::getInstance().IsDevOnlyDirectory(dirName)) continue;
 				scan(entry.virtualPath);
 			}
-			else if (entry.iconType == ResourceIconType::Scene) {
+			else if (entry.iconType == ResourceType::Scene) {
 				sceneFiles.push_back(entry.virtualPath);
 			}
 		}

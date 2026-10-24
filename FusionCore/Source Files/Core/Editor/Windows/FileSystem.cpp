@@ -348,16 +348,16 @@ void FileSystem::DrawNode(const FileSystemEntry& entry, int depth) {
 	if (rowClicked && !isRenaming && !toggledOpen) {
 		SelectPath(entry.virtualPath);
 	}
-	if (rowDoubleClicked && !isRenaming && !toggledOpen && entry.iconType == ResourceIconType::Folder) {
+	if (rowDoubleClicked && !isRenaming && !toggledOpen && entry.iconType == ResourceType::Folder) {
 		BeginRename(entry.virtualPath, entry.name);
 	}
-	if (rowDoubleClicked && !isRenaming && !toggledOpen && entry.iconType == ResourceIconType::Script) {
+	if (rowDoubleClicked && !isRenaming && !toggledOpen && entry.iconType == ResourceType::Script) {
 		OpenPathInVSCode(FileManager::getInstance().currentProjectDirectory, entry.absolutePath);
 	}
 	if (rowDoubleClicked && !isRenaming && !toggledOpen && ResourceManager::IsResourceType(entry.iconType)) {
 		EditorManager::getInstance().SetSelectedAsset(entry.virtualPath);
 	}
-	if (rowDoubleClicked && !isRenaming && !toggledOpen && entry.iconType == ResourceIconType::Scene
+	if (rowDoubleClicked && !isRenaming && !toggledOpen && entry.iconType == ResourceType::Scene
 		&& EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Stop) {
 		RequestOpenScene(entry.absolutePath);
 	}
@@ -400,23 +400,23 @@ void FileSystem::DrawNode(const FileSystemEntry& entry, int depth) {
 	if (entry.isDirectory) {
 		DrawFolderIcon(dl, iconPos, iconSize, IM_COL32(235, 200, 100, 255));
 	}
-	else if (entry.iconType == ResourceIconType::Image) {
+	else if (entry.iconType == ResourceType::Image) {
 		unsigned int tex = FileManager::getInstance().GetOrLoadThumbnail(entry.absolutePath);
 		if (tex != 0)
 			dl->AddImage((ImTextureID)(intptr_t)tex, iconPos, ImVec2(iconPos.x + iconSize, iconPos.y + iconSize), ImVec2(0, 1), ImVec2(1, 0));
 		else
 			DrawFileIcon(dl, iconPos, iconSize, IM_COL32(120, 170, 230, 255));
 	}
-	else if (entry.iconType == ResourceIconType::Script) {
+	else if (entry.iconType == ResourceType::Script) {
 		DrawScriptIcon(dl, iconPos, iconSize, IM_COL32(90, 160, 110, 255), IM_COL32(235, 235, 235, 255));
 	}
-	else if (entry.iconType == ResourceIconType::Scene) {
+	else if (entry.iconType == ResourceType::Scene) {
 		DrawSceneIcon(dl, iconPos, iconSize, IM_COL32(150, 110, 200, 255), IM_COL32(235, 235, 235, 255));
 	}
-	else if (entry.iconType == ResourceIconType::Archive) {
+	else if (entry.iconType == ResourceType::Archive) {
 		DrawArchiveIcon(dl, iconPos, iconSize, IM_COL32(200, 170, 90, 255), IM_COL32(35, 30, 15, 255));
 	}
-	else if (entry.iconType == ResourceIconType::Audio) {
+	else if (entry.iconType == ResourceType::Audio) {
 		DrawAudioIcon(dl, iconPos, iconSize, IM_COL32(210, 110, 140, 255), IM_COL32(255, 255, 255, 255));
 	}
 	else {
@@ -712,7 +712,7 @@ void FileSystem::ProcessEntries() {
 	root.name = "res://";
 	root.virtualPath = FileManager::getInstance().GetRootVirtualPath();
 	root.isDirectory = true;
-	root.iconType = ResourceIconType::Folder;
+	root.iconType = ResourceType::Folder;
 
 	DrawNode(root, 0);
 

@@ -15,34 +15,34 @@ FileManager::~FileManager() {
 	ClearThumbnailCache();
 }
 
-ResourceIconType FileManager::ClassifyExtension(const std::string& extLower) {
+ResourceType FileManager::ClassifyExtension(const std::string& extLower) {
 	static const std::vector<std::string> imageExts = { ".png", ".jpg", ".jpeg", ".bmp", ".tga", ".svg" };
 	static const std::vector<std::string> audioExts = { ".mp3", ".wav" };
 
 	if (std::find(imageExts.begin(), imageExts.end(), extLower) != imageExts.end())
-		return ResourceIconType::Image;
+		return ResourceType::Image;
 
 	if (std::find(audioExts.begin(), audioExts.end(), extLower) != audioExts.end())
-		return ResourceIconType::Audio;
+		return ResourceType::Audio;
 
 	if (extLower == ".py") {
-		return ResourceIconType::Script;
+		return ResourceType::Script;
 	}
 	if (extLower == ".fscene") {
-		return ResourceIconType::Scene;
+		return ResourceType::Scene;
 	}
 	if (extLower == ".zip") {
-		return ResourceIconType::Archive;
+		return ResourceType::Archive;
 	}
 
-	return ResourceIconType::Unknown;
+	return ResourceType::Unknown;
 }
 
 void FileManager::ProcessScriptInSubtree(const std::string& virtualPath, const std::function<void(const std::string&)>& callback) const {
 	if (!IsDirectory(virtualPath)) {
 		std::string ext = VirtualToAbsolute(virtualPath).extension().string();
 		std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return (char)std::tolower(c); });
-		if (ClassifyExtension(ext) == ResourceIconType::Script)
+		if (ClassifyExtension(ext) == ResourceType::Script)
 			callback(virtualPath);
 		return;
 	}
@@ -195,7 +195,7 @@ std::vector<FileSystemEntry> FileManager::GetDirectoryContents(const std::string
 		fe.virtualPath = AbsoluteToVirtual(entry.path());
 
 		if (fe.isDirectory) {
-			fe.iconType = ResourceIconType::Folder;
+			fe.iconType = ResourceType::Folder;
 		}
 		else {
 			std::string ext = entry.path().extension().string();
@@ -324,7 +324,7 @@ bool FileManager::ImportFile(const std::string& sourceAbsolutePath, const std::s
 
 	std::string ext = dest.extension().string();
 	std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return (char)std::tolower(c); });
-	if (ClassifyExtension(ext) == ResourceIconType::Script) {
+	if (ClassifyExtension(ext) == ResourceType::Script) {
 		std::string virtualPath = AbsoluteToVirtual(dest);
 		ScriptManager::getInstance().RegisterScript(virtualPath);
 		ScriptManager::getInstance().TryRegisterScriptAsComponent(virtualPath);

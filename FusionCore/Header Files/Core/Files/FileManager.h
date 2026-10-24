@@ -10,7 +10,7 @@
 #include "../../../stb_image.h"
 #include "../../../Header Files/Core/Scripting/ScriptManager.h"
 
-enum class ResourceIconType {
+enum class ResourceType {
 	Folder,
 	Image,
 	Script,
@@ -25,7 +25,7 @@ struct FileSystemEntry {
 	std::filesystem::path absolutePath;
 	std::string virtualPath;
 	bool isDirectory = false;
-	ResourceIconType iconType = ResourceIconType::Unknown;
+	ResourceType iconType = ResourceType::Unknown;
 	unsigned int thumbnailTexture = 0;
 };
 
@@ -47,7 +47,7 @@ public:
 	static constexpr uint32_t magicByte = 0x4E535546;
 	static constexpr std::string version = "v0.2";
 
-	static ResourceIconType ClassifyExtension(const std::string& extensionLower);
+	static ResourceType ClassifyExtension(const std::string& extensionLower);
 
 	bool isProjectSaved = false;
 	std::string currentProjectFile = "";

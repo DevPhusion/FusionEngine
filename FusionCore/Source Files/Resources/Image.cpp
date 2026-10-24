@@ -1,5 +1,6 @@
 #include "../../Header Files/Resources/Image.h"
 #include "../../Header Files/Core/Files/FileManager.h"
+#include "../../Header Files/Core/Editor/EditorField.h"
 #include <algorithm>
 #include <cstdio>
 #include <numeric>
@@ -16,7 +17,6 @@ void Image::Unload() {
 }
 
 void Image::OnReload() {
-	// File changed (or first load): drop any stale cached texture so the preview reloads it.
 	FileManager::getInstance().InvalidateThumbnail(GetAbsolutePath());
 
 	width = height = channels = 0;
@@ -38,40 +38,13 @@ void Image::OnReload() {
 
 void Image::DrawPreview() {
 	unsigned int tex = valid ? FileManager::getInstance().GetOrLoadThumbnail(GetAbsolutePath()) : 0;
-	if (tex == 0 || width <= 0 || height <= 0) {
-		ImGui::TextDisabled("Preview unavailable (unsupported or corrupt image)");
-		return;
-	}
-
-	const float availW = ImGui::GetContentRegionAvail().x;
-	const float maxH = 360.0f;
-	const float scale = std::min(availW / width, maxH / height);
-	const ImVec2 size(width * scale, height * scale);
-
-	ImVec2 pos = ImGui::GetCursorScreenPos();
-	pos.x += (availW - size.x) * 0.5f;
-	ImGui::SetCursorScreenPos(pos);
-
-	const ImVec2 end(pos.x + size.x, pos.y + size.y);
-	ImDrawList* dl = ImGui::GetWindowDrawList();
-
-	// Checkerboard behind the image so transparency is visible
-	const float tile = 8.0f;
-	dl->AddRectFilled(pos, end, IM_COL32(60, 60, 60, 255));
-	dl->PushClipRect(pos, end, true);
-	int row = 0;
-	for (float y = 0; y < size.y; y += tile, row++)
-		for (float x = (row % 2) * tile; x < size.x; x += tile * 2)
-			dl->AddRectFilled(ImVec2(pos.x + x, pos.y + y), ImVec2(pos.x + x + tile, pos.y + y + tile), IM_COL32(85, 85, 85, 255));
-	dl->PopClipRect();
-
-	// UVs are flipped to match how the file tree draws these thumbnails
-	ImGui::Image((ImTextureID)(intptr_t)tex, size, ImVec2(0, 1), ImVec2(1, 0));
-	dl->AddRect(pos, end, ImGui::GetColorU32(ImGuiCol_Border));
+	EditorField::Detail::ImagePreview(tex, width, height, previewMaxHeight);
 }
 
 void Image::DrawProperties() {
 	if (!valid) return;
+
+	using EditorField::PropertyRow;
 
 	PropertyRow("Resolution", std::to_string(width) + " x " + std::to_string(height) + " px");
 

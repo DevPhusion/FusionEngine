@@ -16,16 +16,16 @@ public:
 	ResourceManager(const ResourceManager&) = delete;
 	void operator=(const ResourceManager&) = delete;
 
-	using Creator = std::function<std::unique_ptr<Resource>(std::string virtualPath, std::filesystem::path absolutePath)>;
+	using ResourceCreator = std::function<std::unique_ptr<Resource>(std::string virtualPath, std::filesystem::path absolutePath)>;
 	
 	template<typename T>
-	void RegisterType(ResourceIconType type) {
+	void RegisterType(ResourceType type) {
 		creators[type] = [](std::string v, std::filesystem::path a) {
 			return std::make_unique<T>(std::move(v), std::move(a));
 			};
 	}
 
-	static bool IsResourceType(ResourceIconType type);
+	static bool IsResourceType(ResourceType type);
 
 	Resource* GetResource(const std::string& virtualPath);
 
@@ -36,6 +36,6 @@ public:
 private:
 	ResourceManager();
 
-	std::unordered_map<ResourceIconType, Creator> creators;
+	std::unordered_map<ResourceType, ResourceCreator> creators;
 	std::unordered_map<std::string, std::unique_ptr<Resource>> resources;
 };

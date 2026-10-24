@@ -1,6 +1,5 @@
 #include "../../Header Files/Resources/Resource.h"
-#include "../../Header Files/Core/Editor/EditorTheme.h"
-#include "../../imgui/imgui.h"   
+#include "../../Header Files/Core/Editor/EditorField.h"
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -80,28 +79,25 @@ std::string Resource::FormatBytes(uintmax_t bytes) {
 	return buf;
 }
 
-void Resource::PropertyRow(const char* label, const std::string& value, bool wrap) {
-	ImGui::TableNextRow();
-	ImGui::TableSetColumnIndex(0);
-	ImGui::TextDisabled("%s", label);
-	ImGui::TableSetColumnIndex(1);
-	if (wrap) ImGui::TextWrapped("%s", value.c_str());
-	else ImGui::TextUnformatted(value.c_str());
+void Resource::DrawPreviewWidget(float maxHeight) {
+	CheckForChanges();
+	previewMaxHeight = maxHeight;
+	if (exists) DrawPreview();
+	else ImGui::TextDisabled("File not found.");
+	previewMaxHeight = -1.0f;
 }
 
 void Resource::DrawHeader() {
-	bool bold = EditorTheme::PushBold();
-	ImGui::TextUnformatted(absolutePath.filename().string().c_str());
-	EditorTheme::PopBold(bold);
+	EditorField::BoldText(absolutePath.filename().string().c_str());
 	ImGui::Spacing();
 }
 
 void Resource::DrawCommonProperties() {
-	PropertyRow("Path", virtualPath, true);
-	PropertyRow("Location", absolutePath.string(), true);
-	PropertyRow("Type", GetTypeName());
-	PropertyRow("File Size", FormatBytes(fileSize));
-	if (!modifiedText.empty()) PropertyRow("Modified", modifiedText);
+	EditorField::PropertyRow("Path", virtualPath, true);
+	EditorField::PropertyRow("Location", absolutePath.string(), true);
+	EditorField::PropertyRow("Type", GetTypeName());
+	EditorField::PropertyRow("File Size", FormatBytes(fileSize));
+	if (!modifiedText.empty()) EditorField::PropertyRow("Modified", modifiedText);
 }
 
 void Resource::ProcessInspectorUI() {
@@ -119,18 +115,12 @@ void Resource::ProcessInspectorUI() {
 	ImGui::Separator();
 	ImGui::Spacing();
 
-	if (ImGui::BeginTable("##ResourceProps", 2, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings)) {
-		ImGui::TableSetupColumn("##k", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-		ImGui::TableSetupColumn("##v", ImGuiTableColumnFlags_WidthStretch);
-
+	if (EditorField::BeginPropertyTable("##ResourceProps")) {
 		DrawCommonProperties();
 		DrawProperties();
-
-		ImGui::EndTable();
+		EditorField::EndPropertyTable();
 	}
 
 	ImGui::Spacing();
-	if (ImGui::Button("Copy Path"))
-		ImGui::SetClipboardText(virtualPath.c_str());
+	EditorField::CopyButton("Copy Path", virtualPath.c_str());
 }
-

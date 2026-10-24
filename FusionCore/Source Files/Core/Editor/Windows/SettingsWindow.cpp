@@ -106,27 +106,11 @@ void SettingsWindow::DrawGeneral() {
 
 	ImGui::SeparatorText("Project");
 
-	EditorField::Detail::Label("Main scene");
 	{
-		char sceneBuf[256];
-#if defined(_MSC_VER)
-		strcpy_s(sceneBuf, settings.mainScenePath.c_str());
-#else
-		strncpy(sceneBuf, settings.mainScenePath.c_str(), sizeof(sceneBuf) - 1);
-		sceneBuf[sizeof(sceneBuf) - 1] = '\0';
-#endif
-		const float browseW = ImGui::CalcTextSize("Browse").x + style.FramePadding.x * 2.0f;
-		ImGui::SetNextItemWidth(-(browseW + style.ItemSpacing.x));
-		ImGui::InputTextWithHint("##MainScene", "None (plays current scene)", sceneBuf,
-			IM_ARRAYSIZE(sceneBuf), ImGuiInputTextFlags_ReadOnly);
-		ImGui::SameLine();
-		if (ImGui::Button("Browse##MainScene")) {
-			auto opts = FileDialogOptions::ForExtension("Fusion Scene", "fscene", "Choose Main Scene");
-			if (auto path = FileDialog::ShowOpenDialog(opts)) {
-				settings.mainScenePath = *path;
-				EM.EngineChangeEvent();
-			}
-		}
+		EditorField::FileSpec spec = EditorField::FileSpec::Extension("Fusion Scene", "fscene", "Choose Main Scene");
+		spec.hint = "None (plays current scene)";
+		spec.allowClear = true;
+		EditorField::FileEngine("Main scene", "##MainScene", settings.mainScenePath, spec);
 	}
 
 	ImGui::Spacing();

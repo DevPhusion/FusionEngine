@@ -199,45 +199,10 @@ void AudioComponent::ProcessInspectorUI() {
 				entry.name = GenerateUniqueTrackName(desired, &entry.name);
 				});
 
-			ImGui::Text("Audio File");
-			ImGui::SameLine();
-			char selected_audio_path[128] = "None (click to choose...)";
-			if (!entry.audioPath.empty()) {
-				std::string displayPath = FileManager::getInstance().AbsoluteToVirtual(entry.audioPath.c_str());
-#if defined(_MSC_VER)
-				strcpy_s(selected_audio_path, displayPath.c_str());
-#else
-				strncpy(selected_audio_path, displayPath.c_str(), sizeof(selected_audio_path) - 1);
-#endif
-			}
-			ImGui::InputText("##AudioPath", selected_audio_path, IM_ARRAYSIZE(selected_audio_path), ImGuiInputTextFlags_ReadOnly);
-			if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-			if (ImGui::IsItemClicked()) {
-				FileDialogOptions opts;
-				opts.title = "Choose Audio";
-				opts.filters = {
-					{ "Audio Files", "*.wav;*.mp3" },
-					{ "All Files", "*.*" }
-				};
-				if (auto path = FileDialog::ShowOpenDialog(opts)) {
-					EditorManager::getInstance().BeginEdit({ parent });
-					SetAudioPath(entry.name, *path);
-					EditorManager::getInstance().EndEdit({ parent });
-				}
-			}
-
-			if (ImGui::BeginDragDropTarget()) {
-				if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(FileManager::kResourceDragDropPayloadType)) {
-					std::string virtualPath(static_cast<const char*>(payload->Data));
-					FileManager& fm = FileManager::getInstance();
-					if (!fm.IsDirectory(virtualPath)) {
-						EditorManager::getInstance().BeginEdit({ parent });
-						SetAudioPath(entry.name, fm.VirtualToAbsolute(virtualPath).string());
-						EditorManager::getInstance().EndEdit({ parent });
-					}
-				}
-				ImGui::EndDragDropTarget();
-			}
+			std::string audioPath = entry.audioPath;
+			EditorField::AudioFileScene(parent, "Audio File", "##AudioPath", audioPath, [&] {
+				SetAudioPath(entry.name, audioPath);
+				});
 
 			EditorField::CheckboxScene(parent, "Streaming", "##Streaming", &entry.streaming, [&] {
 				if (entry.audioPath != "") {
@@ -251,19 +216,9 @@ void AudioComponent::ProcessInspectorUI() {
 				}
 				});
 
-			EditorField::CheckboxScene(parent, "Playing", "##Playing", &entry.isPlaying, [&] {
-				if (entry.isPlaying) {
-					PlayAudioTrack(entry.name);
-				}
-				else {
-					StopAudioTrack(entry.name);
-				}
-				});
-
 			EditorField::InputFloatScene(parent, "Volume", "##Volume", &entry.volume, [&] {
 				SetVolume(entry.name, entry.volume);
 				});
-
 
 			ImGui::Separator();
 

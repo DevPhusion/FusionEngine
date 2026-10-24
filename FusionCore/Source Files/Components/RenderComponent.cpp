@@ -697,45 +697,14 @@ void RenderComponent::PostLoad() {
 }
 
 void RenderComponent::ProcessInspectorUI() {
-	ImGui::Text("Texture");
-	ImGui::SameLine();
-	char selected_texture_path[128] = "None (click to choose...)";
-	if (!texture_path.empty()) {
-		std::string displayPath = FileManager::getInstance().AbsoluteToVirtual(texture_path.c_str());
-#if defined(_MSC_VER)
-		strcpy_s(selected_texture_path, displayPath.c_str());
-#else
-		strncpy(selected_texture_path, displayPath.c_str(), sizeof(selected_texture_path) - 1);
-#endif
-	}
-	ImGui::InputText("##Texture path", selected_texture_path, IM_ARRAYSIZE(selected_texture_path), ImGuiInputTextFlags_ReadOnly);
-	if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-	if (ImGui::IsItemClicked()) {
-		FileDialogOptions opts;
-		opts.title = "Choose Texture";
-		opts.filters = {
-			{ "Images", "*.png;*.jpeg;*.jpg" },
-			{ "All Files", "*.*" }
-		};
-		if (auto path = FileDialog::ShowOpenDialog(opts)) {
-			EditorManager::getInstance().BeginEdit({ parent });
-			SetTexture(*path);
-			EditorManager::getInstance().EndEdit({ parent });
-		}
-	}
+	std::string texturePath = texture_path;   
 
-	if (ImGui::BeginDragDropTarget()) {
-		if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(FileManager::kResourceDragDropPayloadType)) {
-			std::string virtualPath(static_cast<const char*>(payload->Data));
-			FileManager& fm = FileManager::getInstance();
-			if (!fm.IsDirectory(virtualPath)) {
-				EditorManager::getInstance().BeginEdit({ parent });
-				SetTexture(fm.VirtualToAbsolute(virtualPath).string());
-				EditorManager::getInstance().EndEdit({ parent });
-			}
-		}
-		ImGui::EndDragDropTarget();
-	}
+	EditorField::FileSpec texSpec = EditorField::FileSpec::ImageFile();
+	texSpec.allowClear = true;   
+
+	EditorField::ImageFileScene(parent, "Texture", "##TexturePath", texturePath, [&] {
+		SetTexture(texturePath);
+		}, texSpec);
 
 	ImGui::Separator();
 

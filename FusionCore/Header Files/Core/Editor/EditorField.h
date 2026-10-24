@@ -2,6 +2,8 @@
 #include "EditorManager.h"
 #include "EditorTheme.h"
 #include "../EngineManager.h"
+#include "../ResourceManager.h"
+#include "../../Resources/Resource.h"
 #include "../../../imgui/imgui.h"
 #include <vector>
 #include <string>
@@ -12,6 +14,59 @@
 #include <cmath>
 
 namespace EditorField {
+	struct FileSpec {
+		enum class Preview { None, Image, Audio };
+
+		FileDialogOptions dialog;                    // title + filters for the browse dialog
+		std::string folderTitle = "Choose Folder";   // dialog title when `folder` is true
+		std::vector<std::string> extensions;         // lowercase, with dot. Empty = anything
+		const char* hint = "None";                   // shown when empty
+		bool folder = false;                         // pick folders instead of files
+		bool storeVirtual = false;                   // value stored as a virtual path (default: absolute)
+		bool displayVirtual = false;                 // show the virtual path while not editing
+		bool allowClear = false;                     // show an X to empty the field
+		Preview preview = Preview::None;
+		float previewHeight = -1.0f;                 // <=0: default
+
+		static FileSpec Any(const char* title = "Choose File") {
+			FileSpec s; s.dialog.title = title; return s;
+		}
+		static FileSpec Extension(const char* description, const char* ext, const char* title) {
+			FileSpec s;
+			s.dialog = FileDialogOptions::ForExtension(description, ext, title);
+			std::string e = std::string(".") + ext;
+			for (char& c : e) c = (char)std::tolower((unsigned char)c);
+			s.extensions = { e };
+			return s;
+		}
+		static FileSpec Folder(const char* title = "Choose Folder") {
+			FileSpec s; s.folder = true; s.folderTitle = title; s.hint = "(no folder selected)"; return s;
+		}
+		static FileSpec ImageFile() {
+			FileSpec s;
+			s.dialog.title = "Choose Texture";
+			s.dialog.filters = { { "Images", "*.png;*.jpeg;*.jpg" }, { "All Files", "*.*" } };
+			s.extensions = { ".png", ".jpg", ".jpeg" };
+			s.hint = "None (click to choose...)";
+			s.displayVirtual = true;
+			s.preview = Preview::Image;
+			s.previewHeight = 120.0f;
+			return s;
+		}
+		static FileSpec AudioFile() {
+			FileSpec s;
+			s.dialog.title = "Choose Audio";
+			s.dialog.filters = { { "Audio Files", "*.wav;*.mp3" }, { "All Files", "*.*" } };
+			s.extensions = { ".wav", ".mp3" };
+			s.hint = "None (click to choose...)";
+			s.displayVirtual = true;
+			s.preview = Preview::Audio;
+			s.previewHeight = 64.0f;
+			return s;
+		}
+	};
+
+	inline bool CloseButton(const char* id); // Forward decalration
 
 	namespace Detail {
 
@@ -264,6 +319,326 @@ namespace EditorField {
 				[&] { EngineManager::getInstance().EngineChangeEvent(); if (onChange) onChange(); },
 				[] {});
 		}
+
+		inline ImU32 CheckerBackground() { return IM_COL32(60, 60, 60, 255); }
+		inline ImU32 CheckerTile() { return IM_COL32(85, 85, 85, 255); }
+		inline float CheckerTileSize() { return 8.0f; }
+		inline float PreviewMaxHeight() { return 360.0f; }
+		inline float WaveformHeight() { return 140.0f; }
+
+		inline std::string FormatTime(double s, bool millis = false) {
+			if (s < 0.0) s = 0.0;
+			const int total = (int)s;
+			char buf[32];
+			if (millis) std::snprintf(buf, sizeof(buf), "%d:%02d.%03d", total / 60, total % 60, (int)((s - total) * 1000.0));
+			else        std::snprintf(buf, sizeof(buf), "%d:%02d", total / 60, total % 60);
+			return buf;
+		}
+
+		inline void ImagePreview(unsigned int tex, int width, int height, float maxHeight = -1.0f) {
+			if (tex == 0 || width <= 0 || height <= 0) {
+				ImGui::TextDisabled("%s", "Preview unavailable (unsupported or corrupt image)");
+				return;
+			}
+			if (maxHeight <= 0.0f) maxHeight = PreviewMaxHeight();
+
+			const float availW = ImGui::GetContentRegionAvail().x;
+			const float scale = std::min(availW / width, maxHeight / height);
+			const ImVec2 size(width * scale, height * scale);
+
+			ImVec2 pos = ImGui::GetCursorScreenPos();
+			pos.x += (availW - size.x) * 0.5f;
+			ImGui::SetCursorScreenPos(pos);
+
+			const ImVec2 end(pos.x + size.x, pos.y + size.y);
+			ImDrawList* dl = ImGui::GetWindowDrawList();
+
+			const float tile = CheckerTileSize();
+			dl->AddRectFilled(pos, end, CheckerBackground());
+			dl->PushClipRect(pos, end, true);
+			int row = 0;
+			for (float y = 0; y < size.y; y += tile, row++)
+				for (float x = (row % 2) * tile; x < size.x; x += tile * 2)
+					dl->AddRectFilled(ImVec2(pos.x + x, pos.y + y),
+						ImVec2(pos.x + x + tile, pos.y + y + tile), CheckerTile());
+			dl->PopClipRect();
+
+			ImGui::Image((ImTextureID)(intptr_t)tex, size, ImVec2(0, 1), ImVec2(1, 0));
+			dl->AddRect(pos, end, ImGui::GetColorU32(ImGuiCol_Border));
+		}
+
+		inline bool PlayButton(const char* id, bool playing) {
+			const float size = ImGui::GetFrameHeight();
+			const ImVec2 p = ImGui::GetCursorScreenPos();
+			const bool pressed = ImGui::InvisibleButton(id, ImVec2(size, size));
+			const bool hovered = ImGui::IsItemHovered();
+			const bool held = ImGui::IsItemActive();
+			ImDrawList* dl = ImGui::GetWindowDrawList();
+
+			dl->AddRectFilled(p, ImVec2(p.x + size, p.y + size),
+				ImGui::GetColorU32(held ? ImGuiCol_ButtonActive : hovered ? ImGuiCol_ButtonHovered : ImGuiCol_Button),
+				ImGui::GetStyle().FrameRounding);
+
+			const ImU32 col = ImGui::GetColorU32(EditorTheme::Accent());
+			const ImVec2 c(p.x + size * 0.5f, p.y + size * 0.5f);
+			const float r = size * 0.28f;
+
+			if (playing) {
+				dl->AddRectFilled(ImVec2(c.x - r, c.y - r), ImVec2(c.x - r * 0.3f, c.y + r), col);
+				dl->AddRectFilled(ImVec2(c.x + r * 0.3f, c.y - r), ImVec2(c.x + r, c.y + r), col);
+			}
+			else {
+				dl->AddTriangleFilled(ImVec2(c.x - r * 0.7f, c.y - r), ImVec2(c.x - r * 0.7f, c.y + r),
+					ImVec2(c.x + r, c.y), col);
+			}
+			return pressed;
+		}
+
+		inline bool WaveformPlot(const char* id, const float* xs, const float* mins, const float* maxs,
+			int count, float duration, float playhead, float* seekTo, float height = -1.0f) {
+
+			if (height <= 0.0f) height = WaveformHeight();
+			bool seeked = false;
+
+			ImGuiStorage* st = ImGui::GetStateStorage();
+			const ImGuiID dragKey = ImGui::GetID("##scrubbing");
+			bool scrubbing = st->GetBool(dragKey);
+
+			const ImPlotFlags plotFlags = ImPlotFlags_NoTitle | ImPlotFlags_NoLegend | ImPlotFlags_NoMenus |
+				ImPlotFlags_NoBoxSelect | ImPlotFlags_NoMouseText;
+
+			if (ImPlot::BeginPlot(id, ImVec2(-1, height), plotFlags)) {
+				ImPlot::SetupAxes(nullptr, nullptr,
+					ImPlotAxisFlags_Lock | ImPlotAxisFlags_NoGridLines,
+					ImPlotAxisFlags_Lock | ImPlotAxisFlags_NoGridLines | ImPlotAxisFlags_NoTickLabels);
+				ImPlot::SetupAxisLimits(ImAxis_X1, 0.0, (double)duration, ImPlotCond_Always);
+				ImPlot::SetupAxisLimits(ImAxis_Y1, -1.0, 1.0, ImPlotCond_Always);
+
+				float shownPlayhead = playhead;
+				if (seekTo) {
+					const bool hovered = ImPlot::IsPlotHovered();
+					if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+						scrubbing = true;
+					if (!ImGui::IsMouseDown(ImGuiMouseButton_Left))
+						scrubbing = false;
+
+					if (hovered || scrubbing)
+						ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+
+					if (scrubbing) {
+						*seekTo = std::clamp((float)ImPlot::GetPlotMousePos().x, 0.0f, duration);
+						shownPlayhead = *seekTo;   
+						seeked = true;
+					}
+				}
+
+				if (count > 0) {
+					ImPlotSpec wave;
+					wave.LineColor = EditorTheme::Accent();
+					wave.FillColor = EditorTheme::Accent();
+					wave.FillAlpha = 0.55f;
+					ImPlot::PlotShaded("##wave", xs, maxs, mins, count, wave);
+				}
+
+				const double x = (double)shownPlayhead;
+				ImPlotSpec head;
+				head.LineColor = ImVec4(1.0f, 1.0f, 1.0f, 0.9f);
+				head.LineWeight = 1.5f;
+				ImPlot::PlotInfLines("##playhead", &x, 1, head);
+
+				ImPlot::EndPlot();
+			}
+
+			st->SetBool(dragKey, scrubbing);
+			return seeked;
+		}
+
+		struct AudioPlayerResult {
+			bool togglePressed = false;
+			bool seeked = false;
+			float seekTo = 0.0f;
+		};
+
+		inline AudioPlayerResult AudioPlayer(const char* id, bool playing, float position, float duration,
+			const float* xs, const float* mins, const float* maxs, int count, float waveHeight = -1.0f) {
+			AudioPlayerResult r;
+			ImGui::PushID(id);
+
+			if (PlayButton("##play", playing)) r.togglePressed = true;
+			ImGui::SameLine();
+			ImGui::AlignTextToFramePadding();
+			ImGui::TextDisabled("%s / %s", FormatTime(position).c_str(), FormatTime(duration).c_str());
+
+			if (count > 0)
+				r.seeked = WaveformPlot("##wave", xs, mins, maxs, count, duration, position, &r.seekTo, waveHeight);
+
+			ImGui::PopID();
+			return r;
+		}
+
+		inline void DrawFolderGlyph(ImDrawList* dl, ImVec2 center, float size, ImU32 col) {
+			const float w = size * 0.62f, h = size * 0.46f;
+			const float oy = size * 0.04f;
+			const ImVec2 mn(center.x - w * 0.5f, center.y - h * 0.5f + oy);
+			const ImVec2 mx(center.x + w * 0.5f, center.y + h * 0.5f + oy);
+			dl->AddRectFilled(ImVec2(mn.x, mn.y - h * 0.18f), ImVec2(mn.x + w * 0.4f, mn.y + h * 0.3f), col, 1.5f);
+			dl->AddRectFilled(mn, mx, col, 1.5f);
+		}
+
+		inline bool HasAllowedExtension(const std::filesystem::path& p, const FileSpec& spec) {
+			if (spec.extensions.empty()) return true;
+			std::string ext = p.extension().string();
+			for (char& c : ext) c = (char)std::tolower((unsigned char)c);
+			return std::find(spec.extensions.begin(), spec.extensions.end(), ext) != spec.extensions.end();
+		}
+
+		inline bool DropAccepts(const std::string& virtualPath, const FileSpec& spec, std::string& absOut) {
+			FileManager& fm = FileManager::getInstance();
+			if (fm.IsDirectory(virtualPath) != spec.folder) return false;
+			const std::filesystem::path abs = fm.VirtualToAbsolute(virtualPath);
+			if (!spec.folder && !HasAllowedExtension(abs, spec)) return false;
+			absOut = abs.string();
+			return true;
+		}
+
+		inline bool ResolveTypedPath(const char* text, const FileSpec& spec, std::string& out) {
+			namespace fs = std::filesystem;
+			FileManager& fm = FileManager::getInstance();
+
+			std::string t(text);
+			const size_t b = t.find_first_not_of(" \t");
+			const size_t e = t.find_last_not_of(" \t");
+			t = (b == std::string::npos) ? std::string() : t.substr(b, e - b + 1);
+
+			if (t.empty()) { out.clear(); return true; }
+
+			std::error_code ec;
+			const bool virt = spec.displayVirtual || spec.storeVirtual;
+			fs::path resolved;
+			if (fs::exists(fs::path(t), ec)) resolved = t;
+			else if (virt && fs::exists(fm.VirtualToAbsolute(t), ec)) resolved = fm.VirtualToAbsolute(t);
+			else { out = t; return true; }   
+
+			if (fs::is_directory(resolved, ec) != spec.folder) return false;
+			if (!spec.folder && !HasAllowedExtension(resolved, spec)) return false;
+
+			out = spec.storeVirtual ? fm.AbsoluteToVirtual(resolved.string()) : resolved.string();
+			return true;
+		}
+
+		inline bool FileControl(const char* label, const char* id, const std::string& current,
+			const FileSpec& spec, std::string& result) {
+
+			FileManager& fm = FileManager::getInstance();
+			const ImGuiStyle& style = ImGui::GetStyle();
+			const float frame = ImGui::GetFrameHeight();
+			const float gap = style.ItemInnerSpacing.x;
+
+			if (label) {
+				Label(label);
+				ImGui::SetNextItemWidth(-FLT_MIN);
+			}
+			const float total = ImGui::CalcItemWidth();
+			const float reserved = (frame + gap) * (spec.allowClear ? 2.0f : 1.0f);
+
+			ImGui::PushID(id);
+			bool changed = false;
+
+			static std::unordered_map<ImGuiID, std::array<char, 512>> buffers;
+			const ImGuiID textId = ImGui::GetID("##path");
+			const ImGuiID editingKey = ImGui::GetID("##editing");
+			ImGuiStorage* st = ImGui::GetStateStorage();
+			std::array<char, 512>& buf = buffers[textId];
+
+			if (!st->GetBool(editingKey)) {
+				std::string shown = current;
+				if (spec.displayVirtual && !spec.storeVirtual && !current.empty())
+					shown = fm.AbsoluteToVirtual(current);
+				std::snprintf(buf.data(), buf.size(), "%s", shown.c_str());
+			}
+
+			auto acceptDrop = [&]() {
+				if (!ImGui::BeginDragDropTarget()) return;
+				const ImGuiPayload* p = ImGui::AcceptDragDropPayload(
+					FileManager::kResourceDragDropPayloadType, ImGuiDragDropFlags_AcceptPeekOnly);
+				std::string abs;
+				if (p && p->Data) {
+					const std::string vp(static_cast<const char*>(p->Data));
+					if (DropAccepts(vp, spec, abs)) {
+						ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+							ImGui::GetColorU32(EditorTheme::Accent()), style.FrameRounding, 0, 2.0f);
+						if (p->IsDelivery()) {
+							result = spec.storeVirtual ? vp : abs;
+							changed = true;
+						}
+					}
+				}
+				ImGui::EndDragDropTarget();
+				};
+
+			ImGui::SetNextItemWidth(total - reserved);
+			ImGui::InputTextWithHint("##path", spec.hint, buf.data(), buf.size());
+			const bool typedCommit = ImGui::IsItemDeactivatedAfterEdit();
+			if (ImGui::IsItemActivated())   st->SetBool(editingKey, true);
+			if (ImGui::IsItemDeactivated()) st->SetBool(editingKey, false);
+			acceptDrop();
+
+			if (typedCommit) {
+				std::string resolved;
+				if (ResolveTypedPath(buf.data(), spec, resolved) && resolved != current) {
+					result = resolved;
+					changed = true;
+				}
+			}
+
+			if (spec.allowClear) {
+				ImGui::SameLine(0.0f, gap);
+				if (!current.empty()) {
+					if (CloseButton("##clear")) { result.clear(); changed = true; }
+				}
+				else {
+					ImGui::Dummy(ImVec2(frame, frame));
+				}
+			}
+
+			ImGui::SameLine(0.0f, gap);
+			const bool browse = ImGui::Button("##browse", ImVec2(frame, frame));
+			{
+				const ImVec2 mn = ImGui::GetItemRectMin(), mx = ImGui::GetItemRectMax();
+				DrawFolderGlyph(ImGui::GetWindowDrawList(), ImVec2((mn.x + mx.x) * 0.5f, (mn.y + mx.y) * 0.5f),
+					frame, ImGui::GetColorU32(ImGuiCol_Text));
+			}
+			if (ImGui::IsItemHovered()) ImGui::SetTooltip(spec.folder ? "Choose folder..." : "Choose file...");
+			acceptDrop();
+
+			if (browse) {
+				if (spec.folder) {
+					if (auto f = FileDialog::ShowFolderDialog(spec.folderTitle.c_str())) {
+						result = spec.storeVirtual ? fm.AbsoluteToVirtual(*f) : *f;
+						changed = true;
+					}
+				}
+				else {
+					FileDialogOptions opts = spec.dialog;
+					if (auto p = FileDialog::ShowOpenDialog(opts)) {
+						result = spec.storeVirtual ? fm.AbsoluteToVirtual(*p) : *p;
+						changed = true;
+					}
+				}
+			}
+
+			if (spec.preview != FileSpec::Preview::None && !current.empty()) {
+				const std::string vp = spec.storeVirtual ? current : fm.AbsoluteToVirtual(current);
+				if (Resource* res = ResourceManager::getInstance().GetResource(vp))
+					res->DrawPreviewWidget(spec.previewHeight);
+				else
+					ImGui::TextDisabled("Preview unavailable");
+				ImGui::Spacing();
+			}
+
+			ImGui::PopID();
+			return changed;
+		}
 	}
 
 	template<typename WidgetFn, typename OnChange>
@@ -421,6 +796,40 @@ namespace EditorField {
 		return ActionScene(std::vector<Object*>{ target }, triggered, std::forward<OnChange>(onChange), forceNewEdit);
 	}
 
+	template<typename Target, typename OnChange>
+	bool FileScene(Target&& target, const char* label, const char* id, std::string& path,
+		OnChange&& onChange, const FileSpec& spec = FileSpec::Any()) {
+		std::vector<Object*> targets = Detail::ToTargets(std::forward<Target>(target));
+		std::string result;
+		if (!Detail::FileControl(label, id, path, spec, result)) return false;
+
+		EditorManager::getInstance().BeginEdit(targets, false);
+		path = result;
+		onChange();
+		EngineManager::getInstance().SceneChangeEvent();
+		EditorManager::getInstance().EndEdit(targets);
+		return true;
+	}
+
+	template<typename Target, typename OnChange>
+	bool FolderScene(Target&& target, const char* label, const char* id, std::string& path,
+		OnChange&& onChange, const char* dialogTitle = "Choose Folder") {
+		return FileScene(std::forward<Target>(target), label, id, path, std::forward<OnChange>(onChange),
+			FileSpec::Folder(dialogTitle));
+	}
+
+	template<typename Target, typename OnChange>
+	bool ImageFileScene(Target&& target, const char* label, const char* id, std::string& path,
+		OnChange&& onChange, const FileSpec& spec = FileSpec::ImageFile()) {
+		return FileScene(std::forward<Target>(target), label, id, path, std::forward<OnChange>(onChange), spec);
+	}
+
+	template<typename Target, typename OnChange>
+	bool AudioFileScene(Target&& target, const char* label, const char* id, std::string& path,
+		OnChange&& onChange, const FileSpec& spec = FileSpec::AudioFile()) {
+		return FileScene(std::forward<Target>(target), label, id, path, std::forward<OnChange>(onChange), spec);
+	}
+
 	template<typename WidgetFn>
 	inline bool WrapEngine(const char* label, WidgetFn&& widget, const std::function<void()>& onChange = nullptr) {
 		if (label) {
@@ -529,6 +938,32 @@ namespace EditorField {
 		return triggered;
 	}
 
+	inline bool FileEngine(const char* label, const char* id, std::string& path,
+		const FileSpec& spec = FileSpec::Any(), const std::function<void()>& onChange = nullptr) {
+		std::string result;
+		if (!Detail::FileControl(label, id, path, spec, result)) return false;
+
+		path = result;
+		EngineManager::getInstance().EngineChangeEvent();
+		if (onChange) onChange();
+		return true;
+	}
+
+	inline bool FolderEngine(const char* label, const char* id, std::string& path,
+		const char* dialogTitle = "Choose Folder", const std::function<void()>& onChange = nullptr) {
+		return FileEngine(label, id, path, FileSpec::Folder(dialogTitle), onChange);
+	}
+
+	inline bool ImageFileEngine(const char* label, const char* id, std::string& path,
+		const FileSpec& spec = FileSpec::ImageFile(), const std::function<void()>& onChange = nullptr) {
+		return FileEngine(label, id, path, spec, onChange);
+	}
+
+	inline bool AudioFileEngine(const char* label, const char* id, std::string& path,
+		const FileSpec& spec = FileSpec::AudioFile(), const std::function<void()>& onChange = nullptr) {
+		return FileEngine(label, id, path, spec, onChange);
+	}
+
 	inline bool AddButton(const char* label, bool compact = false) {
 		ImGui::PushStyleColor(ImGuiCol_Button, EditorTheme::AccentDim());
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, EditorTheme::Accent());
@@ -594,5 +1029,36 @@ namespace EditorField {
 
 	inline bool Checkbox(const char* id, bool* v) {
 		return Detail::DrawCheckbox(id, v);
+	}
+
+	inline bool BeginPropertyTable(const char* id) {
+		if (!ImGui::BeginTable(id, 2, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings))
+			return false;
+		ImGui::TableSetupColumn("##k", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+		ImGui::TableSetupColumn("##v", ImGuiTableColumnFlags_WidthStretch);
+		return true;
+	}
+
+	inline void EndPropertyTable() {
+		ImGui::EndTable();
+	}
+
+	inline void PropertyRow(const char* label, const char* value, bool wrap = false) {
+		ImGui::TableNextRow();
+		ImGui::TableSetColumnIndex(0);
+		ImGui::TextDisabled("%s", label);
+		ImGui::TableSetColumnIndex(1);
+		if (wrap) ImGui::TextWrapped("%s", value);
+		else      ImGui::TextUnformatted(value);
+	}
+
+	inline void PropertyRow(const char* label, const std::string& value, bool wrap = false) {
+		PropertyRow(label, value.c_str(), wrap);
+	}
+
+	inline bool CopyButton(const char* label, const char* text) {
+		const bool pressed = ImGui::Button(label);
+		if (pressed) ImGui::SetClipboardText(text);
+		return pressed;
 	}
 }

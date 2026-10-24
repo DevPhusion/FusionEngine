@@ -1,18 +1,20 @@
 #include "../../Header Files/Core/ResourceManager.h"
 #include "../../Header Files/Resources/Image.h"
+#include "../../Header Files/Resources/Audio.h"
 #include <algorithm>
 #include <cctype>
 
 namespace fs = std::filesystem;
 
 ResourceManager::ResourceManager() {
-	RegisterType<Image>(ResourceIconType::Image);
+	RegisterType<Image>(ResourceType::Image);
+	RegisterType<Audio>(ResourceType::Audio);
 }
 
-bool ResourceManager::IsResourceType(ResourceIconType type) {
-	return type != ResourceIconType::Folder
-		&& type != ResourceIconType::Script
-		&& type != ResourceIconType::Scene;
+bool ResourceManager::IsResourceType(ResourceType type) {
+	return type != ResourceType::Folder
+		&& type != ResourceType::Script
+		&& type != ResourceType::Scene;
 }
 
 Resource* ResourceManager::GetResource(const std::string& virtualPath) {
@@ -30,7 +32,7 @@ Resource* ResourceManager::GetResource(const std::string& virtualPath) {
 	std::string ext = abs.extension().string();
 	std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return (char)std::tolower(c); });
 
-	const ResourceIconType type = FileManager::ClassifyExtension(ext);
+	const ResourceType type = FileManager::ClassifyExtension(ext);
 	if (!IsResourceType(type))
 		return nullptr;
 

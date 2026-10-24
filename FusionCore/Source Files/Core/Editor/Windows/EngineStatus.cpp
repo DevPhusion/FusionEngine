@@ -366,13 +366,8 @@ void EngineStatus::ProcessExportPopup() {
 	if (ImGui::BeginPopupModal("Export Project", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
 
 		ImGui::Text("Export Folder");
-		ImGui::TextWrapped("%s", config.exportFolder.empty() ? "(no folder selected)" : config.exportFolder.c_str());
-		if (ImGui::Button("Browse...")) {
-			if (auto folder = FileDialog::ShowFolderDialog("Choose Export Folder")) {
-				config.exportFolder = *folder;
-				EngineManager::getInstance().EngineChangeEvent();
-			}
-		}
+		ImGui::SetNextItemWidth(360.0f);
+		EditorField::FolderEngine(nullptr, "##ExportFolder", config.exportFolder, "Choose Export Folder");
 
 		bool isPreviousExportFolder = false;
 		{
@@ -408,23 +403,10 @@ void EngineStatus::ProcessExportPopup() {
 			}
 		}
 
-		{
-			char iconBuf[256];
-			strncpy_s(iconBuf, sizeof(iconBuf), config.iconPath.c_str(), _TRUNCATE);
-			ImGui::Text("Icon");
-			ImGui::SetNextItemWidth(280.0f);
-			if (EditorField::InputTextEngine(nullptr, "##ExportIcon", iconBuf, IM_ARRAYSIZE(iconBuf))) {
-				config.iconPath = iconBuf;
-			}
-			ImGui::SameLine();
-			if (ImGui::Button("Browse##Icon")) {
-				auto opts = FileDialogOptions::ForExtension("Image", "png", "Choose Icon");
-				if (auto path = FileDialog::ShowOpenDialog(opts)) {
-					config.iconPath = *path;
-					EngineManager::getInstance().EngineChangeEvent();
-				}
-			}
-		}
+		ImGui::Text("Icon");
+		ImGui::SetNextItemWidth(360.0f);
+		EditorField::FileEngine(nullptr, "##ExportIcon", config.iconPath,
+			EditorField::FileSpec::Extension("Image", "png", "Choose Icon"));
 
 		{
 			char authorBuf[128];
@@ -682,84 +664,17 @@ void EngineStatus::ProcessTrainSettingsPopup() {
 		}
 
 		ImGui::Text("Save folder");
-		{
-			char folderBuf[256];
-			std::string display = cfg.saveDir.empty()
-				? "(no folder selected)"
-				: cfg.saveDir;
-
-#if defined(_MSC_VER)
-			strcpy_s(folderBuf, display.c_str());
-#else
-			strncpy(folderBuf, display.c_str(), sizeof(folderBuf) - 1);
-			folderBuf[sizeof(folderBuf) - 1] = '\0';
-#endif
-
-			ImGui::SetNextItemWidth(280.0f);
-			ImGui::InputText(
-				"##SaveDir",
-				folderBuf,
-				IM_ARRAYSIZE(folderBuf),
-				ImGuiInputTextFlags_ReadOnly
-			);
-
-			ImGui::SameLine();
-
-			if (ImGui::Button("Browse##SaveDir")) {
-				if (auto folder = FileDialog::ShowFolderDialog("Choose Save Folder")) {
-					cfg.saveDir = *folder;
-					EngineManager::getInstance().EngineChangeEvent();
-				}
-			}
-		}
+		ImGui::SetNextItemWidth(360.0f);
+		EditorField::FolderEngine(nullptr, "##SaveDir", cfg.saveDir, "Choose Save Folder");
 
 		ImGui::Text("Start from model (optional)");
 		{
-			char modelBuf[256];
-			std::string display = cfg.startFromModelPath.empty()
-				? "(train from scratch)"
-				: cfg.startFromModelPath;
-
-#if defined(_MSC_VER)
-			strcpy_s(modelBuf, display.c_str());
-#else
-			strncpy(modelBuf, display.c_str(), sizeof(modelBuf) - 1);
-			modelBuf[sizeof(modelBuf) - 1] = '\0';
-#endif
-
-			ImGui::SetNextItemWidth(280.0f);
-			ImGui::InputText(
-				"##StartFromModel",
-				modelBuf,
-				IM_ARRAYSIZE(modelBuf),
-				ImGuiInputTextFlags_ReadOnly
-			);
-
-			ImGui::SameLine();
-
-			if (ImGui::Button("Browse##StartFromModel")) {
-				auto opts = FileDialogOptions::ForExtension(
-					"Trained Model",
-					"zip",
-					"Choose Trained Model"
-				);
-
-				if (auto path = FileDialog::ShowOpenDialog(opts)) {
-					cfg.startFromModelPath =
-						FileManager::getInstance().AbsoluteToVirtual(*path);
-
-					EngineManager::getInstance().EngineChangeEvent();
-				}
-			}
-
-			if (!cfg.startFromModelPath.empty()) {
-				ImGui::SameLine();
-
-				if (ImGui::Button("Clear##StartFromModel")) {
-					cfg.startFromModelPath.clear();
-					EngineManager::getInstance().EngineChangeEvent();
-				}
-			}
+			EditorField::FileSpec spec = EditorField::FileSpec::Extension("Trained Model", "zip", "Choose Trained Model");
+			spec.storeVirtual = true;
+			spec.allowClear = true;
+			spec.hint = "(train from scratch)";
+			ImGui::SetNextItemWidth(360.0f);
+			EditorField::FileEngine(nullptr, "##StartFromModel", cfg.startFromModelPath, spec);
 		}
 
 		ImGui::Dummy(ImVec2(0, 8));
@@ -787,43 +702,11 @@ void EngineStatus::ProcessTrainSettingsPopup() {
 
 		ImGui::Text("Shards folder");
 		{
-			char shardBuf[256];
-			std::string display = cfg.shardDir.empty()
-				? "(defaults to <save folder>/Shards)"
-				: cfg.shardDir;
-
-#if defined(_MSC_VER)
-			strcpy_s(shardBuf, display.c_str());
-#else
-			strncpy(shardBuf, display.c_str(), sizeof(shardBuf) - 1);
-			shardBuf[sizeof(shardBuf) - 1] = '\0';
-#endif
-
-			ImGui::SetNextItemWidth(280.0f);
-			ImGui::InputText(
-				"##ShardDir",
-				shardBuf,
-				IM_ARRAYSIZE(shardBuf),
-				ImGuiInputTextFlags_ReadOnly
-			);
-
-			ImGui::SameLine();
-
-			if (ImGui::Button("Browse##ShardDir")) {
-				if (auto folder = FileDialog::ShowFolderDialog("Choose Shards Folder")) {
-					cfg.shardDir = *folder;
-					EngineManager::getInstance().EngineChangeEvent();
-				}
-			}
-
-			if (!cfg.shardDir.empty()) {
-				ImGui::SameLine();
-
-				if (ImGui::Button("Clear##ShardDir")) {
-					cfg.shardDir.clear();
-					EngineManager::getInstance().EngineChangeEvent();
-				}
-			}
+			EditorField::FileSpec spec = EditorField::FileSpec::Folder("Choose Shards Folder");
+			spec.allowClear = true;
+			spec.hint = "(defaults to <save folder>/Shards)";
+			ImGui::SetNextItemWidth(360.0f);
+			EditorField::FileEngine(nullptr, "##ShardDir", cfg.shardDir, spec);
 		}
 
 		ImGui::EndDisabled();

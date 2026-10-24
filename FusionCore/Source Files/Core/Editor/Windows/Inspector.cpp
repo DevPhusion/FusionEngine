@@ -94,17 +94,35 @@ namespace {
         EditorManager::getInstance().EndEdit({ o });
     }
 
+    static const char* ExistingBodyType(Object* o) {
+        if (o->HasComponent<RigidBodyComponent>()) return "Rigid Body";
+        if (o->HasComponent<SoftBodyComponent>())  return "Soft Body";
+        if (o->HasComponent<FluidComponent>())     return "Fluid";
+        if (o->HasComponent<GasComponent>())       return "Gas";
+        return nullptr;
+    }
+
+    static std::string BodyBlockReason(Object* o) {
+        const char* existing = ExistingBodyType(o);
+        if (!existing) return "";
+        return std::string("This object already has a ") + existing + " Component.\n"
+            "Remove it first to add this one.";
+    }
+
     struct ComponentEntry {
         std::string label;
-        std::function<bool(Object*)> available;
+        std::function<bool(Object*)> available;                  
         std::function<void(Object*)> add;
+        std::function<std::string(Object*)> blocked = nullptr;   
     };
 
     template<typename T>
-    static ComponentEntry SimpleEntry(const char* label) {
+    static ComponentEntry SimpleEntry(const char* label,
+        std::function<std::string(Object*)> blocked = nullptr) {
         return { label,
             [](Object* o) { return !o->HasComponent<T>(); },
-            [](Object* o) { AddComponentTo<T>(o); } };
+            [](Object* o) { AddComponentTo<T>(o); },
+            std::move(blocked) };
     }
 
     static const std::vector<ComponentEntry>& ComponentRegistry() {
@@ -114,13 +132,13 @@ namespace {
               [](Object* o) { AddComponentTo<RenderComponent>(o, std::vector<float>{}, o->shader, ""); } },
             SimpleEntry<CameraComponent>("Camera Component"),
             SimpleEntry<AudioComponent>("Audio Component"),
-            SimpleEntry<RigidBodyComponent>("Rigid Body Component"),
-            SimpleEntry<SoftBodyComponent>("Soft Body Component"),
+            SimpleEntry<RigidBodyComponent>("Rigid Body Component", BodyBlockReason),
+            SimpleEntry<SoftBodyComponent>("Soft Body Component", BodyBlockReason),
             SimpleEntry<CollisionComponent>("Collision Component"),
             SimpleEntry<ConstraintComponent>("Constraint Component"),
             SimpleEntry<FractureComponent>("Fracture Component"),
-            SimpleEntry<FluidComponent>("Fluid Component"),
-            SimpleEntry<GasComponent>("Gas Component"),
+            SimpleEntry<FluidComponent>("Fluid Component", BodyBlockReason),
+            SimpleEntry<GasComponent>("Gas Component", BodyBlockReason),
             { "Agent Component",
               [](Object* o) { return !o->HasComponent<AgentComponent>() && PackageManager::getInstance().IsPackageInstalled("rl"); },
               [](Object* o) { AddComponentTo<AgentComponent>(o); } },
@@ -133,6 +151,7 @@ namespace {
         std::string label;
         std::string subtitle;
         std::function<void()> add;
+        std::string blocked;   
     };
 
     static std::vector<std::string> s_recentAdds;
@@ -145,18 +164,25 @@ namespace {
     }
 
     static bool DrawCandidateRow(const Candidate& c) {
+        const bool blocked = !c.blocked.empty();
+        const ImVec4 blockedCol(0.95f, 0.65f, 0.25f, 1.0f);  
+
         ImGui::PushID(c.key.c_str());
-        bool clicked = ImGui::Selectable("##row");
+        bool clicked = ImGui::Selectable("##row", false, blocked ? ImGuiSelectableFlags_Disabled : 0);
+        if (blocked && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("%s", c.blocked.c_str());
+
         ImVec2 min = ImGui::GetItemRectMin();
         ImDrawList* dl = ImGui::GetWindowDrawList();
-        dl->AddText(min, ImGui::GetColorU32(ImGuiCol_Text), c.label.c_str());
+        dl->AddText(min, blocked ? ImGui::GetColorU32(blockedCol) : ImGui::GetColorU32(ImGuiCol_Text),
+            c.label.c_str());
         if (!c.subtitle.empty()) {
             float x = min.x + ImGui::CalcTextSize(c.label.c_str()).x + ImGui::GetStyle().ItemSpacing.x;
             std::string sub = "(" + c.subtitle + ")";
             dl->AddText(ImVec2(x, min.y), ImGui::GetColorU32(ImGuiCol_TextDisabled), sub.c_str());
         }
         ImGui::PopID();
-        return clicked;
+        return clicked && !blocked;
     }
 }
 
@@ -345,7 +371,8 @@ void Inspector::ProcessWindow() {
             for (const ComponentEntry& e : ComponentRegistry()) {
                 if (!e.available(selected)) continue;
                 const ComponentEntry* ep = &e;
-                all.push_back({ "c:" + e.label, e.label, "", [ep, selected] { ep->add(selected); } });
+                std::string reason = e.blocked ? e.blocked(selected) : std::string();
+                all.push_back({ "c:" + e.label, e.label, "", [ep, selected] { ep->add(selected); }, reason });
             }
 
             for (const std::string& scriptPath : ScriptManager::getInstance().registeredScripts) {
@@ -381,6 +408,9 @@ void Inspector::ProcessWindow() {
                     [&](const Candidate* c) { return StartsWithNoCase(c->label, search); });
             }
 
+            std::stable_partition(shown.begin(), shown.end(),
+                [](const Candidate* c) { return c->blocked.empty(); });
+
             const Candidate* picked = nullptr;
             if (shown.empty()) {
                 ImGui::TextDisabled(search.empty() ? "Type to search components and scripts" : "No results");
@@ -388,7 +418,7 @@ void Inspector::ProcessWindow() {
             else {
                 for (const Candidate* c : shown)
                     if (DrawCandidateRow(*c)) picked = c;
-                if (enterPressed) picked = shown[0];
+                if (enterPressed && shown[0]->blocked.empty()) picked = shown[0];
             }
 
             if (picked) {
