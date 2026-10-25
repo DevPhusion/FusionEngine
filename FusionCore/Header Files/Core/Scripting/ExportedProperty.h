@@ -15,6 +15,8 @@ enum class ExportType {
     ColorPicker,
     Drag,
     File,
+    Image,
+    Audio,
     Section,
     SubSection
 };

@@ -27,6 +27,43 @@ namespace {
 		return false;
 	}
 
+	EditorField::FileSpec BuildExportFileSpec(const ExportedProperty& prop) {
+		using EditorField::FileSpec;
+
+		FileSpec spec;
+		switch (prop.displayType) {
+		case ExportType::Image: spec = FileSpec::ImageFile(); break;
+		case ExportType::Audio: spec = FileSpec::AudioFile(); break;
+		default: {
+			spec = FileSpec::Any(prop.fileFilter == "*.fscene" ? "Choose Scene" : "Choose File");
+			spec.extensions.clear();
+
+			std::stringstream ss(prop.fileFilter);
+			std::string token;
+			bool any = prop.fileFilter.empty();
+			while (std::getline(ss, token, ';')) {
+				if (!token.empty() && token[0] == '*') token.erase(0, 1);
+				std::transform(token.begin(), token.end(), token.begin(),
+					[](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+				if (token.empty() || token == ".*") { any = true; continue; }
+				spec.extensions.push_back(token);
+			}
+			if (any) spec.extensions.clear();
+
+			spec.dialog.filters = {
+				{ prop.fileFilter == "*.fscene" ? "Scene Files" : "Files", prop.fileFilter },
+				{ "All Files", "*.*" }
+			};
+			break;
+		}
+		}
+
+		spec.storeVirtual = true;
+		spec.displayVirtual = false;
+		spec.allowClear = true;
+		return spec;
+	}
+
 	void WriteExportedValue(BinaryWriter& w, const ExportedValue& value) {
 		w.Write(static_cast<int>(value.index()));
 		std::visit([&](auto&& v) {
@@ -90,6 +127,16 @@ namespace {
 				ref.ptr = nullptr; 
 			}
 		}
+	}
+
+	void OpenInVSCode(const std::filesystem::path& projectDir, const std::filesystem::path& fileAbsPath) {
+		std::string args = "\"" + projectDir.string() + "\" -g \"" + fileAbsPath.string() + "\"";
+#ifdef _WIN32
+		ShellExecuteA(nullptr, "open", "code", args.c_str(), nullptr, SW_HIDE);
+#else
+		std::string command = "code " + args + " >/dev/null 2>&1 &";
+		std::system(command.c_str());
+#endif
 	}
 }
 
@@ -519,9 +566,7 @@ void ScriptComponent::SetInstanceAttrFromVariant(const std::string& name, const 
 		}, value);
 }
 
-void ScriptComponent::ProcessInspectorUI() {
-	RunOnLoad();
-
+void ScriptComponent::DrawExportedProperties() {
 	if (!loaded || exportedProperties.empty()) return;
 
 	RefreshExportedPropertiesFromInstance();
@@ -595,63 +640,28 @@ void ScriptComponent::ProcessInspectorUI() {
 		std::visit([&](auto&& value) {
 			using T = std::decay_t<decltype(value)>;
 
+			const bool isFileType = prop.displayType == ExportType::File
+				|| prop.displayType == ExportType::Image
+				|| prop.displayType == ExportType::Audio;
+
 			if constexpr (!std::is_same_v<T, bool>) {
-				ImGui::Text("%s", prop.name.c_str());
-				ImGui::SameLine();
+				if (!isFileType) {
+					ImGui::Text("%s", prop.name.c_str());
+					ImGui::SameLine();
+				}
 			}
 
 			if constexpr (std::is_same_v<T, std::string>) {
-				if (prop.displayType == ExportType::File) {
-					char displayBuf[256] = "None (click to choose...)";
-					if (!value.empty()) {
-#if defined(_MSC_VER)
-						strcpy_s(displayBuf, value.c_str());
-#else
-						strncpy(displayBuf, value.c_str(), sizeof(displayBuf) - 1);
-						displayBuf[sizeof(displayBuf) - 1] = '\0';
-#endif
-					}
+				if (isFileType) {
+					auto applyValue = [&] { SetInstanceAttrFromVariant(prop.name, prop.value); };
+					const EditorField::FileSpec spec = BuildExportFileSpec(prop);
 
-					ImGui::InputText("##val", displayBuf, sizeof(displayBuf), ImGuiInputTextFlags_ReadOnly);
-					if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-					if (ImGui::IsItemClicked()) {
-						FileDialogOptions opts;
-						opts.title = "Choose File";
-						opts.filters = {
-							{ prop.fileFilter == "*.fscene" ? "Scene Files" : "Files", prop.fileFilter },
-							{ "All Files", "*.*" }
-						};
-						if (auto chosen = FileDialog::ShowOpenDialog(opts)) {
-							std::string virtualPath = FileManager::getInstance().AbsoluteToVirtual(*chosen);
-							EditorManager::getInstance().BeginEdit({ parent });
-							value = virtualPath;
-							SetInstanceAttrFromVariant(prop.name, prop.value);
-							EditorManager::getInstance().EndEdit({ parent });
-							EngineManager::getInstance().SceneChangeEvent();
-						}
-					}
-
-					if (ImGui::BeginDragDropTarget()) {
-						if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(FileManager::kResourceDragDropPayloadType)) {
-							std::string virtualPath(static_cast<const char*>(payload->Data));
-							FileManager& fm = FileManager::getInstance();
-
-							if (fm.IsDirectory(virtualPath)) {
-							}
-							else if (!MatchesFileFilter(virtualPath, prop.fileFilter)) {
-								Console::PrintWarning("Script export '" + prop.name +
-									"': dropped file does not match the required extension (" + prop.fileFilter + ")");
-							}
-							else {
-								EditorManager::getInstance().BeginEdit({ parent });
-								value = virtualPath;
-								SetInstanceAttrFromVariant(prop.name, prop.value);
-								EditorManager::getInstance().EndEdit({ parent });
-								EngineManager::getInstance().SceneChangeEvent();
-							}
-						}
-						ImGui::EndDragDropTarget();
-					}
+					if (prop.displayType == ExportType::Image)
+						EditorField::ImageFileScene(parent, prop.name.c_str(), "##val", value, applyValue, spec);
+					else if (prop.displayType == ExportType::Audio)
+						EditorField::AudioFileScene(parent, prop.name.c_str(), "##val", value, applyValue, spec);
+					else
+						EditorField::FileScene(parent, prop.name.c_str(), "##val", value, applyValue, spec);
 				}
 				else {
 					char buf[256];
@@ -778,6 +788,62 @@ void ScriptComponent::ProcessInspectorUI() {
 	if (hasSection && sectionOpen) {
 		ImGui::TreePop();
 	}
+}
+
+void ScriptComponent::ProcessInspectorUI() {
+	RunOnLoad();
+
+	const bool hasExports = loaded && !exportedProperties.empty();
+	DrawExportedProperties();
+
+	if (hasExports) {
+		ImGui::Spacing();
+		ImGui::Separator();
+		ImGui::Spacing();
+	}
+
+	std::string scriptPath = sourcePath;
+	EditorField::FileSpec spec = EditorField::FileSpec::Extension("Python Script", "py", "Choose Script");
+	spec.storeVirtual = true;   
+	spec.hint = "None (click to choose...)";
+
+	EditorField::FileScene(parent, "Script", "##ScriptFile", scriptPath, [&] {
+		if (scriptPath.empty() || scriptPath == sourcePath) return;
+
+		for (auto& comp : parent->components) {
+			auto* other = dynamic_cast<ScriptComponent*>(comp.get());
+			if (other && other != this && other->sourcePath == scriptPath) {
+				Console::PrintError("ScriptComponent: '{}' is already attached to '{}'; "
+					"an object cannot have two of the same script").Format(scriptPath, parent->name);
+				return;   
+			}
+		}
+
+		pendingExportedValues.clear();  
+		SetSourcePath(scriptPath);      
+		}, spec);
+
+	if (loadFailed && !sourcePath.empty()) {
+		ImGui::PushStyleColor(ImGuiCol_Text, EditorTheme::Danger());
+		ImGui::TextWrapped("Failed to load this script. See the console for details.");
+		ImGui::PopStyleColor();
+	}
+
+	std::filesystem::path absPath;
+	bool canOpen = false;
+	if (!sourcePath.empty()) {
+		absPath = FileManager::getInstance().VirtualToAbsolute(sourcePath);
+		std::error_code ec;
+		canOpen = std::filesystem::exists(absPath, ec);
+	}
+
+	ImGui::BeginDisabled(!canOpen);
+	if (ImGui::Button("Open Script")) {
+		OpenInVSCode(FileManager::getInstance().currentProjectDirectory, absPath);
+	}
+	ImGui::EndDisabled();
+	if (!canOpen && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+		ImGui::SetTooltip(sourcePath.empty() ? "No script assigned." : "Script file not found on disk.");
 }
 
 void ScriptComponent::RunOnLoad() {

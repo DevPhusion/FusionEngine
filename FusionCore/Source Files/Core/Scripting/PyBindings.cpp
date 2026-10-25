@@ -793,6 +793,31 @@ namespace {
 				"    next_level = export_scene(\"res://levels/level_2.fscene\")\n"
 				"    ```");
 
+		m.def("export_image", [](py::object value) {
+			if (!py::isinstance<py::str>(value)) {
+				throw py::type_error("export_image: value must be a str (a res:// path), got " + PyTypeName(value));
+			}
+			return ExportMarker{ value, ExportType::Image, "", "", 0.0f, 1.0f, "*.png;*.jpg;*.jpeg" };
+			}, py::arg("value"),
+				"Mark a str script attribute as editable with an image picker that stores a "
+				"res:// virtual path. Shows a thumbnail preview and accepts .png/.jpg/.jpeg, "
+				"by browsing or dragging from the resource browser.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    sprite = export_image(\"res://textures/hero.png\")\n"
+				"    ```");
+		m.def("export_audio", [](py::object value) {
+			if (!py::isinstance<py::str>(value)) {
+				throw py::type_error("export_audio: value must be a str (a res:// path), got " + PyTypeName(value));
+			}
+			return ExportMarker{ value, ExportType::Audio, "", "", 0.0f, 1.0f, "*.wav;*.mp3" };
+			}, py::arg("value"),
+				"Mark a str script attribute as editable with an audio picker that stores a "
+				"res:// virtual path. Shows a player with a waveform and accepts .wav/.mp3.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    jump_sound = export_audio(\"res://sfx/jump.mp3\")\n"
+				"    ```");
 		m.def("export_section", [](std::string name) {
 			if (name.empty()) {
 				throw py::value_error("export_section: section name cannot be empty");

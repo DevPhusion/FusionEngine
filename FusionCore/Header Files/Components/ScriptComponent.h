@@ -58,6 +58,7 @@ private:
 
 	void ScanExportedProperties();
 	void ApplyPendingExportedValues();
+	void DrawExportedProperties();
 	void RefreshExportedPropertiesFromInstance();
 	void SetInstanceAttrFromVariant(const std::string& name, const ExportedValue& value);
 

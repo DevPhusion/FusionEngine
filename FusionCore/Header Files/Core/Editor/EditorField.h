@@ -796,6 +796,7 @@ namespace EditorField {
 		return ActionScene(std::vector<Object*>{ target }, triggered, std::forward<OnChange>(onChange), forceNewEdit);
 	}
 
+	
 	template<typename Target, typename OnChange>
 	bool FileScene(Target&& target, const char* label, const char* id, std::string& path,
 		OnChange&& onChange, const FileSpec& spec = FileSpec::Any()) {
