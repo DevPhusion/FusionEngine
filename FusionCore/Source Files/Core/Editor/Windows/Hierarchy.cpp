@@ -494,6 +494,21 @@ void Hierarchy::ProcessWindow() {
 		pendingMove = PendingMove();
 	}
 
+	if (!IsRenaming &&
+		ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) &&
+		!ImGui::GetIO().WantTextInput &&
+		ImGui::IsKeyPressed(ImGuiKey_F2, false)) {
+		if (Object* selected = EditorManager::getInstance().selectedObject) {
+			IsRenaming = true;
+#if defined(_MSC_VER)
+			strcpy_s(renameBuffer, sizeof(renameBuffer), selected->name.c_str());
+#else
+			strncpy(renameBuffer, selected->name.c_str(), sizeof(renameBuffer) - 1);
+			renameBuffer[sizeof(renameBuffer) - 1] = '\0';
+#endif
+		}
+	}
+
 	ImGui::PopStyleVar();
 	ImGui::End();
 }

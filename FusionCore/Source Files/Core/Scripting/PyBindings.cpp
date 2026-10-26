@@ -818,6 +818,19 @@ namespace {
 				"    ```python\n"
 				"    jump_sound = export_audio(\"res://sfx/jump.mp3\")\n"
 				"    ```");
+		m.def("export_folder", [](py::object value) {
+			if (!py::isinstance<py::str>(value)) {
+				throw py::type_error("export_folder: value must be a str (a res:// path), got " + PyTypeName(value));
+			}
+			return ExportMarker{ value, ExportType::Folder, "", "", 0.0f, 1.0f };
+			}, py::arg("value"),
+				"Mark a str script attribute as editable with a folder picker that stores a "
+				"res:// virtual path. Folders can be chosen by browsing or by dragging from "
+				"the resource browser.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    level_dir = export_folder(\"res://levels\")\n"
+				"    ```");
 		m.def("export_section", [](std::string name) {
 			if (name.empty()) {
 				throw py::value_error("export_section: section name cannot be empty");

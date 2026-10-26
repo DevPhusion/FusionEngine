@@ -34,6 +34,7 @@ namespace {
 		switch (prop.displayType) {
 		case ExportType::Image: spec = FileSpec::ImageFile(); break;
 		case ExportType::Audio: spec = FileSpec::AudioFile(); break;
+		case ExportType::Folder: spec = FileSpec::Folder("Choose Folder"); break;
 		default: {
 			spec = FileSpec::Any(prop.fileFilter == "*.fscene" ? "Choose Scene" : "Choose File");
 			spec.extensions.clear();
@@ -642,7 +643,8 @@ void ScriptComponent::DrawExportedProperties() {
 
 			const bool isFileType = prop.displayType == ExportType::File
 				|| prop.displayType == ExportType::Image
-				|| prop.displayType == ExportType::Audio;
+				|| prop.displayType == ExportType::Audio
+				|| prop.displayType == ExportType::Folder;
 
 			if constexpr (!std::is_same_v<T, bool>) {
 				if (!isFileType) {
