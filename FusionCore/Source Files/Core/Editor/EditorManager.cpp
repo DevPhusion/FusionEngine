@@ -1,6 +1,6 @@
 #include "../../../Header Files/Core/Editor/EditorManager.h"
 #include "../../../Header Files/Core/Rendering/Renderer.h"
-#include "../../../imgui/imgui_internal.h"
+#include <imgui/imgui_internal.h>
 
 void EditorManager::Setup(GLFWwindow* window) {
 	IMGUI_CHECKVERSION();

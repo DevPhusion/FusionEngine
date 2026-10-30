@@ -11,7 +11,7 @@
 #include "Windows/SettingsWindow.h"
 #include "../EngineManager.h"
 #include "EditorTheme.h"
-#include "../../../imgui/implot.h"
+#include <imgui/implot.h>
 #include <vector>
 
 struct UndoEntry {

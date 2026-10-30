@@ -26,7 +26,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-#include "ImGuiFileDialog.h"
+#include <imgui/ImguiFileDialog.h>
 
 #ifdef __cplusplus
 
@@ -73,7 +73,7 @@ SOFTWARE.
 #ifdef USE_STD_FILESYSTEM
 #include <windows.h>
 #else                       // USE_STD_FILESYSTEM
-#include "dirent.h"  // directly open the dirent file attached to this lib
+#include <imgui/dirent.h>  // directly open the dirent file attached to this lib
 #endif                      // USE_STD_FILESYSTEM
 #define PATH_SEP '\\'
 #ifndef PATH_MAX
@@ -100,7 +100,7 @@ SOFTWARE.
 #ifdef IMGUI_INTERNAL_INCLUDE
 #include IMGUI_INTERNAL_INCLUDE
 #else  // IMGUI_INTERNAL_INCLUDE
-#include "imgui_internal.h"
+#include <imgui/imgui_internal.h>
 #endif  // IMGUI_INTERNAL_INCLUDE
 
 // legacy compatibility 1.89

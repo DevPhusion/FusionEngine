@@ -2,7 +2,7 @@
 #include "../../../../Header Files/Core/EngineManager.h"
 #include "../../../../Header Files/Core/Rendering/Renderer.h"
 #include "../../../../Header Files/Components/MouseInteractComponent.h"
-#include "../../../../imgui/imgui.h"
+#include <imgui/imgui.h>
 
 namespace {
 	enum class ToolIcon { Move, Rotate, Scale };

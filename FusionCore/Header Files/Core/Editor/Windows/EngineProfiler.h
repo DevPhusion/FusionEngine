@@ -1,7 +1,7 @@
 #pragma once
 #include "../EditorWindow.h"
 #include "../../DebugTimer.h"
-#include "../../../../imgui/implot.h"
+#include <imgui/implot.h>
 #include <vector>
 #include <string>
 #include <unordered_map>

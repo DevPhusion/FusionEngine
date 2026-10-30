@@ -4,7 +4,7 @@
 #include "../EngineManager.h"
 #include "FileManager.h"
 #include "FileDialog.h"
-#include "../../../imgui/imgui.h"
+#include <imgui/imgui.h>
 
 #include <filesystem>
 #include <fstream>

@@ -4,7 +4,7 @@
 #include "../EngineManager.h"
 #include "../ResourceManager.h"
 #include "../../Resources/Resource.h"
-#include "../../../imgui/imgui.h"
+#include <imgui/imgui.h>
 #include <vector>
 #include <string>
 #include <cstring>

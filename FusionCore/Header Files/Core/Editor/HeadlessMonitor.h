@@ -3,7 +3,7 @@
 #include "Windows/Console.h"
 #include "../Files/BinaryReader.h"
 #include "../Files/BinaryWriter.h"
-#include "../../../imgui/implot.h"
+#include <imgui/implot.h>
 #include <pybind11/pybind11.h>
 #include <map>
 
