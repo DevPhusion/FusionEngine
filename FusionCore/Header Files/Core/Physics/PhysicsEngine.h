@@ -319,7 +319,10 @@ public:
 	void ResolveRigidSoftContacts(float dtSub);
 	void ResolveRigidSoftImpulses(float dtSub);
 	void ApplyRigidSoftPositionCorrection();
-	
+	void DetectSoftRigidPlanes();
+	void ProjectSoftRigidPlanes();
+	void FinalizeSoftRigidPlanes();
+
 	//Rigid body collision
 	std::vector<RigidContactRecord> rigidContactRecords;
 	bool ResolveCircleCircleContacts(PhysicsBody bodyA, PhysicsBody bodyB, float rA, float rB);

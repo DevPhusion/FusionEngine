@@ -666,10 +666,34 @@ void PhysicsEngine::ResolveSoftRigidContacts(float dtSub) {
 				continue;
 
 			const glm::vec3* axisPtr = (softIdx >= 0 && rigidSoftAxisValid[r][softIdx]) ? &rigidSoftAxis[r][softIdx] : nullptr;  // ADD
-			SoftRigidContact c = DetectSoftRigidContact(pm->worldPos, pm->pointRadius, rigidBoundaries[r], axisPtr);
+			SoftRigidContact c = DetectSoftRigidContact(pm->worldPos, pm->pointRadius, rigidBoundaries[r], nullptr);
+
+			if (c.hit && c.penetration > pm->pointRadius) {
+				glm::vec3 d = pm->worldPos - pm->prevPos;
+				float len = glm::length(d);
+				if (len > 1e-6f) {
+					glm::vec3 dir = d / len;
+					float bestT = INFINITY; glm::vec3 bp(0), bn(0);
+					for (auto& e : rigidBoundaries[r].worldEdges) {
+						float t; glm::vec3 p, n;
+						if (RaySegmentIntersect(pm->prevPos, dir, len, e.start, e.end, t, p, n) && t < bestT) {
+							bestT = t; bp = p; bn = n;
+						}
+					}
+					if (bestT < INFINITY) {
+						float depth = glm::dot(bp - pm->worldPos, bn);   
+						if (depth > 0.0f) {
+							c.normal = bn;
+							c.point = bp;
+							c.penetration = pm->pointRadius + depth;
+						}
+					}
+				}
+			}
 			if (c.hit && c.penetration > best.penetration) { c.rigidIndex = r; best = c; }
 		}
 		if (!best.hit) best.penetration = 0.0f;
+		bool wasHit = softRigidContacts[i].hit;
 		softRigidContacts[i] = best;
 
 		if (best.hit) {
@@ -781,6 +805,76 @@ void PhysicsEngine::ResolveSoftRigidImpulses(float dtSub) {
 				rb->angularVelocity -= rbInvInertia * angImpulseT;
 			}
 		}
+	}
+}
+
+void PhysicsEngine::DetectSoftRigidPlanes() {
+	if (softRigidContacts.size() != allSoftBodyPointMasses.size())
+		softRigidContacts.resize(allSoftBodyPointMasses.size());
+	std::fill(softRigidContacts.begin(), softRigidContacts.end(), SoftRigidContact());
+	if (rigidBoundaries.empty()) return;
+
+	std::unordered_map<SoftBodyComponent*, int> sbIndex;
+	for (int s = 0; s < (int)softBoundaries.size(); s++) sbIndex[softBoundaries[s].sb] = s;
+
+	std::vector<glm::vec3> starts, ends;
+	for (size_t i = 0; i < allSoftBodyPointMasses.size(); i++) {
+		PointMass* pm = allSoftBodyPointMasses[i];
+		if (!pm->sb->Enabled) continue;
+		auto it = sbIndex.find(pm->sb);
+		if (it == sbIndex.end()) continue;
+		const SoftBoundary& sbd = softBoundaries[it->second];
+
+		float margin = pm->pointRadius + glm::length(pm->worldPos - pm->prevPos);
+		float bestScore = INFINITY;
+
+		for (int r = 0; r < (int)rigidBoundaries.size(); r++) {
+			const RigidBoundary& rb = rigidBoundaries[r];
+			if (!layerOverlap(sbd.collisionLayer, sbd.collisionMask, rb.collisionLayer, rb.collisionMask)) continue;
+
+			starts.clear(); ends.clear();
+			for (auto& e : rb.worldEdges) { starts.push_back(e.start); ends.push_back(e.end); }
+
+			bool startedInside = PointInPolygon(pm->prevPos, starts, ends);
+			const glm::vec3 probe = startedInside ? pm->worldPos : pm->prevPos;
+			ClosestPointOnEdge cp = GetClosestPointOnEdge(probe, starts, ends, rb.worldCenter);
+			if (!cp.found) continue;
+			if (!startedInside && cp.dist > margin) continue;
+
+			glm::vec3 n = cp.normal;
+			if (!startedInside && cp.dist > 1e-6f) n = (probe - cp.point) / cp.dist; // radial near corners
+
+			float score = startedInside ? -cp.dist : cp.dist;
+			if (score < bestScore) {
+				bestScore = score;
+				SoftRigidContact& c = softRigidContacts[i];
+				c.hit = true; c.normal = n; c.point = cp.point; c.rigidIndex = r;
+			}
+		}
+	}
+}
+
+void PhysicsEngine::ProjectSoftRigidPlanes() {
+	for (size_t i = 0; i < allSoftBodyPointMasses.size(); i++) {
+		const SoftRigidContact& c = softRigidContacts[i];
+		if (!c.hit) continue;
+		PointMass* pm = allSoftBodyPointMasses[i];
+		float C = glm::dot(pm->worldPos - c.point, c.normal) - pm->pointRadius;
+		if (C < 0.0f) pm->worldPos -= c.normal * C;
+	}
+}
+
+void PhysicsEngine::FinalizeSoftRigidPlanes() {
+	for (size_t i = 0; i < allSoftBodyPointMasses.size(); i++) {
+		SoftRigidContact& c = softRigidContacts[i];
+		if (!c.hit) continue;
+		PointMass* pm = allSoftBodyPointMasses[i];
+		float C = glm::dot(pm->worldPos - c.point, c.normal) - pm->pointRadius;
+		if (C > 1e-3f) { c.hit = false; continue; }
+		c.penetration = std::max(-C, 0.0f);
+		Object* rigidObj = rigidBoundaries[c.rigidIndex].obj;
+		BroadcastCollision(pm->sb->parent, -1, rigidObj, ResolutionShapeIdOf(rigidObj),
+			CollisionType::RigidVsSoft, c.point, c.normal, c.penetration);
 	}
 }
 
@@ -2696,16 +2790,17 @@ void PhysicsEngine::ResolveXPBDConstraints(float delta) {
 			}
 		}
 
+		DetectSoftRigidPlanes();
+
 		for (auto* constraint : registeredXPBDConstraints) constraint->ResetLambda();
 
 		const int posIterations = PS().xpbdPositionIterations;
 		for (int it = 0; it < posIterations; it++) {
 			{
 				TIME_BLOCK("Solve position");
-				for (auto* c : registeredXPBDConstraints) {
-					c->SolvePosition(dtSub);
-				}
+				for (auto* c : registeredXPBDConstraints) c->SolvePosition(dtSub);
 			}
+			ProjectSoftRigidPlanes();
 		}
 
 		{
@@ -2718,10 +2813,7 @@ void PhysicsEngine::ResolveXPBDConstraints(float delta) {
 			RefreshRigidSoftAxes();
 		}
 
-		{
-			TIME_BLOCK("Soft-Rigid contact");   
-			ResolveSoftRigidContacts(dtSub);
-		}
+		FinalizeSoftRigidPlanes();
 
 		{
 			TIME_BLOCK("Rigid-Soft contact");
@@ -2742,18 +2834,8 @@ void PhysicsEngine::ResolveXPBDConstraints(float delta) {
 		}
 
 		{
-			TIME_BLOCK("Soft-Rigid impulse");   
-			ResolveSoftRigidImpulses(dtSub);
-		}
-
-		{
 			TIME_BLOCK("Rigid-Soft impulse");   
 			ResolveRigidSoftImpulses(dtSub);
-		}
-
-		{
-			TIME_BLOCK("Soft-Rigid position correction");
-			ApplySoftRigidPositionCorrection();
 		}
 
 		{
@@ -2770,6 +2852,37 @@ void PhysicsEngine::ResolveXPBDConstraints(float delta) {
 				float dTheta = proxy->rotation - proxy->prevRotation;
 				dTheta = atan2(sin(dTheta), cos(dTheta));
 				proxy->angularVelocity = dTheta / dtSub;
+			}
+		}
+
+		static int substepsLeft = 0;
+		bool anyHit = false;
+		for (auto& c : softRigidContacts) if (c.hit) { anyHit = true; break; }
+		if (anyHit && substepsLeft == 0) substepsLeft = 12;
+
+		if (substepsLeft > 0) {
+			substepsLeft--;
+			for (auto& b : softBoundaries) {
+				TransformComponent* tc = b.obj->GetComponent<TransformComponent>();
+				PointMass* center = b.sb->CenterPM;
+				std::ostringstream ss;
+				ss << "substep:";
+				int ring = (int)b.sb->MassAggregate.size() - 1;
+				for (int k = 0; k < ring; k++) {
+					PointMass* pm = b.sb->MassAggregate[k].get();
+					float d = INFINITY;
+					for (auto& rb : rigidBoundaries) {
+						std::vector<glm::vec3> s, e;
+						for (auto& ed : rb.worldEdges) { s.push_back(ed.start); e.push_back(ed.end); }
+						ClosestPointOnEdge c = GetClosestPointOnEdge(pm->worldPos, s, e, rb.worldCenter);
+						if (c.found) d = std::min(d, PointInPolygon(pm->worldPos, s, e) ? -c.dist : c.dist);
+					}
+					float rest = glm::length(pm->localPos - center->localPos) * tc->size.x;
+					float dev = glm::length(pm->worldPos - center->worldPos) - rest;
+					ss << " [" << k << " d=" << std::round(d * 1000) / 1000
+						<< " dev=" << std::round(dev * 1000) / 1000 << "]";
+				}
+				Console::Print("{}").Format(ss.str());
 			}
 		}
 	}
