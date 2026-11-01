@@ -156,7 +156,7 @@ Fusion Engine is under active development. These are some upcoming features plan
 | Feature | Status | Progress |
 |---|---|---|
 | GUI Engine | In Development | ![0%](https://img.shields.io/badge/Progress-0%25-red) |
-| Improve physics engine stability | In Development | ![0%](https://img.shields.io/badge/Progress-0%25-red) |
+| Improve physics engine stability | In Development | ![20%](https://img.shields.io/badge/Progress-20%25-red) |
 | Tilemap | In Development | ![0%](https://img.shields.io/badge/Progress-0%25-red) |
 
 ## Contact
