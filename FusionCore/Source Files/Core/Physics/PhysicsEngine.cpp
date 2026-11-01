@@ -53,12 +53,6 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 				(*allObjects)[i]->GetComponent<RigidBodyComponent>()->IntegrateVelocities(delta);
 			}
 		}
-		{
-			TIME_BLOCK("Soft body sync point mass");
-			if ((*allObjects)[i]->HasComponent<SoftBodyComponent>()) {
-				(*allObjects)[i]->GetComponent<SoftBodyComponent>()->ProcessSoftBody(delta);
-			}
-		}
 	}
 
 	{
@@ -106,6 +100,14 @@ void PhysicsEngine::ProcessPhysics(float delta) {
 	{
 		TIME_BLOCK("XPBD Solver");
 		ResolveXPBDConstraints(delta);
+	}
+
+	{
+		TIME_BLOCK("Soft body sync mesh");
+		for (int i = 0; i < allObjects->size(); i++) {
+			SoftBodyComponent* sb = (*allObjects)[i]->GetComponent<SoftBodyComponent>();
+			if (sb) sb->ProcessSoftBody(delta);
+		}
 	}
 
 	{
@@ -348,7 +350,7 @@ void PhysicsEngine::ResolveFluidBoundaryContactsGeneric(std::vector<ContinuumPar
 				}
 
 				outContacts[i] = best;
-			}, particles[i]);
+				}, particles[i]);
 		});
 }
 
@@ -412,7 +414,7 @@ void PhysicsEngine::ResolveContinuumSoftImpulses(float dtSub) {
 				p->velocity += p->invMass * impulse;
 				pmA->velocity -= pmA->inverseMass * w0 * impulse;
 				pmB->velocity -= pmB->inverseMass * w1 * impulse;
-			}, allContinuumParticles[i]);
+				}, allContinuumParticles[i]);
 		}
 	}
 }
@@ -506,7 +508,7 @@ void PhysicsEngine::ResolveContinuumRigidImpulses(float dtSub) {
 					rb->velocity -= rbInvMass * impulse;
 					rb->angularVelocity -= rb->inverseInertia * angImpulse;
 				}
-			}, allContinuumParticles[i]);
+				}, allContinuumParticles[i]);
 		}
 	}
 }
@@ -590,7 +592,7 @@ bool PhysicsEngine::ResolveSoftPointSoftEdgeContacts(PhysicsBody pointBody, Poin
 	cp.normal = contactNormal;
 	cp.penetration = penetration;
 	cp.id = ContactID();
-	allContactPoints.push_back(cp);  
+	allContactPoints.push_back(cp);
 
 	XPBDContactConstraint* constraint = new XPBDContactConstraint(pointBody, nearPM->body, contactNormal, vertexRadius,
 		PS().softSoftCompliance, PS().softSoftStaticFriction, PS().softSoftDynamicFriction);
@@ -615,7 +617,7 @@ SoftRigidContact PhysicsEngine::DetectSoftRigidContact(const glm::vec3& pmPos, f
 	if (centerInside) {
 		contact.hit = true;
 		if (forcedAxis != nullptr) {
-			glm::vec3 axis = *forcedAxis;   
+			glm::vec3 axis = *forcedAxis;
 			float pointProj = glm::dot(pmPos, axis);
 			float maxRigidProj = -INFINITY;
 			for (auto& e : rigid.worldEdges) maxRigidProj = std::max(maxRigidProj, glm::dot(e.start, axis));
@@ -649,14 +651,14 @@ void PhysicsEngine::ResolveSoftRigidContacts(float dtSub) {
 		return;
 	}
 
-	std::unordered_map<SoftBodyComponent*, int> sbIndex;          
+	std::unordered_map<SoftBodyComponent*, int> sbIndex;
 	for (int s = 0; s < (int)softBoundaries.size(); s++) sbIndex[softBoundaries[s].sb] = s;
 
 	for (size_t i = 0; i < allSoftBodyPointMasses.size(); i++) {
 		PointMass* pm = allSoftBodyPointMasses[i];
 		if (!pm->sb->Enabled) { softRigidContacts[i] = SoftRigidContact(); continue; }
 
-		auto it = sbIndex.find(pm->sb);                            
+		auto it = sbIndex.find(pm->sb);
 		int softIdx = (it != sbIndex.end()) ? it->second : -1;
 
 		SoftRigidContact best; best.penetration = -INFINITY;
@@ -666,34 +668,10 @@ void PhysicsEngine::ResolveSoftRigidContacts(float dtSub) {
 				continue;
 
 			const glm::vec3* axisPtr = (softIdx >= 0 && rigidSoftAxisValid[r][softIdx]) ? &rigidSoftAxis[r][softIdx] : nullptr;  // ADD
-			SoftRigidContact c = DetectSoftRigidContact(pm->worldPos, pm->pointRadius, rigidBoundaries[r], nullptr);
-
-			if (c.hit && c.penetration > pm->pointRadius) {
-				glm::vec3 d = pm->worldPos - pm->prevPos;
-				float len = glm::length(d);
-				if (len > 1e-6f) {
-					glm::vec3 dir = d / len;
-					float bestT = INFINITY; glm::vec3 bp(0), bn(0);
-					for (auto& e : rigidBoundaries[r].worldEdges) {
-						float t; glm::vec3 p, n;
-						if (RaySegmentIntersect(pm->prevPos, dir, len, e.start, e.end, t, p, n) && t < bestT) {
-							bestT = t; bp = p; bn = n;
-						}
-					}
-					if (bestT < INFINITY) {
-						float depth = glm::dot(bp - pm->worldPos, bn);   
-						if (depth > 0.0f) {
-							c.normal = bn;
-							c.point = bp;
-							c.penetration = pm->pointRadius + depth;
-						}
-					}
-				}
-			}
+			SoftRigidContact c = DetectSoftRigidContact(pm->worldPos, pm->pointRadius, rigidBoundaries[r], axisPtr);
 			if (c.hit && c.penetration > best.penetration) { c.rigidIndex = r; best = c; }
 		}
 		if (!best.hit) best.penetration = 0.0f;
-		bool wasHit = softRigidContacts[i].hit;
 		softRigidContacts[i] = best;
 
 		if (best.hit) {
@@ -704,13 +682,18 @@ void PhysicsEngine::ResolveSoftRigidContacts(float dtSub) {
 }
 
 void PhysicsEngine::ApplySoftRigidPositionCorrection() {
-	const float positionCorrectionFactor = PS().srPositionCorrection;
+	const float factor = PS().srPositionCorrection;
+	const float slop = PS().srSlop;
+	const float maxStep = PS().srMaxStep;
+	const float v0 = PS().srv0;
+
 	for (size_t i = 0; i < allSoftBodyPointMasses.size(); i++) {
 		SoftRigidContact& c = softRigidContacts[i];
 		if (!c.hit) continue;
 
-		PointMass* pm = allSoftBodyPointMasses[i];
-		pm->worldPos += c.normal * (c.penetration * positionCorrectionFactor);
+		float fade = 1.0f / (1.0f + c.impactSpeed / v0);
+		float pen = std::min(std::max(c.penetration - slop, 0.0f), maxStep);
+		allSoftBodyPointMasses[i]->worldPos += c.normal * (pen * factor * fade);
 	}
 }
 
@@ -724,10 +707,10 @@ void PhysicsEngine::ResolveSoftRigidImpulses(float dtSub) {
 	const float staticFriction = ps.srStaticFriction;
 	const float dynamicFriction = ps.srDynamicFriction;
 
-
 	for (auto& c : softRigidContacts) {
 		c.accumNormalImpulse = 0.0f;
 		c.accumTangentImpulse = 0.0f;
+		c.impactSpeed = 0.0f;
 	}
 
 	for (int iter = 0; iter < contactIterations; iter++) {
@@ -757,6 +740,7 @@ void PhysicsEngine::ResolveSoftRigidImpulses(float dtSub) {
 
 			glm::vec3 vRel = pm->velocity - velAtContact();
 			float vn = glm::dot(vRel, c.normal);
+			if (iter == 0) c.impactSpeed = std::max(0.0f, -vn);
 
 			float bias = std::min((beta / dtSub) * std::max(0.0f, c.penetration - slop), maxBiasVelocity);
 
@@ -808,76 +792,6 @@ void PhysicsEngine::ResolveSoftRigidImpulses(float dtSub) {
 	}
 }
 
-void PhysicsEngine::DetectSoftRigidPlanes() {
-	if (softRigidContacts.size() != allSoftBodyPointMasses.size())
-		softRigidContacts.resize(allSoftBodyPointMasses.size());
-	std::fill(softRigidContacts.begin(), softRigidContacts.end(), SoftRigidContact());
-	if (rigidBoundaries.empty()) return;
-
-	std::unordered_map<SoftBodyComponent*, int> sbIndex;
-	for (int s = 0; s < (int)softBoundaries.size(); s++) sbIndex[softBoundaries[s].sb] = s;
-
-	std::vector<glm::vec3> starts, ends;
-	for (size_t i = 0; i < allSoftBodyPointMasses.size(); i++) {
-		PointMass* pm = allSoftBodyPointMasses[i];
-		if (!pm->sb->Enabled) continue;
-		auto it = sbIndex.find(pm->sb);
-		if (it == sbIndex.end()) continue;
-		const SoftBoundary& sbd = softBoundaries[it->second];
-
-		float margin = pm->pointRadius + glm::length(pm->worldPos - pm->prevPos);
-		float bestScore = INFINITY;
-
-		for (int r = 0; r < (int)rigidBoundaries.size(); r++) {
-			const RigidBoundary& rb = rigidBoundaries[r];
-			if (!layerOverlap(sbd.collisionLayer, sbd.collisionMask, rb.collisionLayer, rb.collisionMask)) continue;
-
-			starts.clear(); ends.clear();
-			for (auto& e : rb.worldEdges) { starts.push_back(e.start); ends.push_back(e.end); }
-
-			bool startedInside = PointInPolygon(pm->prevPos, starts, ends);
-			const glm::vec3 probe = startedInside ? pm->worldPos : pm->prevPos;
-			ClosestPointOnEdge cp = GetClosestPointOnEdge(probe, starts, ends, rb.worldCenter);
-			if (!cp.found) continue;
-			if (!startedInside && cp.dist > margin) continue;
-
-			glm::vec3 n = cp.normal;
-			if (!startedInside && cp.dist > 1e-6f) n = (probe - cp.point) / cp.dist; // radial near corners
-
-			float score = startedInside ? -cp.dist : cp.dist;
-			if (score < bestScore) {
-				bestScore = score;
-				SoftRigidContact& c = softRigidContacts[i];
-				c.hit = true; c.normal = n; c.point = cp.point; c.rigidIndex = r;
-			}
-		}
-	}
-}
-
-void PhysicsEngine::ProjectSoftRigidPlanes() {
-	for (size_t i = 0; i < allSoftBodyPointMasses.size(); i++) {
-		const SoftRigidContact& c = softRigidContacts[i];
-		if (!c.hit) continue;
-		PointMass* pm = allSoftBodyPointMasses[i];
-		float C = glm::dot(pm->worldPos - c.point, c.normal) - pm->pointRadius;
-		if (C < 0.0f) pm->worldPos -= c.normal * C;
-	}
-}
-
-void PhysicsEngine::FinalizeSoftRigidPlanes() {
-	for (size_t i = 0; i < allSoftBodyPointMasses.size(); i++) {
-		SoftRigidContact& c = softRigidContacts[i];
-		if (!c.hit) continue;
-		PointMass* pm = allSoftBodyPointMasses[i];
-		float C = glm::dot(pm->worldPos - c.point, c.normal) - pm->pointRadius;
-		if (C > 1e-3f) { c.hit = false; continue; }
-		c.penetration = std::max(-C, 0.0f);
-		Object* rigidObj = rigidBoundaries[c.rigidIndex].obj;
-		BroadcastCollision(pm->sb->parent, -1, rigidObj, ResolutionShapeIdOf(rigidObj),
-			CollisionType::RigidVsSoft, c.point, c.normal, c.penetration);
-	}
-}
-
 RigidSoftContact PhysicsEngine::DetectRigidSoftContact(const glm::vec3& vertexPos, float radius, const SoftBoundary& soft, const glm::vec3* forcedAxis) {
 	RigidSoftContact contact;
 	const std::vector<SoftEdge>& edges = soft.worldEdges;
@@ -898,7 +812,7 @@ RigidSoftContact PhysicsEngine::DetectRigidSoftContact(const glm::vec3& vertexPo
 		contact.edgeT = best.edgeT;
 
 		if (forcedAxis != nullptr) {
-			glm::vec3 axis = -(*forcedAxis);  
+			glm::vec3 axis = -(*forcedAxis);
 			float pointProj = glm::dot(vertexPos, axis);
 			float maxSoftProj = -INFINITY;
 			for (auto& pm : soft.sb->MassAggregate) maxSoftProj = std::max(maxSoftProj, glm::dot(pm->worldPos, axis));
@@ -945,7 +859,7 @@ void PhysicsEngine::ResolveRigidSoftContacts(float dtSub) {
 			if (!layerOverlap(rigidBoundaries[rv.rigidIndex].collisionLayer, rigidBoundaries[rv.rigidIndex].collisionMask,
 				softBoundaries[s].collisionLayer, softBoundaries[s].collisionMask))
 				continue;
-			const glm::vec3* axisPtr = rigidSoftAxisValid[rv.rigidIndex][s] ? &rigidSoftAxis[rv.rigidIndex][s] : nullptr; 
+			const glm::vec3* axisPtr = rigidSoftAxisValid[rv.rigidIndex][s] ? &rigidSoftAxis[rv.rigidIndex][s] : nullptr;
 			RigidSoftContact c = DetectRigidSoftContact(rv.worldPos, rigidVertexRadius, softBoundaries[s], axisPtr);
 			if (c.hit && c.penetration > best.penetration) { c.softIndex = s; best = c; }
 		}
@@ -994,7 +908,7 @@ void PhysicsEngine::ResolveRigidSoftImpulses(float dtSub) {
 			float rbInvMass = rb ? rb->inverseMass : 0.0f;
 			float rbInvInertia = rb ? rb->inverseInertia : 0.0f;
 
-			glm::vec3 r = rv.worldPos - rigid.worldCenter;   
+			glm::vec3 r = rv.worldPos - rigid.worldCenter;
 			float rn = r.x * c.normal.y - r.y * c.normal.x;
 
 			float invMassEdge = pmA->inverseMass * w0 * w0 + pmB->inverseMass * w1 * w1;
@@ -1119,7 +1033,7 @@ bool PhysicsEngine::ResolveCircleCircleContacts(PhysicsBody bodyA, PhysicsBody b
 
 		return true;
 	}
-	
+
 	return false;
 }
 
@@ -1207,7 +1121,7 @@ bool PhysicsEngine::ResolveCirclePolygonContacts(PhysicsBody circle, PhysicsBody
 	if (centerInside) {
 		if (forcedAxis != nullptr) {
 			contactNormal = *forcedAxis;
-	
+
 			float pointProj = glm::dot(center, contactNormal);
 			float maxRigidProj = -INFINITY;
 			for (const auto& edge : worldEdges) {
@@ -1280,7 +1194,7 @@ bool PhysicsEngine::ResolveCirclePolygonContacts(PhysicsBody circle, PhysicsBody
 		constraint->SetInitialImpulse(cachedLambda);
 		RegisterPGSConstraint(constraint);
 	}
-	
+
 	return isColliding;
 }
 
@@ -1336,7 +1250,7 @@ bool PhysicsEngine::ResolvePolygonPolygonContacts(PhysicsBody bodyA, PhysicsBody
 		}
 
 	}
-	
+
 	return colData.isColliding;
 }
 
@@ -1433,7 +1347,7 @@ std::vector<ContactPoint> PhysicsEngine::GenerateContactPoints(CollisionData col
 void PhysicsEngine::ApplyStaticPositionCorrection(TransformComponent* tcA, bool staticA,
 	TransformComponent* tcB, bool staticB, const glm::vec3& normal, float penetration) {
 	if (penetration <= 0.0f) return;
-	if (staticA && staticB) return; 
+	if (staticA && staticB) return;
 
 	if (staticA) {
 		tcB->UpdateWorldPosition(tcB->worldPosition - normal * penetration);
@@ -2073,7 +1987,7 @@ void PhysicsEngine::RefreshSoftBoundariesSurface() {
 void PhysicsEngine::ComputeFluidSurfaceQualification() {
 	if (fluidSurfaceQualifies.size() != allContinuumParticles.size())
 		fluidSurfaceQualifies.resize(allContinuumParticles.size());
-	
+
 	fluidBoundsMin = glm::vec3(INFINITY);
 	fluidBoundsMax = glm::vec3(-INFINITY);
 	const int minN = PS().buoyancyMinNeighbours;
@@ -2087,7 +2001,7 @@ void PhysicsEngine::ComputeFluidSurfaceQualification() {
 			}
 			}, allContinuumParticles[i]);
 	}
-	
+
 	std::for_each(std::execution::par_unseq, fluidIndices.begin(), fluidIndices.end(),
 		[&](int i) {
 			std::visit([&](auto&& p) {
@@ -2107,7 +2021,7 @@ void PhysicsEngine::ComputeFluidSurfaceQualification() {
 					fluidSurfaceQualifies[i] = neighborCount >= minN;
 				}
 				else if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
-					fluidSurfaceQualifies[i] = false; 
+					fluidSurfaceQualifies[i] = false;
 				}
 				}, allContinuumParticles[i]);
 		});
@@ -2380,13 +2294,13 @@ int PhysicsEngine::ClipSegmentToLine(ClipVertex vOut[2], const ClipVertex vIn[2]
 
 		intersectionPoint.id.referenceEdgeA = referenceEdgeIndex;
 		intersectionPoint.id.incidentEdgeB = vIn[0].id.incidentEdgeB;
-		intersectionPoint.id.vertexTypeA = vIn[0].id.vertexTypeA; 
+		intersectionPoint.id.vertexTypeA = vIn[0].id.vertexTypeA;
 
 		intersectionPoint.id.vertexTypeB = clipPlaneId;
 
 		vOut[numOutPoints < 2 ? numOutPoints++ : 1] = intersectionPoint;
 	}
-	
+
 	return numOutPoints;
 }
 
@@ -2527,8 +2441,8 @@ void PhysicsEngine::UpdateContactCache() {
 			ContactCache entry;
 			entry.objectA = contact->objectA.obj;
 			entry.objectB = contact->objectB.obj;
-			entry.pmA = contact->objectA.pm;   
-			entry.pmB = contact->objectB.pm;  
+			entry.pmA = contact->objectA.pm;
+			entry.pmB = contact->objectB.pm;
 			entry.id = contact->contactId;
 			entry.lambda = contact->cacheLambda;
 			contactsCache.push_back(entry);
@@ -2575,7 +2489,7 @@ void PhysicsEngine::ResolvePGSConstraintsForSubstep(float dtSub, float frameDelt
 		return solverRows[a].bias > solverRows[b].bias;
 		});
 
-	const int velocityIterations = PS().pgsSubstepIterations;   
+	const int velocityIterations = PS().pgsSubstepIterations;
 	for (int i = 0; i < velocityIterations; i++) {
 		for (int idx : sortedIndices) {
 			auto& row = solverRows[idx];
@@ -2661,7 +2575,7 @@ void PhysicsEngine::ResolvePGSConstraints(float delta) {
 					lambdaOld = row.lambda;
 					row.lambda += lambdaRaw;
 				}
-				
+
 				{
 					TIME_BLOCK("Post iteration clamp");
 
@@ -2686,7 +2600,7 @@ void PhysicsEngine::ResolvePGSConstraints(float delta) {
 			}
 		}
 	}
-	
+
 
 	{
 		TIME_BLOCK("Post solve");
@@ -2716,7 +2630,7 @@ void PhysicsEngine::ResolvePGSConstraints(float delta) {
 					if (fc->fracturable && appliedImpulse > fc->impulseThreshold)
 						pendingFractures.push_back({ b, contact->attachPointB, appliedImpulse });
 				}
-			}	
+			}
 		}
 	}
 }
@@ -2751,9 +2665,9 @@ void PhysicsEngine::ResolveXPBDConstraints(float delta) {
 	int substeps = PS().xpbdSubsteps;
 	float dtSub = delta / substeps;
 
-	GenerateRigidBoundaries();       
+	GenerateRigidBoundaries();
 	RefreshRigidBoundariesEdges();
-	GenerateRigidVertices();     
+	GenerateRigidVertices();
 	GenerateSoftBoundaries();
 
 	for (int i = 0; i < substeps; i++) {
@@ -2778,7 +2692,7 @@ void PhysicsEngine::ResolveXPBDConstraints(float delta) {
 				pm->acceleration = glm::vec3(0);
 			}
 		}
-		
+
 		{
 			TIME_BLOCK("Integrate proxy");
 			for (auto* proxy : allSoftBodyProxies) {
@@ -2790,30 +2704,32 @@ void PhysicsEngine::ResolveXPBDConstraints(float delta) {
 			}
 		}
 
-		DetectSoftRigidPlanes();
-
 		for (auto* constraint : registeredXPBDConstraints) constraint->ResetLambda();
 
 		const int posIterations = PS().xpbdPositionIterations;
 		for (int it = 0; it < posIterations; it++) {
 			{
 				TIME_BLOCK("Solve position");
-				for (auto* c : registeredXPBDConstraints) c->SolvePosition(dtSub);
+				for (auto* c : registeredXPBDConstraints) {
+					c->SolvePosition(dtSub);
+				}
 			}
-			ProjectSoftRigidPlanes();
 		}
 
 		{
-			TIME_BLOCK("Refresh soft boundary edges");  
+			TIME_BLOCK("Refresh soft boundary edges");
 			RefreshSoftBoundariesEdges();
 		}
 
 		{
-			TIME_BLOCK("Refresh rigid-soft axes");  
+			TIME_BLOCK("Refresh rigid-soft axes");
 			RefreshRigidSoftAxes();
 		}
 
-		FinalizeSoftRigidPlanes();
+		{
+			TIME_BLOCK("Soft-Rigid contact");
+			ResolveSoftRigidContacts(dtSub);
+		}
 
 		{
 			TIME_BLOCK("Rigid-Soft contact");
@@ -2834,8 +2750,18 @@ void PhysicsEngine::ResolveXPBDConstraints(float delta) {
 		}
 
 		{
-			TIME_BLOCK("Rigid-Soft impulse");   
+			TIME_BLOCK("Soft-Rigid impulse");
+			ResolveSoftRigidImpulses(dtSub);
+		}
+
+		{
+			TIME_BLOCK("Rigid-Soft impulse");
 			ResolveRigidSoftImpulses(dtSub);
+		}
+
+		{
+			TIME_BLOCK("Soft-Rigid position correction");
+			ApplySoftRigidPositionCorrection();
 		}
 
 		{
@@ -2852,37 +2778,6 @@ void PhysicsEngine::ResolveXPBDConstraints(float delta) {
 				float dTheta = proxy->rotation - proxy->prevRotation;
 				dTheta = atan2(sin(dTheta), cos(dTheta));
 				proxy->angularVelocity = dTheta / dtSub;
-			}
-		}
-
-		static int substepsLeft = 0;
-		bool anyHit = false;
-		for (auto& c : softRigidContacts) if (c.hit) { anyHit = true; break; }
-		if (anyHit && substepsLeft == 0) substepsLeft = 12;
-
-		if (substepsLeft > 0) {
-			substepsLeft--;
-			for (auto& b : softBoundaries) {
-				TransformComponent* tc = b.obj->GetComponent<TransformComponent>();
-				PointMass* center = b.sb->CenterPM;
-				std::ostringstream ss;
-				ss << "substep:";
-				int ring = (int)b.sb->MassAggregate.size() - 1;
-				for (int k = 0; k < ring; k++) {
-					PointMass* pm = b.sb->MassAggregate[k].get();
-					float d = INFINITY;
-					for (auto& rb : rigidBoundaries) {
-						std::vector<glm::vec3> s, e;
-						for (auto& ed : rb.worldEdges) { s.push_back(ed.start); e.push_back(ed.end); }
-						ClosestPointOnEdge c = GetClosestPointOnEdge(pm->worldPos, s, e, rb.worldCenter);
-						if (c.found) d = std::min(d, PointInPolygon(pm->worldPos, s, e) ? -c.dist : c.dist);
-					}
-					float rest = glm::length(pm->localPos - center->localPos) * tc->size.x;
-					float dev = glm::length(pm->worldPos - center->worldPos) - rest;
-					ss << " [" << k << " d=" << std::round(d * 1000) / 1000
-						<< " dev=" << std::round(dev * 1000) / 1000 << "]";
-				}
-				Console::Print("{}").Format(ss.str());
 			}
 		}
 	}
@@ -2951,13 +2846,13 @@ void PhysicsEngine::SolvePBFLambda(int particleIdx, std::vector<int>& neighbours
 
 		float C = restDensity / rho0 - 1.0f;
 		pi->density = restDensity;
-		if constexpr(std::is_same_v<std::decay_t<decltype(pi)>, FluidParticle*>) {
+		if constexpr (std::is_same_v<std::decay_t<decltype(pi)>, FluidParticle*>) {
 			pi->lambda = -C / (sumGradSq + pi->epsilon);
 		}
 		if constexpr (std::is_same_v<std::decay_t<decltype(pi)>, GasParticle*>) {
 			pi->lambda += (-C - pi->compliance * pi->lambda) / (sumGradSq + pi->compliance);
 		}
-	}, allContinuumParticles[particleIdx]);
+		}, allContinuumParticles[particleIdx]);
 }
 
 void PhysicsEngine::SolvePBFPosition(int particleIdx, std::vector<int>& neighboursIdx, std::vector<glm::vec3>& outPositions) {
@@ -2993,13 +2888,13 @@ void PhysicsEngine::SolvePBFPosition(int particleIdx, std::vector<int>& neighbou
 
 					deltaP += (pi->lambda + pj->lambda + sCorr) * grad;
 				}
-			}, allContinuumParticles[j]);
+				}, allContinuumParticles[j]);
 		}
 
 		glm::vec3 result = pi->predictedPosition + deltaP / rho0;
 		outPositions[particleIdx] = result;
-	}, allContinuumParticles[particleIdx]);
-	
+		}, allContinuumParticles[particleIdx]);
+
 }
 
 void PhysicsEngine::SolveXSPHViscosity(int particleIdx, std::vector<int>& neighboursIdx, std::vector<glm::vec3>& outDeltas) {
@@ -3016,10 +2911,10 @@ void PhysicsEngine::SolveXSPHViscosity(int particleIdx, std::vector<int>& neighb
 					float w = Poly6Kernel(poly6Coeff, h2, r2);
 					delta += w * (pj->velocity - pi->velocity);
 				}
-			}, allContinuumParticles[j]);
+				}, allContinuumParticles[j]);
 		}
 		outDeltas[particleIdx] = pi->viscosity * delta;
-	}, allContinuumParticles[particleIdx]);
+		}, allContinuumParticles[particleIdx]);
 }
 
 void PhysicsEngine::SolveVorticityConfinement(int particleIdx, std::vector<int>& neighboursIdx, std::vector<float>& omega, std::vector<glm::vec3>& outForce) {
@@ -3040,7 +2935,7 @@ void PhysicsEngine::SolveVorticityConfinement(int particleIdx, std::vector<int>&
 						eta += std::abs(omega[j]) * grad;
 					}
 				}
-			}, allContinuumParticles[j]);
+				}, allContinuumParticles[j]);
 		}
 
 		float etaLen = glm::length(eta);
@@ -3050,7 +2945,7 @@ void PhysicsEngine::SolveVorticityConfinement(int particleIdx, std::vector<int>&
 		glm::vec3 omegaVec = glm::vec3(0.0f, 0.0f, omega[particleIdx]);
 
 		outForce[particleIdx] = pi->vorticityEps * glm::cross(N, omegaVec);
-	}, allContinuumParticles[particleIdx]);	
+		}, allContinuumParticles[particleIdx]);
 }
 
 void PhysicsEngine::ComputeVorticity(int particleIdx, std::vector<int>& neighboursIdx, std::vector<float>& outOmegas) {
@@ -3072,11 +2967,11 @@ void PhysicsEngine::ComputeVorticity(int particleIdx, std::vector<int>& neighbou
 						omega += vij.x * grad.y - vij.y * grad.x;
 					}
 				}
-			}, allContinuumParticles[j]);
+				}, allContinuumParticles[j]);
 		}
 
 		outOmegas[particleIdx] = omega;
-	}, allContinuumParticles[particleIdx]);
+		}, allContinuumParticles[particleIdx]);
 }
 
 void PhysicsEngine::SolveThermalDiffusion(int particleIdx, std::vector<int>& neighboursIdx, std::vector<float>& outDeltaT) {
@@ -3098,7 +2993,7 @@ void PhysicsEngine::SolveThermalDiffusion(int particleIdx, std::vector<int>& nei
 							conduction += (pj->mass / pj->density) * (pj->temperature - pi->temperature) * lap;
 						}
 					}
-				}, allContinuumParticles[j]);
+					}, allContinuumParticles[j]);
 			}
 
 			float cooling = -pi->coolingRate * (pi->temperature - pi->ambientTemperature);
@@ -3107,7 +3002,7 @@ void PhysicsEngine::SolveThermalDiffusion(int particleIdx, std::vector<int>& nei
 		else {
 			outDeltaT[particleIdx] = 0;
 		}
-	}, allContinuumParticles[particleIdx]);
+		}, allContinuumParticles[particleIdx]);
 }
 
 bool PhysicsEngine::FindLocalFluidSurface(const glm::vec3& bMin, const glm::vec3& bMax,
@@ -3144,7 +3039,7 @@ bool PhysicsEngine::FindLocalFluidSurface(const glm::vec3& bMin, const glm::vec3
 				rho0Sum += p->density;
 				rho0Count++;
 			}
-		}, allContinuumParticles[idx]);
+			}, allContinuumParticles[idx]);
 	}
 	if (!foundSurface) return false;
 
@@ -3154,7 +3049,7 @@ bool PhysicsEngine::FindLocalFluidSurface(const glm::vec3& bMin, const glm::vec3
 }
 
 void PhysicsEngine::ApplyRigidBuoyancy(float dtSub) {
-	const float linearDragCoeff = PS().buoyancyLinearDrag;     
+	const float linearDragCoeff = PS().buoyancyLinearDrag;
 	const float angularDragCoeff = PS().buoyancyAngularDrag;
 
 	for (auto& b : rigidBoundaries) {
@@ -3240,7 +3135,7 @@ void PhysicsEngine::ResolvePBF(float delta) {
 			if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
 				gasIndices.push_back(i);
 			}
-		}, allContinuumParticles[i]);
+			}, allContinuumParticles[i]);
 	}
 
 	for (int sub = 0; sub < pbfSubsteps; sub++) {
@@ -3263,7 +3158,7 @@ void PhysicsEngine::ResolvePBF(float delta) {
 					std::visit([&](auto&& p) {
 						p->velocity += dtSub * PS().gravity;
 						p->predictedPosition = p->position + dtSub * p->velocity;
-					}, allContinuumParticles[i]);
+						}, allContinuumParticles[i]);
 				});
 			std::for_each(std::execution::par_unseq, gasIndices.begin(), gasIndices.end(),
 				[&](int i) {
@@ -3273,7 +3168,7 @@ void PhysicsEngine::ResolvePBF(float delta) {
 								PS().gravity.y * (p->temperature - p->ambientTemperature) / p->ambientTemperature, 0.0f);
 							p->predictedPosition = p->position + dtSub * p->velocity;
 						}
-					}, allContinuumParticles[i]);
+						}, allContinuumParticles[i]);
 				});
 		}
 
@@ -3291,7 +3186,7 @@ void PhysicsEngine::ResolvePBF(float delta) {
 				if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
 					predictedGas[i] = p->predictedPosition;
 				}
-			}, allContinuumParticles[i]);
+				}, allContinuumParticles[i]);
 
 			std::visit([&](auto&& p) {
 				if constexpr (std::is_same_v<std::decay_t<decltype(p)>, FluidParticle*>) {
@@ -3300,7 +3195,7 @@ void PhysicsEngine::ResolvePBF(float delta) {
 				if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
 					max_smoothing_gas = std::max(max_smoothing_gas, p->smoothingRadius);
 				}
-			}, allContinuumParticles[i]);
+				}, allContinuumParticles[i]);
 		}
 
 		{
@@ -3357,7 +3252,7 @@ void PhysicsEngine::ResolvePBF(float delta) {
 					for (auto& gasIndex : gasIndices) {
 						std::visit([&](auto&& p) {
 							if constexpr (std::is_same_v<std::decay_t<decltype(p)>, GasParticle*>) {
-								float tempRatio = p->temperature / p->ambientTemperature; 
+								float tempRatio = p->temperature / p->ambientTemperature;
 								p->compliance = 1.0f / (p->gamma * p->stiffness * p->restDensity * tempRatio * dtSub * dtSub);
 							}
 							}, allContinuumParticles[gasIndex]);
@@ -3397,7 +3292,7 @@ void PhysicsEngine::ResolvePBF(float delta) {
 		}
 
 		{
-			TIME_BLOCK("Continuum-Soft collision");    
+			TIME_BLOCK("Continuum-Soft collision");
 			ResolveContinuumSoftContacts(dtSub);
 			BroadcastFluidSoftContacts();
 			BroadcastGasSoftContacts();
@@ -3410,7 +3305,7 @@ void PhysicsEngine::ResolvePBF(float delta) {
 					std::visit([&](auto&& p) {
 						p->velocity = (1 / dtSub) * (p->predictedPosition - p->position);
 						p->position = p->predictedPosition;
-					}, allContinuumParticles[i]);
+						}, allContinuumParticles[i]);
 				});
 			std::for_each(std::execution::par_unseq, gasIndices.begin(), gasIndices.end(),
 				[&](int i) {
@@ -3498,7 +3393,7 @@ void PhysicsEngine::ResolvePBF(float delta) {
 void PhysicsEngine::ProcessFractures() {
 	if (pendingFractures.empty()) return;
 
-	std::unordered_map<Object*, PendingFracture> strongest; 
+	std::unordered_map<Object*, PendingFracture> strongest;
 	for (auto& pf : pendingFractures) {
 		auto it = strongest.find(pf.obj);
 		if (it == strongest.end() || pf.impulse > it->second.impulse)
@@ -3714,7 +3609,7 @@ std::vector<glm::vec3> PhysicsEngine::ComputeVoronoiCell(const std::vector<glm::
 		const glm::vec3& o = seeds[j];
 
 		glm::vec3 mid = (s + o) * 0.5f;
-		glm::vec3 normal = glm::normalize(o - s); 
+		glm::vec3 normal = glm::normalize(o - s);
 		float offset = glm::dot(mid, normal);
 
 		cell = ClipPolygonHalfPlane(cell, normal, offset);
@@ -3725,7 +3620,7 @@ std::vector<glm::vec3> PhysicsEngine::ComputeVoronoiCell(const std::vector<glm::
 
 std::vector<glm::vec3> PhysicsEngine::GenerateFractureSeeds(const std::vector<glm::vec3>& polygon, const glm::vec3& impactPoint, int count) {
 	std::vector<glm::vec3> seeds;
-	seeds.push_back(impactPoint); 
+	seeds.push_back(impactPoint);
 
 	glm::vec3 bmin(INFINITY), bmax(-INFINITY);
 	for (auto& p : polygon) { bmin = glm::min(bmin, p); bmax = glm::max(bmax, p); }
@@ -3767,10 +3662,10 @@ bool PhysicsEngine::RaySegmentIntersect(const glm::vec3& origin, const glm::vec3
 	glm::vec3 v3 = glm::vec3(-dir.y, dir.x, 0.0f);
 
 	float denom = glm::dot(v2, v3);
-	if (std::abs(denom) < 1e-8f) return false; 
+	if (std::abs(denom) < 1e-8f) return false;
 
 	float t1 = (v2.x * v1.y - v2.y * v1.x) / denom;
-	float t2 = glm::dot(v1, v3) / denom;            
+	float t2 = glm::dot(v1, v3) / denom;
 
 	if (t1 < 0.0f || t1 > length) return false;
 	if (t2 < 0.0f || t2 > 1.0f) return false;
@@ -3779,7 +3674,7 @@ bool PhysicsEngine::RaySegmentIntersect(const glm::vec3& origin, const glm::vec3
 	outPoint = origin + dir * t1;
 
 	glm::vec3 edgeNormal = glm::normalize(glm::vec3(segDir.y, -segDir.x, 0.0f));
-	if (glm::dot(edgeNormal, dir) > 0.0f) edgeNormal = -edgeNormal; 
+	if (glm::dot(edgeNormal, dir) > 0.0f) edgeNormal = -edgeNormal;
 	outNormal = edgeNormal;
 
 	return true;
@@ -3802,7 +3697,7 @@ bool PhysicsEngine::RayCircleIntersect(const glm::vec3& origin, const glm::vec3&
 
 	float t;
 	if (tNear >= 0.0f) t = tNear;
-	else if (tFar >= 0.0f) t = 0.0f; 
+	else if (tFar >= 0.0f) t = 0.0f;
 	else return false;
 
 	if (t > length) return false;
@@ -3896,7 +3791,7 @@ std::vector<RayCastHit> PhysicsEngine::RayCastAll(const glm::vec3& origin, const
 
 		RayCastObject(origin, dir, length, obj, hits);
 	}
-	
+
 	std::sort(hits.begin(), hits.end(), [](const RayCastHit& a, const RayCastHit& b) {
 		return a.distance < b.distance;
 		});

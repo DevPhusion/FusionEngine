@@ -103,6 +103,7 @@ struct SoftRigidContact {
 	int rigidIndex = -1;
 	float accumNormalImpulse = 0.0f;  
 	float accumTangentImpulse = 0.0f; 
+	float impactSpeed = 0.0f;
 };
 
 struct RigidSoftContact {
@@ -319,9 +320,6 @@ public:
 	void ResolveRigidSoftContacts(float dtSub);
 	void ResolveRigidSoftImpulses(float dtSub);
 	void ApplyRigidSoftPositionCorrection();
-	void DetectSoftRigidPlanes();
-	void ProjectSoftRigidPlanes();
-	void FinalizeSoftRigidPlanes();
 
 	//Rigid body collision
 	std::vector<RigidContactRecord> rigidContactRecords;

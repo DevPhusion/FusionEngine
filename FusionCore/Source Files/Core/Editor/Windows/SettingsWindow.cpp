@@ -214,6 +214,8 @@ void SettingsWindow::DrawPhysics() {
 		F("Static friction", "##SRSF", p.srStaticFriction, 0.01f, 0.0f, 5.0f, "%.3f");
 		F("Dynamic friction", "##SRDF", p.srDynamicFriction, 0.01f, 0.0f, 5.0f, "%.3f");
 		F("Position correction", "##SRPC", p.srPositionCorrection, 0.005f, 0.0f, 1.0f, "%.3f");
+		F("Max step", "##SRMaxStep", p.srMaxStep, 0.01f, 0.0f, 1.0f, "%.3f", "Only applied to soft vs rigid contacts");
+		F("v0", "##SRv0", p.srv0, 0.01f, 0.0f, 10.0f, "%.2f m/s", "Only applied to soft vs rigid contacts");
 		F("Rigid vertex radius", "##RVR", p.rigidVertexRadius, 0.001f, 0.0f, 1.0f, "%.4f");
 	}
 

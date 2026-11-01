@@ -39,6 +39,8 @@ struct PhysicsSettings {
 	float srStaticFriction = 0.4f;
 	float srDynamicFriction = 0.6f;
 	float srPositionCorrection = 0.2f;
+	float srMaxStep = 0.2f; // exclusive to soft-rigid
+	float srv0 = 2.5f; // exclusive to soft-rigid
 	float softRigidRestitution = 0.2f;   // soft point vs rigid
 	float rigidSoftRestitution = 0.0f;   // rigid vertex vs soft
 	float rigidVertexRadius = 0.01f;
@@ -103,6 +105,8 @@ struct PhysicsSettings {
 		w.Write(srStaticFriction);
 		w.Write(srDynamicFriction);
 		w.Write(srPositionCorrection);
+		w.Write(srMaxStep);
+		w.Write(srv0);
 		w.Write(softRigidRestitution);
 		w.Write(rigidSoftRestitution);
 		w.Write(rigidVertexRadius);
@@ -170,6 +174,8 @@ struct PhysicsSettings {
 		srStaticFriction = r.Read<float>();
 		srDynamicFriction = r.Read<float>();
 		srPositionCorrection = r.Read<float>();
+		srMaxStep = r.Read<float>();
+		srv0 = r.Read<float>();
 		softRigidRestitution = r.Read<float>();
 		rigidSoftRestitution = r.Read<float>();
 		rigidVertexRadius = r.Read<float>();

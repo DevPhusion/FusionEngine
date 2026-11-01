@@ -102,27 +102,56 @@ namespace {
         return nullptr;
     }
 
-    static std::string BodyBlockReason(Object* o) {
+    using BlockRule = std::function<std::string(Object*)>;
+
+    template<typename T>
+    static BlockRule BlockedBy(const char* blockerName, const char* why) {
+        return [blockerName, why](Object* o) -> std::string {
+            if (!o->HasComponent<T>()) return "";
+            return std::string("This object has a ") + blockerName + ".\n" + why +
+                "\nRemove the " + blockerName + " first.";
+            };
+    }
+
+    static std::string OnlyOneBody(Object* o) {
         const char* existing = ExistingBodyType(o);
         if (!existing) return "";
-        return std::string("This object already has a ") + existing + " Component.\n"
-            "Remove it first to add this one.";
+        return std::string("This object already has a ") + existing + ".\n" +
+            "Only one body type is allowed per object.\nRemove it first.";
+    }
+
+    static std::vector<BlockRule> FluidGasRules() {
+        return {
+            OnlyOneBody,
+            BlockedBy<ConstraintComponent>("Constraint Component",
+                "Constraints are not supported on fluids or gases."),
+            BlockedBy<FractureComponent>("Fracture Component",
+                "Fracture only works on rigid or static bodies."),
+        };
     }
 
     struct ComponentEntry {
         std::string label;
-        std::function<bool(Object*)> available;                  
+        std::function<bool(Object*)> available;
         std::function<void(Object*)> add;
-        std::function<std::string(Object*)> blocked = nullptr;   
+        std::vector<BlockRule> blockRules = {};
+
+        std::string BlockedReason(Object* o) const {
+            for (const BlockRule& rule : blockRules) {
+                std::string why = rule(o);
+                if (!why.empty())
+                    return "Cannot add " + label + ":\n" + why;
+            }
+            return "";
+        }
     };
 
     template<typename T>
-    static ComponentEntry SimpleEntry(const char* label,
-        std::function<std::string(Object*)> blocked = nullptr) {
+    static ComponentEntry SimpleEntry(const char* label, std::vector<BlockRule> rules = {}) {
         return { label,
             [](Object* o) { return !o->HasComponent<T>(); },
             [](Object* o) { AddComponentTo<T>(o); },
-            std::move(blocked) };
+            std::move(rules) };
     }
 
     static const std::vector<ComponentEntry>& ComponentRegistry() {
@@ -130,15 +159,41 @@ namespace {
             { "Render Component",
               [](Object* o) { return !o->HasComponent<RenderComponent>(); },
               [](Object* o) { AddComponentTo<RenderComponent>(o, std::vector<float>{}, o->shader, ""); } },
+
             SimpleEntry<CameraComponent>("Camera Component"),
             SimpleEntry<AudioComponent>("Audio Component"),
-            SimpleEntry<RigidBodyComponent>("Rigid Body Component", BodyBlockReason),
-            SimpleEntry<SoftBodyComponent>("Soft Body Component", BodyBlockReason),
+
+            SimpleEntry<RigidBodyComponent>("Rigid Body Component", {
+                OnlyOneBody,
+            }),
+
+            SimpleEntry<SoftBodyComponent>("Soft Body Component", {
+                OnlyOneBody,
+                BlockedBy<FractureComponent>("Fracture Component",
+                    "Fracture only works on rigid or static bodies."),
+            }),
+
             SimpleEntry<CollisionComponent>("Collision Component"),
-            SimpleEntry<ConstraintComponent>("Constraint Component"),
-            SimpleEntry<FractureComponent>("Fracture Component"),
-            SimpleEntry<FluidComponent>("Fluid Component", BodyBlockReason),
-            SimpleEntry<GasComponent>("Gas Component", BodyBlockReason),
+
+            SimpleEntry<ConstraintComponent>("Constraint Component", {
+                BlockedBy<FluidComponent>("Fluid Component",
+                    "Constraints only work with rigid and soft bodies."),
+                BlockedBy<GasComponent>("Gas Component",
+                    "Constraints only work with rigid and soft bodies."),
+            }),
+
+            SimpleEntry<FractureComponent>("Fracture Component", {
+                BlockedBy<SoftBodyComponent>("Soft Body Component",
+                    "Fracture only works on rigid or static bodies."),
+                BlockedBy<FluidComponent>("Fluid Component",
+                    "Fracture only works on rigid or static bodies."),
+                BlockedBy<GasComponent>("Gas Component",
+                    "Fracture only works on rigid or static bodies."),
+            }),
+
+            SimpleEntry<FluidComponent>("Fluid Component", FluidGasRules()),
+            SimpleEntry<GasComponent>("Gas Component", FluidGasRules()),
+
             { "Agent Component",
               [](Object* o) { return !o->HasComponent<AgentComponent>() && PackageManager::getInstance().IsPackageInstalled("rl"); },
               [](Object* o) { AddComponentTo<AgentComponent>(o); } },
@@ -371,7 +426,7 @@ void Inspector::ProcessWindow() {
             for (const ComponentEntry& e : ComponentRegistry()) {
                 if (!e.available(selected)) continue;
                 const ComponentEntry* ep = &e;
-                std::string reason = e.blocked ? e.blocked(selected) : std::string();
+                std::string reason = e.BlockedReason(selected);  
                 all.push_back({ "c:" + e.label, e.label, "", [ep, selected] { ep->add(selected); }, reason });
             }
 
@@ -444,5 +499,4 @@ void Inspector::ProcessWindow() {
     }
 
     ImGui::Dummy(ImVec2(0.0f, 50.0f));
-    ImGui::End();
-}
+    ImGui::End();}
