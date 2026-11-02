@@ -220,8 +220,6 @@ void Constraint::ProcessMirroredUI()
 
 void Constraint::ProcessInspectorUI(Object* parent)
 {
-    auto& om = ObjectManager::getInstance();
-
     if (objectA.obj == nullptr && parent != nullptr) {
         PhysicsBody body = PhysicsBody();
         TransformComponent* tc = parent->GetComponent<TransformComponent>();
@@ -312,54 +310,28 @@ void Constraint::ProcessInspectorUI(Object* parent)
 
     ImGui::Text("Object B");
     {
-        char nameBuf[128] = "None (Click to choose...)";
-        if (objectB.obj)
-        {
-#if defined(_MSC_VER)
-            strcpy_s(nameBuf, objectB.obj->name.c_str());
-#else
-            strncpy(nameBuf, objectB.obj->name.c_str(), sizeof(nameBuf) - 1);
-#endif
-        }
+        EditorField::ObjectPickerSpec pickSpec;
+        pickSpec.title = "Select Object B";
+        pickSpec.hint = "None (Click to choose...)";
+        pickSpec.blockRules = {
+            EditorField::BlockObject(parent, "An object cannot be constrained to itself."),
+            EditorField::ObjectBlockedBy<FluidComponent>("Fluid Component",
+                "Constraints only work with rigid and soft bodies."),
+            EditorField::ObjectBlockedBy<GasComponent>("Gas Component",
+                "Constraints only work with rigid and soft bodies."),
+        };
 
-        ImGui::InputText("##sel_objB", nameBuf, IM_ARRAYSIZE(nameBuf), ImGuiInputTextFlags_ReadOnly);
-
-        if (ImGui::IsItemHovered())
-            ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-        if (ImGui::IsItemClicked())
-            ImGui::OpenPopup("ConstraintPickerB");
-
-        if (ImGui::BeginPopup("ConstraintPickerB"))
-        {
-            ImGui::TextDisabled("Select Object B");
-            ImGui::Separator();
-
-            Object* pendingSelection = nullptr;
-            for (auto& objPtr : om.allObjects)
-            {
-                Object* candidate = objPtr.get();
-
-                if (ImGui::Selectable(candidate->name.c_str()))
-                {
-                    pendingSelection = candidate;
-                    ImGui::CloseCurrentPopup();
+        EditorField::ObjectScene({ parent }, nullptr, "##objB", objectB.obj,
+            [&](Object* picked) {
+                if (picked == nullptr) {
+                    SetObjectB(PhysicsBody());
+                    return;
                 }
-            }
-
-            ImGui::EndPopup();
-
-            if (pendingSelection != nullptr) {
-                Object* previousObjectB = objectB.obj;
-
-                std::vector<Object*> editRoots = { parent, pendingSelection };
-                if (previousObjectB) editRoots.push_back(previousObjectB);
-
-                EditorManager::getInstance().BeginEdit(editRoots, true);
 
                 PhysicsBody body = PhysicsBody();
-                TransformComponent* tc = pendingSelection->GetComponent<TransformComponent>();
-                RigidBodyComponent* pc = pendingSelection->GetComponent<RigidBodyComponent>();
-                body.obj = pendingSelection;
+                TransformComponent* tc = picked->GetComponent<TransformComponent>();
+                RigidBodyComponent* pc = picked->GetComponent<RigidBodyComponent>();
+                body.obj = picked;
 
                 if (tc) {
                     body.position = &tc->worldPosition;
@@ -373,11 +345,7 @@ void Constraint::ProcessInspectorUI(Object* parent)
                     body.invMass = &pc->inverseMass;
                 }
                 SetObjectB(body);
-                EngineManager::getInstance().SceneChangeEvent();
-
-                EditorManager::getInstance().EndEdit(editRoots);
-            }
-        }
+            }, pickSpec, true);
     }
     AttachPointWidget("B", objectB.obj, useCenterB, attachBEditing, attachPointB);
 

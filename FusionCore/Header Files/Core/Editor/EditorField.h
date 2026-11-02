@@ -1,6 +1,7 @@
 #pragma once
 #include "EditorManager.h"
 #include "EditorTheme.h"
+#include "../ObjectManager.h"
 #include "../EngineManager.h"
 #include "../ResourceManager.h"
 #include "../../Resources/Resource.h"
@@ -14,6 +15,29 @@
 #include <cmath>
 
 namespace EditorField {
+	using ObjectBlockRule = std::function<std::string(Object*)>;
+
+	struct ObjectPickerSpec {
+		const char* title = "Select Object";                
+		const char* hint = "None (click to choose...)";    
+		bool allowClear = false;                           
+		std::vector<ObjectBlockRule> blockRules;         
+	};
+
+	template<typename T>
+	inline ObjectBlockRule ObjectBlockedBy(std::string componentName, std::string why) {
+		return [componentName = std::move(componentName), why = std::move(why)](Object* o) -> std::string {
+			if (!o->HasComponent<T>()) return "";
+			return "This object has a " + componentName + ".\n" + why;
+			};
+	}
+
+	inline ObjectBlockRule BlockObject(Object* blocked, std::string why) {
+		return [blocked, why = std::move(why)](Object* o) -> std::string {
+			return o == blocked ? why : std::string();
+			};
+	}
+
 	struct FileSpec {
 		enum class Preview { None, Image, Audio };
 
@@ -639,6 +663,196 @@ namespace EditorField {
 			ImGui::PopID();
 			return changed;
 		}
+
+		inline ImVec4 ObjectBlockedColor() { return ImVec4(0.95f, 0.65f, 0.25f, 1.0f); }
+
+		inline std::string LowerCopy(std::string s) {
+			std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return (char)std::tolower(c); });
+			return s;
+		}
+
+		inline std::string ObjectBlockReason(Object* o, const ObjectPickerSpec& spec) {
+			for (const ObjectBlockRule& rule : spec.blockRules) {
+				std::string why = rule(o);
+				if (!why.empty()) return "Cannot select " + o->name + ":\n" + why;
+			}
+			return "";
+		}
+
+		struct ObjectPickerState {
+			const ObjectPickerSpec* spec = nullptr;
+			Object* current = nullptr;
+			std::string filter;                                         // lowercase; empty = not filtering
+			std::unordered_map<Object*, std::vector<Object*>> children;
+			std::unordered_map<Object*, bool> subtreeMatch;             // cache for this frame
+			Object* picked = nullptr;
+			Object* firstMatch = nullptr;                               // first selectable name match (for Enter)
+		};
+
+		inline bool ObjectNameMatches(Object* o, const ObjectPickerState& st) {
+			return st.filter.empty() || LowerCopy(o->name).find(st.filter) != std::string::npos;
+		}
+
+		inline bool ObjectSubtreeMatches(Object* o, ObjectPickerState& st) {
+			if (st.filter.empty()) return true;
+			auto cached = st.subtreeMatch.find(o);
+			if (cached != st.subtreeMatch.end()) return cached->second;
+
+			bool match = ObjectNameMatches(o, st);
+			if (!match) {
+				auto kids = st.children.find(o);
+				if (kids != st.children.end())
+					for (Object* c : kids->second)
+						if (ObjectSubtreeMatches(c, st)) { match = true; break; }
+			}
+			st.subtreeMatch[o] = match;
+			return match;
+		}
+
+		inline void DrawObjectPickerNode(Object* o, ObjectPickerState& st) {
+			if (!ObjectSubtreeMatches(o, st)) return;
+
+			std::vector<Object*> visibleKids;
+			auto it = st.children.find(o);
+			if (it != st.children.end())
+				for (Object* c : it->second)
+					if (ObjectSubtreeMatches(c, st)) visibleKids.push_back(c);
+
+			const std::string reason = ObjectBlockReason(o, *st.spec);
+			const bool blocked = !reason.empty();
+			const bool filtering = !st.filter.empty();
+			const bool leaf = visibleKids.empty();
+
+			ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow |
+				ImGuiTreeNodeFlags_SpanAvailWidth |
+				ImGuiTreeNodeFlags_DefaultOpen;
+			if (leaf) flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+			if (o == st.current) flags |= ImGuiTreeNodeFlags_Selected;
+
+			if (filtering && !leaf) ImGui::SetNextItemOpen(true, ImGuiCond_Always);
+
+			ImGui::PushID(o);
+
+			bool pushedColor = false;
+			if (blocked) {
+				ImGui::PushStyleColor(ImGuiCol_Text, ObjectBlockedColor());
+				pushedColor = true;
+			}
+			else if (o->hidden) {
+				ImGui::PushStyleColor(ImGuiCol_Text, ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled));
+				pushedColor = true;
+			}
+
+			const char* label = o->name.empty() ? "(unnamed)" : o->name.c_str();
+			const bool open = ImGui::TreeNodeEx("##node", flags, "%s", label);
+			if (pushedColor) ImGui::PopStyleColor();
+
+			if (ImGui::IsItemHovered()) {
+				if (blocked) ImGui::SetTooltip("%s", reason.c_str());
+				else ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+			}
+			if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen() && !blocked)
+				st.picked = o;
+
+			if (filtering && !blocked && st.firstMatch == nullptr && ObjectNameMatches(o, st))
+				st.firstMatch = o;
+
+			if (!leaf && open) {
+				for (Object* c : visibleKids) DrawObjectPickerNode(c, st);
+				ImGui::TreePop();
+			}
+
+			ImGui::PopID();
+		}
+
+		inline bool ObjectControl(const char* label, const char* id, Object* current,
+			const ObjectPickerSpec& spec, Object*& result) {
+
+			const ImGuiStyle& style = ImGui::GetStyle();
+			const float frame = ImGui::GetFrameHeight();
+			const float gap = style.ItemInnerSpacing.x;
+
+			if (label) Label(label);
+			ImGui::SetNextItemWidth(-FLT_MIN);
+			const float total = ImGui::CalcItemWidth();
+			const float reserved = spec.allowClear ? (frame + gap) : 0.0f;
+
+			ImGui::PushID(id);
+			bool changed = false;
+			constexpr const char* kPopup = "##objectPicker";
+
+			static std::unordered_map<ImGuiID, std::array<char, 256>> searchBuffers;
+			std::array<char, 256>& search = searchBuffers[ImGui::GetID("##search")];
+
+			char display[256];
+			std::snprintf(display, sizeof(display), "%s", current ? current->name.c_str() : "");
+			ImGui::SetNextItemWidth(total - reserved);
+			ImGui::InputTextWithHint("##display", spec.hint, display, sizeof(display), ImGuiInputTextFlags_ReadOnly);
+			if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
+			if (ImGui::IsItemClicked()) ImGui::OpenPopup(kPopup);
+			const ImVec2 fieldMin = ImGui::GetItemRectMin();
+			const ImVec2 fieldMax = ImGui::GetItemRectMax();
+
+			if (spec.allowClear) {
+				ImGui::SameLine(0.0f, gap);
+				if (current) {
+					if (CloseButton("##clear")) { result = nullptr; changed = true; }
+				}
+				else {
+					ImGui::Dummy(ImVec2(frame, frame));
+				}
+			}
+
+			ImGui::SetNextWindowPos(ImVec2(fieldMin.x, fieldMax.y + 4.0f));
+			ImGui::SetNextWindowSize(ImVec2(std::max(fieldMax.x - fieldMin.x, 320.0f), 380.0f));
+			if (ImGui::BeginPopup(kPopup)) {
+				ObjectPickerState st;
+				st.spec = &spec;
+				st.current = current;
+
+				const bool appearing = ImGui::IsWindowAppearing();
+				if (appearing) search[0] = '\0';
+
+				ImGui::TextDisabled("%s", spec.title);
+				ImGui::SetNextItemWidth(-FLT_MIN);
+				if (appearing) ImGui::SetKeyboardFocusHere();
+				const bool enterPressed = ImGui::InputTextWithHint("##search", "Search objects...",
+					search.data(), search.size(), ImGuiInputTextFlags_EnterReturnsTrue);
+				st.filter = LowerCopy(search.data());
+
+				for (auto& up : ObjectManager::getInstance().allObjects) {
+					Object* o = up.get();
+					if (!o || o->hideInHierarchy || o->parent == nullptr) continue;
+					st.children[o->parent].push_back(o);
+				}
+
+				ImGui::Separator();
+				if (ImGui::BeginChild("##tree", ImVec2(0, 0))) {
+					Object* root = ObjectManager::getInstance().GetSceneRoot();
+					if (!root) {
+						ImGui::TextDisabled("Empty scene");
+					}
+					else if (!ObjectSubtreeMatches(root, st)) {
+						ImGui::TextDisabled("No results");
+					}
+					else {
+						DrawObjectPickerNode(root, st);
+					}
+				}
+				ImGui::EndChild();
+
+				if (enterPressed && st.picked == nullptr) st.picked = st.firstMatch;
+
+				if (st.picked) {
+					if (st.picked != current) { result = st.picked; changed = true; }
+					ImGui::CloseCurrentPopup();
+				}
+				ImGui::EndPopup();
+			}
+
+			ImGui::PopID();
+			return changed;
+		}
 	}
 
 	template<typename WidgetFn, typename OnChange>
@@ -831,6 +1045,26 @@ namespace EditorField {
 		return FileScene(std::forward<Target>(target), label, id, path, std::forward<OnChange>(onChange), spec);
 	}
 
+	template<typename OnPick>
+	bool ObjectScene(std::vector<Object*> targets, const char* label, const char* id, Object* current,
+		OnPick&& onPick, const ObjectPickerSpec& spec = ObjectPickerSpec(), bool forceNewEdit = false) {
+
+		Object* picked = nullptr;
+		if (!Detail::ObjectControl(label, id, current, spec, picked)) return false;
+
+		auto addTarget = [&](Object* o) {
+			if (o && std::find(targets.begin(), targets.end(), o) == targets.end()) targets.push_back(o);
+			};
+		addTarget(current);
+		addTarget(picked);
+
+		EditorManager::getInstance().BeginEdit(targets, forceNewEdit);
+		onPick(picked);
+		EngineManager::getInstance().SceneChangeEvent();
+		EditorManager::getInstance().EndEdit(targets);
+		return true;
+	}
+
 	template<typename WidgetFn>
 	inline bool WrapEngine(const char* label, WidgetFn&& widget, const std::function<void()>& onChange = nullptr) {
 		if (label) {
@@ -963,6 +1197,16 @@ namespace EditorField {
 	inline bool AudioFileEngine(const char* label, const char* id, std::string& path,
 		const FileSpec& spec = FileSpec::AudioFile(), const std::function<void()>& onChange = nullptr) {
 		return FileEngine(label, id, path, spec, onChange);
+	}
+
+	inline bool ObjectEngine(const char* label, const char* id, Object*& obj,
+		const ObjectPickerSpec& spec = ObjectPickerSpec(), const std::function<void()>& onChange = nullptr) {
+		Object* picked = nullptr;
+		if (!Detail::ObjectControl(label, id, obj, spec, picked)) return false;
+		obj = picked;
+		EngineManager::getInstance().EngineChangeEvent();
+		if (onChange) onChange();
+		return true;
 	}
 
 	inline bool AddButton(const char* label, bool compact = false) {
