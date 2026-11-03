@@ -49,4 +49,5 @@ struct ExportMarker {
     float min = 0.0f;
     float max = 1.0f;
     std::string fileFilter = "*.*";
+    pybind11::object blockFunc;
 };

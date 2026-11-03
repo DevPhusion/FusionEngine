@@ -831,6 +831,39 @@ namespace {
 				"    ```python\n"
 				"    level_dir = export_folder(\"res://levels\")\n"
 				"    ```");
+		m.def("export_object", [](py::object value, py::object blockingFunc) {
+			const bool isObjectInstance = py::isinstance<Object>(value);
+			const bool isObjectClass = PyType_Check(value.ptr()) && value.is(py::type::of<Object>());
+			if (!isObjectInstance && !isObjectClass) {
+				throw py::type_error("export_object: value must be the Object class or an Object instance, got "
+					+ PyTypeName(value));
+			}
+			if (!blockingFunc.is_none() && !PyCallable_Check(blockingFunc.ptr())) {
+				throw py::type_error("export_object: blocking_func must be callable or None, got "
+					+ PyTypeName(blockingFunc));
+			}
+			ExportMarker marker{ value, ExportType::Default, "", "", 0.0f, 1.0f, "" };
+			marker.blockFunc = blockingFunc;
+			return marker;
+			}, py::arg("value"), py::arg("blocking_func") = py::none(),
+				"Mark an Object script attribute as editable with the object picker, optionally "
+				"preventing some Objects from being selected.\n\n"
+				"blocking_func is called with each candidate Object while the picker is open. Return "
+				"None (or '' / False) to allow the Object, or a str explaining why it can't be "
+				"selected (returning True blocks it with a generic message). Blocked Objects are "
+				"greyed out in the picker and show the reason as a tooltip. The check only applies to "
+				"the editor picker; it does not stop scripts from assigning the attribute directly. "
+				"Keep it cheap: it runs for every visible Object each frame the picker is open.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    def no_rigidbody(obj):\n"
+				"        if obj.has_component(RigidBodyComponent):\n"
+				"            return \"This object has a RigidBodyComponent\"\n"
+				"        return None\n\n"
+				"    target = export_object(Object, no_rigidbody)\n"
+				"    other = export_object(Object, lambda o: \"Hidden\" if o.hidden else None)\n"
+				"    ```\n"
+				"Plain export(Object) still works and has no restrictions.");
 		m.def("export_section", [](std::string name) {
 			if (name.empty()) {
 				throw py::value_error("export_section: section name cannot be empty");

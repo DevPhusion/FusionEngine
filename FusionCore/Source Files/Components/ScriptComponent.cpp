@@ -65,6 +65,55 @@ namespace {
 		return spec;
 	}
 
+	void ReportBlockFuncErrorOnce(const std::string& msg) {
+		static std::unordered_set<std::string> reported;  
+		if (!reported.insert(msg).second) return;
+		Console::PrintError("ScriptComponent: export_object blocking function error: {}").Format(msg);
+	}
+
+	EditorField::ObjectBlockRule MakePyBlockRule(py::object func) {
+		auto holder = std::shared_ptr<py::object>(
+			new py::object(std::move(func)),
+			[](py::object* p) { py::gil_scoped_acquire gil; delete p; });
+
+		return [holder](Object* o) -> std::string {
+			if (!o) return "";
+			py::gil_scoped_acquire gil;
+			try {
+				py::object result = (*holder)(py::cast(o, py::return_value_policy::reference));
+				if (result.is_none()) return "";
+				if (py::isinstance<py::bool_>(result)) return result.cast<bool>() ? "Blocked by script." : "";
+				if (py::isinstance<py::str>(result)) return result.cast<std::string>();
+				ReportBlockFuncErrorOnce("must return a str, bool or None, got " +
+					py::str(py::type::of(result).attr("__name__")).cast<std::string>());
+			}
+			catch (const py::error_already_set& e) {
+				ReportBlockFuncErrorOnce(e.what());
+			}
+			return "";   
+			};
+	}
+
+	EditorField::ObjectPickerSpec BuildExportObjectSpec(const py::object& scriptInstance, const std::string& propName) {
+		EditorField::ObjectPickerSpec spec;
+		spec.allowClear = true;  
+		if (!scriptInstance) return spec;
+
+		py::gil_scoped_acquire gil;
+		try {
+			py::object marker = py::getattr(scriptInstance.attr("__class__"), propName.c_str(), py::none());
+			if (py::isinstance<ExportMarker>(marker)) {
+				const ExportMarker& m = marker.cast<const ExportMarker&>();
+				if (m.blockFunc && !m.blockFunc.is_none())
+					spec.blockRules.push_back(MakePyBlockRule(m.blockFunc));
+			}
+		}
+		catch (const py::error_already_set&) {
+			PyErr_Clear();
+		}
+		return spec;
+	}
+
 	void WriteExportedValue(BinaryWriter& w, const ExportedValue& value) {
 		w.Write(static_cast<int>(value.index()));
 		std::visit([&](auto&& v) {
@@ -646,7 +695,7 @@ void ScriptComponent::DrawExportedProperties() {
 				|| prop.displayType == ExportType::Audio
 				|| prop.displayType == ExportType::Folder;
 
-			if constexpr (!std::is_same_v<T, bool>) {
+			if constexpr (!std::is_same_v<T, bool> && !std::is_same_v<T, ObjectRef>) {
 				if (!isFileType) {
 					ImGui::Text("%s", prop.name.c_str());
 					ImGui::SameLine();
@@ -741,43 +790,16 @@ void ScriptComponent::DrawExportedProperties() {
 						});
 			}
 			else if constexpr (std::is_same_v<T, ObjectRef>) {
-				char nameBuf[128];
-				std::string label = value.ptr ? value.ptr->name : std::string("None (Click to choose...)");
-				std::snprintf(nameBuf, sizeof(nameBuf), "%s", label.c_str());
+				const EditorField::ObjectPickerSpec spec = BuildExportObjectSpec(scriptInstance, prop.name);
 
-				ImGui::InputText("##val", nameBuf, sizeof(nameBuf), ImGuiInputTextFlags_ReadOnly);
-				if (ImGui::IsItemHovered()) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-				if (ImGui::IsItemClicked()) ImGui::OpenPopup("##ExportObjectPicker");
-
-				if (ImGui::BeginPopup("##ExportObjectPicker")) {
-					ImGui::TextDisabled("Select Object");
-					ImGui::Separator();
-
-					ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.65f, 0.65f, 0.65f, 1.0f));
-					EditorField::ActionScene(parent, ImGui::Selectable("None"), [&] {
-						UnregisterObjectDeleteCallback(prop);
-						value.ptr = nullptr;
-						value.id = 0;
+				EditorField::ObjectScene(std::vector<Object*>{ parent }, prop.name.c_str(), "##val", value.ptr,
+					[&](Object* picked) {
+						UnregisterObjectDeleteCallback(prop);   
+						value.ptr = picked;
+						value.id = picked ? picked->id : 0;
+						RegisterObjectDeleteCallback(prop);     
 						SetInstanceAttrFromVariant(prop.name, prop.value);
-						EngineManager::getInstance().SceneChangeEvent();
-						});
-					ImGui::PopStyleColor();
-					ImGui::Separator();
-
-					for (auto& objPtr : ObjectManager::getInstance().allObjects) {
-						Object* candidate = objPtr.get();
-						EditorField::ActionScene(parent,
-							ImGui::Selectable(candidate->name.c_str(), candidate == value.ptr), [&] {
-								UnregisterObjectDeleteCallback(prop);
-								value.ptr = candidate;
-								value.id = candidate->id;
-								RegisterObjectDeleteCallback(prop);
-								SetInstanceAttrFromVariant(prop.name, prop.value);
-								EngineManager::getInstance().SceneChangeEvent();
-							});
-					}
-					ImGui::EndPopup();
-				}
+					}, spec);
 			}
 			}, prop.value);
 
