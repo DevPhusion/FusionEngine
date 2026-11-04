@@ -1005,6 +1005,23 @@ namespace EditorField {
 		return triggered;
 	}
 
+	template<typename Target, typename OnChange>
+	bool ComboScene(Target&& target, const char* label, const char* id, int* currentIndex,
+		const char* const items[], int itemCount, OnChange&& onChange) {
+		std::vector<Object*> targets = Detail::ToTargets(std::forward<Target>(target));
+
+		Detail::Label(label);
+		ImGui::SetNextItemWidth(-FLT_MIN);
+		bool changed = ImGui::Combo(id, currentIndex, items, itemCount);
+		if (changed) {
+			EditorManager::getInstance().BeginEdit(targets, false);
+			onChange();
+			EngineManager::getInstance().SceneChangeEvent();
+			EditorManager::getInstance().EndEdit(targets);
+		}
+		return changed;
+	}
+
 	template<typename OnChange>
 	bool ActionScene(Object* target, bool triggered, OnChange&& onChange, bool forceNewEdit = false) {
 		return ActionScene(std::vector<Object*>{ target }, triggered, std::forward<OnChange>(onChange), forceNewEdit);

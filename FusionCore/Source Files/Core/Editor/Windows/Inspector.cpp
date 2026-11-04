@@ -194,6 +194,8 @@ namespace {
             SimpleEntry<FluidComponent>("Fluid Component", FluidGasRules()),
             SimpleEntry<GasComponent>("Gas Component", FluidGasRules()),
 
+            SimpleEntry<CanvasComponent>("Canvas Component"),
+
             { "Agent Component",
               [](Object* o) { return !o->HasComponent<AgentComponent>() && PackageManager::getInstance().IsPackageInstalled("rl"); },
               [](Object* o) { AddComponentTo<AgentComponent>(o); } },

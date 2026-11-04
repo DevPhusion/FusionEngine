@@ -14,6 +14,7 @@
 #include "EditorRenderComponent.h"
 #include "AgentComponent.h"
 #include "AudioComponent.h"
+#include "CanvasComponent.h"
 
 namespace {
 	std::unique_ptr<Component> CreateComponentFromName(Object* parent, std::string name) {
@@ -55,6 +56,9 @@ namespace {
 		}
 		if (name == "Editor Render Component") {
 			return std::make_unique<EditorRenderComponent>(parent, parent->shader);
+		}
+		if (name == "Canvas Component") {
+			return std::make_unique<CanvasComponent>(parent);
 		}
 		if (name == "Script Component") {
 			return std::make_unique<ScriptComponent>(parent, "");
