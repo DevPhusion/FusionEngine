@@ -1,6 +1,6 @@
 # Fusion Engine
 
-Fusion Engine is a custom 2D game engine designed for building lightweight, reinforcement learning (RL) training environments. The engine uses python as its native scripting language with direct integration with Gymnasium and Stable-Baseline3 for RL training. The core architecture of the engine is inspired by Unity and Godot engine but designed with the main goal of creating RL environments instead of games. 
+Fusion Engine is a custom 2D game engine designed for building lightweight, reinforcement learning (RL) training environments. The engine uses python as its native scripting language with direct integration with Gymnasium and Stable-Baseline3 for RL training. The core architecture of the engine is inspired by Unity and Godot engine but is designed to support reinforcement learning training natively.
 
 <img width="1902" height="977" alt="Fusion Engine editor showing a project being edited" src="https://github.com/user-attachments/assets/ba17224a-cf3f-4c2d-a64c-11109d354fb5" />
 
@@ -121,7 +121,7 @@ Once the environment is set up, standard Python packages (Gymnasium, Stable-Base
 
 ## AI Training Features
 
-Reinforcement learning support is delivered as an installable **package** rather than a core feature, keeping the base engine lightweight. Selecting the RL package from the project configuration screen pulls in both the required Python libraries (e.g. NumPy, PyTorch, Gymnasium) and engine-side features (a dedicated `fusionRL` Python API and additional editor windows). Installed and selected packages are synced automatically in the background when a project is opened.
+Reinforcement learning support is delivered as an installable **package** rather than a core feature, keeping the base engine lightweight. Selecting the RL package from the project configuration screen pulls in both the required Python libraries (e.g. NumPy, PyTorch, Gymnasium) and engine-side features (a dedicated `fusionRL` Python API and additional editor windows). Installed and selected packages are synced automatically in the background when a project is opened. This means the base engine can still be used to make games while still allowing the possibility of integrating RL training.
 
 **Demo:** RL agent learning to play Flappy Bird
 
