@@ -113,6 +113,15 @@ namespace {
             };
     }
 
+    template<typename T>
+    static BlockRule Required(const char* requireName, const char* why) {
+        return [requireName, why](Object* o) -> std::string {
+            if (o->HasComponent<T>()) return "";
+            return std::string("This component require ") + requireName + ".\n" + why +
+                "\nAdd " + requireName + " first.";
+            };
+    }
+
     static std::string OnlyOneBody(Object* o) {
         const char* existing = ExistingBodyType(o);
         if (!existing) return "";
@@ -195,6 +204,8 @@ namespace {
             SimpleEntry<GasComponent>("Gas Component", FluidGasRules()),
 
             SimpleEntry<CanvasComponent>("Canvas Component"),
+            SimpleEntry<RectTransformComponent>("Rect Transform Component"),
+            SimpleEntry<TextComponent>("Text Component", { Required<RectTransformComponent>("Rect Transform Component", "All GUI elements needs Rect Transform.") }),
 
             { "Agent Component",
               [](Object* o) { return !o->HasComponent<AgentComponent>() && PackageManager::getInstance().IsPackageInstalled("rl"); },

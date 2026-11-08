@@ -2,6 +2,7 @@
 #include "../../../../Header Files/Core/EngineManager.h"
 #include "../../../../Header Files/Core/Rendering/Renderer.h"
 #include "../../../../Header Files/Components/MouseInteractComponent.h"
+#include "../../../../Header Files/Core/GUIEngine.h"
 #include <imgui/imgui.h>
 
 namespace {
@@ -256,6 +257,9 @@ void Viewport::ProcessWindow() {
 		ImGui::Image((ImTextureID)(intptr_t)colorTexture, imageSize, ImVec2(0, 1), ImVec2(1, 0));
 		const bool showOverlay =
 			EngineManager::getInstance().EnginePhysicsMode != EngineManager::PhysicsMode::Simulate;
+
+		GUIEngine::getInstance().RenderInEditor(ImGui::GetWindowDrawList(),
+			glm::vec2(ImGui::GetItemRectMin().x, ImGui::GetItemRectMin().y), glm::vec2(imageSize.x, imageSize.y));
 
 		overlayHovered = showOverlay
 			? DrawGizmoToolbar(ImVec2(panelPos.x + 10.0f, panelPos.y + 10.0f))

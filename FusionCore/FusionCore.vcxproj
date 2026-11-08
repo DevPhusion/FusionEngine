@@ -155,7 +155,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Source Files\Components\CanvasComponent.cpp" />
+    <ClCompile Include="Source Files\Components\GUI\RectTransformComponent.cpp" />
+    <ClCompile Include="Source Files\Components\GUI\CanvasComponent.cpp" />
     <ClCompile Include="imgui\imgui.cpp" />
     <ClCompile Include="imgui\ImGuiFileDialog.cpp" />
     <ClCompile Include="imgui\imgui_demo.cpp" />
@@ -167,6 +168,7 @@
     <ClCompile Include="imgui\implot.cpp" />
     <ClCompile Include="imgui\implot_demo.cpp" />
     <ClCompile Include="imgui\implot_items.cpp" />
+    <ClCompile Include="Source Files\Core\GUIEngine.cpp" />
     <ClCompile Include="Source Files\Resources\Audio.cpp" />
     <ClCompile Include="Source Files\Core\ResourceManager.cpp" />
     <ClCompile Include="Source Files\Resources\Image.cpp" />
@@ -248,9 +250,11 @@
     <ClCompile Include="stb_image.cpp" />
     <ClCompile Include="Source Files\Core\Editor\Windows\Viewport.cpp" />
     <ClCompile Include="Source Files\Core\Editor\ThemeManager.cpp" />
+    <ClCompile Include="Source Files\Components\GUI\TextComponent.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Header Files\Components\CanvasComponent.h" />
+    <ClInclude Include="Header Files\Core\GUIEngine.h" />
+    <ClInclude Include="Header Files\Components\GUI\CanvasComponent.h" />
     <ClInclude Include="Header Files\Resources\Audio.h" />
     <ClInclude Include="Header Files\Core\Editor\Windows\DocsWindow.h" />
     <ClInclude Include="Header Files\Components\GasComponent.h" />
@@ -341,9 +345,11 @@
     <ClInclude Include="Header Files\Core\Editor\Windows\SettingsWindow.h" />
     <ClInclude Include="Header Files\Resources\Resource.h" />
     <ClInclude Include="Header Files\Core\ResourceManager.h" />
+    <ClInclude Include="Header Files\Components\GUI\RectTransformComponent.h" />
     <ClInclude Include="stb_image.h" />
     <ClInclude Include="Header Files\Core\Editor\Windows\Viewport.h" />
     <ClInclude Include="Header Files\Core\Editor\ThemeManager.h" />
+    <ClInclude Include="Header Files\Components\GUI\TextComponent.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="Resources\Images\engineIcon.ico" />

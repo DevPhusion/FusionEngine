@@ -1,6 +1,6 @@
-#include "../../Header Files/Components/CanvasComponent.h"
-#include "../../Header Files/Core/EngineManager.h"
-#include "../../Header Files/Core/Editor/EditorField.h"
+#include "../../../Header Files/Components/GUI/CanvasComponent.h"
+#include "../../../Header Files/Core/EngineManager.h"
+#include "../../../Header Files/Core/Editor/EditorField.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
 #include <cmath>

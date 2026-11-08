@@ -1,6 +1,6 @@
 #pragma once
-#include "Component.h"
-#include "../Objects/Object.h"
+#include "../Component.h"
+#include "../../Objects/Object.h"
 #include <glm/glm.hpp>
 #include <vector>
 

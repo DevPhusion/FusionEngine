@@ -18,6 +18,7 @@
 #include "../FusionCore/Header Files/Core/Scripting/ScriptManager.h"
 #include "../FusionCore/Header Files/Core/SceneManager.h" 
 #include "../FusionCore/Header Files/Core/AudioManager.h"
+#include "../FusionCore/Header Files/Core/GUIEngine.h"
 
 PYBIND11_EMBEDDED_MODULE(fusion, m) {
 	RegisterEngineBindings(m);
@@ -172,6 +173,7 @@ int main(int argc, char* argv[]) {
 	AudioManager::getInstance().Initialize();
 	Renderer::getInstance().Setup(&ObjectManager::getInstance().allObjects);
 	InputManager::getInstance().Setup(window);
+	GUIEngine::getInstance().Initialize(window);
 	EngineManager::getInstance().Setup(window);
 	PhysicsEngine::getInstance().Setup(&ObjectManager::getInstance().allObjects);
 	Camera::getInstance().Setup();
@@ -242,12 +244,17 @@ int main(int argc, char* argv[]) {
 
 		glDisable(GL_SCISSOR_TEST);
 
+		GUIEngine::getInstance().RenderPlayer(vp.x, vp.y, vp.width, vp.height,
+			(int)EngineManager::getInstance().windowWidth,
+			(int)EngineManager::getInstance().windowHeight);
+
 		InputManager::getInstance().ClearFrameState();
 
 		glfwSwapBuffers(window);
 	}
 
 	AudioManager::getInstance().Shutdown();
+	GUIEngine::getInstance().Shutdown();
 	glfwDestroyWindow(window);
 	glfwTerminate();
 	return 0;

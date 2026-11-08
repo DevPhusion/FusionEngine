@@ -14,7 +14,9 @@
 #include "EditorRenderComponent.h"
 #include "AgentComponent.h"
 #include "AudioComponent.h"
-#include "CanvasComponent.h"
+#include "GUI/CanvasComponent.h"
+#include "GUI/RectTransformComponent.h"
+#include "GUI/TextComponent.h"
 
 namespace {
 	std::unique_ptr<Component> CreateComponentFromName(Object* parent, std::string name) {
@@ -59,6 +61,12 @@ namespace {
 		}
 		if (name == "Canvas Component") {
 			return std::make_unique<CanvasComponent>(parent);
+		}
+		if (name == "Rect Transform Component") {
+			return std::make_unique<RectTransformComponent>(parent);
+		}
+		if (name == "Text Component") {
+			return std::make_unique<TextComponent>(parent);
 		}
 		if (name == "Script Component") {
 			return std::make_unique<ScriptComponent>(parent, "");
