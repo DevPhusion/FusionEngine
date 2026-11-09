@@ -43,6 +43,7 @@ public:
 	void ClearLayoutDirty() { layoutDirty = false; }
 
 	static const std::vector<CanvasComponent*>& GetActiveCanvases() { return activeCanvases; }
+	static void SortCanvases();
 
 	RenderMode renderMode = RenderMode::ScreenSpace;
 	ScaleMode scaleMode = ScaleMode::ScaleWithScreen;
@@ -51,13 +52,12 @@ public:
 	float matchWidthOrHeight = 0.5f;   
 	float constantScale = 1.0f;
 
-private:
 	glm::vec2 canvasSize = glm::vec2(1920.0f, 1080.0f);
 	float scaleFactor = 1.0f;
 	bool layoutDirty = true;
 
+private:
 	static std::vector<CanvasComponent*> activeCanvases;
 	void RegisterCanvas();
 	void UnregisterCanvas();
-	static void SortCanvases();
 };

@@ -1750,116 +1750,7 @@ namespace {
 				"(mirrors the inspector's 'Re-lock direction' button)");
 	}
 
-	void RegisterComponentBindings(py::module_& m) {
-		auto renderClass = py::class_<RenderComponent>(m, "RenderComponent")
-			.def_property("enable",
-				[](RenderComponent& self) { return self.Enabled; },
-				[](RenderComponent& self, bool enable) { self.SetEnabled(enable); },
-				"Whether this component is active. Disabling hides the object's rendered shape.")
-
-			.def_property("color",
-				[](RenderComponent& self) { return self.color; },
-				[](RenderComponent& self, glm::vec4 c) {
-					self.color = c;
-					EngineManager::getInstance().SceneChangeEvent();
-				},
-				"Tint/fill color (RGBA, 0-1) applied to the shape and any texture")
-
-			.def_property("z_index",
-				[](RenderComponent& self) { return self.z_index; },
-				[](RenderComponent& self, int z) {
-					self.z_index = z;
-					EngineManager::getInstance().SceneChangeEvent();
-				},
-				"Draw order relative to other render components. Higher values draw on top.")
-
-			.def_property("shape",
-				[](RenderComponent& self) -> Shape { return self.currentShape; },
-				[](RenderComponent& self, Shape shape) { self.SetShape(shape); },
-				"The shape used to render this object. Accepts a RectangleShape, "
-				"CircleShape, or PolygonShape. Equivalent to calling set_shape().")
-
-			.def("set_shape", &RenderComponent::SetShape, py::arg("shape"),
-				"Accepts a RectangleShape, CircleShape, or PolygonShape")
-
-			.def("set_texture", [](RenderComponent& self, const std::string& virtualPath) {
-			if (virtualPath.empty()) {
-				self.SetTexture("");
-				return;
-			}
-			if (!FileManager::getInstance().VirtualPathExists(virtualPath)) {
-				Console::AddMessage(Console::MessageType::Error,
-					"set_texture: resource not found: " + virtualPath);
-				return;
-			}
-			self.SetTexture(FileManager::getInstance().VirtualToAbsolute(virtualPath).string());
-				}, py::arg("virtual_path"),
-					"Load a texture from a res:// path (e.g. 'res://textures/wood.png'), or pass '' to clear it")
-			.def("set_enable", &RenderComponent::SetEnabled,
-				"Set enable. See the enable property.");
-
-
-		EnableGetComponent<RenderComponent>(renderClass);
-		EnableHasComponent<RenderComponent>(renderClass);
-		RegisterComponentGetter<RenderComponent>(renderClass);
-		EnableGetOwner<RenderComponent>(renderClass);
-		RegisterComponentRemover<RenderComponent>(renderClass);
-		RegisterComponentAdder<RenderComponent>(renderClass,
-			[](Object& obj) {
-				return std::make_unique<RenderComponent>(&obj, std::vector<float>{}, obj.shader, "");
-			});
-		EnableAddComponent<RenderComponent>(renderClass);
-		EnableRemoveComponent<RenderComponent>(renderClass);
-		EnableAddObject<RenderComponent>(renderClass);
-		EnableAddChild<RenderComponent>(renderClass);
-		EnableRemoveObject<RenderComponent>(renderClass);
-
-		auto transformClass = py::class_<TransformComponent>(m, "TransformComponent")
-			.def_property("world_position",
-				[](TransformComponent& self) -> glm::vec3& { return self.worldPosition; },
-				[](TransformComponent& self, glm::vec3 pos) { self.UpdateWorldPosition(pos); },
-				py::return_value_policy::reference_internal,
-				"World-space position of the object")
-			.def_property("enable",
-				[](TransformComponent& self) {return self.Enabled; },
-				[](TransformComponent& self, bool enable) {self.SetEnabled(enable);},
-				"Whether this component is active")
-			.def_property("rotation_degrees",
-				[](TransformComponent& self) {return self.rotation * (180 / std::numbers::pi);},
-				[](TransformComponent& self, float angle) {self.Rotate(angle * (std::numbers::pi / 180));},
-				"Rotation in degrees. Equivalent to the rotation property converted to/from radians.")
-			.def_property("rotation",
-				[](TransformComponent& self) { return self.rotation; },
-				[](TransformComponent& self, float angle) { self.Rotate(angle); },
-				"Rotation in radians")
-			.def_property("size",
-				[](TransformComponent& self) { return self.size; },
-				[](TransformComponent& self, glm::vec3 scale) { self.Scale(scale); },
-				"Scale of the object along each axis")
-			.def("set_enable", &TransformComponent::SetEnabled,
-				"Set enable. See the enable property.")
-			.def("set_size", &TransformComponent::Scale,
-				"Set size. See the size property.")
-			.def("set_rotation", &TransformComponent::Rotate,
-				"Set rotation (radians). See the rotation property.")
-			.def("set_rotation_degrees", [](TransformComponent& self, float angle) { self.Rotate(angle * (180 / std::numbers::pi)); },
-				"Set rotation_degrees. See the rotation_degrees property.")
-			.def("update_world_position", &TransformComponent::UpdateWorldPosition,
-				"Set world_position. See the world_position property.")
-			.def("to_local_coordinates", [](TransformComponent& self, glm::vec3 worldCoordinates) {self.ProjectToWorld(worldCoordinates, true);},
-				"Convert a world-space point into this object's local/model space")
-			.def("to_world_coordinates", [](TransformComponent& self, glm::vec3 localCoordinates) {self.ProjectToWorld(localCoordinates, false);},
-				"Convert a local/model-space point into world space");
-		EnableGetComponent<TransformComponent>(transformClass);
-		EnableHasComponent<TransformComponent>(transformClass);
-		RegisterComponentGetter<TransformComponent>(transformClass);
-		EnableGetOwner<TransformComponent>(transformClass);
-		EnableAddComponent<TransformComponent>(transformClass);
-		EnableRemoveComponent<TransformComponent>(transformClass);
-		EnableAddObject<TransformComponent>(transformClass);
-		EnableAddChild<TransformComponent>(transformClass);
-		EnableRemoveObject<TransformComponent>(transformClass);
-
+	void RegisterPhysicsComponentBindings(py::module_& m) {
 		auto rigidBodyClass = py::class_<RigidBodyComponent>(m, "RigidBodyComponent")
 			.def_property("enable",
 				[](RigidBodyComponent& self) { return self.Enabled; },
@@ -2030,230 +1921,6 @@ namespace {
 		EnableAddObject<RigidBodyComponent>(rigidBodyClass);
 		EnableAddChild<RigidBodyComponent>(rigidBodyClass);
 		EnableRemoveObject<RigidBodyComponent>(rigidBodyClass);
-
-		auto collisionClass = py::class_<CollisionComponent>(m, "CollisionComponent")
-			.def_property("enable",
-				[](CollisionComponent& self) { return self.Enabled; },
-				[](CollisionComponent& self, bool enable) { self.SetEnabled(enable); },
-				"Whether this component is active")
-			.def("set_enable", &CollisionComponent::SetEnabled,
-				"Set enable. See the enable property.")
-
-			.def_property("is_static",
-				[](CollisionComponent& self) { return self.isStatic; },
-				[](CollisionComponent& self, bool s) { self.isStatic = s; },
-				"Whether this object is treated as immovable for collision resolution "
-				"(other bodies collide against it, but it is never pushed)")
-			.def("set_static", [](CollisionComponent& self, bool s) { self.isStatic = s; },
-				py::arg("is_static"),
-				"Set is_static. See the is_static property.")
-
-			.def_property("collision_layer",
-				[](CollisionComponent& self) { return self.collisionLayer; },
-				[](CollisionComponent& self, uint16_t layer) { self.SetCollisionLayer(layer); },
-				"CollisionLayer bit flags describing what this object is. Combined with "
-				"other objects' collision_mask to decide whether they collide.")
-			.def("set_collision_layer", &CollisionComponent::SetCollisionLayer, py::arg("layer"),
-				"Set collision_layer. See the collision_layer property.")
-
-			.def_property("collision_mask",
-				[](CollisionComponent& self) { return self.collisionMask; },
-				[](CollisionComponent& self, uint16_t mask) { self.SetCollisionMask(mask); },
-				"CollisionMask bit flags describing which layers this object collides with")
-			.def("set_collision_mask", &CollisionComponent::SetCollisionMask, py::arg("mask"),
-				"Set collision_mask. See the collision_mask property.")
-
-			.def_property("sync_with_render_component",
-				[](CollisionComponent& self) {
-					CollisionShapeEntry* res = self.GetResolutionShape();
-					if (!res && !self.shapes.empty()) res = &self.shapes.front();
-					return res ? res->syncWithRenderComponent : false;
-				},
-				[](CollisionComponent& self, bool sync) {
-					CollisionShapeEntry* res = self.GetResolutionShape();
-					if (!res && !self.shapes.empty()) res = &self.shapes.front();
-					if (res) self.SetSyncWithRenderComponent(*res, sync);
-				},
-				"Whether the resolution shape (or the first shape if none is set as resolution) "
-				"automatically mirrors this object's RenderComponent shape. When True, calling "
-				"set_shape() on that shape will be overridden on the next sync.")
-			.def("set_sync_with_render_component", [](CollisionComponent& self, bool sync) {
-			CollisionShapeEntry* res = self.GetResolutionShape();
-			if (!res && !self.shapes.empty()) res = &self.shapes.front();
-			if (res) self.SetSyncWithRenderComponent(*res, sync);
-				}, py::arg("sync"),
-					"Set sync_with_render_component. See the sync_with_render_component property.")
-
-			.def_property("shape",
-				[](CollisionComponent& self) -> Shape { return self.resolutionShape; },
-				[](CollisionComponent& self, Shape shape) { self.SetShape(shape); },
-				"The resolution shape used for physical collision response. Equivalent to "
-				"calling set_shape() with no shape_id.")
-			.def("set_shape", [](CollisionComponent& self, Shape shape) {
-			CollisionShapeEntry* res = self.GetResolutionShape();
-			if (!res && !self.shapes.empty()) res = &self.shapes.front();
-			if (res && res->syncWithRenderComponent) {
-				Console::PrintWarning("CollisionComponent: set_shape called while sync_with_render_component "
-					"is True; shape will be overridden by RenderComponent");
-			}
-			self.SetShape(shape);
-				}, py::arg("shape"),
-					"Accepts a RectangleShape, CircleShape, or PolygonShape. Applies to the "
-					"resolution shape (or the first shape if none is set as resolution).")
-			.def("add_shape", &CollisionComponent::AddShape,
-				py::arg("shape"), py::arg("name") = "",
-				"Add a new collision shape to this component. Returns its shape_id.\n\n"
-				"Example:\n"
-				"    ```python\n"
-				"    sid = col.add_shape(CircleShape(Vector3(0,0,0), 1.0), 'Detector')\n"
-				"    ```")
-
-			.def("remove_shape", &CollisionComponent::RemoveShape, py::arg("shape_id"),
-				"Remove a collision shape by id, as returned by add_shape()")
-
-			.def("get_shape_ids", [](CollisionComponent& self) {
-			std::vector<int> ids;
-			ids.reserve(self.shapes.size());
-			for (auto& e : self.shapes) ids.push_back(e.id);
-			return ids;
-				}, "Returns the ids of every collision shape on this component")
-
-			.def("get_shape_name", [](CollisionComponent& self, int shapeId) {
-			CollisionShapeEntry* e = self.GetShape(shapeId);
-			if (!e) throw py::value_error("get_shape_name: invalid shape_id");
-			return e->name;
-				}, py::arg("shape_id"),
-					"Get the display name of the shape with the given id")
-
-			.def("set_shape_name", [](CollisionComponent& self, int shapeId, std::string name) {
-			CollisionShapeEntry* e = self.GetShape(shapeId);
-			if (!e) throw py::value_error("set_shape_name: invalid shape_id");
-			e->name = name;
-				}, py::arg("shape_id"), py::arg("name"),
-					"Rename the shape with the given id")
-
-			.def("get_shape", [](CollisionComponent& self, int shapeId) -> Shape {
-			CollisionShapeEntry* e = self.GetShape(shapeId);
-			if (!e) throw py::value_error("get_shape: invalid shape_id");
-			return e->currentShape;
-				}, py::arg("shape_id"),
-					"Get the Shape object for the shape with the given id")
-
-			.def("get_shape_id", &CollisionComponent::GetShapeId, py::arg("name"),
-				"Look up a shape's id by its name (as set in the inspector or via "
-				"set_shape_name). Returns -1 if no shape has that name.\n\n"
-				"Example:\n"
-				"    ```python\n"
-				"    detector_id = self.cc.get_shape_id('Aggro Radius')\n"
-				"    ```")
-
-			.def("set_shape", [](CollisionComponent& self, int shapeId, Shape shape) {
-			CollisionShapeEntry* e = self.GetShape(shapeId);
-			if (!e) throw py::value_error("set_shape: invalid shape_id");
-			if (e->syncWithRenderComponent) {
-				Console::PrintWarning("CollisionComponent: set_shape called while sync_with_render_component "
-					"is True for this shape; it will be overridden by RenderComponent");
-			}
-			self.SetShape(*e, shape);
-				}, py::arg("shape_id"), py::arg("shape"),
-					"Replace the shape stored under the given shape_id")
-
-			.def("get_sync_with_render_component", [](CollisionComponent& self, int shapeId) {
-			CollisionShapeEntry* e = self.GetShape(shapeId);
-			if (!e) throw py::value_error("get_sync_with_render_component: invalid shape_id");
-			return e->syncWithRenderComponent;
-				}, py::arg("shape_id"),
-					"Whether the shape with the given id mirrors the RenderComponent shape")
-
-			.def("set_sync_with_render_component", [](CollisionComponent& self, int shapeId, bool sync) {
-			CollisionShapeEntry* e = self.GetShape(shapeId);
-			if (!e) throw py::value_error("set_sync_with_render_component: invalid shape_id");
-			self.SetSyncWithRenderComponent(*e, sync);
-				}, py::arg("shape_id"), py::arg("sync"),
-					"Set whether the shape with the given id mirrors the RenderComponent shape")
-
-			.def("get_shape_center", [](CollisionComponent& self, int shapeId) {
-			CollisionShapeEntry* e = self.GetShape(shapeId);
-			if (!e) throw py::value_error("get_shape_center: invalid shape_id");
-			return self.GetCenter(*e);
-				}, py::arg("shape_id"),
-					"World-space center of the shape with the given id")
-
-			.def("get_shape_area", [](CollisionComponent& self, int shapeId) {
-			CollisionShapeEntry* e = self.GetShape(shapeId);
-			if (!e) throw py::value_error("get_shape_area: invalid shape_id");
-			return self.GetArea(*e);
-				}, py::arg("shape_id"),
-					"Area of the shape with the given id, in world units squared")
-
-			.def_property("resolution_shape_id",
-				[](CollisionComponent& self) { return self.resolutionShapeID; },
-				[](CollisionComponent& self, int shapeId) { self.SetResolutionShapeID(shapeId); },
-				"Id of the shape used for physical collision resolution. -1 means None: "
-				"shapes stay collidable for detection, but nothing is physically resolved.")
-			.def("set_resolution_shape_id", &CollisionComponent::SetResolutionShapeID, py::arg("shape_id"),
-				"Pass -1 for None: shapes stay collidable for detection, but nothing is "
-				"physically resolved.")
-			.def("get_resolution_shape_id", [](CollisionComponent& self) { return self.resolutionShapeID; },
-				"Get resolution_shape_id. See the resolution_shape_id property.")
-
-			.def("is_grounded", &CollisionComponent::isGrounded, py::arg("probe_length") = 0.15f,
-				"Cast a short ray straight down from the lowest point of this shape to check for ground")
-
-			.def("add_collision_callback", [](CollisionComponent& self, py::function func) {
-			return self.AddCollisionCallback([func](const CollisionEventData& data) {
-				py::gil_scoped_acquire gil;
-				try { func(data); }
-				catch (const py::error_already_set& e) {
-					Console::AddMessage(Console::MessageType::Error,
-						std::string("collision callback error: ") + e.what());
-				}
-				});
-				}, py::arg("callback"),
-					"Fires every physics substep while two shapes are overlapping"
-					". Returns an id usable with remove_collision_callback().")
-			.def("remove_collision_callback", &CollisionComponent::RemoveCollisionCallback, py::arg("id"),
-				"Unregister a callback previously registered with add_collision_callback()")
-
-			.def("add_collision_enter_callback", [](CollisionComponent& self, py::function func) {
-			return self.AddCollisionEnterCallback([func](const CollisionEventData& data) {
-				py::gil_scoped_acquire gil;
-				try { func(data); }
-				catch (const py::error_already_set& e) {
-					Console::AddMessage(Console::MessageType::Error,
-						std::string("collision enter callback error: ") + e.what());
-				}
-				});
-				}, py::arg("callback"), "Fires once on the frame a collision first begins.")
-			.def("remove_collision_enter_callback", &CollisionComponent::RemoveCollisionEnterCallback, py::arg("id"),
-				"Unregister a callback previously registered with add_collision_enter_callback()")
-
-			.def("add_collision_exit_callback", [](CollisionComponent& self, py::function func) {
-			return self.AddCollisionExitCallback([func](const CollisionEventData& data) {
-				py::gil_scoped_acquire gil;
-				try { func(data); }
-				catch (const py::error_already_set& e) {
-					Console::AddMessage(Console::MessageType::Error,
-						std::string("collision exit callback error: ") + e.what());
-				}
-				});
-				}, py::arg("callback"), "Fires once on the frame a collision stops.")
-			.def("remove_collision_exit_callback", &CollisionComponent::RemoveCollisionExitCallback, py::arg("id"),
-				"Unregister a callback previously registered with add_collision_exit_callback()");
-		EnableGetComponent<CollisionComponent>(collisionClass);
-		EnableHasComponent<CollisionComponent>(collisionClass);
-		RegisterComponentGetter<CollisionComponent>(collisionClass);
-		EnableGetOwner<CollisionComponent>(collisionClass);
-		RegisterComponentRemover<CollisionComponent>(collisionClass);
-		RegisterComponentAdder<CollisionComponent>(collisionClass,
-			[](Object& obj) {
-				return std::make_unique<CollisionComponent>(&obj);
-			});
-		EnableAddComponent<CollisionComponent>(collisionClass);
-		EnableRemoveComponent<CollisionComponent>(collisionClass);
-		EnableAddObject<CollisionComponent>(collisionClass);
-		EnableAddChild<CollisionComponent>(collisionClass);
-		EnableRemoveObject<CollisionComponent>(collisionClass);
 
 		auto softBodyClass = py::class_<SoftBodyComponent>(m, "SoftBodyComponent")
 			.def_property("enable",
@@ -3050,106 +2717,106 @@ namespace {
 				}, py::arg("dissipation_rate"),
 					"Set dissipation_rate. See the dissipation_rate property.")
 
-				.def_property("can_dissipate",
-					[](GasComponent& self) { return self.canDissipate; },
-					[](GasComponent& self, bool c) {
-						self.canDissipate = c;
-						for (auto* p : self.particles) p->canDissipate = c;
-						EngineManager::getInstance().SceneChangeEvent();
-					},
-					"Whether particles shrink and fade away over time. Applies to all current "
-					"particles. When False, the other dissipation/wisp settings are ignored.")
-				.def("set_can_dissipate", [](GasComponent& self, bool c) {
-				self.canDissipate = c;
-				for (auto* p : self.particles) p->canDissipate = c;
-				EngineManager::getInstance().SceneChangeEvent();
-					}, py::arg("can_dissipate"),
-						"Set can_dissipate. See the can_dissipate property.")
+			.def_property("can_dissipate",
+				[](GasComponent& self) { return self.canDissipate; },
+				[](GasComponent& self, bool c) {
+					self.canDissipate = c;
+					for (auto* p : self.particles) p->canDissipate = c;
+					EngineManager::getInstance().SceneChangeEvent();
+				},
+				"Whether particles shrink and fade away over time. Applies to all current "
+				"particles. When False, the other dissipation/wisp settings are ignored.")
+			.def("set_can_dissipate", [](GasComponent& self, bool c) {
+			self.canDissipate = c;
+			for (auto* p : self.particles) p->canDissipate = c;
+			EngineManager::getInstance().SceneChangeEvent();
+				}, py::arg("can_dissipate"),
+					"Set can_dissipate. See the can_dissipate property.")
 
-				.def_property("dissipation_rate",
-					[](GasComponent& self) { return self.dissipationRate; },
-					[](GasComponent& self, float r) { self.dissipationRate = std::max(0.0f, r); },
-					"Exponential rate at which each particle's radius scale decays per second "
-					"(only when can_dissipate is True). Clamped to >= 0.")
-				.def("set_dissipation_rate", [](GasComponent& self, float r) {
-				self.dissipationRate = std::max(0.0f, r);
-					}, py::arg("dissipation_rate"),
-						"Set dissipation_rate. See the dissipation_rate property.")
+			.def_property("dissipation_rate",
+				[](GasComponent& self) { return self.dissipationRate; },
+				[](GasComponent& self, float r) { self.dissipationRate = std::max(0.0f, r); },
+				"Exponential rate at which each particle's radius scale decays per second "
+				"(only when can_dissipate is True). Clamped to >= 0.")
+			.def("set_dissipation_rate", [](GasComponent& self, float r) {
+			self.dissipationRate = std::max(0.0f, r);
+				}, py::arg("dissipation_rate"),
+					"Set dissipation_rate. See the dissipation_rate property.")
 
-				.def_property("min_radius",
-					[](GasComponent& self) { return self.minRadius; },
-					[](GasComponent& self, float r) { self.minRadius = std::max(0.0001f, r); },
-					"Radius scale (0-1, relative to full size) below which a dissipating particle "
-					"is removed. Clamped to a small positive minimum.")
-				.def("set_min_radius", [](GasComponent& self, float r) {
-				self.minRadius = std::max(0.0001f, r);
-					}, py::arg("min_radius"),
-						"Set min_radius. See the min_radius property.")
+			.def_property("min_radius",
+				[](GasComponent& self) { return self.minRadius; },
+				[](GasComponent& self, float r) { self.minRadius = std::max(0.0001f, r); },
+				"Radius scale (0-1, relative to full size) below which a dissipating particle "
+				"is removed. Clamped to a small positive minimum.")
+			.def("set_min_radius", [](GasComponent& self, float r) {
+			self.minRadius = std::max(0.0001f, r);
+				}, py::arg("min_radius"),
+					"Set min_radius. See the min_radius property.")
 
-				.def_property("dissipation_spread",
-					[](GasComponent& self) { return self.dissipationSpread; },
-					[](GasComponent& self, float s) { self.dissipationSpread = std::max(0.0f, s); },
-					"How strongly dissipating particles drift outward along a random direction "
-					"as they shrink. Clamped to >= 0.")
-				.def("set_dissipation_spread", [](GasComponent& self, float s) {
-				self.dissipationSpread = std::max(0.0f, s);
-					}, py::arg("dissipation_spread"),
-						"Set dissipation_spread. See the dissipation_spread property.")
+			.def_property("dissipation_spread",
+				[](GasComponent& self) { return self.dissipationSpread; },
+				[](GasComponent& self, float s) { self.dissipationSpread = std::max(0.0f, s); },
+				"How strongly dissipating particles drift outward along a random direction "
+				"as they shrink. Clamped to >= 0.")
+			.def("set_dissipation_spread", [](GasComponent& self, float s) {
+			self.dissipationSpread = std::max(0.0f, s);
+				}, py::arg("dissipation_spread"),
+					"Set dissipation_spread. See the dissipation_spread property.")
 
-				.def_property("max_dissipation_speed",
-					[](GasComponent& self) { return self.maxDissipationSpeed; },
-					[](GasComponent& self, float s) { self.maxDissipationSpeed = std::max(0.0f, s); },
-					"Speed cap applied to particles while they drift outward from dissipation. "
-					"Clamped to >= 0.")
-				.def("set_max_dissipation_speed", [](GasComponent& self, float s) {
-				self.maxDissipationSpeed = std::max(0.0f, s);
-					}, py::arg("max_dissipation_speed"),
-						"Set max_dissipation_speed. See the max_dissipation_speed property.")
+			.def_property("max_dissipation_speed",
+				[](GasComponent& self) { return self.maxDissipationSpeed; },
+				[](GasComponent& self, float s) { self.maxDissipationSpeed = std::max(0.0f, s); },
+				"Speed cap applied to particles while they drift outward from dissipation. "
+				"Clamped to >= 0.")
+			.def("set_max_dissipation_speed", [](GasComponent& self, float s) {
+			self.maxDissipationSpeed = std::max(0.0f, s);
+				}, py::arg("max_dissipation_speed"),
+					"Set max_dissipation_speed. See the max_dissipation_speed property.")
 
-				.def_property("emit_wisps_on_dissipate",
-					[](GasComponent& self) { return self.emitWispsOnDissipate; },
-					[](GasComponent& self, bool e) { self.emitWispsOnDissipate = e; },
-					"Whether a dissipating particle splits into smaller visual-only wisps once "
-					"it shrinks past wisp_split_threshold")
-				.def("set_emit_wisps_on_dissipate", [](GasComponent& self, bool e) {
-				self.emitWispsOnDissipate = e;
-					}, py::arg("emit_wisps_on_dissipate"),
-						"Set emit_wisps_on_dissipate. See the emit_wisps_on_dissipate property.")
+			.def_property("emit_wisps_on_dissipate",
+				[](GasComponent& self) { return self.emitWispsOnDissipate; },
+				[](GasComponent& self, bool e) { self.emitWispsOnDissipate = e; },
+				"Whether a dissipating particle splits into smaller visual-only wisps once "
+				"it shrinks past wisp_split_threshold")
+			.def("set_emit_wisps_on_dissipate", [](GasComponent& self, bool e) {
+			self.emitWispsOnDissipate = e;
+				}, py::arg("emit_wisps_on_dissipate"),
+					"Set emit_wisps_on_dissipate. See the emit_wisps_on_dissipate property.")
 
-				.def_property("wisp_split_threshold",
-					[](GasComponent& self) { return self.wispSplitThreshold; },
-					[](GasComponent& self, float t) { self.wispSplitThreshold = glm::clamp(t, 0.0f, 1.0f); },
-					"Radius scale (0-1) at or below which a dissipating particle spawns its wisps. "
-					"Clamped to [0, 1].")
-				.def("set_wisp_split_threshold", [](GasComponent& self, float t) {
-				self.wispSplitThreshold = glm::clamp(t, 0.0f, 1.0f);
-					}, py::arg("wisp_split_threshold"),
-						"Set wisp_split_threshold. See the wisp_split_threshold property.")
+			.def_property("wisp_split_threshold",
+				[](GasComponent& self) { return self.wispSplitThreshold; },
+				[](GasComponent& self, float t) { self.wispSplitThreshold = glm::clamp(t, 0.0f, 1.0f); },
+				"Radius scale (0-1) at or below which a dissipating particle spawns its wisps. "
+				"Clamped to [0, 1].")
+			.def("set_wisp_split_threshold", [](GasComponent& self, float t) {
+			self.wispSplitThreshold = glm::clamp(t, 0.0f, 1.0f);
+				}, py::arg("wisp_split_threshold"),
+					"Set wisp_split_threshold. See the wisp_split_threshold property.")
 
-				.def_property("wisp_count_per_split",
-					[](GasComponent& self) { return self.wispCountPerSplit; },
-					[](GasComponent& self, int c) { self.wispCountPerSplit = std::max(0, c); },
-					"Number of wisps spawned each time a particle splits. Clamped to >= 0.")
-				.def("set_wisp_count_per_split", [](GasComponent& self, int c) {
-				self.wispCountPerSplit = std::max(0, c);
-					}, py::arg("wisp_count_per_split"),
-						"Set wisp_count_per_split. See the wisp_count_per_split property.")
+			.def_property("wisp_count_per_split",
+				[](GasComponent& self) { return self.wispCountPerSplit; },
+				[](GasComponent& self, int c) { self.wispCountPerSplit = std::max(0, c); },
+				"Number of wisps spawned each time a particle splits. Clamped to >= 0.")
+			.def("set_wisp_count_per_split", [](GasComponent& self, int c) {
+			self.wispCountPerSplit = std::max(0, c);
+				}, py::arg("wisp_count_per_split"),
+					"Set wisp_count_per_split. See the wisp_count_per_split property.")
 
-				.def_property("max_dissipation_generations",
-					[](GasComponent& self) { return self.maxDissipationGenerations; },
-					[](GasComponent& self, int g) { self.maxDissipationGenerations = std::max(0, g); },
-					"How many times wisps may themselves split into further wisps. "
-					"0 means only original particles split. Clamped to >= 0.")
-				.def("set_max_dissipation_generations", [](GasComponent& self, int g) {
-				self.maxDissipationGenerations = std::max(0, g);
-					}, py::arg("max_dissipation_generations"),
-						"Set max_dissipation_generations. See the max_dissipation_generations property.")
+			.def_property("max_dissipation_generations",
+				[](GasComponent& self) { return self.maxDissipationGenerations; },
+				[](GasComponent& self, int g) { self.maxDissipationGenerations = std::max(0, g); },
+				"How many times wisps may themselves split into further wisps. "
+				"0 means only original particles split. Clamped to >= 0.")
+			.def("set_max_dissipation_generations", [](GasComponent& self, int g) {
+			self.maxDissipationGenerations = std::max(0, g);
+				}, py::arg("max_dissipation_generations"),
+					"Set max_dissipation_generations. See the max_dissipation_generations property.")
 
-				.def("reseed", [](GasComponent& self) {
-				self.SeedParticles();
-				self.ResizeInstanceBuffer();
-					}, "Discard all particles (including manually added ones and wisps) and "
-					"re-fill the shape according to desired_particle_count")
+			.def("reseed", [](GasComponent& self) {
+			self.SeedParticles();
+			self.ResizeInstanceBuffer();
+				}, "Discard all particles (including manually added ones and wisps) and "
+				"re-fill the shape according to desired_particle_count")
 
 			.def_property_readonly("particle_count", [](GasComponent& self) { return self.particles.size(); },
 				"Number of particles currently in this gas")
@@ -3158,7 +2825,7 @@ namespace {
 			return self.particles;
 				}, py::return_value_policy::reference,
 				"All GasParticle instances currently owned by this component, including "
-				"visual-only wisps spawned by dissipation (check GasParticle.is_visual_only)")
+					"visual-only wisps spawned by dissipation (check GasParticle.is_visual_only)")
 
 			.def("get_particle", [](GasComponent& self, int index) -> GasParticle* {
 			if (index < 0 || index >= (int)self.particles.size())
@@ -3381,6 +3048,667 @@ namespace {
 		EnableAddObject<FractureComponent>(fractureClass);
 		EnableAddChild<FractureComponent>(fractureClass);
 		EnableRemoveObject<FractureComponent>(fractureClass);
+	}
+
+	void RegisterGUIComponentBindings(py::module_& m) {
+		py::enum_<CanvasComponent::RenderMode>(m, "CanvasRenderMode",
+			"How a CanvasComponent is rendered")
+			.value("ScreenSpace", CanvasComponent::RenderMode::ScreenSpace, "Drawn as an overlay on the screen")
+			.value("WorldSpace", CanvasComponent::RenderMode::WorldSpace, "Not implemented yet");
+
+		py::enum_<CanvasComponent::ScaleMode>(m, "CanvasScaleMode",
+			"How a CanvasComponent scales its UI with the viewport size")
+			.value("ConstantPixelSize", CanvasComponent::ScaleMode::ConstantPixelSize,
+				"UI is scaled by a fixed constant_scale regardless of viewport size")
+			.value("ScaleWithScreen", CanvasComponent::ScaleMode::ScaleWithScreen,
+				"UI scales relative to reference_resolution, blended by match_width_or_height");
+
+		auto canvasClass = py::class_<CanvasComponent>(m, "CanvasComponent",
+			"Root of a UI hierarchy. Child Objects with a RectTransformComponent are laid out "
+			"relative to this canvas.")
+			.def_property("enable",
+				[](CanvasComponent& self) { return self.Enabled; },
+				[](CanvasComponent& self, bool enable) { self.SetEnabled(enable); },
+				"Whether this component is active")
+			.def("set_enable", &CanvasComponent::SetEnabled, py::arg("enable"),
+				"Set enable. See the enable property.")
+
+			.def_property("render_mode",
+				[](CanvasComponent& self) { return self.renderMode; },
+				[](CanvasComponent& self, CanvasComponent::RenderMode mode) {
+					self.renderMode = mode;
+					self.layoutDirty = true;
+				},
+				"CanvasRenderMode. Only ScreenSpace is currently implemented.")
+			.def("set_render_mode", [](CanvasComponent& self, CanvasComponent::RenderMode mode) {
+			self.renderMode = mode;
+			self.layoutDirty = true;
+				}, py::arg("render_mode"),
+					"Set render_mode. See the render_mode property.")
+
+			.def_property("sort_order",
+				[](CanvasComponent& self) { return self.sortOrder; },
+				[](CanvasComponent& self, int order) {
+					self.sortOrder = order;
+					CanvasComponent::SortCanvases();
+				},
+				"Draw order between canvases. Higher values draw on top.")
+			.def("set_sort_order", [](CanvasComponent& self, int order) {
+			self.sortOrder = order;
+			CanvasComponent::SortCanvases();
+				}, py::arg("sort_order"),
+					"Set sort_order. See the sort_order property.")
+
+			.def_property("scale_mode",
+				[](CanvasComponent& self) { return self.scaleMode; },
+				[](CanvasComponent& self, CanvasComponent::ScaleMode mode) {
+					self.scaleMode = mode;
+					self.layoutDirty = true;
+				},
+				"CanvasScaleMode controlling how the UI scales with the viewport")
+			.def("set_scale_mode", [](CanvasComponent& self, CanvasComponent::ScaleMode mode) {
+			self.scaleMode = mode;
+			self.layoutDirty = true;
+				}, py::arg("scale_mode"),
+					"Set scale_mode. See the scale_mode property.")
+
+			.def_property("reference_resolution",
+				[](CanvasComponent& self) { return self.referenceResolution; },
+				[](CanvasComponent& self, glm::vec2 res) {
+					self.referenceResolution = glm::max(res, glm::vec2(1.0f));
+					self.layoutDirty = true;
+				},
+				"Design resolution (Vector2, pixels) used by CanvasScaleMode.ScaleWithScreen. "
+				"Components are clamped to >= 1.")
+			.def("set_reference_resolution", [](CanvasComponent& self, glm::vec2 res) {
+			self.referenceResolution = glm::max(res, glm::vec2(1.0f));
+			self.layoutDirty = true;
+				}, py::arg("reference_resolution"),
+					"Set reference_resolution. See the reference_resolution property.")
+
+			.def_property("match_width_or_height",
+				[](CanvasComponent& self) { return self.matchWidthOrHeight; },
+				[](CanvasComponent& self, float m) {
+					self.matchWidthOrHeight = glm::clamp(m, 0.0f, 1.0f);
+					self.layoutDirty = true;
+				},
+				"0-1 blend between matching the reference width (0) and height (1) when "
+				"scale_mode is ScaleWithScreen. Clamped to [0, 1].")
+			.def("set_match_width_or_height", [](CanvasComponent& self, float m) {
+			self.matchWidthOrHeight = glm::clamp(m, 0.0f, 1.0f);
+			self.layoutDirty = true;
+				}, py::arg("match_width_or_height"),
+					"Set match_width_or_height. See the match_width_or_height property.")
+
+			.def_property("constant_scale",
+				[](CanvasComponent& self) { return self.constantScale; },
+				[](CanvasComponent& self, float s) {
+					self.constantScale = std::max(s, 0.01f);
+					self.layoutDirty = true;
+				},
+				"UI scale factor used by CanvasScaleMode.ConstantPixelSize. Clamped to >= 0.01.")
+			.def("set_constant_scale", [](CanvasComponent& self, float s) {
+			self.constantScale = std::max(s, 0.01f);
+			self.layoutDirty = true;
+				}, py::arg("constant_scale"),
+					"Set constant_scale. See the constant_scale property.")
+
+			.def_property_readonly("canvas_size",
+				[](CanvasComponent& self) { return self.GetCanvasSize(); },
+				"Current size of the canvas in canvas units (viewport size / scale_factor). "
+				"Updated by the engine each frame.")
+			.def_property_readonly("scale_factor",
+				[](CanvasComponent& self) { return self.scaleFactor; },
+				"Current pixels-per-canvas-unit scale (read-only)");
+
+		EnableGetComponent<CanvasComponent>(canvasClass);
+		EnableHasComponent<CanvasComponent>(canvasClass);
+		RegisterComponentGetter<CanvasComponent>(canvasClass);
+		EnableGetOwner<CanvasComponent>(canvasClass);
+		RegisterComponentRemover<CanvasComponent>(canvasClass);
+		RegisterComponentAdder<CanvasComponent>(canvasClass,
+			[](Object& obj) { return std::make_unique<CanvasComponent>(&obj); });
+		EnableAddComponent<CanvasComponent>(canvasClass);
+		EnableRemoveComponent<CanvasComponent>(canvasClass);
+		EnableAddObject<CanvasComponent>(canvasClass);
+		EnableAddChild<CanvasComponent>(canvasClass);
+		EnableRemoveObject<CanvasComponent>(canvasClass);
+
+		auto rectClass = py::class_<RectTransformComponent>(m, "RectTransformComponent",
+			"Anchor-based 2D layout for UI Objects. The final rect is "
+			"anchors (fractions of the parent rect) + pixel offsets, clamped to min_size.")
+			.def_property("anchor_min",
+				[](RectTransformComponent& self) { return self.anchorMin; },
+				[](RectTransformComponent& self, glm::vec2 a) { self.SetAnchors(a, self.anchorMax); },
+				"Lower-left (top-left in canvas space) anchor as a 0-1 fraction of the parent rect")
+			.def("set_anchor_min", [](RectTransformComponent& self, glm::vec2 a) {
+			self.SetAnchors(a, self.anchorMax);
+				}, py::arg("anchor_min"),
+					"Set anchor_min. See the anchor_min property.")
+
+			.def_property("anchor_max",
+				[](RectTransformComponent& self) { return self.anchorMax; },
+				[](RectTransformComponent& self, glm::vec2 a) { self.SetAnchors(self.anchorMin, a); },
+				"Opposite-corner anchor as a 0-1 fraction of the parent rect")
+			.def("set_anchor_max", [](RectTransformComponent& self, glm::vec2 a) {
+			self.SetAnchors(self.anchorMin, a);
+				}, py::arg("anchor_max"),
+					"Set anchor_max. See the anchor_max property.")
+
+			.def("set_anchors", &RectTransformComponent::SetAnchors,
+				py::arg("anchor_min"), py::arg("anchor_max"),
+				"Set both anchors at once.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    rt.set_anchors(Vector2(0, 0), Vector2(1, 1))  # stretch to fill parent\n"
+				"    ```")
+
+			.def_property("offset_min",
+				[](RectTransformComponent& self) { return self.offsetMin; },
+				[](RectTransformComponent& self, glm::vec2 o) { self.SetOffsets(o, self.offsetMax); },
+				"Pixel offset from the min anchor point")
+			.def("set_offset_min", [](RectTransformComponent& self, glm::vec2 o) {
+			self.SetOffsets(o, self.offsetMax);
+				}, py::arg("offset_min"),
+					"Set offset_min. See the offset_min property.")
+
+			.def_property("offset_max",
+				[](RectTransformComponent& self) { return self.offsetMax; },
+				[](RectTransformComponent& self, glm::vec2 o) { self.SetOffsets(self.offsetMin, o); },
+				"Pixel offset from the max anchor point")
+			.def("set_offset_max", [](RectTransformComponent& self, glm::vec2 o) {
+			self.SetOffsets(self.offsetMin, o);
+				}, py::arg("offset_max"),
+					"Set offset_max. See the offset_max property.")
+
+			.def("set_offsets", &RectTransformComponent::SetOffsets,
+				py::arg("offset_min"), py::arg("offset_max"),
+				"Set both offsets at once")
+
+			.def_property("min_size",
+				[](RectTransformComponent& self) { return self.minSize; },
+				[](RectTransformComponent& self, glm::vec2 s) { self.SetMinSize(s); },
+				"Minimum resolved size in pixels. Clamped to >= 0.")
+			.def("set_min_size", &RectTransformComponent::SetMinSize, py::arg("min_size"),
+				"Set min_size. See the min_size property.")
+
+			.def("set_anchored_rect", &RectTransformComponent::SetAnchoredRect,
+				py::arg("center"), py::arg("size"),
+				"Position the rect by its center and size, as offsets from the anchors. Most "
+				"useful when the anchors are a single point (not stretched).\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    rt.set_anchors(Vector2(0.5, 0.5), Vector2(0.5, 0.5))\n"
+				"    rt.set_anchored_rect(Vector2(0, 0), Vector2(200, 50))\n"
+				"    ```")
+
+			.def_property_readonly("is_stretched",
+				[](RectTransformComponent& self) { return self.IsStretched(); },
+				"True if anchor_min != anchor_max on at least one axis, i.e. the rect "
+				"grows/shrinks with its parent")
+
+			.def_property_readonly("rect_position",
+				[](RectTransformComponent& self) { return self.GetRect().pos; },
+				"Resolved top-left position of the rect in canvas units. Updated when the "
+				"canvas next resolves its layout.")
+			.def_property_readonly("rect_size",
+				[](RectTransformComponent& self) { return self.GetRect().size; },
+				"Resolved size of the rect in canvas units. Updated when the canvas next "
+				"resolves its layout.");
+
+		EnableGetComponent<RectTransformComponent>(rectClass);
+		EnableHasComponent<RectTransformComponent>(rectClass);
+		RegisterComponentGetter<RectTransformComponent>(rectClass);
+		EnableGetOwner<RectTransformComponent>(rectClass);
+		RegisterComponentRemover<RectTransformComponent>(rectClass);
+		RegisterComponentAdder<RectTransformComponent>(rectClass,
+			[](Object& obj) { return std::make_unique<RectTransformComponent>(&obj); });
+		EnableAddComponent<RectTransformComponent>(rectClass);
+		EnableRemoveComponent<RectTransformComponent>(rectClass);
+		EnableAddObject<RectTransformComponent>(rectClass);
+		EnableAddChild<RectTransformComponent>(rectClass);
+		EnableRemoveObject<RectTransformComponent>(rectClass);
+
+		py::enum_<TextComponent::HAlign>(m, "TextHAlign", "Horizontal text alignment")
+			.value("Left", TextComponent::HAlign::Left)
+			.value("Center", TextComponent::HAlign::Center)
+			.value("Right", TextComponent::HAlign::Right);
+
+		py::enum_<TextComponent::VAlign>(m, "TextVAlign", "Vertical text alignment")
+			.value("Top", TextComponent::VAlign::Top)
+			.value("Middle", TextComponent::VAlign::Middle)
+			.value("Bottom", TextComponent::VAlign::Bottom);
+
+		auto textClass = py::class_<TextComponent>(m, "TextComponent",
+			"Draws a string of text inside this Object's RectTransformComponent. "
+			"Adding a TextComponent automatically adds a RectTransformComponent if missing.")
+			.def_property("enable",
+				[](TextComponent& self) { return self.Enabled; },
+				[](TextComponent& self, bool enable) { self.SetEnabled(enable); },
+				"Whether this component is active")
+			.def("set_enable", &TextComponent::SetEnabled, py::arg("enable"),
+				"Set enable. See the enable property.")
+
+			.def_readwrite("text", &TextComponent::text,
+				"The string to display")
+			.def("set_text", [](TextComponent& self, const std::string& t) { self.text = t; },
+				py::arg("text"),
+				"Set text. See the text property.")
+
+			.def_property("color",
+				[](TextComponent& self) { return self.color; },
+				[](TextComponent& self, glm::vec4 c) { self.color = c; },
+				"Text color (RGBA, 0-1)")
+			.def("set_color", [](TextComponent& self, glm::vec4 c) { self.color = c; },
+				py::arg("color"),
+				"Set color. See the color property.")
+
+			.def_property("font_size",
+				[](TextComponent& self) { return self.fontSize; },
+				[](TextComponent& self, float s) { self.fontSize = std::max(s, 1.0f); },
+				"Font size in canvas units (scaled by the canvas scale factor). Clamped to >= 1.")
+			.def("set_font_size", [](TextComponent& self, float s) { self.fontSize = std::max(s, 1.0f); },
+				py::arg("font_size"),
+				"Set font_size. See the font_size property.")
+
+			.def_property("font_path",
+				[](TextComponent& self) { return self.fontPath; },
+				[](TextComponent& self, const std::string& path) {
+					if (!path.empty() && !FileManager::getInstance().VirtualPathExists(path)) {
+						Console::AddMessage(Console::MessageType::Error,
+							"TextComponent.font_path: resource not found: " + path);
+						return;
+					}
+					self.fontPath = path;
+				},
+				"res:// path to a .ttf/.otf font, or '' for the default font. Setting a path "
+				"that doesn't exist logs an error and leaves the font unchanged.")
+			.def("set_font", [](TextComponent& self, const std::string& path) {
+			if (!path.empty() && !FileManager::getInstance().VirtualPathExists(path)) {
+				Console::AddMessage(Console::MessageType::Error,
+					"TextComponent.set_font: resource not found: " + path);
+				return;
+			}
+			self.fontPath = path;
+				}, py::arg("virtual_path"),
+					"Set font_path. Pass '' to use the default font.\n\n"
+					"Example:\n"
+					"    ```python\n"
+					"    label.set_font('res://fonts/pixel.ttf')\n"
+					"    ```")
+
+			.def_property("h_align",
+				[](TextComponent& self) { return self.hAlign; },
+				[](TextComponent& self, TextComponent::HAlign a) { self.hAlign = a; },
+				"TextHAlign: Left, Center or Right within the rect")
+			.def("set_h_align", [](TextComponent& self, TextComponent::HAlign a) { self.hAlign = a; },
+				py::arg("h_align"),
+				"Set h_align. See the h_align property.")
+
+			.def_property("v_align",
+				[](TextComponent& self) { return self.vAlign; },
+				[](TextComponent& self, TextComponent::VAlign a) { self.vAlign = a; },
+				"TextVAlign: Top, Middle or Bottom within the rect")
+			.def("set_v_align", [](TextComponent& self, TextComponent::VAlign a) { self.vAlign = a; },
+				py::arg("v_align"),
+				"Set v_align. See the v_align property.")
+
+			.def_readwrite("word_wrap", &TextComponent::wordWrap,
+				"Wrap text to the width of the rect")
+			.def("set_word_wrap", [](TextComponent& self, bool w) { self.wordWrap = w; },
+				py::arg("word_wrap"),
+				"Set word_wrap. See the word_wrap property.");
+
+		EnableGetComponent<TextComponent>(textClass);
+		EnableHasComponent<TextComponent>(textClass);
+		RegisterComponentGetter<TextComponent>(textClass);
+		EnableGetOwner<TextComponent>(textClass);
+		RegisterComponentRemover<TextComponent>(textClass);
+		RegisterComponentAdder<TextComponent>(textClass,
+			[](Object& obj) { return std::make_unique<TextComponent>(&obj); });
+		EnableAddComponent<TextComponent>(textClass);
+		EnableRemoveComponent<TextComponent>(textClass);
+		EnableAddObject<TextComponent>(textClass);
+		EnableAddChild<TextComponent>(textClass);
+		EnableRemoveObject<TextComponent>(textClass);
+	}
+
+	void RegisterComponentBindings(py::module_& m) {
+		RegisterPhysicsComponentBindings(m);
+		RegisterGUIComponentBindings(m);
+
+		auto renderClass = py::class_<RenderComponent>(m, "RenderComponent")
+			.def_property("enable",
+				[](RenderComponent& self) { return self.Enabled; },
+				[](RenderComponent& self, bool enable) { self.SetEnabled(enable); },
+				"Whether this component is active. Disabling hides the object's rendered shape.")
+
+			.def_property("color",
+				[](RenderComponent& self) { return self.color; },
+				[](RenderComponent& self, glm::vec4 c) {
+					self.color = c;
+					EngineManager::getInstance().SceneChangeEvent();
+				},
+				"Tint/fill color (RGBA, 0-1) applied to the shape and any texture")
+
+			.def_property("z_index",
+				[](RenderComponent& self) { return self.z_index; },
+				[](RenderComponent& self, int z) {
+					self.z_index = z;
+					EngineManager::getInstance().SceneChangeEvent();
+				},
+				"Draw order relative to other render components. Higher values draw on top.")
+
+			.def_property("shape",
+				[](RenderComponent& self) -> Shape { return self.currentShape; },
+				[](RenderComponent& self, Shape shape) { self.SetShape(shape); },
+				"The shape used to render this object. Accepts a RectangleShape, "
+				"CircleShape, or PolygonShape. Equivalent to calling set_shape().")
+
+			.def("set_shape", &RenderComponent::SetShape, py::arg("shape"),
+				"Accepts a RectangleShape, CircleShape, or PolygonShape")
+
+			.def("set_texture", [](RenderComponent& self, const std::string& virtualPath) {
+			if (virtualPath.empty()) {
+				self.SetTexture("");
+				return;
+			}
+			if (!FileManager::getInstance().VirtualPathExists(virtualPath)) {
+				Console::AddMessage(Console::MessageType::Error,
+					"set_texture: resource not found: " + virtualPath);
+				return;
+			}
+			self.SetTexture(FileManager::getInstance().VirtualToAbsolute(virtualPath).string());
+				}, py::arg("virtual_path"),
+					"Load a texture from a res:// path (e.g. 'res://textures/wood.png'), or pass '' to clear it")
+			.def("set_enable", &RenderComponent::SetEnabled,
+				"Set enable. See the enable property.");
+
+
+		EnableGetComponent<RenderComponent>(renderClass);
+		EnableHasComponent<RenderComponent>(renderClass);
+		RegisterComponentGetter<RenderComponent>(renderClass);
+		EnableGetOwner<RenderComponent>(renderClass);
+		RegisterComponentRemover<RenderComponent>(renderClass);
+		RegisterComponentAdder<RenderComponent>(renderClass,
+			[](Object& obj) {
+				return std::make_unique<RenderComponent>(&obj, std::vector<float>{}, obj.shader, "");
+			});
+		EnableAddComponent<RenderComponent>(renderClass);
+		EnableRemoveComponent<RenderComponent>(renderClass);
+		EnableAddObject<RenderComponent>(renderClass);
+		EnableAddChild<RenderComponent>(renderClass);
+		EnableRemoveObject<RenderComponent>(renderClass);
+
+		auto transformClass = py::class_<TransformComponent>(m, "TransformComponent")
+			.def_property("world_position",
+				[](TransformComponent& self) -> glm::vec3& { return self.worldPosition; },
+				[](TransformComponent& self, glm::vec3 pos) { self.UpdateWorldPosition(pos); },
+				py::return_value_policy::reference_internal,
+				"World-space position of the object")
+			.def_property("enable",
+				[](TransformComponent& self) {return self.Enabled; },
+				[](TransformComponent& self, bool enable) {self.SetEnabled(enable);},
+				"Whether this component is active")
+			.def_property("rotation_degrees",
+				[](TransformComponent& self) {return self.rotation * (180 / std::numbers::pi);},
+				[](TransformComponent& self, float angle) {self.Rotate(angle * (std::numbers::pi / 180));},
+				"Rotation in degrees. Equivalent to the rotation property converted to/from radians.")
+			.def_property("rotation",
+				[](TransformComponent& self) { return self.rotation; },
+				[](TransformComponent& self, float angle) { self.Rotate(angle); },
+				"Rotation in radians")
+			.def_property("size",
+				[](TransformComponent& self) { return self.size; },
+				[](TransformComponent& self, glm::vec3 scale) { self.Scale(scale); },
+				"Scale of the object along each axis")
+			.def("set_enable", &TransformComponent::SetEnabled,
+				"Set enable. See the enable property.")
+			.def("set_size", &TransformComponent::Scale,
+				"Set size. See the size property.")
+			.def("set_rotation", &TransformComponent::Rotate,
+				"Set rotation (radians). See the rotation property.")
+			.def("set_rotation_degrees", [](TransformComponent& self, float angle) { self.Rotate(angle * (180 / std::numbers::pi)); },
+				"Set rotation_degrees. See the rotation_degrees property.")
+			.def("update_world_position", &TransformComponent::UpdateWorldPosition,
+				"Set world_position. See the world_position property.")
+			.def("to_local_coordinates", [](TransformComponent& self, glm::vec3 worldCoordinates) {self.ProjectToWorld(worldCoordinates, true);},
+				"Convert a world-space point into this object's local/model space")
+			.def("to_world_coordinates", [](TransformComponent& self, glm::vec3 localCoordinates) {self.ProjectToWorld(localCoordinates, false);},
+				"Convert a local/model-space point into world space");
+		EnableGetComponent<TransformComponent>(transformClass);
+		EnableHasComponent<TransformComponent>(transformClass);
+		RegisterComponentGetter<TransformComponent>(transformClass);
+		EnableGetOwner<TransformComponent>(transformClass);
+		EnableAddComponent<TransformComponent>(transformClass);
+		EnableRemoveComponent<TransformComponent>(transformClass);
+		EnableAddObject<TransformComponent>(transformClass);
+		EnableAddChild<TransformComponent>(transformClass);
+		EnableRemoveObject<TransformComponent>(transformClass);
+
+		auto collisionClass = py::class_<CollisionComponent>(m, "CollisionComponent")
+			.def_property("enable",
+				[](CollisionComponent& self) { return self.Enabled; },
+				[](CollisionComponent& self, bool enable) { self.SetEnabled(enable); },
+				"Whether this component is active")
+			.def("set_enable", &CollisionComponent::SetEnabled,
+				"Set enable. See the enable property.")
+
+			.def_property("is_static",
+				[](CollisionComponent& self) { return self.isStatic; },
+				[](CollisionComponent& self, bool s) { self.isStatic = s; },
+				"Whether this object is treated as immovable for collision resolution "
+				"(other bodies collide against it, but it is never pushed)")
+			.def("set_static", [](CollisionComponent& self, bool s) { self.isStatic = s; },
+				py::arg("is_static"),
+				"Set is_static. See the is_static property.")
+
+			.def_property("collision_layer",
+				[](CollisionComponent& self) { return self.collisionLayer; },
+				[](CollisionComponent& self, uint16_t layer) { self.SetCollisionLayer(layer); },
+				"CollisionLayer bit flags describing what this object is. Combined with "
+				"other objects' collision_mask to decide whether they collide.")
+			.def("set_collision_layer", &CollisionComponent::SetCollisionLayer, py::arg("layer"),
+				"Set collision_layer. See the collision_layer property.")
+
+			.def_property("collision_mask",
+				[](CollisionComponent& self) { return self.collisionMask; },
+				[](CollisionComponent& self, uint16_t mask) { self.SetCollisionMask(mask); },
+				"CollisionMask bit flags describing which layers this object collides with")
+			.def("set_collision_mask", &CollisionComponent::SetCollisionMask, py::arg("mask"),
+				"Set collision_mask. See the collision_mask property.")
+
+			.def_property("sync_with_render_component",
+				[](CollisionComponent& self) {
+					CollisionShapeEntry* res = self.GetResolutionShape();
+					if (!res && !self.shapes.empty()) res = &self.shapes.front();
+					return res ? res->syncWithRenderComponent : false;
+				},
+				[](CollisionComponent& self, bool sync) {
+					CollisionShapeEntry* res = self.GetResolutionShape();
+					if (!res && !self.shapes.empty()) res = &self.shapes.front();
+					if (res) self.SetSyncWithRenderComponent(*res, sync);
+				},
+				"Whether the resolution shape (or the first shape if none is set as resolution) "
+				"automatically mirrors this object's RenderComponent shape. When True, calling "
+				"set_shape() on that shape will be overridden on the next sync.")
+			.def("set_sync_with_render_component", [](CollisionComponent& self, bool sync) {
+			CollisionShapeEntry* res = self.GetResolutionShape();
+			if (!res && !self.shapes.empty()) res = &self.shapes.front();
+			if (res) self.SetSyncWithRenderComponent(*res, sync);
+				}, py::arg("sync"),
+					"Set sync_with_render_component. See the sync_with_render_component property.")
+
+			.def_property("shape",
+				[](CollisionComponent& self) -> Shape { return self.resolutionShape; },
+				[](CollisionComponent& self, Shape shape) { self.SetShape(shape); },
+				"The resolution shape used for physical collision response. Equivalent to "
+				"calling set_shape() with no shape_id.")
+			.def("set_shape", [](CollisionComponent& self, Shape shape) {
+			CollisionShapeEntry* res = self.GetResolutionShape();
+			if (!res && !self.shapes.empty()) res = &self.shapes.front();
+			if (res && res->syncWithRenderComponent) {
+				Console::PrintWarning("CollisionComponent: set_shape called while sync_with_render_component "
+					"is True; shape will be overridden by RenderComponent");
+			}
+			self.SetShape(shape);
+				}, py::arg("shape"),
+					"Accepts a RectangleShape, CircleShape, or PolygonShape. Applies to the "
+					"resolution shape (or the first shape if none is set as resolution).")
+			.def("add_shape", &CollisionComponent::AddShape,
+				py::arg("shape"), py::arg("name") = "",
+				"Add a new collision shape to this component. Returns its shape_id.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    sid = col.add_shape(CircleShape(Vector3(0,0,0), 1.0), 'Detector')\n"
+				"    ```")
+
+			.def("remove_shape", &CollisionComponent::RemoveShape, py::arg("shape_id"),
+				"Remove a collision shape by id, as returned by add_shape()")
+
+			.def("get_shape_ids", [](CollisionComponent& self) {
+			std::vector<int> ids;
+			ids.reserve(self.shapes.size());
+			for (auto& e : self.shapes) ids.push_back(e.id);
+			return ids;
+				}, "Returns the ids of every collision shape on this component")
+
+			.def("get_shape_name", [](CollisionComponent& self, int shapeId) {
+			CollisionShapeEntry* e = self.GetShape(shapeId);
+			if (!e) throw py::value_error("get_shape_name: invalid shape_id");
+			return e->name;
+				}, py::arg("shape_id"),
+					"Get the display name of the shape with the given id")
+
+			.def("set_shape_name", [](CollisionComponent& self, int shapeId, std::string name) {
+			CollisionShapeEntry* e = self.GetShape(shapeId);
+			if (!e) throw py::value_error("set_shape_name: invalid shape_id");
+			e->name = name;
+				}, py::arg("shape_id"), py::arg("name"),
+					"Rename the shape with the given id")
+
+			.def("get_shape", [](CollisionComponent& self, int shapeId) -> Shape {
+			CollisionShapeEntry* e = self.GetShape(shapeId);
+			if (!e) throw py::value_error("get_shape: invalid shape_id");
+			return e->currentShape;
+				}, py::arg("shape_id"),
+					"Get the Shape object for the shape with the given id")
+
+			.def("get_shape_id", &CollisionComponent::GetShapeId, py::arg("name"),
+				"Look up a shape's id by its name (as set in the inspector or via "
+				"set_shape_name). Returns -1 if no shape has that name.\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    detector_id = self.cc.get_shape_id('Aggro Radius')\n"
+				"    ```")
+
+			.def("set_shape", [](CollisionComponent& self, int shapeId, Shape shape) {
+			CollisionShapeEntry* e = self.GetShape(shapeId);
+			if (!e) throw py::value_error("set_shape: invalid shape_id");
+			if (e->syncWithRenderComponent) {
+				Console::PrintWarning("CollisionComponent: set_shape called while sync_with_render_component "
+					"is True for this shape; it will be overridden by RenderComponent");
+			}
+			self.SetShape(*e, shape);
+				}, py::arg("shape_id"), py::arg("shape"),
+					"Replace the shape stored under the given shape_id")
+
+			.def("get_sync_with_render_component", [](CollisionComponent& self, int shapeId) {
+			CollisionShapeEntry* e = self.GetShape(shapeId);
+			if (!e) throw py::value_error("get_sync_with_render_component: invalid shape_id");
+			return e->syncWithRenderComponent;
+				}, py::arg("shape_id"),
+					"Whether the shape with the given id mirrors the RenderComponent shape")
+
+			.def("set_sync_with_render_component", [](CollisionComponent& self, int shapeId, bool sync) {
+			CollisionShapeEntry* e = self.GetShape(shapeId);
+			if (!e) throw py::value_error("set_sync_with_render_component: invalid shape_id");
+			self.SetSyncWithRenderComponent(*e, sync);
+				}, py::arg("shape_id"), py::arg("sync"),
+					"Set whether the shape with the given id mirrors the RenderComponent shape")
+
+			.def("get_shape_center", [](CollisionComponent& self, int shapeId) {
+			CollisionShapeEntry* e = self.GetShape(shapeId);
+			if (!e) throw py::value_error("get_shape_center: invalid shape_id");
+			return self.GetCenter(*e);
+				}, py::arg("shape_id"),
+					"World-space center of the shape with the given id")
+
+			.def("get_shape_area", [](CollisionComponent& self, int shapeId) {
+			CollisionShapeEntry* e = self.GetShape(shapeId);
+			if (!e) throw py::value_error("get_shape_area: invalid shape_id");
+			return self.GetArea(*e);
+				}, py::arg("shape_id"),
+					"Area of the shape with the given id, in world units squared")
+
+			.def_property("resolution_shape_id",
+				[](CollisionComponent& self) { return self.resolutionShapeID; },
+				[](CollisionComponent& self, int shapeId) { self.SetResolutionShapeID(shapeId); },
+				"Id of the shape used for physical collision resolution. -1 means None: "
+				"shapes stay collidable for detection, but nothing is physically resolved.")
+			.def("set_resolution_shape_id", &CollisionComponent::SetResolutionShapeID, py::arg("shape_id"),
+				"Pass -1 for None: shapes stay collidable for detection, but nothing is "
+				"physically resolved.")
+			.def("get_resolution_shape_id", [](CollisionComponent& self) { return self.resolutionShapeID; },
+				"Get resolution_shape_id. See the resolution_shape_id property.")
+
+			.def("is_grounded", &CollisionComponent::isGrounded, py::arg("probe_length") = 0.15f,
+				"Cast a short ray straight down from the lowest point of this shape to check for ground")
+
+			.def("add_collision_callback", [](CollisionComponent& self, py::function func) {
+			return self.AddCollisionCallback([func](const CollisionEventData& data) {
+				py::gil_scoped_acquire gil;
+				try { func(data); }
+				catch (const py::error_already_set& e) {
+					Console::AddMessage(Console::MessageType::Error,
+						std::string("collision callback error: ") + e.what());
+				}
+				});
+				}, py::arg("callback"),
+					"Fires every physics substep while two shapes are overlapping"
+					". Returns an id usable with remove_collision_callback().")
+			.def("remove_collision_callback", &CollisionComponent::RemoveCollisionCallback, py::arg("id"),
+				"Unregister a callback previously registered with add_collision_callback()")
+
+			.def("add_collision_enter_callback", [](CollisionComponent& self, py::function func) {
+			return self.AddCollisionEnterCallback([func](const CollisionEventData& data) {
+				py::gil_scoped_acquire gil;
+				try { func(data); }
+				catch (const py::error_already_set& e) {
+					Console::AddMessage(Console::MessageType::Error,
+						std::string("collision enter callback error: ") + e.what());
+				}
+				});
+				}, py::arg("callback"), "Fires once on the frame a collision first begins.")
+			.def("remove_collision_enter_callback", &CollisionComponent::RemoveCollisionEnterCallback, py::arg("id"),
+				"Unregister a callback previously registered with add_collision_enter_callback()")
+
+			.def("add_collision_exit_callback", [](CollisionComponent& self, py::function func) {
+			return self.AddCollisionExitCallback([func](const CollisionEventData& data) {
+				py::gil_scoped_acquire gil;
+				try { func(data); }
+				catch (const py::error_already_set& e) {
+					Console::AddMessage(Console::MessageType::Error,
+						std::string("collision exit callback error: ") + e.what());
+				}
+				});
+				}, py::arg("callback"), "Fires once on the frame a collision stops.")
+			.def("remove_collision_exit_callback", &CollisionComponent::RemoveCollisionExitCallback, py::arg("id"),
+				"Unregister a callback previously registered with add_collision_exit_callback()");
+		EnableGetComponent<CollisionComponent>(collisionClass);
+		EnableHasComponent<CollisionComponent>(collisionClass);
+		RegisterComponentGetter<CollisionComponent>(collisionClass);
+		EnableGetOwner<CollisionComponent>(collisionClass);
+		RegisterComponentRemover<CollisionComponent>(collisionClass);
+		RegisterComponentAdder<CollisionComponent>(collisionClass,
+			[](Object& obj) {
+				return std::make_unique<CollisionComponent>(&obj);
+			});
+		EnableAddComponent<CollisionComponent>(collisionClass);
+		EnableRemoveComponent<CollisionComponent>(collisionClass);
+		EnableAddObject<CollisionComponent>(collisionClass);
+		EnableAddChild<CollisionComponent>(collisionClass);
+		EnableRemoveObject<CollisionComponent>(collisionClass);
 
 		auto cameraClass = py::class_<CameraComponent>(m, "CameraComponent")
 			.def_property("enable",
