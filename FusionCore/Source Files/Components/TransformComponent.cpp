@@ -2,6 +2,7 @@
 #include "../../Header Files/Components/RigidBodyComponent.h"
 #include "../../Header Files/Core/ObjectManager.h"
 #include "../../Header Files/Core/Editor/EditorField.h"
+#include "../../Header Files/Components/GUI/RectTransformComponent.h"
 
 TransformComponent::TransformComponent(Object* parent, Shader shader, glm::vec3 rotation_center) : ComponentBase<TransformComponent>(parent) {
 	Name = "Transform Component";
@@ -57,6 +58,11 @@ void TransformComponent::PostLoad() {
 }
 
 void TransformComponent::ProcessInspectorUI() {
+	if (parent->HasComponent<RectTransformComponent>()) {
+		EditorField::BoldText("This object has a RectTransformComponent, \nTransformComponent is disabled.");
+		return;
+	}
+
 	float position[] = { worldPosition.x, worldPosition.y };
 	EditorField::InputFloat2Scene(parent, "Position ", "## Position", position, [&] {
 		UpdateWorldPosition(glm::vec3(position[0], position[1], 0));

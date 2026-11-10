@@ -136,6 +136,8 @@ namespace {
                 "Constraints are not supported on fluids or gases."),
             BlockedBy<FractureComponent>("Fracture Component",
                 "Fracture only works on rigid or static bodies."),
+			BlockedBy<RectTransformComponent>("Rect Transform Component",
+				""),
         };
     }
 
@@ -167,28 +169,36 @@ namespace {
         static const std::vector<ComponentEntry> entries = {
             { "Render Component",
               [](Object* o) { return !o->HasComponent<RenderComponent>(); },
-              [](Object* o) { AddComponentTo<RenderComponent>(o, std::vector<float>{}, o->shader, ""); } },
+              [](Object* o) { AddComponentTo<RenderComponent>(o, std::vector<float>{}, o->shader, ""); }, 
+            {BlockedBy<RectTransformComponent>("Rect Transform Component",
+                ""),}},
 
-            SimpleEntry<CameraComponent>("Camera Component"),
-            SimpleEntry<AudioComponent>("Audio Component"),
+            SimpleEntry<CameraComponent>("Camera Component", {BlockedBy<RectTransformComponent>("Rect Transform Component",
+                ""),}),
+            SimpleEntry<AudioComponent>("Audio Component", {BlockedBy<RectTransformComponent>("Rect Transform Component",
+                ""),}),
 
             SimpleEntry<RigidBodyComponent>("Rigid Body Component", {
                 OnlyOneBody,
+                BlockedBy<RectTransformComponent>("Rect Transform Component", ""),
             }),
 
             SimpleEntry<SoftBodyComponent>("Soft Body Component", {
                 OnlyOneBody,
                 BlockedBy<FractureComponent>("Fracture Component",
                     "Fracture only works on rigid or static bodies."),
+				BlockedBy<RectTransformComponent>("Rect Transform Component", ""),
             }),
 
-            SimpleEntry<CollisionComponent>("Collision Component"),
+            SimpleEntry<CollisionComponent>("Collision Component", {BlockedBy<RectTransformComponent>("Rect Transform Component",
+                ""),}),
 
             SimpleEntry<ConstraintComponent>("Constraint Component", {
                 BlockedBy<FluidComponent>("Fluid Component",
                     "Constraints only work with rigid and soft bodies."),
                 BlockedBy<GasComponent>("Gas Component",
                     "Constraints only work with rigid and soft bodies."),
+                BlockedBy<RectTransformComponent>("Rect Transform Component", ""),
             }),
 
             SimpleEntry<FractureComponent>("Fracture Component", {
@@ -198,6 +208,7 @@ namespace {
                     "Fracture only works on rigid or static bodies."),
                 BlockedBy<GasComponent>("Gas Component",
                     "Fracture only works on rigid or static bodies."),
+                BlockedBy<RectTransformComponent>("Rect Transform Component", ""),
             }),
 
             SimpleEntry<FluidComponent>("Fluid Component", FluidGasRules()),
@@ -209,7 +220,9 @@ namespace {
 
             { "Agent Component",
               [](Object* o) { return !o->HasComponent<AgentComponent>() && PackageManager::getInstance().IsPackageInstalled("rl"); },
-              [](Object* o) { AddComponentTo<AgentComponent>(o); } },
+              [](Object* o) { AddComponentTo<AgentComponent>(o); },
+            {BlockedBy<RectTransformComponent>("Rect Transform Component",
+                ""),}},
         };
         return entries;
     }
