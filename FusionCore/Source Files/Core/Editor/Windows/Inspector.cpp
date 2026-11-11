@@ -102,6 +102,40 @@ namespace {
         return nullptr;
     }
 
+    template<typename... Ts>
+    static bool IsAnyOf(const Component* c) {
+        return ((dynamic_cast<const Ts*>(c) != nullptr) || ...);
+    }
+
+    // All UI component need to be added here
+    static bool NeedsRectTransform(const Component* c) {
+        return IsAnyOf<CanvasComponent, TextComponent>(c);
+    }
+
+    static std::vector<int> RectDependents(Object* o) {
+        std::vector<int> out;
+        for (int i = 0; i < static_cast<int>(o->components.size()); i++)
+            if (NeedsRectTransform(o->components[i].get())) out.push_back(i);
+        return out;
+    }
+
+    static void RemoveRectTransformAndDependents(Object* o) {
+        EditorManager::getInstance().BeginEdit({ o });
+
+        std::vector<int> deps = RectDependents(o);
+        for (auto it = deps.rbegin(); it != deps.rend(); ++it)
+            o->RemoveComponent(*it);
+
+        for (int i = 0; i < static_cast<int>(o->components.size()); i++) {
+            if (dynamic_cast<RectTransformComponent*>(o->components[i].get())) {
+                o->RemoveComponent(i);
+                break;
+            }
+        }
+
+        EditorManager::getInstance().EndEdit({ o });
+    }
+
     using BlockRule = std::function<std::string(Object*)>;
 
     template<typename T>
@@ -139,6 +173,24 @@ namespace {
 			BlockedBy<RectTransformComponent>("Rect Transform Component",
 				""),
         };
+    }
+
+    static std::string NoWorldComponents(Object* o) {
+        const char* w =
+            o->HasComponent<RenderComponent>() ? "Render Component" :
+            o->HasComponent<CameraComponent>() ? "Camera Component" :
+            o->HasComponent<AudioComponent>() ? "Audio Component" :
+            o->HasComponent<RigidBodyComponent>() ? "Rigid Body Component" :
+            o->HasComponent<SoftBodyComponent>() ? "Soft Body Component" :
+            o->HasComponent<CollisionComponent>() ? "Collision Component" :
+            o->HasComponent<ConstraintComponent>() ? "Constraint Component" :
+            o->HasComponent<FractureComponent>() ? "Fracture Component" :
+            o->HasComponent<FluidComponent>() ? "Fluid Component" :
+            o->HasComponent<GasComponent>() ? "Gas Component" :
+            o->HasComponent<AgentComponent>() ? "Agent Component" : nullptr;
+        if (!w) return "";
+        return std::string("This object has a ") + w + ".\n"
+            "UI objects use a Rect Transform instead of a Transform.\nRemove it first.";
     }
 
     struct ComponentEntry {
@@ -214,8 +266,8 @@ namespace {
             SimpleEntry<FluidComponent>("Fluid Component", FluidGasRules()),
             SimpleEntry<GasComponent>("Gas Component", FluidGasRules()),
 
-            SimpleEntry<CanvasComponent>("Canvas Component"),
-            SimpleEntry<RectTransformComponent>("Rect Transform Component"),
+            SimpleEntry<CanvasComponent>("Canvas Component", {Required<RectTransformComponent>("Rect Transform Component", "All GUI elements needs Rect Transform")}),
+            SimpleEntry<RectTransformComponent>("Rect Transform Component", { NoWorldComponents }),
             SimpleEntry<TextComponent>("Text Component", { Required<RectTransformComponent>("Rect Transform Component", "All GUI elements needs Rect Transform.") }),
 
             { "Agent Component",
@@ -408,10 +460,18 @@ void Inspector::ProcessWindow() {
         }
 
         if (pendingRemoval != -1) {
-            EditorManager::getInstance().BeginEdit({ selected });
-            selected->RemoveComponent(pendingRemoval);
-            EditorManager::getInstance().EndEdit({ selected });
-            EngineManager::getInstance().SceneChangeEvent();
+            Component* target = selected->components[pendingRemoval].get();
+            const bool isRect = dynamic_cast<RectTransformComponent*>(target) != nullptr;
+
+            if (isRect && !RectDependents(selected).empty()) {
+                ImGui::OpenPopup("Remove Rect Transform?");   
+            }
+            else {
+                EditorManager::getInstance().BeginEdit({ selected });
+                selected->RemoveComponent(pendingRemoval);
+                EditorManager::getInstance().EndEdit({ selected });
+                EngineManager::getInstance().SceneChangeEvent();
+            }
         }
         else if (pendingMoveFrom != -1 && pendingMoveTo != -1 && pendingMoveFrom != pendingMoveTo) {
             EditorManager::getInstance().BeginEdit({ selected });
@@ -420,6 +480,31 @@ void Inspector::ProcessWindow() {
             selected->components.insert(selected->components.begin() + pendingMoveTo, std::move(moved));
             EditorManager::getInstance().EndEdit({ selected });
             EngineManager::getInstance().SceneChangeEvent();
+        }
+
+        if (ImGui::BeginPopupModal("Remove Rect Transform?", nullptr,
+            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
+
+            ImGui::TextColored(ImVec4(0.95f, 0.65f, 0.25f, 1.0f),
+                "These components need a Rect Transform:");
+            ImGui::Spacing();
+            for (int idx : RectDependents(selected))
+                ImGui::BulletText("%s", selected->components[idx]->Name.c_str());
+
+            ImGui::Spacing();
+            ImGui::TextWrapped("Removing the Rect Transform will also remove everything listed above.");
+            ImGui::Spacing();
+
+            if (ImGui::Button("Remove All", ImVec2(120, 0))) {
+                RemoveRectTransformAndDependents(selected);
+                EngineManager::getInstance().SceneChangeEvent();
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel", ImVec2(120, 0)) || ImGui::IsKeyPressed(ImGuiKey_Escape))
+                ImGui::CloseCurrentPopup();
+
+            ImGui::EndPopup();
         }
 
         ImGui::Dummy(ImVec2(0.0f, 6.0f));

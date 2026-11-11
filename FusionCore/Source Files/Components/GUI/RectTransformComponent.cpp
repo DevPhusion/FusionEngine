@@ -42,6 +42,11 @@ void RectTransformComponent::MarkDirty() {
 }
 
 void RectTransformComponent::Resolve(const UiRect& parentRect) {
+	if (CanvasComponent* canvas = parent->GetComponent<CanvasComponent>()) {
+		rect = UiRect{ glm::vec2(0.0f), canvas->GetCanvasSize() };  
+		return;
+	}
+
 	const glm::vec2 anchorMinPx = parentRect.pos + anchorMin * parentRect.size;
 	const glm::vec2 anchorMaxPx = parentRect.pos + anchorMax * parentRect.size;
 
