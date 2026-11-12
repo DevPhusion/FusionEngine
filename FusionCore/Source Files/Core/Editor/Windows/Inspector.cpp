@@ -482,8 +482,12 @@ void Inspector::ProcessWindow() {
             EngineManager::getInstance().SceneChangeEvent();
         }
 
+        const ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+        ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+        ImGui::SetNextWindowSize(ImVec2(340.0f, 0.0f), ImGuiCond_Always); 
+
         if (ImGui::BeginPopupModal("Remove Rect Transform?", nullptr,
-            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
+            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize)) {
 
             ImGui::TextColored(ImVec4(0.95f, 0.65f, 0.25f, 1.0f),
                 "These components need a Rect Transform:");
