@@ -1,6 +1,7 @@
 #include "../../../Header Files/Core/Editor/Gizmos.h"
 #include "../../../Header Files/Core/Editor/EditorManager.h"
 #include "../../../Header Files/Core/Rendering/Renderer.h"
+#include "../../../Header Files/Components/GUI/RectTransformComponent.h"
 
 Gizmos::Gizmos() {
     mouseButtonCallbackID = InputManager::getInstance().SetMouseButtonCallback(
@@ -70,12 +71,13 @@ void Gizmos::DrawFilledQuad(glm::vec3 center, glm::vec3 size, glm::vec4 color, b
     glBindVertexArray(0);
 }
 
-TransformComponent* Gizmos::GetSelectedTransform() {
+bool Gizmos::CanShowGizmos() {
     Object* selected = EditorManager::getInstance().selectedObject;
-    if (!selected) return nullptr;
-    if (!selected->HasComponent<TransformComponent>()) return nullptr;
+    if (!selected) return false;
+    if (!selected->HasComponent<TransformComponent>()) return false;
+	if (selected->HasComponent<RectTransformComponent>()) return false;
 
-    return selected->GetComponent<TransformComponent>();
+    return true;
 }
 
 void Gizmos::UpdateGizmos() {
@@ -190,8 +192,8 @@ void Gizmos::OnMouseButton(int button, int action, int mods) {
 	if (EngineManager::getInstance().EnginePhysicsMode == EngineManager::PhysicsMode::Simulate ||
 		EngineManager::getInstance().EngineInteractMode != EngineManager::InteractMode::EditorSelect) return;
 
-	TransformComponent* transform = GetSelectedTransform();
-	if (!transform) return;
+	if (!CanShowGizmos()) return;
+	TransformComponent* transform = EditorManager::getInstance().selectedObject->GetComponent<TransformComponent>();
 
 	glm::vec3 origin = transform->GetWorldPosition();
 
@@ -221,8 +223,8 @@ void Gizmos::OnCursorPosition(double xpos, double ypos) {
 
 	if (!isDragging || selectedAxis == GizmosAxis::None) return;
 
-	TransformComponent* transform = GetSelectedTransform();
-	if (!transform) return;
+	if (!CanShowGizmos()) return;
+	TransformComponent* transform = EditorManager::getInstance().selectedObject->GetComponent<TransformComponent>();
 
 	if (currentGizmosMode == GizmosMode::Move && (selectedAxis == GizmosAxis::X || selectedAxis == GizmosAxis::Y)) {
 		glm::vec3 axisDir = (selectedAxis == GizmosAxis::X) ? glm::vec3(1.0f, 0.0f, 0.0f) : glm::vec3(0.0f, 1.0f, 0.0f);
@@ -255,8 +257,8 @@ void Gizmos::OnCursorPosition(double xpos, double ypos) {
 }
 
 void Gizmos::DrawMoveGizmos() {
-    TransformComponent* transform = GetSelectedTransform();
-    if (!transform) return;
+	if (!CanShowGizmos()) return;
+	TransformComponent* transform = EditorManager::getInstance().selectedObject->GetComponent<TransformComponent>();
 
     glm::vec3 origin = transform->GetWorldPosition();
 
@@ -265,8 +267,8 @@ void Gizmos::DrawMoveGizmos() {
 }
 
 void Gizmos::DrawRotateGizmos() {
-    TransformComponent* transform = GetSelectedTransform();
-    if (!transform) return;
+	if (!CanShowGizmos()) return;
+	TransformComponent* transform = EditorManager::getInstance().selectedObject->GetComponent<TransformComponent>();
 
     glm::vec3 origin = transform->GetWorldPosition();
 
@@ -274,8 +276,8 @@ void Gizmos::DrawRotateGizmos() {
 }
 
 void Gizmos::DrawScaleGizmos() {
-    TransformComponent* transform = GetSelectedTransform();
-    if (!transform) return;
+	if (!CanShowGizmos()) return;
+	TransformComponent* transform = EditorManager::getInstance().selectedObject->GetComponent<TransformComponent>();
 
     glm::vec3 origin = transform->GetWorldPosition();
 

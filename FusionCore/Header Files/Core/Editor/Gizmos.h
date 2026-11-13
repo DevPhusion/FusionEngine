@@ -65,6 +65,6 @@ private:
 	const glm::vec4 yAxisColor = glm::vec4(0.15f, 0.85f, 0.15f, 1.0f); 
 	const glm::vec4 rotateColor = glm::vec4(0.2f, 0.6f, 1.0f, 1.0f);   
 
-	TransformComponent* GetSelectedTransform();
+	bool CanShowGizmos();
 	TransformComponent* draggedTransform = nullptr;
 };

@@ -1,4 +1,5 @@
 #include "../../Header Files/Components/MouseInteractComponent.h"
+#include "../../Header Files/Components/GUI/RectTransformComponent.h"
 
 bool MouseInteractComponent::ObjectSelected = false;
 bool MouseInteractComponent::PressArbitrated = false;
@@ -104,6 +105,9 @@ bool MouseInteractComponent::IsCursorInside() {
 	if (!parent || !Enabled) return false;
 	TransformComponent* t = parent->GetComponent<TransformComponent>();
 	if (!t) return false;
+	if (parent->HasComponent<RectTransformComponent>()) {
+		return false;
+	}
 
 	glm::vec3 mousePos = t->GetTransformedPoint(glm::vec3(InputManager::glX, InputManager::glY, 0), true);
 	if (parent->HasComponent<RenderComponent>())

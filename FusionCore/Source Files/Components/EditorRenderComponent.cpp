@@ -1,5 +1,6 @@
 #include "../../Header Files/Components/EditorRenderComponent.h"
 #include "../../Header Files/Components/TransformComponent.h"
+#include "../../Header Files/Components/GUI/RectTransformComponent.h"
 
 EditorRenderComponent::EditorRenderComponent(Object* parent, Shader shader, std::string texture_path, float halfSize)
 	: ComponentBase<EditorRenderComponent>(parent) {
@@ -134,7 +135,7 @@ std::unordered_map<std::string, std::pair<GLuint, int>>& EditorRenderComponent::
 }
 
 void EditorRenderComponent::Draw() {
-	if (!Enabled || EngineManager::getInstance().isHeadless)
+	if (!Enabled || EngineManager::getInstance().isHeadless || parent->HasComponent<RectTransformComponent>()) 
 		return;
 
 	this->shader.use();
@@ -146,7 +147,7 @@ void EditorRenderComponent::Draw() {
 	}
 
 	glm::vec3 center = GetCenter();
-
+	 
 	float zoom = Camera::getInstance().cameraZoom;
 	if (zoom < 1e-6f) zoom = 1.0f;
 
