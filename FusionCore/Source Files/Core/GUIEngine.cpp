@@ -3,6 +3,7 @@
 #include "../../Header Files/Components/GUI/RectTransformComponent.h"
 #include "../../Header Files/Core/Files/Export/ExportPackageReader.h"
 #include "../../Header Files/Core/ObjectManager.h"
+#include "../../Header Files/Core/Editor/GUIGizmos.h"
 
 
 void GUIEngine::Initialize(GLFWwindow* window) {
@@ -52,7 +53,13 @@ void GUIEngine::RenderInEditor(ImDrawList* dl, glm::vec2 origin, glm::vec2 size)
 	if (!dl) return;
 	dl->PushClipRect(ImVec2(origin.x, origin.y), ImVec2(origin.x + size.x, origin.y + size.y), true);
 	RenderCanvases(dl, origin, size);
+	GUIGizmos::getInstance().Draw(dl, origin, size);   
 	dl->PopClipRect();
+}
+
+bool GUIEngine::HasDrawable(Object* owner) const {
+	auto it = drawables.find(owner);
+	return it != drawables.end() && !it->second.empty();
 }
 
 ImFont* GUIEngine::GetFont(const std::string& virtualPath) {

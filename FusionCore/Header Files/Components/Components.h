@@ -17,6 +17,7 @@
 #include "GUI/CanvasComponent.h"
 #include "GUI/RectTransformComponent.h"
 #include "GUI/TextComponent.h"
+#include "GUI/PanelComponent.h"
 
 namespace {
 	std::unique_ptr<Component> CreateComponentFromName(Object* parent, std::string name) {
@@ -67,6 +68,9 @@ namespace {
 		}
 		if (name == "Text Component") {
 			return std::make_unique<TextComponent>(parent);
+		}
+		if (name == "Panel Component") {
+			return std::make_unique<PanelComponent>(parent);
 		}
 		if (name == "Script Component") {
 			return std::make_unique<ScriptComponent>(parent, "");

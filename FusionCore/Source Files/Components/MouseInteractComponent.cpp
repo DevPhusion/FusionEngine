@@ -1,5 +1,6 @@
 #include "../../Header Files/Components/MouseInteractComponent.h"
 #include "../../Header Files/Components/GUI/RectTransformComponent.h"
+#include "../../Header Files/Core/Editor/GUIGizmos.h"
 
 bool MouseInteractComponent::ObjectSelected = false;
 bool MouseInteractComponent::PressArbitrated = false;
@@ -84,6 +85,7 @@ void MouseInteractComponent::OnDelete() {
 void MouseInteractComponent::SetSelectedPolygon(Object* obj, bool enable) {
 	if (EngineManager::getInstance().isPlayer) return;
 	if (Renderer::getInstance().gizmos->isDragging) return;
+	if (GUIGizmos::getInstance().isDragging) return;
 
 	if (!enable) {
 		if (EditorManager::getInstance().selectedObject == obj) {

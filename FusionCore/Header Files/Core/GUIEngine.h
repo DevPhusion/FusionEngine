@@ -43,6 +43,8 @@ public:
 
 	void RenderInEditor(ImDrawList* dl, glm::vec2 origin, glm::vec2 size);
 
+	bool HasDrawable(Object* owner) const;
+
 	ImFont* GetFont(const std::string& virtualPath);
 
 	void RegisterDrawable(Object* owner, IUIDrawable* d);
