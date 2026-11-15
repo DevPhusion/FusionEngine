@@ -321,7 +321,7 @@ namespace {
 }
 
 Inspector::Inspector(std::string name) : EditorWindow(name) {
-
+    
 }
 
 void Inspector::ProcessWindow() {
