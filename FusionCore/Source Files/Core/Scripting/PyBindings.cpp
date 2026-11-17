@@ -3050,6 +3050,28 @@ namespace {
 		EnableRemoveObject<FractureComponent>(fractureClass);
 	}
 
+	void SetVirtualFontPath(std::string& target, const std::string& path, const char* fnName) {
+		if (!path.empty() && !FileManager::getInstance().VirtualPathExists(path)) {
+			Console::AddMessage(Console::MessageType::Error,
+				std::string(fnName) + ": resource not found: " + path);
+			return;
+		}
+		target = path;
+	}
+
+	void SetPanelTexturePath(PanelComponent& self, const std::string& virtualPath, const char* fnName) {
+		if (virtualPath.empty()) {
+			self.texturePath.clear();
+			return;
+		}
+		if (!FileManager::getInstance().VirtualPathExists(virtualPath)) {
+			Console::AddMessage(Console::MessageType::Error,
+				std::string(fnName) + ": resource not found: " + virtualPath);
+			return;
+		}
+		self.texturePath = FileManager::getInstance().VirtualToAbsolute(virtualPath).string();
+	}
+
 	void RegisterGUIComponentBindings(py::module_& m) {
 		py::enum_<CanvasComponent::RenderMode>(m, "CanvasRenderMode",
 			"How a CanvasComponent is rendered")
@@ -3279,9 +3301,21 @@ namespace {
 			.value("Middle", TextComponent::VAlign::Middle)
 			.value("Bottom", TextComponent::VAlign::Bottom);
 
+		py::enum_<TextComponent::TextMode>(m, "TextMode",
+			"How a TextComponent interprets its text")
+			.value("Plain", TextComponent::TextMode::Plain,
+				"The text is drawn exactly as written; markup tags are shown literally")
+			.value("Rich", TextComponent::TextMode::Rich,
+				"Inline tags (<b>, <i>, <u>, <s>, <color=...>, <size=...>) style parts of the text");
+
 		auto textClass = py::class_<TextComponent>(m, "TextComponent",
 			"Draws a string of text inside this Object's RectTransformComponent. "
-			"Adding a TextComponent automatically adds a RectTransformComponent if missing.")
+			"Adding a TextComponent automatically adds a RectTransformComponent if missing.\n\n"
+			"In TextMode.Rich the text may contain inline tags:\n"
+			"    <b>bold</b>  <i>italic</i>  <u>underline</u>  <s>strikethrough</s>\n"
+			"    <color=#RRGGBB>, <color=#RRGGBBAA> or <color=red> ... </color>\n"
+			"    <size=32> ... </size>   (font size in canvas units)\n"
+			"Tags can be nested. Use \\< to write a literal '<'. Unrecognised tags are left as plain text.")
 			.def_property("enable",
 				[](TextComponent& self) { return self.Enabled; },
 				[](TextComponent& self, bool enable) { self.SetEnabled(enable); },
@@ -3290,15 +3324,30 @@ namespace {
 				"Set enable. See the enable property.")
 
 			.def_readwrite("text", &TextComponent::text,
-				"The string to display")
+				"The string to display. In TextMode.Rich it may contain inline style tags "
+				"(see the class docs).\n\n"
+				"Example:\n"
+				"    ```python\n"
+				"    label.text = 'HP: <color=red><b>42</b></color> / 100'\n"
+				"    ```")
 			.def("set_text", [](TextComponent& self, const std::string& t) { self.text = t; },
 				py::arg("text"),
 				"Set text. See the text property.")
 
+			.def_property("text_mode",
+				[](TextComponent& self) { return self.textMode; },
+				[](TextComponent& self, TextComponent::TextMode mode) { self.textMode = mode; },
+				"TextMode.Plain draws the text as-is; TextMode.Rich parses inline style tags. "
+				"Defaults to Rich.")
+			.def("set_text_mode", [](TextComponent& self, TextComponent::TextMode mode) { self.textMode = mode; },
+				py::arg("text_mode"),
+				"Set text_mode. See the text_mode property.")
+
 			.def_property("color",
 				[](TextComponent& self) { return self.color; },
 				[](TextComponent& self, glm::vec4 c) { self.color = c; },
-				"Text color (RGBA, 0-1)")
+				"Base text color (RGBA, 0-1). Parts of the text inside a <color> tag use that "
+				"tag's color instead (its alpha is multiplied by this color's alpha).")
 			.def("set_color", [](TextComponent& self, glm::vec4 c) { self.color = c; },
 				py::arg("color"),
 				"Set color. See the color property.")
@@ -3306,7 +3355,7 @@ namespace {
 			.def_property("font_size",
 				[](TextComponent& self) { return self.fontSize; },
 				[](TextComponent& self, float s) { self.fontSize = std::max(s, 1.0f); },
-				"Font size in canvas units (scaled by the canvas scale factor). Clamped to >= 1.")
+				"Base font size in canvas units (scaled by the canvas scale factor). Clamped to >= 1.")
 			.def("set_font_size", [](TextComponent& self, float s) { self.fontSize = std::max(s, 1.0f); },
 				py::arg("font_size"),
 				"Set font_size. See the font_size property.")
@@ -3314,28 +3363,57 @@ namespace {
 			.def_property("font_path",
 				[](TextComponent& self) { return self.fontPath; },
 				[](TextComponent& self, const std::string& path) {
-					if (!path.empty() && !FileManager::getInstance().VirtualPathExists(path)) {
-						Console::AddMessage(Console::MessageType::Error,
-							"TextComponent.font_path: resource not found: " + path);
-						return;
-					}
-					self.fontPath = path;
+					SetVirtualFontPath(self.fontPath, path, "TextComponent.font_path");
 				},
 				"res:// path to a .ttf/.otf font, or '' for the default font. Setting a path "
 				"that doesn't exist logs an error and leaves the font unchanged.")
 			.def("set_font", [](TextComponent& self, const std::string& path) {
-			if (!path.empty() && !FileManager::getInstance().VirtualPathExists(path)) {
-				Console::AddMessage(Console::MessageType::Error,
-					"TextComponent.set_font: resource not found: " + path);
-				return;
-			}
-			self.fontPath = path;
+			SetVirtualFontPath(self.fontPath, path, "TextComponent.set_font");
 				}, py::arg("virtual_path"),
 					"Set font_path. Pass '' to use the default font.\n\n"
 					"Example:\n"
 					"    ```python\n"
 					"    label.set_font('res://fonts/pixel.ttf')\n"
 					"    ```")
+
+			.def_property("bold_font_path",
+				[](TextComponent& self) { return self.boldFontPath; },
+				[](TextComponent& self, const std::string& path) {
+					SetVirtualFontPath(self.boldFontPath, path, "TextComponent.bold_font_path");
+				},
+				"res:// path to the font used for <b> text in TextMode.Rich, or '' to fake "
+				"bold from the regular font. Setting a path that doesn't exist logs an error "
+				"and leaves it unchanged.")
+			.def("set_bold_font", [](TextComponent& self, const std::string& path) {
+			SetVirtualFontPath(self.boldFontPath, path, "TextComponent.set_bold_font");
+				}, py::arg("virtual_path"),
+					"Set bold_font_path. Pass '' to fake bold.")
+
+			.def_property("italic_font_path",
+				[](TextComponent& self) { return self.italicFontPath; },
+				[](TextComponent& self, const std::string& path) {
+					SetVirtualFontPath(self.italicFontPath, path, "TextComponent.italic_font_path");
+				},
+				"res:// path to the font used for <i> text in TextMode.Rich, or '' to fake "
+				"italic from the regular font. Setting a path that doesn't exist logs an error "
+				"and leaves it unchanged.")
+			.def("set_italic_font", [](TextComponent& self, const std::string& path) {
+			SetVirtualFontPath(self.italicFontPath, path, "TextComponent.set_italic_font");
+				}, py::arg("virtual_path"),
+					"Set italic_font_path. Pass '' to fake italic.")
+
+			.def_property("bold_italic_font_path",
+				[](TextComponent& self) { return self.boldItalicFontPath; },
+				[](TextComponent& self, const std::string& path) {
+					SetVirtualFontPath(self.boldItalicFontPath, path, "TextComponent.bold_italic_font_path");
+				},
+				"res:// path to the font used for text that is both bold and italic in "
+				"TextMode.Rich. If empty, the bold or italic font is used with the missing "
+				"style faked. Setting a path that doesn't exist logs an error and leaves it unchanged.")
+			.def("set_bold_italic_font", [](TextComponent& self, const std::string& path) {
+			SetVirtualFontPath(self.boldItalicFontPath, path, "TextComponent.set_bold_italic_font");
+				}, py::arg("virtual_path"),
+					"Set bold_italic_font_path. Pass '' to fall back to the bold/italic fonts.")
 
 			.def_property("h_align",
 				[](TextComponent& self) { return self.hAlign; },
@@ -3371,6 +3449,110 @@ namespace {
 		EnableAddObject<TextComponent>(textClass);
 		EnableAddChild<TextComponent>(textClass);
 		EnableRemoveObject<TextComponent>(textClass);
+
+		py::enum_<PanelComponent::PanelMode>(m, "PanelMode",
+			"How a PanelComponent fills its rect")
+			.value("Color", PanelComponent::PanelMode::Color,
+				"Solid fill using the panel's color")
+			.value("Texture", PanelComponent::PanelMode::Texture,
+				"Draws the panel's texture, multiplied by its tint");
+
+		auto panelClass = py::class_<PanelComponent>(m, "PanelComponent",
+			"A rectangular UI panel drawn inside this Object's RectTransformComponent, filled "
+			"with either a solid color or a texture, with optional rounded corners and border. "
+			"Adding a PanelComponent automatically adds a RectTransformComponent if missing.")
+			.def_property("enable",
+				[](PanelComponent& self) { return self.Enabled; },
+				[](PanelComponent& self, bool enable) { self.SetEnabled(enable); },
+				"Whether this component is active")
+			.def("set_enable", &PanelComponent::SetEnabled, py::arg("enable"),
+				"Set enable. See the enable property.")
+
+			.def_property("mode",
+				[](PanelComponent& self) { return self.mode; },
+				[](PanelComponent& self, PanelComponent::PanelMode mode) { self.mode = mode; },
+				"PanelMode.Color fills the panel with color; PanelMode.Texture draws "
+				"texture_path multiplied by tint")
+			.def("set_mode", [](PanelComponent& self, PanelComponent::PanelMode mode) { self.mode = mode; },
+				py::arg("mode"),
+				"Set mode. See the mode property.")
+
+			.def_property("color",
+				[](PanelComponent& self) { return self.color; },
+				[](PanelComponent& self, glm::vec4 c) { self.color = c; },
+				"Fill color (RGBA, 0-1) used in PanelMode.Color")
+			.def("set_color", [](PanelComponent& self, glm::vec4 c) { self.color = c; },
+				py::arg("color"),
+				"Set color. See the color property.")
+
+			.def_property("texture_path",
+				[](PanelComponent& self) -> std::string {
+					if (self.texturePath.empty()) return self.texturePath;
+					return FileManager::getInstance().AbsoluteToVirtual(self.texturePath);
+				},
+				[](PanelComponent& self, const std::string& virtualPath) {
+					SetPanelTexturePath(self, virtualPath, "PanelComponent.texture_path");
+				},
+				"res:// path to the panel's texture, or '' for none. Only drawn in "
+				"PanelMode.Texture. Setting a path that doesn't exist logs an error and "
+				"leaves the texture unchanged.")
+			.def("set_texture", [](PanelComponent& self, const std::string& virtualPath) {
+			SetPanelTexturePath(self, virtualPath, "PanelComponent.set_texture");
+				}, py::arg("virtual_path"),
+					"Set texture_path. Pass '' to clear it. Does not change mode.\n\n"
+					"Example:\n"
+					"    ```python\n"
+					"    panel.set_texture('res://textures/frame.png')\n"
+					"    panel.mode = PanelMode.Texture\n"
+					"    ```")
+
+			.def_property("tint",
+				[](PanelComponent& self) { return self.tint; },
+				[](PanelComponent& self, glm::vec4 c) { self.tint = c; },
+				"Color (RGBA, 0-1) the texture is multiplied by in PanelMode.Texture. "
+				"White (1, 1, 1, 1) leaves the texture unchanged; lower alpha makes it translucent.")
+			.def("set_tint", [](PanelComponent& self, glm::vec4 c) { self.tint = c; },
+				py::arg("tint"),
+				"Set tint. See the tint property.")
+
+			.def_property("corner_radius",
+				[](PanelComponent& self) { return self.cornerRadius; },
+				[](PanelComponent& self, float r) { self.cornerRadius = std::max(r, 0.0f); },
+				"Corner rounding in canvas units, applied to the fill, texture and border. "
+				"Clamped to >= 0 (and to half the panel's smaller side when drawn).")
+			.def("set_corner_radius", [](PanelComponent& self, float r) { self.cornerRadius = std::max(r, 0.0f); },
+				py::arg("corner_radius"),
+				"Set corner_radius. See the corner_radius property.")
+
+			.def_property("border_color",
+				[](PanelComponent& self) { return self.borderColor; },
+				[](PanelComponent& self, glm::vec4 c) { self.borderColor = c; },
+				"Border color (RGBA, 0-1). Only visible when border_thickness > 0.")
+			.def("set_border_color", [](PanelComponent& self, glm::vec4 c) { self.borderColor = c; },
+				py::arg("border_color"),
+				"Set border_color. See the border_color property.")
+
+			.def_property("border_thickness",
+				[](PanelComponent& self) { return self.borderThickness; },
+				[](PanelComponent& self, float t) { self.borderThickness = std::max(t, 0.0f); },
+				"Border thickness in canvas units, drawn inside the panel's edge in either "
+				"mode. 0 means no border. Clamped to >= 0.")
+			.def("set_border_thickness", [](PanelComponent& self, float t) { self.borderThickness = std::max(t, 0.0f); },
+				py::arg("border_thickness"),
+				"Set border_thickness. See the border_thickness property.");
+
+		EnableGetComponent<PanelComponent>(panelClass);
+		EnableHasComponent<PanelComponent>(panelClass);
+		RegisterComponentGetter<PanelComponent>(panelClass);
+		EnableGetOwner<PanelComponent>(panelClass);
+		RegisterComponentRemover<PanelComponent>(panelClass);
+		RegisterComponentAdder<PanelComponent>(panelClass,
+			[](Object& obj) { return std::make_unique<PanelComponent>(&obj); });
+		EnableAddComponent<PanelComponent>(panelClass);
+		EnableRemoveComponent<PanelComponent>(panelClass);
+		EnableAddObject<PanelComponent>(panelClass);
+		EnableAddChild<PanelComponent>(panelClass);
+		EnableRemoveObject<PanelComponent>(panelClass);
 	}
 
 	void RegisterComponentBindings(py::module_& m) {
