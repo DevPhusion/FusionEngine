@@ -109,7 +109,7 @@ namespace {
 
     // All UI component need to be added here
     static bool NeedsRectTransform(const Component* c) {
-        return IsAnyOf<CanvasComponent, TextComponent, PanelComponent>(c);
+        return IsAnyOf<CanvasComponent, TextComponent, PanelComponent, ButtonComponent>(c);
     }
 
     static std::vector<int> RectDependents(Object* o) {
@@ -270,6 +270,7 @@ namespace {
             SimpleEntry<RectTransformComponent>("Rect Transform Component", { NoWorldComponents }),
             SimpleEntry<TextComponent>("Text Component", { Required<RectTransformComponent>("Rect Transform Component", "All GUI elements needs Rect Transform.") }),
 			SimpleEntry<PanelComponent>("Panel Component", { Required<RectTransformComponent>("Rect Transform Component", "All GUI elements needs Rect Transform.") }),
+            SimpleEntry<ButtonComponent>("Button Component", { Required<RectTransformComponent>("Rect Transform Component", "All GUI elements needs Rect Transform.") }),
 
             { "Agent Component",
               [](Object* o) { return !o->HasComponent<AgentComponent>() && PackageManager::getInstance().IsPackageInstalled("rl"); },
