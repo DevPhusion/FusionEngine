@@ -3072,6 +3072,28 @@ namespace {
 		self.texturePath = FileManager::getInstance().VirtualToAbsolute(virtualPath).string();
 	}
 
+	std::function<void()> WrapPyButtonCallback(py::function func, std::string what) {
+		auto holder = std::shared_ptr<py::function>(
+			new py::function(std::move(func)),
+			[](py::function* f) {
+				py::gil_scoped_acquire gil;
+				delete f;
+			});
+
+		return [holder, what = std::move(what)]() {
+			py::gil_scoped_acquire gil;
+			try { (*holder)(); }
+			catch (const py::error_already_set& e) {
+				Console::AddMessage(Console::MessageType::Error, what + " callback error: " + e.what());
+			}
+			};
+	}
+
+	int AddButtonCallback(ButtonComponent& self, ButtonComponent::ButtonEvent event,
+		py::function func, const char* what) {
+		return self.AddCallback(event, WrapPyButtonCallback(std::move(func), what));
+	}
+
 	void RegisterGUIComponentBindings(py::module_& m) {
 		py::enum_<CanvasComponent::RenderMode>(m, "CanvasRenderMode",
 			"How a CanvasComponent is rendered")
@@ -3553,6 +3575,184 @@ namespace {
 		EnableAddObject<PanelComponent>(panelClass);
 		EnableAddChild<PanelComponent>(panelClass);
 		EnableRemoveObject<PanelComponent>(panelClass);
+
+		auto buttonClass = py::class_<ButtonComponent>(m, "ButtonComponent",
+			"A clickable UI button drawn inside this Object's RectTransformComponent: a colored "
+			"background (with hover / pressed / disabled colors) and a plain text label. "
+			"Adding a ButtonComponent automatically adds a RectTransformComponent if missing.\n\n"
+			"Buttons only react to the mouse while the game is running.\n\n"
+			"Example:\n"
+			"    ```python\n"
+			"    btn = self.get_component(ButtonComponent)\n"
+			"    def on_play():\n"
+			"        load_scene('res://levels/level_1.fscene')\n"
+			"    self.play_id = btn.add_click_callback(on_play)\n"
+			"    ```")
+			.def_property("enable",
+				[](ButtonComponent& self) { return self.Enabled; },
+				[](ButtonComponent& self, bool enable) { self.SetEnabled(enable); },
+				"Whether this component is active. A disabled button is not drawn and fires no events.")
+			.def("set_enable", &ButtonComponent::SetEnabled, py::arg("enable"),
+				"Set enable. See the enable property.")
+
+			.def_property("interactable",
+				[](ButtonComponent& self) { return self.interactable; },
+				[](ButtonComponent& self, bool i) { self.interactable = i; },
+				"If False the button is drawn with disabled_color and fires no events, "
+				"but is still visible. Unlike enable, this keeps the button on screen.")
+			.def("set_interactable", [](ButtonComponent& self, bool i) { self.interactable = i; },
+				py::arg("interactable"),
+				"Set interactable. See the interactable property.")
+
+			.def_property_readonly("is_hovered",
+				[](ButtonComponent& self) { return self.IsHovered(); },
+				"True while the mouse pointer is over the button")
+			.def_property_readonly("is_pressed",
+				[](ButtonComponent& self) { return self.IsPressed(); },
+				"True from the moment the mouse goes down on the button until it is released")
+
+			.def_readwrite("text", &ButtonComponent::text,
+				"The button's label (plain text, no markup)")
+			.def("set_text", [](ButtonComponent& self, const std::string& t) { self.text = t; },
+				py::arg("text"),
+				"Set text. See the text property.")
+
+			.def_property("font_path",
+				[](ButtonComponent& self) { return self.fontPath; },
+				[](ButtonComponent& self, const std::string& path) {
+					SetVirtualFontPath(self.fontPath, path, "ButtonComponent.font_path");
+				},
+				"res:// path to a .ttf/.otf font, or '' for the default font. Setting a path "
+				"that doesn't exist logs an error and leaves the font unchanged.")
+			.def("set_font", [](ButtonComponent& self, const std::string& path) {
+			SetVirtualFontPath(self.fontPath, path, "ButtonComponent.set_font");
+				}, py::arg("virtual_path"),
+					"Set font_path. Pass '' to use the default font.")
+
+			.def_property("font_size",
+				[](ButtonComponent& self) { return self.fontSize; },
+				[](ButtonComponent& self, float s) { self.fontSize = std::max(s, 1.0f); },
+				"Label font size in canvas units (scaled by the canvas scale factor). Clamped to >= 1.")
+			.def("set_font_size", [](ButtonComponent& self, float s) { self.fontSize = std::max(s, 1.0f); },
+				py::arg("font_size"),
+				"Set font_size. See the font_size property.")
+
+			.def_property("text_color",
+				[](ButtonComponent& self) { return self.textColor; },
+				[](ButtonComponent& self, glm::vec4 c) { self.textColor = c; },
+				"Label color (RGBA, 0-1). Drawn at half alpha while the button is not interactable.")
+			.def("set_text_color", [](ButtonComponent& self, glm::vec4 c) { self.textColor = c; },
+				py::arg("text_color"),
+				"Set text_color. See the text_color property.")
+
+			.def_property("normal_color",
+				[](ButtonComponent& self) { return self.normalColor; },
+				[](ButtonComponent& self, glm::vec4 c) { self.normalColor = c; },
+				"Background color (RGBA, 0-1) when idle")
+			.def("set_normal_color", [](ButtonComponent& self, glm::vec4 c) { self.normalColor = c; },
+				py::arg("normal_color"),
+				"Set normal_color. See the normal_color property.")
+
+			.def_property("hover_color",
+				[](ButtonComponent& self) { return self.hoverColor; },
+				[](ButtonComponent& self, glm::vec4 c) { self.hoverColor = c; },
+				"Background color (RGBA, 0-1) while the pointer is over the button")
+			.def("set_hover_color", [](ButtonComponent& self, glm::vec4 c) { self.hoverColor = c; },
+				py::arg("hover_color"),
+				"Set hover_color. See the hover_color property.")
+
+			.def_property("pressed_color",
+				[](ButtonComponent& self) { return self.pressedColor; },
+				[](ButtonComponent& self, glm::vec4 c) { self.pressedColor = c; },
+				"Background color (RGBA, 0-1) while the button is held down with the pointer over it")
+			.def("set_pressed_color", [](ButtonComponent& self, glm::vec4 c) { self.pressedColor = c; },
+				py::arg("pressed_color"),
+				"Set pressed_color. See the pressed_color property.")
+
+			.def_property("disabled_color",
+				[](ButtonComponent& self) { return self.disabledColor; },
+				[](ButtonComponent& self, glm::vec4 c) { self.disabledColor = c; },
+				"Background color (RGBA, 0-1) while interactable is False")
+			.def("set_disabled_color", [](ButtonComponent& self, glm::vec4 c) { self.disabledColor = c; },
+				py::arg("disabled_color"),
+				"Set disabled_color. See the disabled_color property.")
+
+			.def_property("corner_radius",
+				[](ButtonComponent& self) { return self.cornerRadius; },
+				[](ButtonComponent& self, float r) { self.cornerRadius = std::max(r, 0.0f); },
+				"Corner rounding in canvas units. Clamped to >= 0 (and to half the button's "
+				"smaller side when drawn).")
+			.def("set_corner_radius", [](ButtonComponent& self, float r) { self.cornerRadius = std::max(r, 0.0f); },
+				py::arg("corner_radius"),
+				"Set corner_radius. See the corner_radius property.")
+
+			.def_property("border_color",
+				[](ButtonComponent& self) { return self.borderColor; },
+				[](ButtonComponent& self, glm::vec4 c) { self.borderColor = c; },
+				"Border color (RGBA, 0-1). Only visible when border_thickness > 0.")
+			.def("set_border_color", [](ButtonComponent& self, glm::vec4 c) { self.borderColor = c; },
+				py::arg("border_color"),
+				"Set border_color. See the border_color property.")
+
+			.def_property("border_thickness",
+				[](ButtonComponent& self) { return self.borderThickness; },
+				[](ButtonComponent& self, float t) { self.borderThickness = std::max(t, 0.0f); },
+				"Border thickness in canvas units. 0 means no border. Clamped to >= 0.")
+			.def("set_border_thickness", [](ButtonComponent& self, float t) { self.borderThickness = std::max(t, 0.0f); },
+				py::arg("border_thickness"),
+				"Set border_thickness. See the border_thickness property.")
+
+			.def("click", &ButtonComponent::Click,
+				"Fire the click callbacks as if the button had been clicked. Does nothing if "
+				"interactable is False.")
+
+			.def("add_click_callback", [](ButtonComponent& self, py::function func) {
+			return AddButtonCallback(self, ButtonComponent::ButtonEvent::Click, std::move(func), "button click");
+				}, py::arg("callback"),
+					"Call callback() when the button is clicked (mouse pressed and released while "
+					"over the button). Returns an id usable with remove_callback().\n\n"
+					"Example:\n"
+					"    ```python\n"
+					"    self.click_id = btn.add_click_callback(self.on_clicked)\n"
+					"    ```")
+			.def("add_press_callback", [](ButtonComponent& self, py::function func) {
+			return AddButtonCallback(self, ButtonComponent::ButtonEvent::Press, std::move(func), "button press");
+				}, py::arg("callback"),
+					"Call callback() when the mouse goes down on the button. Returns an id usable "
+					"with remove_callback().")
+			.def("add_release_callback", [](ButtonComponent& self, py::function func) {
+			return AddButtonCallback(self, ButtonComponent::ButtonEvent::Release, std::move(func), "button release");
+				}, py::arg("callback"),
+					"Call callback() when the mouse is released after pressing the button, whether "
+					"or not the pointer is still over it. Returns an id usable with remove_callback().")
+			.def("add_hover_enter_callback", [](ButtonComponent& self, py::function func) {
+			return AddButtonCallback(self, ButtonComponent::ButtonEvent::HoverEnter, std::move(func), "button hover enter");
+				}, py::arg("callback"),
+					"Call callback() when the pointer moves onto the button. Returns an id usable "
+					"with remove_callback().")
+			.def("add_hover_exit_callback", [](ButtonComponent& self, py::function func) {
+			return AddButtonCallback(self, ButtonComponent::ButtonEvent::HoverExit, std::move(func), "button hover exit");
+				}, py::arg("callback"),
+					"Call callback() when the pointer moves off the button. Returns an id usable "
+					"with remove_callback().")
+
+			.def("remove_callback", &ButtonComponent::RemoveCallback, py::arg("id"),
+				"Unregister a callback previously registered with any add_*_callback() method")
+			.def("clear_callbacks", &ButtonComponent::ClearCallbacks,
+				"Unregister every callback on this button, for all events");
+
+		EnableGetComponent<ButtonComponent>(buttonClass);
+		EnableHasComponent<ButtonComponent>(buttonClass);
+		RegisterComponentGetter<ButtonComponent>(buttonClass);
+		EnableGetOwner<ButtonComponent>(buttonClass);
+		RegisterComponentRemover<ButtonComponent>(buttonClass);
+		RegisterComponentAdder<ButtonComponent>(buttonClass,
+			[](Object& obj) { return std::make_unique<ButtonComponent>(&obj); });
+		EnableAddComponent<ButtonComponent>(buttonClass);
+		EnableRemoveComponent<ButtonComponent>(buttonClass);
+		EnableAddObject<ButtonComponent>(buttonClass);
+		EnableAddChild<ButtonComponent>(buttonClass);
+		EnableRemoveObject<ButtonComponent>(buttonClass);
 	}
 
 	void RegisterComponentBindings(py::module_& m) {
