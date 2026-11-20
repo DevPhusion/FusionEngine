@@ -34,9 +34,5 @@ public:
 	void Deserialize(BinaryReader& r) override;
 
 private:
-	void EnsureTexture();
-	void ReleaseTexture();
-
-	unsigned int textureID = 0;  
-	std::string  loadedPath;      
+	GUITextureHandle texture;
 };

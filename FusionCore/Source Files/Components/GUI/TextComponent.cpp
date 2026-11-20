@@ -3,117 +3,9 @@
 #include "../../../Header Files/Core/Editor/EditorField.h"
 #include <imgui/imgui.h>
 #include <algorithm>
-#include <cctype>
 #include <cfloat>
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
-#include <string>
-#include <vector>
-
-namespace {
-	EditorField::FileSpec MakeFontSpec(const char* hint) {
-		EditorField::FileSpec s;
-		s.dialog.title = "Choose Font";
-		s.dialog.filters = { { "Fonts", "*.ttf;*.otf" }, { "All Files", "*.*" } };
-		s.extensions = { ".ttf", ".otf" };
-		s.hint = hint;
-		s.storeVirtual = true;
-		s.displayVirtual = true;
-		s.allowClear = true;
-		return s;
-	}
-
-	struct TagOp {
-		char kind = 0;          
-		bool close = false;
-		glm::vec4 col{ 1.0f };
-		float size = 0.0f;
-	};
-
-	bool ParseColor(const std::string& v, glm::vec4& out) {
-		struct Named { const char* n; float r, g, b; };
-		static const Named names[] = {
-			{"white",1,1,1}, {"black",0,0,0}, {"red",1,0,0}, {"green",0,0.8f,0},
-			{"blue",0,0.4f,1}, {"yellow",1,0.92f,0}, {"cyan",0,1,1},
-			{"magenta",1,0,1}, {"orange",1,0.55f,0}, {"gray",0.5f,0.5f,0.5f},
-			{"grey",0.5f,0.5f,0.5f}, {"purple",0.6f,0.2f,0.8f}, {"pink",1,0.5f,0.75f}
-		};
-		if (v.empty()) return false;
-		if (v[0] == '#') {
-			const size_t n = v.size() - 1;
-			if (n != 6 && n != 8) return false;
-			for (size_t i = 1; i < v.size(); ++i)
-				if (!std::isxdigit((unsigned char)v[i])) return false;
-			auto hex = [&](size_t i) { return std::strtoul(v.substr(i, 2).c_str(), nullptr, 16) / 255.0f; };
-			out = glm::vec4(hex(1), hex(3), hex(5), n == 8 ? hex(7) : 1.0f);
-			return true;
-		}
-		for (const Named& nm : names) {
-			if (v == nm.n) { out = glm::vec4(nm.r, nm.g, nm.b, 1.0f); return true; }
-		}
-		return false;
-	}
-
-	bool ParseTag(const std::string& raw, TagOp& op) {
-		std::string t;
-		t.reserve(raw.size());
-		for (char ch : raw) t += (char)std::tolower((unsigned char)ch);
-
-		op = TagOp();
-		size_t i = 0;
-		if (!t.empty() && t[0] == '/') { op.close = true; i = 1; }
-
-		const size_t eq = t.find('=', i);
-		const std::string name = (eq == std::string::npos) ? t.substr(i) : t.substr(i, eq - i);
-		const std::string val = (eq == std::string::npos) ? "" : t.substr(eq + 1);
-
-		if ((name == "b" || name == "i" || name == "u" || name == "s") && val.empty()) {
-			op.kind = name[0];
-			return true;
-		}
-		if (name == "color") {
-			op.kind = 'c';
-			if (!op.close && !ParseColor(val, op.col)) return false;
-			return true;
-		}
-		if (name == "size") {
-			op.kind = 'z';
-			if (!op.close) {
-				char* end = nullptr;
-				const float v = std::strtof(val.c_str(), &end);
-				if (end == val.c_str() || v <= 0.0f) return false;
-				op.size = v;
-			}
-			return true;
-		}
-		return false;
-	}
-
-	int sSelA = 0, sSelB = 0;
-
-	int SelectionTracker(ImGuiInputTextCallbackData* d) {
-		sSelA = d->SelectionStart;
-		sSelB = d->SelectionEnd;
-		return 0;
-	}
-
-	std::string WrapSelection(const std::string& src, const std::string& open, const std::string& close) {
-		size_t a = (size_t)std::max(0, std::min(sSelA, sSelB));
-		size_t b = (size_t)std::max(0, std::max(sSelA, sSelB));
-		a = std::min(a, src.size());
-		b = std::min(b, src.size());
-		std::string out = src.substr(0, a) + open + src.substr(a, b - a) + close + src.substr(b);
-		sSelA = sSelB = (int)(a + open.size());   
-		return out;
-	}
-
-	inline const char* NextUtf8(const char* p, const char* end) {
-		++p;
-		while (p < end && ((unsigned char)*p & 0xC0) == 0x80) ++p;
-		return p;
-	}
-}
 
 TextComponent::TextComponent(Object* parent) : ComponentBase<TextComponent>(parent) {
 	Name = "Text Component";
@@ -145,85 +37,10 @@ void TextComponent::OnDelete() {
 }
 
 void TextComponent::ParseRich() {
-	richCache.clear();
+	richCache = RichText::Parse(text, IsRich());
 	richCacheSrc = text;
 	richCacheRich = IsRich();
 	richCacheValid = true;
-
-	int bold = 0, italic = 0, underline = 0, strike = 0;
-	std::vector<glm::vec4> colorStack;
-	std::vector<float> sizeStack;
-	std::string run;
-
-	auto emit = [&]() {
-		size_t i = 0;
-		while (i < run.size()) {
-			RichPiece p;
-			p.bold = bold > 0;
-			p.italic = italic > 0;
-			p.underline = underline > 0;
-			p.strike = strike > 0;
-			p.hasColor = !colorStack.empty();
-			if (p.hasColor) p.color = colorStack.back();
-			p.size = sizeStack.empty() ? 0.0f : sizeStack.back();
-
-			const char ch = run[i];
-			if (ch == '\r') { ++i; continue; }
-			if (ch == '\n') {
-				p.newline = true;
-				++i;
-			}
-			else if (ch == ' ' || ch == '\t') {
-				p.space = true;
-				while (i < run.size() && (run[i] == ' ' || run[i] == '\t')) { p.text += run[i]; ++i; }
-			}
-			else {
-				while (i < run.size() && run[i] != ' ' && run[i] != '\t' && run[i] != '\n' && run[i] != '\r') {
-					p.text += run[i]; ++i;
-				}
-			}
-			richCache.push_back(std::move(p));
-		}
-		run.clear();
-		};
-
-	for (size_t k = 0; k < text.size();) {
-		const char ch = text[k];
-
-		if (IsRich() && ch == '\\' && k + 1 < text.size() && text[k + 1] == '<') {  
-			run += '<';
-			k += 2;
-			continue;
-		}
-
-		if (IsRich() && ch == '<') {
-			const size_t close = text.find('>', k);
-			TagOp op;
-			if (close != std::string::npos && ParseTag(text.substr(k + 1, close - k - 1), op)) {
-				emit();   
-				switch (op.kind) {
-				case 'b': bold = std::max(0, bold + (op.close ? -1 : 1)); break;
-				case 'i': italic = std::max(0, italic + (op.close ? -1 : 1)); break;
-				case 'u': underline = std::max(0, underline + (op.close ? -1 : 1)); break;
-				case 's': strike = std::max(0, strike + (op.close ? -1 : 1)); break;
-				case 'c':
-					if (op.close) { if (!colorStack.empty()) colorStack.pop_back(); }
-					else colorStack.push_back(op.col);
-					break;
-				case 'z':
-					if (op.close) { if (!sizeStack.empty()) sizeStack.pop_back(); }
-					else sizeStack.push_back(op.size);
-					break;
-				}
-				k = close + 1;
-				continue;
-			}
-		}
-
-		run += ch;
-		++k;
-	}
-	emit();
 }
 
 void TextComponent::DrawUI(const UIDrawContext& c) {
@@ -237,15 +54,14 @@ void TextComponent::DrawUI(const UIDrawContext& c) {
 
 	if (!richCacheValid || richCacheRich != IsRich() || richCacheSrc != text) ParseRich();
 
+	// ---- resolve the four font slots: index = bold | (italic << 1) ----
 	struct FontSel { ImFont* font; bool fakeBold; bool fakeItalic; };
-	auto load = [](const std::string& path) -> ImFont* {
-		return path.empty() ? nullptr : GUIEngine::getInstance().GetFont(path);
-		};
-	ImFont* reg = load(fontPath);
-	if (!reg) reg = ImGui::GetFont();
-	ImFont* bf = load(boldFontPath);
-	ImFont* itf = load(italicFontPath);
-	ImFont* bif = load(boldItalicFontPath);
+	GUIEngine& gui = GUIEngine::getInstance();
+
+	ImFont* reg = gui.GetFontOrDefault(fontPath);
+	ImFont* bf = gui.GetFont(boldFontPath);
+	ImFont* itf = gui.GetFont(italicFontPath);
+	ImFont* bif = gui.GetFont(boldItalicFontPath);
 
 	FontSel fonts[4];
 	fonts[0] = { reg, false, false };
@@ -257,15 +73,16 @@ void TextComponent::DrawUI(const UIDrawContext& c) {
 	else          fonts[3] = { reg, true, true };
 
 	auto boldOffset = [](float px) { return std::max(0.5f, px * 0.035f); };
-	auto fontIndex = [](const RichPiece& p) { return (p.bold ? 1 : 0) | (p.italic ? 2 : 0); };
+	auto fontIndex = [](const RichText::Piece& p) { return (p.bold ? 1 : 0) | (p.italic ? 2 : 0); };
 	auto measure = [&](const char* b, const char* e, float px, int fi) {
 		float mw = fonts[fi].font->CalcTextSizeA(px, FLT_MAX, 0.0f, b, e).x;
 		if (fonts[fi].fakeBold) mw += boldOffset(px);
 		return mw;
 		};
 
+	// ---- layout ----
 	struct Placed {
-		const RichPiece* p;
+		const RichText::Piece* p;
 		const char* b;
 		const char* e;
 		float x, w, px;
@@ -284,7 +101,7 @@ void TextComponent::DrawUI(const UIDrawContext& c) {
 	bool wrapped = false;
 
 	auto flush = [&]() {
-		while (!cur.items.empty() && cur.items.back().p->space) {   
+		while (!cur.items.empty() && cur.items.back().p->space) {   // trailing spaces don't count
 			cur.width -= cur.items.back().w;
 			cur.items.pop_back();
 		}
@@ -292,13 +109,13 @@ void TextComponent::DrawUI(const UIDrawContext& c) {
 		lines.push_back(std::move(cur));
 		cur = Line();
 		};
-	auto addItem = [&](const RichPiece* p, const char* b, const char* e, float iw, float px, int fi) {
+	auto addItem = [&](const RichText::Piece* p, const char* b, const char* e, float iw, float px, int fi) {
 		cur.items.push_back({ p, b, e, cur.width, iw, px, fi });
 		cur.width += iw;
 		cur.height = std::max(cur.height, px);
 		};
 
-	for (const RichPiece& p : richCache) {
+	for (const RichText::Piece& p : richCache) {
 		if (p.newline) { flush(); wrapped = false; continue; }
 
 		const float px = (p.size > 0.0f ? p.size : fontSize) * c.scale;
@@ -311,16 +128,17 @@ void TextComponent::DrawUI(const UIDrawContext& c) {
 			flush();
 			wrapped = true;
 		}
-		if (p.space && cur.items.empty() && wrapped) continue;  
+		if (p.space && cur.items.empty() && wrapped) continue;   // no leading spaces after a soft wrap
 
 		if (wrap > 0.0f && !p.space && pw > wrap) {
+			// Single word wider than the box: break it by character.
 			const char* s = b;
 			while (s < e) {
 				const float avail = wrap - cur.width;
 				const char* q = s;
 				float acc = 0.0f;
 				while (q < e) {
-					const char* n = NextUtf8(q, e);
+					const char* n = RichText::NextUtf8(q, e);
 					const float cw = measure(q, n, px, fi);
 					if (acc + cw > avail && q > s) break;
 					if (acc + cw > avail && q == s) break;
@@ -329,7 +147,7 @@ void TextComponent::DrawUI(const UIDrawContext& c) {
 				}
 				if (q == s) {
 					if (!cur.items.empty()) { flush(); wrapped = true; continue; }
-					q = NextUtf8(s, e);                      
+					q = RichText::NextUtf8(s, e);            // line empty: must take at least one char
 					acc = measure(s, q, px, fi);
 				}
 				addItem(&p, s, q, acc, px, fi);
@@ -346,6 +164,7 @@ void TextComponent::DrawUI(const UIDrawContext& c) {
 	float totalH = 0.0f;
 	for (const Line& l : lines) totalH += l.height;
 
+	// ---- draw ----
 	ImDrawList* dl = c.dl;
 	dl->PushClipRect(ImVec2(mn.x, mn.y), ImVec2(mx.x, mx.y), true);
 
@@ -359,16 +178,16 @@ void TextComponent::DrawUI(const UIDrawContext& c) {
 		else if (hAlign == HAlign::Right) x0 += (w - line.width);
 
 		for (const Placed& it : line.items) {
-			const RichPiece& p = *it.p;
+			const RichText::Piece& p = *it.p;
 			if (p.newline) continue;
 
 			glm::vec4 cc = color;
 			if (p.hasColor) cc = glm::vec4(p.color.r, p.color.g, p.color.b, p.color.a * color.a);
 			if (cc.a <= 0.0f) continue;
-			const ImU32 col = ImGui::ColorConvertFloat4ToU32(ImVec4(cc.r, cc.g, cc.b, cc.a));
+			const ImU32 col = GUIEngine::ToU32(cc);
 
 			const float x = x0 + it.x;
-			const float ty = y + (line.height - it.px);   
+			const float ty = y + (line.height - it.px);   // bottom-align mixed sizes on a line
 			const FontSel& fs = fonts[it.fi];
 
 			if (!p.space) {
@@ -396,22 +215,29 @@ void TextComponent::DrawUI(const UIDrawContext& c) {
 	dl->PopClipRect();
 }
 
+int TextComponent::SelectionCallback(ImGuiInputTextCallbackData* data) {
+	TextComponent* self = static_cast<TextComponent*>(data->UserData);
+	self->selStart = data->SelectionStart;
+	self->selEnd = data->SelectionEnd;
+	return 0;
+}
+
 void TextComponent::ProcessInspectorUI() {
 	static const char* hNames[] = { "Left", "Center", "Right" };
 	static const char* vNames[] = { "Top", "Middle", "Bottom" };
-	static const EditorField::FileSpec fontSpec = MakeFontSpec("Default (click to choose...)");
-	static const EditorField::FileSpec variantSpec = MakeFontSpec("None (faux style)");
+	static const char* modeNames[] = { "Plain", "Rich Text" };
+	static const EditorField::FileSpec fontSpec = EditorField::FileSpec::FontFile();
+	static const EditorField::FileSpec variantSpec = EditorField::FileSpec::FontFile("None (faux style)");
 
 	char buf[4096];
 	strncpy_s(buf, sizeof(buf), text.c_str(), _TRUNCATE);
 	EditorField::Wrap(parent, "Text ",
 		[&] {
 			return ImGui::InputTextMultiline("##TextStr", buf, sizeof(buf), ImVec2(-FLT_MIN, 90.0f),
-				ImGuiInputTextFlags_CallbackAlways, SelectionTracker, nullptr);
+				ImGuiInputTextFlags_CallbackAlways, SelectionCallback, this);
 		},
 		[&] { text = buf; });
 
-	static const char* modeNames[] = { "Plain", "Rich Text" };
 	int tm = (int)textMode;
 	EditorField::ComboScene(parent, "Text Mode ", "##TextMode", &tm, modeNames, 2, [&] {
 		textMode = (TextMode)tm;
@@ -423,13 +249,20 @@ void TextComponent::ProcessInspectorUI() {
 		EditorField::Wrap(parent, "Format ",
 			[&] {
 				bool hit = false;
-				if (ImGui::SmallButton("B")) { pending = WrapSelection(text, "<b>", "</b>"); hit = true; }
+				auto apply = [&](const std::string& open, const std::string& close) {
+					int caret = 0;
+					pending = RichText::WrapSelection(text, selStart, selEnd, open, close, &caret);
+					selStart = selEnd = caret;
+					hit = true;
+					};
+
+				if (ImGui::SmallButton("B")) apply("<b>", "</b>");
 				ImGui::SameLine();
-				if (ImGui::SmallButton("I")) { pending = WrapSelection(text, "<i>", "</i>"); hit = true; }
+				if (ImGui::SmallButton("I")) apply("<i>", "</i>");
 				ImGui::SameLine();
-				if (ImGui::SmallButton("U")) { pending = WrapSelection(text, "<u>", "</u>"); hit = true; }
+				if (ImGui::SmallButton("U")) apply("<u>", "</u>");
 				ImGui::SameLine();
-				if (ImGui::SmallButton("S")) { pending = WrapSelection(text, "<s>", "</s>"); hit = true; }
+				if (ImGui::SmallButton("S")) apply("<s>", "</s>");
 				ImGui::SameLine();
 				ImGui::ColorEdit3("##FmtColor", pick, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel);
 				ImGui::SameLine();
@@ -437,12 +270,13 @@ void TextComponent::ProcessInspectorUI() {
 					char tag[32];
 					snprintf(tag, sizeof(tag), "<color=#%02X%02X%02X>",
 						(int)(pick[0] * 255.0f + 0.5f), (int)(pick[1] * 255.0f + 0.5f), (int)(pick[2] * 255.0f + 0.5f));
-					pending = WrapSelection(text, tag, "</color>");
-					hit = true;
+					apply(tag, "</color>");
 				}
 				return hit;
 			},
 			[&] { text = pending; });
+
+		ImGui::TextDisabled("Tags: <b> <i> <u> <s> <color=#RRGGBB[AA]|name> <size=N>. Use \\< for a literal '<'.");
 
 		if (ImGui::TreeNode("Font Variants##TextVariants")) {
 			EditorField::FileScene(parent, "Bold ", "##TextFontB", boldFontPath, [&] {}, variantSpec);
@@ -457,15 +291,11 @@ void TextComponent::ProcessInspectorUI() {
 	if (!fontPath.empty() && !GUIEngine::getInstance().GetFont(fontPath))
 		ImGui::TextDisabled("Could not load font, using default.");
 
-	float fs = fontSize;
-	EditorField::InputFloatScene(parent, "Font Size ", "##TextSize", &fs, [&] {
-		fontSize = std::max(fs, 1.0f);
-		}, "%.1f");
+	EditorField::InputFloatScene(parent, "Font Size ", "##TextSize", &fontSize, [&] {
+		fontSize = std::max(fontSize, 1.0f);
 
-	float col[4] = { color.r, color.g, color.b, color.a };
-	EditorField::ColorEdit4Scene(parent, "Color ", "##TextColor", col, [&] {
-		color = glm::vec4(col[0], col[1], col[2], col[3]);
-		});
+		}, "%.1f");
+	EditorField::ColorEdit4Scene(parent, "Color ", "##TextColor", &color, [&] {});
 
 	ImGui::Separator();
 

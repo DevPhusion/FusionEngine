@@ -66,15 +66,27 @@ namespace EditorField {
 		static FileSpec Folder(const char* title = "Choose Folder") {
 			FileSpec s; s.folder = true; s.folderTitle = title; s.hint = "(no folder selected)"; return s;
 		}
-		static FileSpec ImageFile() {
+		static FileSpec ImageFile(bool allowClear = false, float previewHeight = 120.0f) {
 			FileSpec s;
 			s.dialog.title = "Choose Texture";
 			s.dialog.filters = { { "Images", "*.png;*.jpeg;*.jpg" }, { "All Files", "*.*" } };
 			s.extensions = { ".png", ".jpg", ".jpeg" };
 			s.hint = "None (click to choose...)";
 			s.displayVirtual = true;
+			s.allowClear = allowClear;
 			s.preview = Preview::Image;
-			s.previewHeight = 120.0f;
+			s.previewHeight = previewHeight;
+			return s;
+		}
+		static FileSpec FontFile(const char* hint = "Default (click to choose...)") {
+			FileSpec s;
+			s.dialog.title = "Choose Font";
+			s.dialog.filters = { { "Fonts", "*.ttf;*.otf" }, { "All Files", "*.*" } };
+			s.extensions = { ".ttf", ".otf" };
+			s.hint = hint;
+			s.storeVirtual = true;       
+			s.displayVirtual = true;
+			s.allowClear = true;
 			return s;
 		}
 		static FileSpec AudioFile() {
@@ -853,7 +865,7 @@ namespace EditorField {
 			ImGui::PopID();
 			return changed;
 		}
-	}
+	} 
 
 	template<typename WidgetFn, typename OnChange>
 	bool Wrap(std::vector<Object*> targets, const char* label, WidgetFn&& widget,
@@ -961,10 +973,14 @@ namespace EditorField {
 	}
 
 	template<typename Target, typename OnChange>
-	bool ColorEdit4Scene(Target&& target, const char* label, const char* id, float v[4], OnChange&& onChange) {
+	bool ColorEdit4Scene(Target&& target, const char* label, const char* id, glm::vec4* v, OnChange&& onChange) {
+		float val[4] = { v->r, v->g, v->b, v->a };
 		return Wrap(std::forward<Target>(target), label,
-			[&] { return ImGui::ColorEdit4(id, v); },
-			std::forward<OnChange>(onChange));
+			[&] { return ImGui::ColorEdit4(id, val); },
+			[&] {
+				*v = glm::vec4(val[0], val[1], val[2], val[3]);   
+				onChange();
+			});
 	}
 
 	template<typename Target, typename OnChange>

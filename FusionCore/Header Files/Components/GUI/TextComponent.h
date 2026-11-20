@@ -4,6 +4,7 @@
 #include <vector>
 #include "../Component.h"   
 #include "../../Core/GUIEngine.h"
+#include "../../Core/RichText.h"
 
 class TextComponent : public ComponentBase<TextComponent>, public IUIDrawable {
 public:
@@ -40,20 +41,14 @@ public:
 	void Serialize(BinaryWriter& w) override;
 	void Deserialize(BinaryReader& r) override;
 private:
-	struct RichPiece {
-		std::string text;
-		bool bold = false, italic = false, underline = false, strike = false;
-		bool hasColor = false;          // false -> use the component's `color`
-		glm::vec4 color{ 1.0f };
-		float size = 0.0f;              // 0 -> use the component's `fontSize`
-		bool newline = false;
-		bool space = false;
-	};
-
 	void ParseRich();
 
-	std::vector<RichPiece> richCache;
+	std::vector<RichText::Piece> richCache;
 	std::string richCacheSrc;
 	bool richCacheRich = false;
 	bool richCacheValid = false;
+
+	static int SelectionCallback(ImGuiInputTextCallbackData* data);
+	int selStart = 0;
+	int selEnd = 0;
 };

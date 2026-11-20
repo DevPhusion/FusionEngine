@@ -707,12 +707,8 @@ void RenderComponent::ProcessInspectorUI() {
 		}, texSpec);
 
 	ImGui::Separator();
-
-	float displayColor[4] = { color.x, color.y, color.z, color.a };
-	EditorField::ColorEdit4Scene(parent, "Color", "##Color", displayColor, [&] {
-		this->color = glm::vec4(displayColor[0], displayColor[1], displayColor[2], displayColor[3]);
-		EngineManager::getInstance().SceneChangeEvent();
-		});
+;
+	EditorField::ColorEdit4Scene(parent, "Color", "##Color", &color, [&] {});
 
 
 	ImGui::Separator();

@@ -325,17 +325,9 @@ void GasComponent::SpawnDissipationWisps(GasParticle* source) {
 
 void GasComponent::ProcessInspectorUI() {
 	if (ImGui::TreeNodeEx("Visuals", ImGuiTreeNodeFlags_DefaultOpen)) {
-		float displayColor[4] = { color.x, color.y, color.z, color.a };
-		EditorField::ColorEdit4Scene(parent, "Color", "##Color", displayColor, [&] {
-			this->color = glm::vec4(displayColor[0], displayColor[1], displayColor[2], displayColor[3]);
-			EngineManager::getInstance().SceneChangeEvent();
-			});
+		EditorField::ColorEdit4Scene(parent, "Color", "##Color", &color, [&] {});
 
-		float displayOutline[4] = { outlineColor.x, outlineColor.y, outlineColor.z, outlineColor.a };
-		EditorField::ColorEdit4Scene(parent, "Outline Color", "##OutlineColor", displayOutline, [&] {
-			this->outlineColor = glm::vec4(displayOutline[0], displayOutline[1], displayOutline[2], displayOutline[3]);
-			EngineManager::getInstance().SceneChangeEvent();
-			});
+		EditorField::ColorEdit4Scene(parent, "Outline Color", "##OutlineColor", &outlineColor, [&] {});
 
 		EditorField::InputFloatScene(parent, "Particle Radius", "##ParticleRadius", &particleRadius, [&] {
 			particleRadius = std::max(0.0001f, particleRadius);
