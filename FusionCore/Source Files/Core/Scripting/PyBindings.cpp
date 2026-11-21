@@ -3094,6 +3094,19 @@ namespace {
 		return self.AddCallback(event, WrapPyButtonCallback(std::move(func), what));
 	}
 
+	void SetTexturePathChecked(std::string& target, const std::string& virtualPath, const char* fnName) {
+		if (virtualPath.empty()) {
+			target.clear();
+			return;
+		}
+		if (!FileManager::getInstance().VirtualPathExists(virtualPath)) {
+			Console::AddMessage(Console::MessageType::Error,
+				std::string(fnName) + ": resource not found: " + virtualPath);
+			return;
+		}
+		target = FileManager::getInstance().VirtualToAbsolute(virtualPath).string();
+	}
+
 	void RegisterGUIComponentBindings(py::module_& m) {
 		py::enum_<CanvasComponent::RenderMode>(m, "CanvasRenderMode",
 			"How a CanvasComponent is rendered")
@@ -3576,6 +3589,13 @@ namespace {
 		EnableAddChild<PanelComponent>(panelClass);
 		EnableRemoveObject<PanelComponent>(panelClass);
 
+		py::enum_<ButtonComponent::ButtonMode>(m, "ButtonMode",
+			"How a ButtonComponent draws its background")
+			.value("Color", ButtonComponent::ButtonMode::Color,
+				"Solid fill using normal_color / hover_color / pressed_color / disabled_color")
+			.value("Texture", ButtonComponent::ButtonMode::Texture,
+				"Texture(s) multiplied by normal_tint / hover_tint / pressed_tint / disabled_tint");
+
 		auto buttonClass = py::class_<ButtonComponent>(m, "ButtonComponent",
 			"A clickable UI button drawn inside this Object's RectTransformComponent: a colored "
 			"background (with hover / pressed / disabled colors) and a plain text label. "
@@ -3676,6 +3696,94 @@ namespace {
 			.def("set_disabled_color", [](ButtonComponent& self, glm::vec4 c) { self.disabledColor = c; },
 				py::arg("disabled_color"),
 				"Set disabled_color. See the disabled_color property.")
+
+			.def_property("mode",
+				[](ButtonComponent& self) { return self.mode; },
+				[](ButtonComponent& self, ButtonComponent::ButtonMode mode) { self.mode = mode; },
+				"ButtonMode.Color draws the state colors; ButtonMode.Texture draws the textures "
+				"multiplied by the state tints")
+			.def("set_mode", [](ButtonComponent& self, ButtonComponent::ButtonMode mode) { self.mode = mode; },
+				py::arg("mode"),
+				"Set mode. See the mode property.")
+
+			.def_property("texture_path",
+				[](ButtonComponent& self) { return FileManager::getInstance().AbsoluteToVirtual(self.texturePath); },
+				[](ButtonComponent& self, const std::string& p) {
+					SetTexturePathChecked(self.texturePath, p, "ButtonComponent.texture_path");
+				},
+				"res:// path to the button's main texture, or '' for none. Used in ButtonMode.Texture, "
+				"and as the fallback for any state without its own texture. A path that doesn't "
+				"exist logs an error and leaves the texture unchanged.")
+			.def("set_texture", [](ButtonComponent& self, const std::string& p) {
+					SetTexturePathChecked(self.texturePath, p, "ButtonComponent.set_texture");
+				}, py::arg("virtual_path"),
+					"Set texture_path. Pass '' to clear it. Does not change mode.\n\n"
+					"Example:\n"
+					"    ```python\n"
+					"    btn.set_texture('res://ui/button.png')\n"
+					"    btn.mode = ButtonMode.Texture\n"
+					"    ```")
+
+			.def_property("hover_texture_path",
+					[](ButtonComponent& self) { return FileManager::getInstance().AbsoluteToVirtual(self.hoverTexturePath); },
+					[](ButtonComponent& self, const std::string& p) {
+						SetTexturePathChecked(self.hoverTexturePath, p, "ButtonComponent.hover_texture_path");
+				},
+				"res:// path to the texture shown while hovered, or '' to use texture_path")
+			.def("set_hover_texture", [](ButtonComponent& self, const std::string& p) {
+					SetTexturePathChecked(self.hoverTexturePath, p, "ButtonComponent.set_hover_texture");
+				}, py::arg("virtual_path"),
+					"Set hover_texture_path. Pass '' to fall back to texture_path.")
+
+					.def_property("pressed_texture_path",
+					[](ButtonComponent& self) { return FileManager::getInstance().AbsoluteToVirtual(self.pressedTexturePath); },
+					[](ButtonComponent& self, const std::string& p) {
+						SetTexturePathChecked(self.pressedTexturePath, p, "ButtonComponent.pressed_texture_path");
+				},
+				"res:// path to the texture shown while pressed, or '' to use texture_path")
+			.def("set_pressed_texture", [](ButtonComponent& self, const std::string& p) {
+					SetTexturePathChecked(self.pressedTexturePath, p, "ButtonComponent.set_pressed_texture");
+				}, py::arg("virtual_path"),
+					"Set pressed_texture_path. Pass '' to fall back to texture_path.")
+
+					.def_property("disabled_texture_path",
+					[](ButtonComponent& self) { return FileManager::getInstance().AbsoluteToVirtual(self.disabledTexturePath); },
+					[](ButtonComponent& self, const std::string& p) {
+						SetTexturePathChecked(self.disabledTexturePath, p, "ButtonComponent.disabled_texture_path");
+				},
+				"res:// path to the texture shown while not interactable, or '' to use texture_path")
+			.def("set_disabled_texture", [](ButtonComponent& self, const std::string& p) {
+					SetTexturePathChecked(self.disabledTexturePath, p, "ButtonComponent.set_disabled_texture");
+				}, py::arg("virtual_path"),
+					"Set disabled_texture_path. Pass '' to fall back to texture_path.")
+
+			.def_property("normal_tint",
+					[](ButtonComponent& self) { return self.normalTint; },
+					[](ButtonComponent& self, glm::vec4 c) { self.normalTint = c; },
+					"Color (RGBA, 0-1) the texture is multiplied by when idle. White leaves it unchanged.")
+			.def("set_normal_tint", [](ButtonComponent& self, glm::vec4 c) { self.normalTint = c; },
+					py::arg("normal_tint"), "Set normal_tint. See the normal_tint property.")
+
+			.def_property("hover_tint",
+					[](ButtonComponent& self) { return self.hoverTint; },
+					[](ButtonComponent& self, glm::vec4 c) { self.hoverTint = c; },
+					"Tint (RGBA, 0-1) while hovered. Use white if hover_texture_path is set.")
+			.def("set_hover_tint", [](ButtonComponent& self, glm::vec4 c) { self.hoverTint = c; },
+					py::arg("hover_tint"), "Set hover_tint. See the hover_tint property.")
+
+			.def_property("pressed_tint",
+					[](ButtonComponent& self) { return self.pressedTint; },
+					[](ButtonComponent& self, glm::vec4 c) { self.pressedTint = c; },
+					"Tint (RGBA, 0-1) while pressed. Use white if pressed_texture_path is set.")
+					.def("set_pressed_tint", [](ButtonComponent& self, glm::vec4 c) { self.pressedTint = c; },
+					py::arg("pressed_tint"), "Set pressed_tint. See the pressed_tint property.")
+
+			.def_property("disabled_tint",
+					[](ButtonComponent& self) { return self.disabledTint; },
+					[](ButtonComponent& self, glm::vec4 c) { self.disabledTint = c; },
+					"Tint (RGBA, 0-1) while not interactable")
+			.def("set_disabled_tint", [](ButtonComponent& self, glm::vec4 c) { self.disabledTint = c; },
+					py::arg("disabled_tint"), "Set disabled_tint. See the disabled_tint property.")
 
 			.def_property("corner_radius",
 				[](ButtonComponent& self) { return self.cornerRadius; },
