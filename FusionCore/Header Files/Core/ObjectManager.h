@@ -36,6 +36,10 @@ public:
 	void AddSoftPolygon(Object* parent = nullptr);
 	void AddFluid(Object* parent = nullptr);
 	void AddGas(Object* parent = nullptr);
+	void AddCanvas(Object* parent = nullptr);
+	void AddText(Object* parent = nullptr);
+	void AddPanel(Object* parent = nullptr);
+	void AddButton(Object* parent = nullptr);
 	Object* AddExistingObject(std::unique_ptr<Object> obj, Object* parent = nullptr);
 	void FlushPendingObjects();
 

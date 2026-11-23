@@ -1,4 +1,5 @@
 #include "../../Header Files/Core/ObjectManager.h"
+#include "../../Header Files/Components/Components.h"
 
 void ObjectManager::AddObject(Object* parent) {
 	EngineManager::getInstance().SceneChangeEvent();
@@ -297,6 +298,89 @@ void ObjectManager::AddGas(Object* parent) {
 	obj->addedToScene = true;
 	AttachNewObject(obj.get(), parent);
 	EditorManager::getInstance().RegisterObjectCreated(obj.get());
+	allObjects.push_back(std::move(obj));
+}
+
+void ObjectManager::AddCanvas(Object* parent) {
+	EngineManager::getInstance().SceneChangeEvent();
+	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
+	obj->AddComponent(std::make_unique<EditorRenderComponent>(obj.get(), obj->shader, "Resources/Images/Object.png", 0.075f));
+	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj->shader, glm::vec3(0.0f)));
+	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get()));
+	for (auto& c : obj->components) {
+		c->Activate();
+	}
+	obj->AddComponent(std::make_unique<RectTransformComponent>(obj.get()));
+	obj->AddComponent(std::make_unique<CanvasComponent>(obj.get()));
+
+	obj->addedToScene = true;
+	AttachNewObject(obj.get(), parent);
+	EditorManager::getInstance().RegisterObjectCreated(obj.get());
+	obj->GetComponent<RectTransformComponent>()->Activate();
+	obj->GetComponent<CanvasComponent>()->Activate();
+	allObjects.push_back(std::move(obj));
+}
+
+
+void ObjectManager::AddText(Object* parent) {
+	EngineManager::getInstance().SceneChangeEvent();
+	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
+	obj->AddComponent(std::make_unique<EditorRenderComponent>(obj.get(), obj->shader, "Resources/Images/Object.png", 0.075f));
+	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj->shader, glm::vec3(0.0f)));
+	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get()));
+	for (auto& c : obj->components) {
+		c->Activate();
+	}
+	obj->AddComponent(std::make_unique<RectTransformComponent>(obj.get()));
+	obj->AddComponent(std::make_unique<TextComponent>(obj.get()));
+
+	obj->addedToScene = true;
+	AttachNewObject(obj.get(), parent);
+	EditorManager::getInstance().RegisterObjectCreated(obj.get());
+	obj->GetComponent<RectTransformComponent>()->Activate();
+	obj->GetComponent<TextComponent>()->Activate();
+	allObjects.push_back(std::move(obj));
+}
+
+
+void ObjectManager::AddPanel(Object* parent) {
+	EngineManager::getInstance().SceneChangeEvent();
+	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
+	obj->AddComponent(std::make_unique<EditorRenderComponent>(obj.get(), obj->shader, "Resources/Images/Object.png", 0.075f));
+	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj->shader, glm::vec3(0.0f)));
+	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get()));
+	for (auto& c : obj->components) {
+		c->Activate();
+	}
+	obj->AddComponent(std::make_unique<RectTransformComponent>(obj.get()));
+	obj->AddComponent(std::make_unique<PanelComponent>(obj.get()));
+
+	obj->addedToScene = true;
+	AttachNewObject(obj.get(), parent);
+	EditorManager::getInstance().RegisterObjectCreated(obj.get());
+	obj->GetComponent<RectTransformComponent>()->Activate();
+	obj->GetComponent<PanelComponent>()->Activate();
+	allObjects.push_back(std::move(obj));
+}
+
+
+void ObjectManager::AddButton(Object* parent) {
+	EngineManager::getInstance().SceneChangeEvent();
+	std::unique_ptr<Object> obj = std::make_unique<Object>(Shader("Resources/Shaders/vertex.txt", "Resources/Shaders/fragment.txt"));
+	obj->AddComponent(std::make_unique<EditorRenderComponent>(obj.get(), obj->shader, "Resources/Images/Object.png", 0.075f));
+	obj->AddComponent(std::make_unique<TransformComponent>(obj.get(), obj->shader, glm::vec3(0.0f)));
+	obj->AddComponent(std::make_unique<MouseInteractComponent>(obj.get()));
+	for (auto& c : obj->components) {
+		c->Activate();
+	}
+	obj->AddComponent(std::make_unique<RectTransformComponent>(obj.get()));
+	obj->AddComponent(std::make_unique<ButtonComponent>(obj.get()));
+
+	obj->addedToScene = true;
+	AttachNewObject(obj.get(), parent);
+	EditorManager::getInstance().RegisterObjectCreated(obj.get());
+	obj->GetComponent<RectTransformComponent>()->Activate();
+	obj->GetComponent<ButtonComponent>()->Activate();
 	allObjects.push_back(std::move(obj));
 }
 

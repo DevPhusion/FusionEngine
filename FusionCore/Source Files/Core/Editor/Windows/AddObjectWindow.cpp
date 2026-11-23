@@ -1,6 +1,7 @@
 #include "../../../../Header Files/Core/Editor/Windows/AddObjectWindow.h"
 #include "../../../../Header Files/Core/ObjectManager.h"
 #include "../../../../Header Files/Core/SceneManager.h"
+#include "../../../../Header Files/Core/Rendering/Renderer.h"
 
 namespace {
 	struct TypeInfo { const char* name; const char* category; const char* description; };
@@ -16,8 +17,12 @@ namespace {
 		{ "Soft Polygon",  "Soft Bodies",  "A deformable body with a custom outline. You draw its vertices in the viewport after pressing Add." },
 		{ "Fluid",         "Fluids & Gas", "A particle-based fluid." },
 		{ "Gas",           "Fluids & Gas", "A particle-based gas." },
+		{ "Canvas",        "UI",           "The root of a UI hierarchy. Text, panels and buttons are only drawn when they are inside a canvas." },
+		{ "Text",          "UI",           "A text label with optional rich formatting (bold, italic, underline, colors and sizes)." },
+		{ "Panel",         "UI",           "A rectangle filled with a color or a texture, with optional rounded corners and border" },
+		{ "Button",        "UI",           "A clickable button with a colored or textured background and a text label. Fires events that scripts can listen to." },
 	};
-	const char* kCategories[] = { "General", "Rigid Bodies", "Soft Bodies", "Fluids & Gas" };
+	const char* kCategories[] = { "General", "Rigid Bodies", "Soft Bodies", "Fluids & Gas", "UI"};
 
 	const TypeInfo* FindInfo(const std::string& name) {
 		for (const TypeInfo& t : kTypes) if (name == t.name) return &t;
@@ -130,6 +135,10 @@ void AddObjectWindow::CommitAdd() {
 	else if (SelectedType == "Soft Circle")  OM.AddSoftCircle(parent);
 	else if (SelectedType == "Fluid")        OM.AddFluid(parent);
 	else if (SelectedType == "Gas")          OM.AddGas(parent);
+	else if (SelectedType == "Canvas")       OM.AddCanvas(parent);
+	else if (SelectedType == "Text")         OM.AddText(parent);
+	else if (SelectedType == "Panel")        OM.AddPanel(parent);
+	else if (SelectedType == "Button")       OM.AddButton(parent);
 	else return;
 
 	ApplyName(LastCreatedObject());
