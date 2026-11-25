@@ -65,6 +65,44 @@ void RectTransformComponent::ResolveTree(const UiRect& parentRect) {
 	}
 }
 
+void RectTransformComponent::SetAnchorPreset(AnchorPreset preset) {
+	anchorPreset = preset;
+
+	switch (anchorPreset) {
+	case AnchorPreset::Center:
+		SetAnchors(glm::vec2(0.5f), glm::vec2(0.5f));
+		SetAnchoredRect(glm::vec2(0.0f), rect.size);
+		break;
+	case AnchorPreset::TopLeft:
+		SetAnchors(glm::vec2(0.0f), glm::vec2(0.0f));
+		SetAnchoredRect(glm::vec2(0.0f), rect.size);
+		break;
+	case AnchorPreset::TopCenter:
+		SetAnchors(glm::vec2(0.5f, 0.0f), glm::vec2(0.5f, 0.0f));
+		SetAnchoredRect(glm::vec2(0.0f), rect.size);
+		break;
+	case AnchorPreset::TopRight:
+		SetAnchors(glm::vec2(1.0f, 0.0f), glm::vec2(1.0f, 0.0f));
+		SetAnchoredRect(glm::vec2(0.0f), rect.size);
+		break;
+	case AnchorPreset::BottomLeft:
+		SetAnchors(glm::vec2(0.0f, 1.0f), glm::vec2(0.0f, 1.0f));
+		SetAnchoredRect(glm::vec2(0.0f), rect.size);
+		break;
+	case AnchorPreset::BottomCenter:
+		SetAnchors(glm::vec2(0.5f, 1.0f), glm::vec2(0.5f, 1.0f));
+		SetAnchoredRect(glm::vec2(0.0f), rect.size);
+		break;
+	case AnchorPreset::BottomRight:
+		SetAnchors(glm::vec2(1.0f, 1.0f), glm::vec2(1.0f, 1.0f));
+		SetAnchoredRect(glm::vec2(0.0f), rect.size);
+		break;
+	case AnchorPreset::FullRect:
+		SetAnchors(glm::vec2(0.5f), glm::vec2(0.5f));
+		SetAnchoredRect(glm::vec2(0.0f), GetParentRect().size);
+	}
+}
+
 void RectTransformComponent::SetAnchors(glm::vec2 mn, glm::vec2 mx) {
 	if (mn == anchorMin && mx == anchorMax) return;
 	anchorMin = mn;
@@ -91,6 +129,8 @@ void RectTransformComponent::SetAnchoredRect(glm::vec2 center, glm::vec2 size) {
 }
 
 void RectTransformComponent::ProcessInspectorUI() {
+	static const char* anchorPresetNames[] = { "None", "Center", "Top Left", "Top Center", "Top Right", "Bottom Left", "Bottom Center", "Bottom Right", "Full Rect" };
+
 	if (!IsStretched()) {
 		const glm::vec2 size = offsetMax - offsetMin;
 		const glm::vec2 center = (offsetMin + offsetMax) * 0.5f;
@@ -118,6 +158,11 @@ void RectTransformComponent::ProcessInspectorUI() {
 	}
 
 	ImGui::Separator();
+
+	int anchorPreset = (int)this->anchorPreset;
+	EditorField::ComboScene(parent, "Anchor Preset ", "##AnchorPreset", &anchorPreset, anchorPresetNames, 9, [&] {
+		SetAnchorPreset((AnchorPreset)anchorPreset);
+		});
 
 	float amin[2] = { anchorMin.x, anchorMin.y };
 	EditorField::InputFloat2Scene(parent, "Anchor Min ", "##RtAnchorMin", amin, [&] {
@@ -167,6 +212,7 @@ void RectTransformComponent::Serialize(BinaryWriter& w) {
 	w.Write(offsetMin);
 	w.Write(offsetMax);
 	w.Write(minSize);
+	w.Write((int)anchorPreset);
 }
 
 void RectTransformComponent::Deserialize(BinaryReader& r) {
@@ -176,4 +222,5 @@ void RectTransformComponent::Deserialize(BinaryReader& r) {
 	offsetMin = r.Read<glm::vec2>();
 	offsetMax = r.Read<glm::vec2>();
 	minSize = r.Read<glm::vec2>();
+	SetAnchorPreset((AnchorPreset)r.Read<int>());
 }

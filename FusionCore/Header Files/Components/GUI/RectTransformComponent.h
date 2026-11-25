@@ -23,6 +23,18 @@ struct UiRect {
 	}
 };
 
+enum class AnchorPreset {
+	None = 0,
+	Center = 1,
+	TopLeft = 2,
+	TopCenter = 3,
+	TopRight = 4,
+	BottomLeft = 5,
+	BottomCenter = 6,
+	BottomRight = 7,
+	FullRect = 8
+};
+
 class RectTransformComponent : public ComponentBase<RectTransformComponent>
 {
 public:
@@ -36,12 +48,15 @@ public:
 	virtual void Serialize(BinaryWriter& w);
 	virtual void Deserialize(BinaryReader& r);
 
+	AnchorPreset anchorPreset = AnchorPreset::None;
+
 	glm::vec2 anchorMin = glm::vec2(0.5f);
 	glm::vec2 anchorMax = glm::vec2(0.5f);
 	glm::vec2 offsetMin = glm::vec2(-50.0f);
 	glm::vec2 offsetMax = glm::vec2(50.0f);
 	glm::vec2 minSize = glm::vec2(0.0f);
 
+	void SetAnchorPreset(AnchorPreset preset);
 	void SetAnchors(glm::vec2 anchorMin, glm::vec2 anchorMax);
 	void SetOffsets(glm::vec2 offsetMin, glm::vec2 offsetMax);
 	void SetMinSize(glm::vec2 minSize);
